@@ -7,6 +7,9 @@ import {
   DollarSign,
   ClipboardList,
   ClipboardCheck,
+  Wrench,
+  Zap,
+  Sparkles,
 } from "lucide-react";
 
 function Logo() {
@@ -17,7 +20,6 @@ function Logo() {
           LP
         </div>
       </div>
-
       <div>
         <div className="text-2xl font-black text-white">
           liquida<span className="text-[#F59E0B]">preço</span>
@@ -57,49 +59,22 @@ export default function Sidebar() {
       </div>
 
       <nav className="space-y-2">
-
-        {/* Upload */}
         <NavItem to="/upload" icon={Upload} label="Uploads" />
-
-        {/* Entrada */}
         <NavItem to="/analise-entrada" icon={BarChart3} label="Análise de Entrada" />
-
-        {/* Faturamento */}
         <NavItem to="/faturamento" icon={DollarSign} label="Faturamento" />
-
-        {/* Abertura de OS */}
         <NavItem to="/abertura-os" icon={ClipboardList} label="Abertura de OS" />
 
-        {/* -------- LINHA BRANCA -------- */}
         <div className="pt-4">
           <div className="px-4 text-xs font-bold text-white/50 uppercase">
             Linha Branca
           </div>
         </div>
 
-        <NavItem
-          to="/linha-branca/triagem"
-          icon={ClipboardCheck}
-          label="Triagem"
-        />
+        <NavItem to="/linha-branca/triagem" icon={ClipboardCheck} label="Triagem" />
+        <NavItem to="/linha-branca/reparo-mecanico" icon={Wrench} label="Reparo Mecânico" />
+        <NavItem to="/linha-branca/reparo-eletrico" icon={Zap} label="Reparo Elétrico" />
+        <NavItem to="/linha-branca/reparo-estetico" icon={Sparkles} label="Reparo Estético" />
 
-        {/* placeholders futuros */}
-        <button className="w-full flex items-center gap-3 rounded-2xl px-4 py-3 text-white/40 cursor-default">
-          <Database className="h-4 w-4" />
-          <span>Reparo Mecânico</span>
-        </button>
-
-        <button className="w-full flex items-center gap-3 rounded-2xl px-4 py-3 text-white/40 cursor-default">
-          <Database className="h-4 w-4" />
-          <span>Reparo Elétrico</span>
-        </button>
-
-        <button className="w-full flex items-center gap-3 rounded-2xl px-4 py-3 text-white/40 cursor-default">
-          <Database className="h-4 w-4" />
-          <span>Reparo Estético</span>
-        </button>
-
-        {/* Outros */}
         <div className="pt-4">
           <div className="px-4 text-xs font-bold text-white/50 uppercase">
             Sistema
@@ -110,7 +85,6 @@ export default function Sidebar() {
           <Bell className="h-4 w-4" />
           <span>Alertas</span>
         </button>
-
       </nav>
     </aside>
   );
