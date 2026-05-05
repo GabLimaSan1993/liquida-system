@@ -1,5 +1,4 @@
 import { supabase } from "../lib/supabase";
-import { REPAROS_MECANICOS, REPAROS_ELETRICOS, REPAROS_ESTETICOS } from "./linhaBrancaService";
 
 export async function fetchOsParaReparo(areaExecucao) {
   const { data, error } = await supabase
@@ -26,8 +25,38 @@ export async function fetchTriagemDaOs(osId) {
   return data;
 }
 
+export async function condenarOs(os, motivo, tecnico) {
+  const { error: execError } = await supabase
+    .from("ordens_servico_execucao")
+    .insert({
+      os_id: os.id,
+      area_execucao: os.area_destino,
+      tecnico,
+      dt_inicio: new Date().toISOString(),
+      dt_fim: new Date().toISOString(),
+      condenado: true,
+      motivo_condenacao: motivo,
+      aprovado: false,
+    });
+
+  if (execError) throw execError;
+
+  const { error: osError } = await supabase
+    .from("ordens_servico")
+    .update({
+      status_atual: "Condenado",
+      etapa_atual: "Scrap",
+      area_destino: "Scrap",
+      tecnico_responsavel: tecnico,
+    })
+    .eq("id", os.id);
+
+  if (osError) throw osError;
+  return true;
+}
+
 export async function salvarExecucaoReparo(os, execucao, areaExecucao) {
-  const proximaArea = proximaAreaComReparo(os, areaExecucao);
+  const proximaArea = calcularProximaArea(os, areaExecucao);
 
   const { error: execError } = await supabase
     .from("ordens_servico_execucao")
@@ -43,19 +72,21 @@ export async function salvarExecucaoReparo(os, execucao, areaExecucao) {
       descricao_peca_t: execucao.descricao_peca,
       aprovado: true,
       observacoes: execucao.observacoes,
+      condenado: false,
     });
 
   if (execError) throw execError;
 
-  const novoStatus = proximaArea ? "Triado" : "Aprovado";
-  const novaEtapa = proximaArea ?? "Aprovado";
+  const novoStatus = proximaArea ? "Triado" : "Bancada de Testes";
+  const novaEtapa = proximaArea ?? "Bancada de Testes";
+  const novaArea = proximaArea ?? "Bancada de Testes";
 
   const { error: osError } = await supabase
     .from("ordens_servico")
     .update({
       status_atual: novoStatus,
       etapa_atual: novaEtapa,
-      area_destino: proximaArea,
+      area_destino: novaArea,
       tecnico_responsavel: execucao.tecnico,
     })
     .eq("id", os.id);
@@ -64,7 +95,8 @@ export async function salvarExecucaoReparo(os, execucao, areaExecucao) {
   return true;
 }
 
-function proximaAreaComReparo(os, areaAtual) {
+function calcularProximaArea(os, areaAtual) {
+  // Busca próxima área com reparos pendentes baseado na triagem
   const ordem = ["Reparo Mecânico", "Reparo Elétrico", "Reparo Estético"];
   const idx = ordem.indexOf(areaAtual);
   for (let i = idx + 1; i < ordem.length; i++) {
@@ -72,5 +104,3 @@ function proximaAreaComReparo(os, areaAtual) {
   }
   return null;
 }
-
-export { REPAROS_MECANICOS, REPAROS_ELETRICOS, REPAROS_ESTETICOS };
