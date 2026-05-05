@@ -2,7 +2,6 @@ import { NavLink } from "react-router-dom";
 import {
   Upload,
   BarChart3,
-  Database,
   Bell,
   DollarSign,
   ClipboardList,
@@ -10,6 +9,9 @@ import {
   Wrench,
   Zap,
   Sparkles,
+  FlaskConical,
+  Camera,
+  ShieldCheck,
 } from "lucide-react";
 
 function Logo() {
@@ -48,9 +50,17 @@ function NavItem({ to, icon: Icon, label }) {
   );
 }
 
+function SectionLabel({ label }) {
+  return (
+    <div className="pt-4">
+      <div className="px-4 text-xs font-bold text-white/50 uppercase">{label}</div>
+    </div>
+  );
+}
+
 export default function Sidebar() {
   return (
-    <aside className="hidden lg:flex flex-col gap-6 bg-[linear-gradient(180deg,#7F2D92_0%,#5B1E74_100%)] p-6 text-white">
+    <aside className="hidden lg:flex flex-col gap-6 bg-[linear-gradient(180deg,#7F2D92_0%,#5B1E74_100%)] p-6 text-white overflow-y-auto">
       <Logo />
 
       <div className="rounded-3xl bg-white/10 p-4 ring-1 ring-white/10">
@@ -64,23 +74,16 @@ export default function Sidebar() {
         <NavItem to="/faturamento" icon={DollarSign} label="Faturamento" />
         <NavItem to="/abertura-os" icon={ClipboardList} label="Abertura de OS" />
 
-        <div className="pt-4">
-          <div className="px-4 text-xs font-bold text-white/50 uppercase">
-            Linha Branca
-          </div>
-        </div>
-
+        <SectionLabel label="Linha Branca" />
         <NavItem to="/linha-branca/triagem" icon={ClipboardCheck} label="Triagem" />
         <NavItem to="/linha-branca/reparo-mecanico" icon={Wrench} label="Reparo Mecânico" />
         <NavItem to="/linha-branca/reparo-eletrico" icon={Zap} label="Reparo Elétrico" />
         <NavItem to="/linha-branca/reparo-estetico" icon={Sparkles} label="Reparo Estético" />
+        <NavItem to="/linha-branca/bancada-testes" icon={FlaskConical} label="Bancada de Testes" />
+        <NavItem to="/linha-branca/limpeza" icon={Camera} label="Limpeza" />
+        <NavItem to="/linha-branca/qualidade" icon={ShieldCheck} label="Qualidade" />
 
-        <div className="pt-4">
-          <div className="px-4 text-xs font-bold text-white/50 uppercase">
-            Sistema
-          </div>
-        </div>
-
+        <SectionLabel label="Sistema" />
         <button className="w-full flex items-center gap-3 rounded-2xl px-4 py-3 text-white/60 cursor-default">
           <Bell className="h-4 w-4" />
           <span>Alertas</span>

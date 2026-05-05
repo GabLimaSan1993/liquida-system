@@ -8,6 +8,9 @@ import FaturamentoPage from "./pages/FaturamentoPage.jsx";
 import AberturaOsPage from "./pages/AberturaOsPage.jsx";
 import LinhaBrancaTriagemPage from "./pages/LinhaBrancaTriagemPage.jsx";
 import ReparoLinhaBrancaPage from "./pages/ReparoLinhaBrancaPage.jsx";
+import BancadaTestesPage from "./pages/BancadaTestesPage.jsx";
+import LimpezaPage from "./pages/LimpezaPage.jsx";
+import QualidadePage from "./pages/QualidadePage.jsx";
 
 export default function App() {
   return (
@@ -24,6 +27,9 @@ export default function App() {
         <Route path="/linha-branca/reparo-mecanico" element={<ReparoLinhaBrancaPage areaExecucao="Reparo Mecânico" />} />
         <Route path="/linha-branca/reparo-eletrico" element={<ReparoLinhaBrancaPage areaExecucao="Reparo Elétrico" />} />
         <Route path="/linha-branca/reparo-estetico" element={<ReparoLinhaBrancaPage areaExecucao="Reparo Estético" />} />
+        <Route path="/linha-branca/bancada-testes" element={<BancadaTestesPage />} />
+        <Route path="/linha-branca/limpeza" element={<LimpezaPage />} />
+        <Route path="/linha-branca/qualidade" element={<QualidadePage />} />
       </Route>
     </Routes>
   );
