@@ -1,4 +1,5 @@
-import { NavLink } from "react-router-dom";
+import { useState } from "react";
+import { NavLink, useLocation } from "react-router-dom";
 import {
   Upload,
   BarChart3,
@@ -12,6 +13,9 @@ import {
   FlaskConical,
   Camera,
   ShieldCheck,
+  ChevronDown,
+  ChevronRight,
+  Layers,
 } from "lucide-react";
 
 function Logo() {
@@ -32,33 +36,43 @@ function Logo() {
   );
 }
 
-function NavItem({ to, icon: Icon, label }) {
+function NavItem({ to, icon: Icon, label, indent = false }) {
   return (
     <NavLink
       to={to}
       className={({ isActive }) =>
         `w-full flex items-center gap-3 rounded-2xl px-4 py-3 transition-all ${
+          indent ? "pl-6" : ""
+        } ${
           isActive
             ? "bg-white text-[#6B1F87] shadow-lg"
             : "text-white/85 hover:bg-white/10"
         }`
       }
     >
-      <Icon className="h-4 w-4" />
+      <Icon className="h-4 w-4 shrink-0" />
       <span className="font-medium">{label}</span>
     </NavLink>
   );
 }
 
-function SectionLabel({ label }) {
-  return (
-    <div className="pt-4">
-      <div className="px-4 text-xs font-bold text-white/50 uppercase">{label}</div>
-    </div>
-  );
-}
+const LINHA_BRANCA_PATHS = [
+  "/linha-branca/triagem",
+  "/linha-branca/reparo-mecanico",
+  "/linha-branca/reparo-eletrico",
+  "/linha-branca/reparo-estetico",
+  "/linha-branca/bancada-testes",
+  "/linha-branca/limpeza",
+  "/linha-branca/qualidade",
+];
 
 export default function Sidebar() {
+  const location = useLocation();
+  const isLinhaBrancaActive = LINHA_BRANCA_PATHS.some((p) =>
+    location.pathname.startsWith(p)
+  );
+  const [linhaBrancaOpen, setLinhaBrancaOpen] = useState(isLinhaBrancaActive);
+
   return (
     <aside className="hidden lg:flex flex-col gap-6 bg-[linear-gradient(180deg,#7F2D92_0%,#5B1E74_100%)] p-6 text-white overflow-y-auto">
       <Logo />
@@ -74,16 +88,42 @@ export default function Sidebar() {
         <NavItem to="/faturamento" icon={DollarSign} label="Faturamento" />
         <NavItem to="/abertura-os" icon={ClipboardList} label="Abertura de OS" />
 
-        <SectionLabel label="Linha Branca" />
-        <NavItem to="/linha-branca/triagem" icon={ClipboardCheck} label="Triagem" />
-        <NavItem to="/linha-branca/reparo-mecanico" icon={Wrench} label="Reparo Mecânico" />
-        <NavItem to="/linha-branca/reparo-eletrico" icon={Zap} label="Reparo Elétrico" />
-        <NavItem to="/linha-branca/reparo-estetico" icon={Sparkles} label="Reparo Estético" />
-        <NavItem to="/linha-branca/bancada-testes" icon={FlaskConical} label="Bancada de Testes" />
-        <NavItem to="/linha-branca/limpeza" icon={Camera} label="Limpeza" />
-        <NavItem to="/linha-branca/qualidade" icon={ShieldCheck} label="Qualidade" />
+        {/* Gestão de Linha Branca — colapsável */}
+        <div className="pt-2">
+          <button
+            onClick={() => setLinhaBrancaOpen((o) => !o)}
+            className={`w-full flex items-center justify-between rounded-2xl px-4 py-3 transition-all ${
+              isLinhaBrancaActive
+                ? "bg-white/20 text-white"
+                : "text-white/85 hover:bg-white/10"
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <Layers className="h-4 w-4 shrink-0" />
+              <span className="font-semibold">Linha Branca</span>
+            </div>
+            {linhaBrancaOpen
+              ? <ChevronDown className="h-4 w-4" />
+              : <ChevronRight className="h-4 w-4" />
+            }
+          </button>
 
-        <SectionLabel label="Sistema" />
+          {linhaBrancaOpen && (
+            <div className="mt-1 space-y-1 border-l-2 border-white/20 ml-4 pl-2">
+              <NavItem to="/linha-branca/triagem" icon={ClipboardCheck} label="Triagem" indent />
+              <NavItem to="/linha-branca/reparo-mecanico" icon={Wrench} label="Reparo Mecânico" indent />
+              <NavItem to="/linha-branca/reparo-eletrico" icon={Zap} label="Reparo Elétrico" indent />
+              <NavItem to="/linha-branca/reparo-estetico" icon={Sparkles} label="Reparo Estético" indent />
+              <NavItem to="/linha-branca/bancada-testes" icon={FlaskConical} label="Bancada de Testes" indent />
+              <NavItem to="/linha-branca/limpeza" icon={Camera} label="Limpeza" indent />
+              <NavItem to="/linha-branca/qualidade" icon={ShieldCheck} label="Qualidade" indent />
+            </div>
+          )}
+        </div>
+
+        <div className="pt-2">
+          <div className="px-4 text-xs font-bold text-white/50 uppercase">Sistema</div>
+        </div>
         <button className="w-full flex items-center gap-3 rounded-2xl px-4 py-3 text-white/60 cursor-default">
           <Bell className="h-4 w-4" />
           <span>Alertas</span>
