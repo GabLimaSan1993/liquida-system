@@ -133,9 +133,41 @@ export async function parseXmlNfe(file) {
 }
 
 export async function createOrdemServico(payload) {
+  // Campos válidos da tabela ordens_servico
+  const osPayload = {
+    numero_os: payload.numero_os,
+    dt_entrada: payload.dt_entrada,
+    dt_fabricacao: payload.dt_fabricacao || null,
+    lote: payload.lote,
+    fornecedor: payload.fornecedor,
+    origem: payload.origem,
+    linha_produto: payload.linha_produto,
+    categoria: payload.categoria,
+    marca: payload.marca,
+    modelo: payload.modelo,
+    serial_number: payload.serial_number,
+    imei: payload.imei,
+    voltagem: payload.voltagem,
+    valor_entrada: payload.valor_entrada || null,
+    estado_visual: payload.estado_visual,
+    possui_avaria: payload.possui_avaria,
+    descricao_avaria: payload.descricao_avaria,
+    acessorios_recebidos: payload.acessorios_recebidos,
+    observacoes_log: payload.observacoes_logistica,
+    status_atual: payload.status_atual,
+    etapa_atual: payload.etapa_atual,
+    prioridade: payload.prioridade,
+    nf_entrada_id: payload.nf_entrada_id || null,
+    nf_entrada_item_id: payload.nf_entrada_item_id || null,
+    chave_nfe: payload.chave_nfe,
+    numero_nf: payload.numero_nf,
+    areas_reparo: [],
+    areas_concluidas: [],
+  };
+
   const { data: ordem, error } = await supabase
     .from("ordens_servico")
-    .insert(payload)
+    .insert(osPayload)
     .select()
     .single();
 
@@ -169,9 +201,7 @@ export async function createOrdemServico(payload) {
     .from("aging_os_operacional")
     .insert(agingPayload);
 
-  if (agingError) {
-    throw agingError;
-  }
+  if (agingError) throw agingError;
 
   return ordem;
 }
