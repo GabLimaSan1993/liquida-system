@@ -22,7 +22,7 @@ export default function MainLayout() {
   const { pathname } = useLocation();
   const meta = PAGE_META[pathname] ?? { title: "Liquida System", subtitle: "" };
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [desktopOpen, setDesktopOpen] = useState(true);
+  const [desktopOpen, setDesktopOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#FAF6FF_0%,#F4ECFA_100%)] text-slate-900">
@@ -44,19 +44,19 @@ export default function MainLayout() {
 
       <div className="flex min-h-screen">
 
-        {/* Sidebar desktop */}
-        <div className={`hidden lg:block transition-all duration-300 shrink-0 ${desktopOpen ? "w-[325px]" : "w-0 overflow-hidden"}`}>
-          <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        {/* Sidebar desktop — drawer fixo */}
+        <div className={`hidden lg:block fixed top-0 left-0 h-full z-40 transition-transform duration-300 ${desktopOpen ? "translate-x-0" : "-translate-x-full"}`}
+          style={{ width: "325px" }}
+        >
+          <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} onDesktopClose={() => setDesktopOpen(false)} />
         </div>
 
-        {/* Botão flutuante desktop quando sidebar fechada */}
-        {!desktopOpen && (
-          <button
-            onClick={() => setDesktopOpen(true)}
-            className="hidden lg:flex fixed top-4 left-4 z-50 rounded-xl bg-[#6B1F87] p-2.5 text-white shadow-lg hover:bg-[#5B1E74] transition"
-          >
-            <Menu className="h-5 w-5" />
-          </button>
+        {/* Overlay desktop quando sidebar aberta */}
+        {desktopOpen && (
+          <div
+            className="hidden lg:block fixed inset-0 z-30 bg-black/30"
+            onClick={() => setDesktopOpen(false)}
+          />
         )}
 
         {/* Sidebar mobile */}
@@ -71,31 +71,27 @@ export default function MainLayout() {
           />
         )}
 
-        <main className="flex-1 pt-16 lg:pt-0 p-4 lg:p-6 min-h-screen">
+        <main className="flex-1 pt-16 lg:pt-0 p-4 lg:p-6 min-h-screen w-full">
           <div className="space-y-6">
 
             {/* Header desktop */}
-            <div className="hidden lg:flex items-center justify-between border-b border-purple-100 pb-4">
-              <div className="flex items-center gap-4">
-                {desktopOpen && (
-                  <button
-                    onClick={() => setDesktopOpen(false)}
-                    className="rounded-xl bg-[#6B1F87] p-2.5 text-white shadow hover:bg-[#5B1E74] transition"
-                  >
-                    <Menu className="h-5 w-5" />
-                  </button>
+            <div className="hidden lg:flex items-center gap-4 border-b border-purple-100 pb-4">
+              <button
+                onClick={() => setDesktopOpen((o) => !o)}
+                className="rounded-xl bg-[#6B1F87] p-2.5 text-white shadow hover:bg-[#5B1E74] transition shrink-0"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-widest text-purple-400">
+                  Liquida System
+                </p>
+                <h1 className="mt-0.5 text-3xl font-black tracking-tight text-[#4C1D95]">
+                  {meta.title}
+                </h1>
+                {meta.subtitle && (
+                  <p className="mt-0.5 text-sm text-slate-500">{meta.subtitle}</p>
                 )}
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-widest text-purple-400">
-                    Liquida System
-                  </p>
-                  <h1 className="mt-0.5 text-3xl font-black tracking-tight text-[#4C1D95]">
-                    {meta.title}
-                  </h1>
-                  {meta.subtitle && (
-                    <p className="mt-0.5 text-sm text-slate-500">{meta.subtitle}</p>
-                  )}
-                </div>
               </div>
             </div>
 

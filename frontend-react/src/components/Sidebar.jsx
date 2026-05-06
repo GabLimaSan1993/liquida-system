@@ -124,22 +124,28 @@ function SidebarContent({ profile, onClose, handleLogout }) {
   );
 }
 
-export default function Sidebar({ open, onClose }) {
+export default function Sidebar({ open, onClose, onDesktopClose }) {
   const { profile } = useAuth();
   const navigate = useNavigate();
 
   async function handleLogout() {
     await signOut();
     onClose?.();
+    onDesktopClose?.();
     navigate("/login");
   }
 
   return (
     <>
-      {/* Desktop */}
-      <aside className="hidden lg:flex flex-col gap-4 bg-[linear-gradient(180deg,#7F2D92_0%,#5B1E74_100%)] p-6 text-white overflow-y-auto">
-        <Logo />
-        <SidebarContent profile={profile} onClose={onClose} handleLogout={handleLogout} />
+      {/* Desktop drawer */}
+      <aside className="hidden lg:flex flex-col h-full w-[325px] gap-4 bg-[linear-gradient(180deg,#7F2D92_0%,#5B1E74_100%)] p-6 text-white overflow-y-auto">
+        <div className="flex items-center justify-between">
+          <Logo />
+          <button onClick={onDesktopClose} className="text-white/70 hover:text-white">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <SidebarContent profile={profile} onClose={onDesktopClose} handleLogout={handleLogout} />
       </aside>
 
       {/* Mobile drawer */}
