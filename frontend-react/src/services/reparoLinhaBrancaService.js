@@ -4,7 +4,8 @@ export async function fetchOsParaReparo(areaExecucao) {
   const { data, error } = await supabase
     .from("ordens_servico")
     .select("*")
-    .eq("area_destino", areaExecucao)
+    .contains("areas_reparo", [areaExecucao])
+    .not("areas_concluidas", "cs", `{${areaExecucao}}`)
     .in("status_atual", ["Triado", "Em reparo"])
     .order("dt_entrada", { ascending: true });
 
@@ -56,8 +57,6 @@ export async function condenarOs(os, motivo, tecnico) {
 }
 
 export async function salvarExecucaoReparo(os, execucao, areaExecucao) {
-  const proximaArea = calcularProximaArea(os, areaExecucao);
-
   const { error: execError } = await supabase
     .from("ordens_servico_execucao")
     .insert({
@@ -77,9 +76,21 @@ export async function salvarExecucaoReparo(os, execucao, areaExecucao) {
 
   if (execError) throw execError;
 
-  const novoStatus = proximaArea ? "Triado" : "Bancada de Testes";
-  const novaEtapa = proximaArea ?? "Bancada de Testes";
-  const novaArea = proximaArea ?? "Bancada de Testes";
+  // Adiciona área atual nas concluídas
+  const areasConcluidasAtualizadas = [
+    ...(os.areas_concluidas || []),
+    areaExecucao,
+  ];
+
+  // Verifica se todas as áreas foram concluídas
+  const areasReparo = os.areas_reparo || [];
+  const todasConcluidas = areasReparo.every((area) =>
+    areasConcluidasAtualizadas.includes(area)
+  );
+
+  const novoStatus = todasConcluidas ? "Bancada de Testes" : "Em reparo";
+  const novaEtapa = todasConcluidas ? "Bancada de Testes" : areaExecucao;
+  const novaArea = todasConcluidas ? "Bancada de Testes" : areaExecucao;
 
   const { error: osError } = await supabase
     .from("ordens_servico")
@@ -87,20 +98,11 @@ export async function salvarExecucaoReparo(os, execucao, areaExecucao) {
       status_atual: novoStatus,
       etapa_atual: novaEtapa,
       area_destino: novaArea,
+      areas_concluidas: areasConcluidasAtualizadas,
       tecnico_responsavel: execucao.tecnico,
     })
     .eq("id", os.id);
 
   if (osError) throw osError;
   return true;
-}
-
-function calcularProximaArea(os, areaAtual) {
-  // Busca próxima área com reparos pendentes baseado na triagem
-  const ordem = ["Reparo Mecânico", "Reparo Elétrico", "Reparo Estético"];
-  const idx = ordem.indexOf(areaAtual);
-  for (let i = idx + 1; i < ordem.length; i++) {
-    if (os.area_destino === ordem[i]) return ordem[i];
-  }
-  return null;
 }

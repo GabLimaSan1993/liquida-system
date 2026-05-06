@@ -80,26 +80,20 @@ export async function salvarTriagemLinhaBranca(os, triagem) {
   const temEletrico = triagem.reparos_eletricos.length > 0;
   const temEstetico = triagem.reparos_esteticos.length > 0;
 
-  let areaDestino = null;
-  let etapaAtual = "Aprovado";
+  // Monta lista de todas as áreas com reparo
+  const areasReparo = [];
+  if (temMecanico) areasReparo.push("Reparo Mecânico");
+  if (temEletrico) areasReparo.push("Reparo Elétrico");
+  if (temEstetico) areasReparo.push("Reparo Estético");
+
   let statusAtual = "Aprovado";
+  let etapaAtual = "Aprovado";
+  let areaDestino = null;
 
-  if (triagem.precisa_reparo) {
+  if (triagem.precisa_reparo && areasReparo.length > 0) {
     statusAtual = "Triado";
-
-    if (temMecanico) {
-      areaDestino = "Reparo Mecânico";
-      etapaAtual = "Reparo Mecânico";
-    } else if (temEletrico) {
-      areaDestino = "Reparo Elétrico";
-      etapaAtual = "Reparo Elétrico";
-    } else if (temEstetico) {
-      areaDestino = "Reparo Estético";
-      etapaAtual = "Reparo Estético";
-    } else {
-      areaDestino = "Reparo não classificado";
-      etapaAtual = "Triado";
-    }
+    etapaAtual = areasReparo[0];
+    areaDestino = areasReparo[0];
   }
 
   const { error: triagemError } = await supabase
@@ -123,11 +117,12 @@ export async function salvarTriagemLinhaBranca(os, triagem) {
       status_atual: statusAtual,
       etapa_atual: etapaAtual,
       area_destino: areaDestino,
+      areas_reparo: areasReparo,
+      areas_concluidas: [],
       tecnico_triagem: triagem.triado_por || null,
     })
     .eq("id", os.id);
 
   if (osError) throw osError;
-
   return true;
 }
