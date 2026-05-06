@@ -153,7 +153,7 @@ export async function createOrdemServico(payload) {
     possui_avaria: payload.possui_avaria,
     descricao_avaria: payload.descricao_avaria,
     acessorios_recebidos: payload.acessorios_recebidos,
-    observacoes_log: payload.observacoes_logistica,
+    observacoes_logistica: payload.observacoes_logistica,
     status_atual: payload.status_atual,
     etapa_atual: payload.etapa_atual,
     prioridade: payload.prioridade,
