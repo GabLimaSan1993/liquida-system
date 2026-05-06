@@ -69,7 +69,7 @@ export async function salvarExecucaoReparo(os, execucao, areaExecucao) {
       diagnostico_final: execucao.diagnostico_final,
       servico_executado: execucao.servico_executado,
       peca_trocada: execucao.peca_trocada,
-      descricao_peca_t: execucao.descricao_peca,
+      descricao_peca_trocada: execucao.descricao_peca,
       aprovado: true,
       observacoes: execucao.observacoes,
       condenado: false,
