@@ -22,6 +22,7 @@ export default function MainLayout() {
   const { pathname } = useLocation();
   const meta = PAGE_META[pathname] ?? { title: "Liquida System", subtitle: "" };
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [desktopOpen, setDesktopOpen] = useState(true);
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#FAF6FF_0%,#F4ECFA_100%)] text-slate-900">
@@ -38,12 +39,20 @@ export default function MainLayout() {
           <div className="text-xs font-semibold uppercase tracking-widest text-purple-400">Liquida System</div>
           <div className="text-base font-black text-[#4C1D95] leading-tight">{meta.title}</div>
         </div>
-        <div className="w-10" /> {/* espaço para centralizar o título */}
+        <div className="w-10" />
       </header>
 
-      <div className="lg:grid lg:min-h-screen lg:grid-cols-[325px_1fr]">
+      <div className="flex min-h-screen">
 
-        <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        {/* Sidebar desktop */}
+        <div className={`hidden lg:flex transition-all duration-300 ${desktopOpen ? "w-[325px]" : "w-0 overflow-hidden"}`}>
+          <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        </div>
+
+        {/* Sidebar mobile */}
+        <div className="lg:hidden">
+          <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        </div>
 
         {sidebarOpen && (
           <div
@@ -52,21 +61,29 @@ export default function MainLayout() {
           />
         )}
 
-        <main className="pt-16 lg:pt-0 p-4 lg:p-6 min-h-screen">
+        <main className="flex-1 pt-16 lg:pt-0 p-4 lg:p-6 min-h-screen">
           <div className="space-y-6">
 
             {/* Header desktop */}
-            <div className="hidden lg:flex items-end justify-between border-b border-purple-100 pb-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-widest text-purple-400">
-                  Liquida System
-                </p>
-                <h1 className="mt-1 text-3xl font-black tracking-tight text-[#4C1D95]">
-                  {meta.title}
-                </h1>
-                {meta.subtitle && (
-                  <p className="mt-1 text-sm text-slate-500">{meta.subtitle}</p>
-                )}
+            <div className="hidden lg:flex items-center justify-between border-b border-purple-100 pb-4">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setDesktopOpen((o) => !o)}
+                  className="rounded-xl bg-[#6B1F87] p-2.5 text-white shadow hover:bg-[#5B1E74] transition"
+                >
+                  <Menu className="h-5 w-5" />
+                </button>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-purple-400">
+                    Liquida System
+                  </p>
+                  <h1 className="mt-0.5 text-3xl font-black tracking-tight text-[#4C1D95]">
+                    {meta.title}
+                  </h1>
+                  {meta.subtitle && (
+                    <p className="mt-0.5 text-sm text-slate-500">{meta.subtitle}</p>
+                  )}
+                </div>
               </div>
             </div>
 
