@@ -45,9 +45,19 @@ export default function MainLayout() {
       <div className="flex min-h-screen">
 
         {/* Sidebar desktop */}
-        <div className={`hidden lg:flex transition-all duration-300 ${desktopOpen ? "w-[325px]" : "w-0 overflow-hidden"}`}>
+        <div className={`hidden lg:block transition-all duration-300 shrink-0 ${desktopOpen ? "w-[325px]" : "w-0 overflow-hidden"}`}>
           <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
         </div>
+
+        {/* Botão flutuante desktop quando sidebar fechada */}
+        {!desktopOpen && (
+          <button
+            onClick={() => setDesktopOpen(true)}
+            className="hidden lg:flex fixed top-4 left-4 z-50 rounded-xl bg-[#6B1F87] p-2.5 text-white shadow-lg hover:bg-[#5B1E74] transition"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+        )}
 
         {/* Sidebar mobile */}
         <div className="lg:hidden">
@@ -67,12 +77,14 @@ export default function MainLayout() {
             {/* Header desktop */}
             <div className="hidden lg:flex items-center justify-between border-b border-purple-100 pb-4">
               <div className="flex items-center gap-4">
-                <button
-                  onClick={() => setDesktopOpen((o) => !o)}
-                  className="rounded-xl bg-[#6B1F87] p-2.5 text-white shadow hover:bg-[#5B1E74] transition"
-                >
-                  <Menu className="h-5 w-5" />
-                </button>
+                {desktopOpen && (
+                  <button
+                    onClick={() => setDesktopOpen(false)}
+                    className="rounded-xl bg-[#6B1F87] p-2.5 text-white shadow hover:bg-[#5B1E74] transition"
+                  >
+                    <Menu className="h-5 w-5" />
+                  </button>
+                )}
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-widest text-purple-400">
                     Liquida System
