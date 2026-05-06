@@ -7,6 +7,13 @@ const PAGE_META = {
   "/faturamento": { title: "Faturamento", subtitle: "Vendas, cliente, fornecedor, lote e rentabilidade" },
   "/abertura-os": { title: "Abertura de OS", subtitle: "Registro e acompanhamento de ordens de serviço" },
   "/linha-branca/triagem": { title: "Triagem", subtitle: "Linha Branca · Classificação de entrada" },
+  "/linha-branca/reparo-mecanico": { title: "Reparo Mecânico", subtitle: "Linha Branca · Execução de reparos mecânicos" },
+  "/linha-branca/reparo-eletrico": { title: "Reparo Elétrico", subtitle: "Linha Branca · Execução de reparos elétricos" },
+  "/linha-branca/reparo-estetico": { title: "Reparo Estético", subtitle: "Linha Branca · Execução de reparos estéticos" },
+  "/linha-branca/bancada-testes": { title: "Bancada de Testes", subtitle: "Linha Branca · Aprovação ou retorno para reparo" },
+  "/linha-branca/limpeza": { title: "Limpeza", subtitle: "Linha Branca · Registro fotográfico pós-limpeza" },
+  "/linha-branca/qualidade": { title: "Qualidade", subtitle: "Linha Branca · Checklist de aprovação e descaracterização" },
+  "/gerenciar-usuarios": { title: "Gerenciar Usuários", subtitle: "Cadastro e permissões de acesso" },
 };
 
 export default function MainLayout() {
@@ -17,11 +24,8 @@ export default function MainLayout() {
     <div className="min-h-screen bg-[linear-gradient(180deg,#FAF6FF_0%,#F4ECFA_100%)] text-slate-900">
       <div className="grid min-h-screen lg:grid-cols-[325px_1fr]">
         <Sidebar />
-
         <main className="p-5 lg:p-6">
           <div className="space-y-6">
-
-            {/* Header dinâmico */}
             <div className="flex items-end justify-between border-b border-purple-100 pb-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-widest text-purple-400">
@@ -35,7 +39,6 @@ export default function MainLayout() {
                 )}
               </div>
             </div>
-
             <Outlet />
           </div>
         </main>

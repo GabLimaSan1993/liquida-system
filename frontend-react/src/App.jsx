@@ -1,6 +1,9 @@
 import { Navigate, Route, Routes } from "react-router-dom";
+import { useAuth } from "./AuthContext.jsx";
 
 import MainLayout from "./layout/MainLayout.jsx";
+import LoginPage from "./pages/LoginPage.jsx";
+import GerenciarUsuariosPage from "./pages/GerenciarUsuariosPage.jsx";
 
 import UploadPage from "./pages/UploadPage.jsx";
 import AnalysisEntryPage from "./pages/AnalysisEntryPage.jsx";
@@ -12,24 +15,54 @@ import BancadaTestesPage from "./pages/BancadaTestesPage.jsx";
 import LimpezaPage from "./pages/LimpezaPage.jsx";
 import QualidadePage from "./pages/QualidadePage.jsx";
 
+function ProtectedRoute({ tela, children }) {
+  const { user, profile, loading, hasAccess } = useAuth();
+  if (loading) return <div className="min-h-screen flex items-center justify-center text-purple-700 font-bold">Carregando...</div>;
+  if (!user) return <Navigate to="/login" replace />;
+  if (tela && !hasAccess(tela)) return <Navigate to="/sem-acesso" replace />;
+  return children;
+}
+
+function SemAcessoPage() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-[#FAF6FF]">
+      <div className="text-center">
+        <div className="text-6xl mb-4">🔒</div>
+        <h1 className="text-2xl font-black text-[#6B1F87] mb-2">Acesso negado</h1>
+        <p className="text-slate-500">Você não tem permissão para acessar esta página.</p>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
+  const { user, loading } = useAuth();
+
+  if (loading) return <div className="min-h-screen flex items-center justify-center text-purple-700 font-bold">Carregando...</div>;
+
   return (
     <Routes>
-      <Route element={<MainLayout />}>
+      <Route path="/login" element={!user ? <LoginPage /> : <Navigate to="/upload" replace />} />
+      <Route path="/sem-acesso" element={<SemAcessoPage />} />
+
+      <Route element={
+        <ProtectedRoute>
+          <MainLayout />
+        </ProtectedRoute>
+      }>
         <Route path="/" element={<Navigate to="/upload" replace />} />
-
-        <Route path="/upload" element={<UploadPage />} />
-        <Route path="/analise-entrada" element={<AnalysisEntryPage />} />
-        <Route path="/faturamento" element={<FaturamentoPage />} />
-        <Route path="/abertura-os" element={<AberturaOsPage />} />
-
-        <Route path="/linha-branca/triagem" element={<LinhaBrancaTriagemPage />} />
-        <Route path="/linha-branca/reparo-mecanico" element={<ReparoLinhaBrancaPage areaExecucao="Reparo Mecânico" />} />
-        <Route path="/linha-branca/reparo-eletrico" element={<ReparoLinhaBrancaPage areaExecucao="Reparo Elétrico" />} />
-        <Route path="/linha-branca/reparo-estetico" element={<ReparoLinhaBrancaPage areaExecucao="Reparo Estético" />} />
-        <Route path="/linha-branca/bancada-testes" element={<BancadaTestesPage />} />
-        <Route path="/linha-branca/limpeza" element={<LimpezaPage />} />
-        <Route path="/linha-branca/qualidade" element={<QualidadePage />} />
+        <Route path="/upload" element={<ProtectedRoute tela="/upload"><UploadPage /></ProtectedRoute>} />
+        <Route path="/analise-entrada" element={<ProtectedRoute tela="/analise-entrada"><AnalysisEntryPage /></ProtectedRoute>} />
+        <Route path="/faturamento" element={<ProtectedRoute tela="/faturamento"><FaturamentoPage /></ProtectedRoute>} />
+        <Route path="/abertura-os" element={<ProtectedRoute tela="/abertura-os"><AberturaOsPage /></ProtectedRoute>} />
+        <Route path="/linha-branca/triagem" element={<ProtectedRoute tela="/linha-branca/triagem"><LinhaBrancaTriagemPage /></ProtectedRoute>} />
+        <Route path="/linha-branca/reparo-mecanico" element={<ProtectedRoute tela="/linha-branca/reparo-mecanico"><ReparoLinhaBrancaPage areaExecucao="Reparo Mecânico" /></ProtectedRoute>} />
+        <Route path="/linha-branca/reparo-eletrico" element={<ProtectedRoute tela="/linha-branca/reparo-eletrico"><ReparoLinhaBrancaPage areaExecucao="Reparo Elétrico" /></ProtectedRoute>} />
+        <Route path="/linha-branca/reparo-estetico" element={<ProtectedRoute tela="/linha-branca/reparo-estetico"><ReparoLinhaBrancaPage areaExecucao="Reparo Estético" /></ProtectedRoute>} />
+        <Route path="/linha-branca/bancada-testes" element={<ProtectedRoute tela="/linha-branca/bancada-testes"><BancadaTestesPage /></ProtectedRoute>} />
+        <Route path="/linha-branca/limpeza" element={<ProtectedRoute tela="/linha-branca/limpeza"><LimpezaPage /></ProtectedRoute>} />
+        <Route path="/linha-branca/qualidade" element={<ProtectedRoute tela="/linha-branca/qualidade"><QualidadePage /></ProtectedRoute>} />
+        <Route path="/gerenciar-usuarios" element={<ProtectedRoute tela="/gerenciar-usuarios"><GerenciarUsuariosPage /></ProtectedRoute>} />
       </Route>
     </Routes>
   );
