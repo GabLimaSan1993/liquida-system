@@ -16,6 +16,8 @@ import {
   ChevronDown,
   ChevronRight,
   Layers,
+  Truck,
+  TrendingUp,
 } from "lucide-react";
 
 function Logo() {
@@ -56,23 +58,36 @@ function NavItem({ to, icon: Icon, label, indent = false }) {
   );
 }
 
-const LINHA_BRANCA_PATHS = [
-  "/linha-branca/triagem",
-  "/linha-branca/reparo-mecanico",
-  "/linha-branca/reparo-eletrico",
-  "/linha-branca/reparo-estetico",
-  "/linha-branca/bancada-testes",
-  "/linha-branca/limpeza",
-  "/linha-branca/qualidade",
-];
+function CollapseGroup({ icon: Icon, label, paths, children }) {
+  const location = useLocation();
+  const isActive = paths.some((p) => location.pathname.startsWith(p));
+  const [open, setOpen] = useState(isActive);
+
+  return (
+    <div className="pt-1">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className={`w-full flex items-center justify-between rounded-2xl px-4 py-3 transition-all ${
+          isActive ? "bg-white/20 text-white" : "text-white/85 hover:bg-white/10"
+        }`}
+      >
+        <div className="flex items-center gap-3">
+          <Icon className="h-4 w-4 shrink-0" />
+          <span className="font-semibold">{label}</span>
+        </div>
+        {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+      </button>
+
+      {open && (
+        <div className="mt-1 space-y-1 border-l-2 border-white/20 ml-4 pl-2">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Sidebar() {
-  const location = useLocation();
-  const isLinhaBrancaActive = LINHA_BRANCA_PATHS.some((p) =>
-    location.pathname.startsWith(p)
-  );
-  const [linhaBrancaOpen, setLinhaBrancaOpen] = useState(isLinhaBrancaActive);
-
   return (
     <aside className="hidden lg:flex flex-col gap-6 bg-[linear-gradient(180deg,#7F2D92_0%,#5B1E74_100%)] p-6 text-white overflow-y-auto">
       <Logo />
@@ -82,44 +97,39 @@ export default function Sidebar() {
         <div className="mt-1 text-lg font-semibold">Pricing & Margem</div>
       </div>
 
-      <nav className="space-y-2">
+      <nav className="space-y-1">
         <NavItem to="/upload" icon={Upload} label="Uploads" />
-        <NavItem to="/analise-entrada" icon={BarChart3} label="Análise de Entrada" />
-        <NavItem to="/faturamento" icon={DollarSign} label="Faturamento" />
-        <NavItem to="/abertura-os" icon={ClipboardList} label="Abertura de OS" />
 
-        {/* Gestão de Linha Branca — colapsável */}
-        <div className="pt-2">
-          <button
-            onClick={() => setLinhaBrancaOpen((o) => !o)}
-            className={`w-full flex items-center justify-between rounded-2xl px-4 py-3 transition-all ${
-              isLinhaBrancaActive
-                ? "bg-white/20 text-white"
-                : "text-white/85 hover:bg-white/10"
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <Layers className="h-4 w-4 shrink-0" />
-              <span className="font-semibold">Linha Branca</span>
-            </div>
-            {linhaBrancaOpen
-              ? <ChevronDown className="h-4 w-4" />
-              : <ChevronRight className="h-4 w-4" />
-            }
-          </button>
+        <CollapseGroup
+          icon={TrendingUp}
+          label="Tesouraria"
+          paths={["/analise-entrada", "/faturamento"]}
+        >
+          <NavItem to="/analise-entrada" icon={BarChart3} label="Análise de Entrada" indent />
+          <NavItem to="/faturamento" icon={DollarSign} label="Faturamento" indent />
+        </CollapseGroup>
 
-          {linhaBrancaOpen && (
-            <div className="mt-1 space-y-1 border-l-2 border-white/20 ml-4 pl-2">
-              <NavItem to="/linha-branca/triagem" icon={ClipboardCheck} label="Triagem" indent />
-              <NavItem to="/linha-branca/reparo-mecanico" icon={Wrench} label="Reparo Mecânico" indent />
-              <NavItem to="/linha-branca/reparo-eletrico" icon={Zap} label="Reparo Elétrico" indent />
-              <NavItem to="/linha-branca/reparo-estetico" icon={Sparkles} label="Reparo Estético" indent />
-              <NavItem to="/linha-branca/bancada-testes" icon={FlaskConical} label="Bancada de Testes" indent />
-              <NavItem to="/linha-branca/limpeza" icon={Camera} label="Limpeza" indent />
-              <NavItem to="/linha-branca/qualidade" icon={ShieldCheck} label="Qualidade" indent />
-            </div>
-          )}
-        </div>
+        <CollapseGroup
+          icon={Truck}
+          label="Logística"
+          paths={["/abertura-os"]}
+        >
+          <NavItem to="/abertura-os" icon={ClipboardList} label="Abertura de OS" indent />
+        </CollapseGroup>
+
+        <CollapseGroup
+          icon={Layers}
+          label="Linha Branca"
+          paths={["/linha-branca"]}
+        >
+          <NavItem to="/linha-branca/triagem" icon={ClipboardCheck} label="Triagem" indent />
+          <NavItem to="/linha-branca/reparo-mecanico" icon={Wrench} label="Reparo Mecânico" indent />
+          <NavItem to="/linha-branca/reparo-eletrico" icon={Zap} label="Reparo Elétrico" indent />
+          <NavItem to="/linha-branca/reparo-estetico" icon={Sparkles} label="Reparo Estético" indent />
+          <NavItem to="/linha-branca/bancada-testes" icon={FlaskConical} label="Bancada de Testes" indent />
+          <NavItem to="/linha-branca/limpeza" icon={Camera} label="Limpeza" indent />
+          <NavItem to="/linha-branca/qualidade" icon={ShieldCheck} label="Qualidade" indent />
+        </CollapseGroup>
 
         <div className="pt-2">
           <div className="px-4 text-xs font-bold text-white/50 uppercase">Sistema</div>
