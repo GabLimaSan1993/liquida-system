@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import Sidebar from "../components/Sidebar.jsx";
+import { Menu } from "lucide-react";
 
 const PAGE_META = {
   "/upload": { title: "Uploads", subtitle: "Envie as bases para análise" },
@@ -19,14 +21,42 @@ const PAGE_META = {
 export default function MainLayout() {
   const { pathname } = useLocation();
   const meta = PAGE_META[pathname] ?? { title: "Liquida System", subtitle: "" };
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#FAF6FF_0%,#F4ECFA_100%)] text-slate-900">
-      <div className="grid min-h-screen lg:grid-cols-[325px_1fr]">
-        <Sidebar />
-        <main className="p-5 lg:p-6">
+      <div className="lg:grid lg:min-h-screen lg:grid-cols-[325px_1fr]">
+
+        {/* Sidebar desktop */}
+        <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+
+        {/* Overlay mobile */}
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 z-30 bg-black/50 lg:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
+        <main className="min-h-screen p-4 lg:p-6">
+
+          {/* Header mobile */}
+          <div className="flex items-center justify-between mb-4 lg:hidden">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="rounded-2xl bg-[#6B1F87] p-3 text-white shadow-lg"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <div className="text-right">
+              <div className="text-xs font-semibold uppercase tracking-widest text-purple-400">Liquida System</div>
+              <div className="text-lg font-black text-[#4C1D95]">{meta.title}</div>
+            </div>
+          </div>
+
           <div className="space-y-6">
-            <div className="flex items-end justify-between border-b border-purple-100 pb-4">
+            {/* Header desktop */}
+            <div className="hidden lg:flex items-end justify-between border-b border-purple-100 pb-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-widest text-purple-400">
                   Liquida System
@@ -39,6 +69,7 @@ export default function MainLayout() {
                 )}
               </div>
             </div>
+
             <Outlet />
           </div>
         </main>

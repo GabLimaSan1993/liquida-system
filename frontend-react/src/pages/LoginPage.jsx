@@ -32,7 +32,6 @@ export default function LoginPage() {
     <div className="min-h-screen bg-[linear-gradient(135deg,#4C1D95_0%,#6B1F87_42%,#A12A7D_70%,#F97316_100%)] flex items-center justify-center p-4">
       <div className="w-full max-w-md">
 
-        {/* Logo */}
         <div className="flex items-center gap-3 justify-center mb-8">
           <div className="relative h-14 w-14 rounded-2xl bg-white/20 shadow-lg ring-1 ring-white/30 overflow-hidden">
             <div className="absolute inset-0 flex items-center justify-center text-white font-black text-xl">
@@ -47,7 +46,6 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Card */}
         <div className="rounded-[32px] bg-white p-8 shadow-2xl">
           <h1 className="text-2xl font-black text-[#4C1D95] mb-1">Bem-vindo</h1>
           <p className="text-sm text-slate-500 mb-6">Faça login para acessar o sistema.</p>
@@ -90,10 +88,6 @@ export default function LoginPage() {
             </button>
           </form>
         </div>
-
-        <p className="text-center text-xs text-white/50 mt-6">
-          Liquida System · Pricing & Margem
-        </p>
       </div>
     </div>
   );
