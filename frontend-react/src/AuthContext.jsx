@@ -15,6 +15,8 @@ export function AuthProvider({ children }) {
       setProfile(p);
     } catch {
       setProfile(null);
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -22,15 +24,20 @@ export function AuthProvider({ children }) {
     supabase.auth.getSession().then(({ data }) => {
       const u = data.session?.user ?? null;
       setUser(u);
-      if (u) loadProfile(u.id);
-      else setLoading(false);
+      if (u) {
+        loadProfile(u.id);
+      } else {
+        setLoading(false);
+      }
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       const u = session?.user ?? null;
       setUser(u);
-      if (u) loadProfile(u.id);
-      else {
+      if (u) {
+        setLoading(true);
+        loadProfile(u.id);
+      } else {
         setProfile(null);
         setLoading(false);
       }
@@ -38,10 +45,6 @@ export function AuthProvider({ children }) {
 
     return () => listener.subscription.unsubscribe();
   }, []);
-
-  useEffect(() => {
-    if (user !== null) setLoading(false);
-  }, [profile, user]);
 
   function hasAccess(tela) {
     if (!profile) return false;
