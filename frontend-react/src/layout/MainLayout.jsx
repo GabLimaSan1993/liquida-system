@@ -25,12 +25,26 @@ export default function MainLayout() {
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#FAF6FF_0%,#F4ECFA_100%)] text-slate-900">
+
+      {/* Header fixo mobile */}
+      <header className="fixed top-0 left-0 right-0 z-20 flex items-center justify-between bg-white/90 backdrop-blur-md border-b border-purple-100 px-4 py-3 lg:hidden shadow-sm">
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className="rounded-xl bg-[#6B1F87] p-2.5 text-white shadow"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+        <div className="text-center">
+          <div className="text-xs font-semibold uppercase tracking-widest text-purple-400">Liquida System</div>
+          <div className="text-base font-black text-[#4C1D95] leading-tight">{meta.title}</div>
+        </div>
+        <div className="w-10" /> {/* espaço para centralizar o título */}
+      </header>
+
       <div className="lg:grid lg:min-h-screen lg:grid-cols-[325px_1fr]">
 
-        {/* Sidebar desktop */}
         <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-        {/* Overlay mobile */}
         {sidebarOpen && (
           <div
             className="fixed inset-0 z-30 bg-black/50 lg:hidden"
@@ -38,23 +52,9 @@ export default function MainLayout() {
           />
         )}
 
-        <main className="min-h-screen p-4 lg:p-6">
-
-          {/* Header mobile */}
-          <div className="flex items-center justify-between mb-4 lg:hidden">
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="rounded-2xl bg-[#6B1F87] p-3 text-white shadow-lg"
-            >
-              <Menu className="h-5 w-5" />
-            </button>
-            <div className="text-right">
-              <div className="text-xs font-semibold uppercase tracking-widest text-purple-400">Liquida System</div>
-              <div className="text-lg font-black text-[#4C1D95]">{meta.title}</div>
-            </div>
-          </div>
-
+        <main className="pt-16 lg:pt-0 p-4 lg:p-6 min-h-screen">
           <div className="space-y-6">
+
             {/* Header desktop */}
             <div className="hidden lg:flex items-end justify-between border-b border-purple-100 pb-4">
               <div>
