@@ -11,6 +11,7 @@ import {
   REPAROS_ELETRICOS,
   REPAROS_ESTETICOS,
 } from "../services/linhaBrancaService.js";
+import { useAuth } from "../AuthContext.jsx";
 
 const REPAROS_POR_AREA = {
   "Reparo Mecânico": { campo: "reparos_mecanicos", lista: REPAROS_MECANICOS },
@@ -19,7 +20,6 @@ const REPAROS_POR_AREA = {
 };
 
 const EMPTY_EXECUCAO = {
-  tecnico: "",
   diagnostico_final: "",
   peca_trocada: false,
   pecas: [],
@@ -53,9 +53,8 @@ function Button({ children, primary = false, danger = false, ...props }) {
   return <button {...props} className={`${base} ${style}`}>{children}</button>;
 }
 
-function ModalCondenar({ onConfirm, onCancel, saving }) {
+function ModalCondenar({ onConfirm, onCancel, saving, tecnico }) {
   const [motivo, setMotivo] = useState("");
-  const [tecnico, setTecnico] = useState("");
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
@@ -75,15 +74,10 @@ function ModalCondenar({ onConfirm, onCancel, saving }) {
         </p>
 
         <div className="space-y-4">
-          <label>
-            <span className="text-sm font-semibold text-slate-600">Técnico responsável *</span>
-            <input
-              value={tecnico}
-              onChange={(e) => setTecnico(e.target.value)}
-              className={inputClass()}
-              placeholder="Nome do técnico"
-            />
-          </label>
+          <div className="rounded-2xl bg-[#FCFAFF] p-4 ring-1 ring-[#E9D5FF]">
+            <div className="text-xs font-semibold text-slate-500">Técnico responsável</div>
+            <div className="mt-1 text-sm font-bold text-[#6B1F87]">{tecnico}</div>
+          </div>
           <label>
             <span className="text-sm font-semibold text-slate-600">Motivo da condenação *</span>
             <textarea
@@ -99,7 +93,7 @@ function ModalCondenar({ onConfirm, onCancel, saving }) {
         <div className="mt-6 flex gap-3">
           <button
             onClick={() => onConfirm(motivo, tecnico)}
-            disabled={!motivo || !tecnico || saving}
+            disabled={!motivo || saving}
             className="flex-1 rounded-2xl bg-red-500 py-3 text-sm font-bold text-white hover:bg-red-600 disabled:opacity-50 transition"
           >
             {saving ? "Condenando..." : "Confirmar condenação"}
@@ -117,6 +111,7 @@ function ModalCondenar({ onConfirm, onCancel, saving }) {
 }
 
 export default function ReparoLinhaBrancaPage({ areaExecucao }) {
+  const { profile } = useAuth();
   const [osList, setOsList] = useState([]);
   const [selectedOsId, setSelectedOsId] = useState("");
   const [triagem, setTriagem] = useState(null);
@@ -141,7 +136,9 @@ export default function ReparoLinhaBrancaPage({ areaExecucao }) {
   }, [triagem, campo]);
 
   const reparosDisponivelAdicional = useMemo(() => {
-    return listaCompleta?.filter((r) => !reparosTriados.includes(r) && !execucao.reparos_adicionais.includes(r)) || [];
+    return listaCompleta?.filter(
+      (r) => !reparosTriados.includes(r) && !execucao.reparos_adicionais.includes(r)
+    ) || [];
   }, [listaCompleta, reparosTriados, execucao.reparos_adicionais]);
 
   async function loadOs() {
@@ -174,7 +171,6 @@ export default function ReparoLinhaBrancaPage({ areaExecucao }) {
     setExecucao((cur) => ({ ...cur, [field]: value }));
   }
 
-  // Peças
   function adicionarPeca() {
     const nova = execucao.novaPeca.trim();
     if (!nova) return;
@@ -192,7 +188,6 @@ export default function ReparoLinhaBrancaPage({ areaExecucao }) {
     }));
   }
 
-  // Reparos adicionais
   function adicionarReparoAdicional() {
     if (!reparoAdicionalSelecionado) return;
     setExecucao((cur) => ({
@@ -234,8 +229,8 @@ export default function ReparoLinhaBrancaPage({ areaExecucao }) {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!selectedOs || !execucao.tecnico || !execucao.diagnostico_final) {
-      setStatus("Preencha a OS, técnico e diagnóstico final.");
+    if (!selectedOs || !execucao.diagnostico_final) {
+      setStatus("Preencha a OS e o diagnóstico final.");
       return;
     }
     try {
@@ -249,6 +244,7 @@ export default function ReparoLinhaBrancaPage({ areaExecucao }) {
         selectedOs,
         {
           ...execucao,
+          tecnico: profile?.nome,
           servico_executado: servicoCompleto,
           peca_trocada: execucao.pecas.length > 0,
           descricao_peca: execucao.pecas.join(", "),
@@ -272,6 +268,7 @@ export default function ReparoLinhaBrancaPage({ areaExecucao }) {
           onConfirm={handleCondenar}
           onCancel={() => setShowModalCondenar(false)}
           saving={condenando}
+          tecnico={profile?.nome}
         />
       )}
 
@@ -284,10 +281,16 @@ export default function ReparoLinhaBrancaPage({ areaExecucao }) {
                 Execute os reparos triados e registre o diagnóstico final.
               </p>
             </div>
-            <div className="rounded-2xl bg-[#FCFAFF] px-4 py-3 ring-1 ring-[#E9D5FF]">
-              <div className="text-xs font-semibold text-slate-500">OS pendentes</div>
-              <div className="text-xl font-black text-[#6B1F87]">
-                {loading ? "..." : osList.length}
+            <div className="flex items-center gap-4">
+              <div className="rounded-2xl bg-[#FCFAFF] px-4 py-3 ring-1 ring-[#E9D5FF]">
+                <div className="text-xs font-semibold text-slate-500">Técnico</div>
+                <div className="text-sm font-bold text-[#6B1F87]">{profile?.nome}</div>
+              </div>
+              <div className="rounded-2xl bg-[#FCFAFF] px-4 py-3 ring-1 ring-[#E9D5FF]">
+                <div className="text-xs font-semibold text-slate-500">OS pendentes</div>
+                <div className="text-xl font-black text-[#6B1F87]">
+                  {loading ? "..." : osList.length}
+                </div>
               </div>
             </div>
           </div>
@@ -300,37 +303,24 @@ export default function ReparoLinhaBrancaPage({ areaExecucao }) {
               <h2 className="text-lg font-bold text-[#6B1F87]">Selecionar OS</h2>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <label>
-                <span className="text-sm font-semibold text-slate-600">OS para reparo</span>
-                <select
-                  value={selectedOsId}
-                  onChange={(e) => handleSelectOs(e.target.value)}
-                  className={inputClass()}
-                >
-                  <option value="">Selecione uma OS</option>
-                  {osList.map((os) => (
-                    <option key={os.id} value={os.id}>
-                      {os.numero_os} — {os.marca || "Sem marca"} {os.modelo || ""}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label>
-                <span className="text-sm font-semibold text-slate-600">Técnico responsável</span>
-                <input
-                  value={execucao.tecnico}
-                  onChange={(e) => update("tecnico", e.target.value)}
-                  disabled={!selectedOs}
-                  className={inputClass(!selectedOs)}
-                  placeholder="Nome do técnico"
-                />
-              </label>
-            </div>
+            <label>
+              <span className="text-sm font-semibold text-slate-600">OS para reparo</span>
+              <select
+                value={selectedOsId}
+                onChange={(e) => handleSelectOs(e.target.value)}
+                className={inputClass()}
+              >
+                <option value="">Selecione uma OS</option>
+                {osList.map((os) => (
+                  <option key={os.id} value={os.id}>
+                    {os.numero_os} — {os.marca || "Sem marca"} {os.modelo || ""}
+                  </option>
+                ))}
+              </select>
+            </label>
 
             {selectedOs && (
-              <div className="mt-5 grid gap-4 md:grid-cols-4">
+              <div className="mt-5 grid gap-4 grid-cols-2 md:grid-cols-4">
                 {[
                   ["Fornecedor", selectedOs.fornecedor],
                   ["Lote", selectedOs.lote],
@@ -361,7 +351,6 @@ export default function ReparoLinhaBrancaPage({ areaExecucao }) {
                 )}
               </div>
 
-              {/* Reparos adicionais — dropdown */}
               <div className="mt-6">
                 <h3 className="mb-3 text-sm font-bold text-slate-600">Reparos adicionais encontrados</h3>
                 <div className="flex gap-2">
@@ -401,7 +390,6 @@ export default function ReparoLinhaBrancaPage({ areaExecucao }) {
             </SectionCard>
           )}
 
-          {/* Peças trocadas */}
           {selectedOs && (
             <SectionCard>
               <h2 className="mb-4 text-lg font-bold text-[#6B1F87]">Peças trocadas</h2>
