@@ -13,6 +13,7 @@ import {
   createOrdemServico,
   parseXmlNfe,
 } from "../services/osService.js";
+import { useAuth } from "../AuthContext.jsx";
 
 const EMPTY_FORM = {
   numero_os: "",
@@ -22,14 +23,12 @@ const EMPTY_FORM = {
   fornecedor: "",
   fornecedor_cnpj: "",
   origem: "Compra",
-
   nf_entrada_id: null,
   nf_entrada_item_id: null,
   chave_nfe: "",
   numero_nf: "",
   serie_nf: "",
   item_xml_index: "",
-
   linha_produto: "",
   categoria: "",
   marca: "",
@@ -39,13 +38,11 @@ const EMPTY_FORM = {
   imei: "",
   voltagem: "",
   valor_entrada: "",
-
   estado_visual: "OK",
   possui_avaria: false,
   descricao_avaria: "",
   acessorios_recebidos: "",
   observacoes_logistica: "",
-
   status_atual: "Recebido",
   etapa_atual: "Aguardando triagem",
   prioridade: "Normal",
@@ -97,6 +94,7 @@ function Button({ children, primary = false, ...props }) {
 }
 
 export default function AberturaOsPage() {
+  const { profile } = useAuth();
   const [form, setForm] = useState({
     ...EMPTY_FORM,
     numero_os: buildNumeroOs("Diversos"),
@@ -125,10 +123,7 @@ export default function AberturaOsPage() {
   }, [form, xmlLoaded]);
 
   function update(field, value) {
-    setForm((current) => ({
-      ...current,
-      [field]: value,
-    }));
+    setForm((current) => ({ ...current, [field]: value }));
   }
 
   function handleLinhaProdutoChange(value) {
@@ -157,15 +152,12 @@ export default function AberturaOsPage() {
   async function handleXmlUpload(event) {
     const file = event.target.files?.[0];
     if (!file) return;
-
     try {
       setReadingXml(true);
       setStatus("Lendo XML da NF...");
-
       const parsed = await parseXmlNfe(file);
       setXmlData(parsed);
       setSelectedItem(null);
-
       setForm((current) => ({
         ...current,
         fornecedor: parsed.fornecedor,
@@ -176,10 +168,8 @@ export default function AberturaOsPage() {
         item_xml_index: "",
         lote: current.lote || buildLote(current.linha_produto || "Diversos"),
       }));
-
       setStatus(`XML lido com sucesso. NF ${parsed.numero_nf} com ${parsed.itens.length} item(ns).`);
     } catch (error) {
-      console.error(error);
       setStatus(`Erro ao ler XML: ${error.message || "falha ao processar NF"}`);
     } finally {
       setReadingXml(false);
@@ -188,10 +178,8 @@ export default function AberturaOsPage() {
 
   function handleItemChange(indexValue) {
     if (!xmlData) return;
-
     const item = xmlData.itens.find((current) => String(current.index) === String(indexValue));
     setSelectedItem(item || null);
-
     setForm((current) => ({
       ...current,
       item_xml_index: indexValue,
@@ -214,30 +202,25 @@ export default function AberturaOsPage() {
 
   async function handleSubmit(event) {
     event.preventDefault();
-
     if (!canSave) {
       setStatus("Suba o XML da NF, selecione o item e preencha linha do produto e marca.");
       return;
     }
-
     if (form.dt_fabricacao && form.dt_fabricacao > new Date().toISOString().slice(0, 10)) {
       setStatus("A data de fabricação não pode ser futura.");
       return;
     }
-
     try {
       setSaving(true);
-      setStatus("Salvando OS e alimentando aging operacional...");
-
+      setStatus("Salvando OS...");
       await createOrdemServico({
         ...form,
+        criado_por: profile?.nome,
         possui_avaria: Boolean(form.possui_avaria),
         valor_entrada: form.valor_entrada === "" ? null : Number(form.valor_entrada),
         nf_entrada_item_id: form.item_xml_index === "" ? null : Number(form.item_xml_index),
       });
-
-      setStatus(`OS ${form.numero_os} criada com sucesso.`);
-
+      setStatus(`OS ${form.numero_os} criada com sucesso por ${profile?.nome}.`);
       setForm((current) => ({
         ...EMPTY_FORM,
         numero_os: buildNumeroOs(current.linha_produto || "Diversos"),
@@ -249,10 +232,8 @@ export default function AberturaOsPage() {
         chave_nfe: current.chave_nfe,
         linha_produto: current.linha_produto,
       }));
-
       setSelectedItem(null);
     } catch (error) {
-      console.error(error);
       setStatus(`Erro ao salvar OS: ${error.message || "falha no cadastro"}`);
     } finally {
       setSaving(false);
@@ -271,11 +252,14 @@ export default function AberturaOsPage() {
               Suba o XML da NF para amarrar fornecedor, item, lote, NF e OS.
             </p>
           </div>
-
-          <div className="rounded-2xl bg-[#FCFAFF] px-4 py-3 ring-1 ring-[#E9D5FF]">
-            <div className="text-xs font-semibold text-slate-500">Status inicial</div>
-            <div className="text-sm font-bold text-[#6B1F87]">
-              Recebido / Aguardando triagem
+          <div className="flex items-center gap-4">
+            <div className="rounded-2xl bg-[#FCFAFF] px-4 py-3 ring-1 ring-[#E9D5FF]">
+              <div className="text-xs font-semibold text-slate-500">Criado por</div>
+              <div className="text-sm font-bold text-[#6B1F87]">{profile?.nome}</div>
+            </div>
+            <div className="rounded-2xl bg-[#FCFAFF] px-4 py-3 ring-1 ring-[#E9D5FF]">
+              <div className="text-xs font-semibold text-slate-500">Status inicial</div>
+              <div className="text-sm font-bold text-[#6B1F87]">Recebido / Aguardando triagem</div>
             </div>
           </div>
         </div>
@@ -296,7 +280,6 @@ export default function AberturaOsPage() {
                 onChange={handleXmlUpload}
                 className="block w-full text-sm text-slate-600"
               />
-
               <div className="mt-4 text-sm text-slate-500">
                 {readingXml
                   ? "Processando XML..."
@@ -308,35 +291,16 @@ export default function AberturaOsPage() {
 
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <Field label="Fornecedor">
-                <input
-                  value={form.fornecedor}
-                  disabled
-                  className={inputClass(true)}
-                />
+                <input value={form.fornecedor} disabled className={inputClass(true)} />
               </Field>
-
               <Field label="CNPJ fornecedor">
-                <input
-                  value={form.fornecedor_cnpj}
-                  disabled
-                  className={inputClass(true)}
-                />
+                <input value={form.fornecedor_cnpj} disabled className={inputClass(true)} />
               </Field>
-
               <Field label="Número NF">
-                <input
-                  value={form.numero_nf}
-                  disabled
-                  className={inputClass(true)}
-                />
+                <input value={form.numero_nf} disabled className={inputClass(true)} />
               </Field>
-
               <Field label="Chave NF-e">
-                <input
-                  value={form.chave_nfe}
-                  disabled
-                  className={inputClass(true)}
-                />
+                <input value={form.chave_nfe} disabled className={inputClass(true)} />
               </Field>
             </div>
           </div>
@@ -357,20 +321,14 @@ export default function AberturaOsPage() {
               >
                 <option value="">Selecione</option>
                 {LINHAS_PRODUTO.map((linha) => (
-                  <option key={linha} value={linha}>
-                    {linha}
-                  </option>
+                  <option key={linha} value={linha}>{linha}</option>
                 ))}
               </select>
             </Field>
 
             <Field label="Número da OS">
               <div className="flex gap-2">
-                <input
-                  value={form.numero_os}
-                  disabled
-                  className={inputClass(true)}
-                />
+                <input value={form.numero_os} disabled className={inputClass(true)} />
                 <button
                   type="button"
                   onClick={regenerateNumeroOs}
@@ -383,11 +341,7 @@ export default function AberturaOsPage() {
 
             <Field label="Lote automático">
               <div className="flex gap-2">
-                <input
-                  value={form.lote}
-                  disabled
-                  className={inputClass(true)}
-                />
+                <input value={form.lote} disabled className={inputClass(true)} />
                 <button
                   type="button"
                   onClick={regenerateLote}
@@ -452,46 +406,28 @@ export default function AberturaOsPage() {
                 >
                   <option value="">Selecione um item da NF</option>
                   {xmlData?.itens?.map((item) => (
-                    <option key={item.index} value={item.index}>
-                      {item.label}
-                    </option>
+                    <option key={item.index} value={item.index}>{item.label}</option>
                   ))}
                 </select>
               </Field>
             </div>
 
             <Field label="Quantidade NF">
-              <input
-                value={selectedItem?.quantidade || ""}
-                disabled
-                className={inputClass(true)}
-              />
+              <input value={selectedItem?.quantidade || ""} disabled className={inputClass(true)} />
             </Field>
 
             <Field label="Valor unitário NF">
-              <input
-                value={selectedItem?.valor_unitario || ""}
-                disabled
-                className={inputClass(true)}
-              />
+              <input value={selectedItem?.valor_unitario || ""} disabled className={inputClass(true)} />
             </Field>
 
             <div className="md:col-span-2">
               <Field label="Descrição do produto">
-                <input
-                  value={form.descricao_produto}
-                  disabled
-                  className={inputClass(true)}
-                />
+                <input value={form.descricao_produto} disabled className={inputClass(true)} />
               </Field>
             </div>
 
             <Field label="Valor de entrada">
-              <input
-                value={form.valor_entrada}
-                disabled
-                className={inputClass(true)}
-              />
+              <input value={form.valor_entrada} disabled className={inputClass(true)} />
             </Field>
           </div>
         </SectionCard>
@@ -507,7 +443,6 @@ export default function AberturaOsPage() {
                 className={inputClass()}
               />
             </Field>
-
             <Field label="Marca">
               <input
                 value={form.marca}
@@ -515,7 +450,6 @@ export default function AberturaOsPage() {
                 className={inputClass()}
               />
             </Field>
-
             <Field label="Modelo">
               <input
                 value={form.modelo}
@@ -523,7 +457,6 @@ export default function AberturaOsPage() {
                 className={inputClass()}
               />
             </Field>
-
             <Field label="Serial">
               <input
                 value={form.serial_number}
@@ -531,7 +464,6 @@ export default function AberturaOsPage() {
                 className={inputClass()}
               />
             </Field>
-
             <Field label="IMEI / patrimônio">
               <input
                 value={form.imei}
@@ -539,7 +471,6 @@ export default function AberturaOsPage() {
                 className={inputClass()}
               />
             </Field>
-
             <Field label="Voltagem">
               <select
                 value={form.voltagem}
@@ -619,18 +550,17 @@ export default function AberturaOsPage() {
           </div>
         </SectionCard>
 
-        {status ? (
+        {status && (
           <div className="rounded-2xl bg-[#FCFAFF] p-4 text-sm font-semibold text-[#6B1F87] ring-1 ring-[#E9D5FF]">
             {status}
           </div>
-        ) : null}
+        )}
 
         <div className="flex flex-wrap gap-3">
           <Button primary type="submit" disabled={saving || !canSave}>
             <Save className="h-4 w-4" />
             {saving ? "Salvando..." : "Salvar OS"}
           </Button>
-
           <Button type="button" onClick={resetForm}>
             <RotateCcw className="h-4 w-4" />
             Limpar formulário

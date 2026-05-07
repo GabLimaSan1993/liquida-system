@@ -13,43 +13,35 @@ export function getLinhaPrefix(linhaProduto) {
 
 export function buildNumeroOs(linhaProduto = "Diversos") {
   const now = new Date();
-
   const datePart = [
     now.getFullYear(),
     String(now.getMonth() + 1).padStart(2, "0"),
     String(now.getDate()).padStart(2, "0"),
   ].join("");
-
   const timePart = [
     String(now.getHours()).padStart(2, "0"),
     String(now.getMinutes()).padStart(2, "0"),
     String(now.getSeconds()).padStart(2, "0"),
   ].join("");
-
   const randomPart = String(Math.floor(Math.random() * 9999)).padStart(4, "0");
   const prefix = getLinhaPrefix(linhaProduto);
-
   return `OS-${prefix}-${datePart}-${timePart}-${randomPart}`;
 }
 
 export function buildLote(linhaProduto = "Diversos") {
   const now = new Date();
-
   const datePart = [
     now.getFullYear(),
     String(now.getMonth() + 1).padStart(2, "0"),
     String(now.getDate()).padStart(2, "0"),
   ].join("");
-
   const timePart = [
     String(now.getHours()).padStart(2, "0"),
     String(now.getMinutes()).padStart(2, "0"),
     String(now.getSeconds()).padStart(2, "0"),
   ].join("");
-
   const randomPart = String(Math.floor(Math.random() * 9999)).padStart(4, "0");
   const prefix = getLinhaPrefix(linhaProduto);
-
   return `LOTE-${prefix}-${datePart}-${timePart}-${randomPart}`;
 }
 
@@ -69,9 +61,7 @@ export async function parseXmlNfe(file) {
   const xml = parser.parseFromString(xmlText, "text/xml");
 
   const parserError = xml.querySelector("parsererror");
-  if (parserError) {
-    throw new Error("XML inválido ou com estrutura não reconhecida.");
-  }
+  if (parserError) throw new Error("XML inválido ou com estrutura não reconhecida.");
 
   const infNFe = xml.querySelector("infNFe");
   const ide = xml.querySelector("ide");
@@ -79,20 +69,17 @@ export async function parseXmlNfe(file) {
 
   const chaveNfeRaw = infNFe?.getAttribute("Id") || "";
   const chave_nfe = chaveNfeRaw.replace(/^NFe/i, "");
-
   const numero_nf = textContent(ide, "nNF");
   const serie_nf = textContent(ide, "serie");
   const data_emissao =
     textContent(ide, "dhEmi")?.slice(0, 10) ||
     textContent(ide, "dEmi")?.slice(0, 10) ||
     "";
-
   const fornecedor = textContent(emit, "xNome");
   const fornecedor_cnpj = textContent(emit, "CNPJ");
 
   const itens = Array.from(xml.querySelectorAll("det")).map((det, index) => {
     const prod = det.querySelector("prod");
-
     const codigo = textContent(prod, "cProd");
     const descricao = textContent(prod, "xProd");
     const ncm = textContent(prod, "NCM");
@@ -101,7 +88,6 @@ export async function parseXmlNfe(file) {
     const quantidade = parseNumber(textContent(prod, "qCom"));
     const valor_unitario = parseNumber(textContent(prod, "vUnCom"));
     const valor_total = parseNumber(textContent(prod, "vProd"));
-
     return {
       index,
       codigo,
@@ -133,7 +119,6 @@ export async function parseXmlNfe(file) {
 }
 
 export async function createOrdemServico(payload) {
-  // Campos válidos da tabela ordens_servico
   const osPayload = {
     numero_os: payload.numero_os,
     dt_entrada: payload.dt_entrada,
@@ -161,6 +146,7 @@ export async function createOrdemServico(payload) {
     nf_entrada_item_id: payload.nf_entrada_item_id || null,
     chave_nfe: payload.chave_nfe,
     numero_nf: payload.numero_nf,
+    criado_por: payload.criado_por || null,
     areas_reparo: [],
     areas_concluidas: [],
   };

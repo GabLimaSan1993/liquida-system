@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { FlaskConical, Save, RotateCcw, AlertTriangle } from "lucide-react";
+import { FlaskConical, Save, RotateCcw } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { useAuth } from "../AuthContext.jsx";
 
 const EMPTY = {
-  tecnico: "",
-  aprovado: null,
   obs_bancada: "",
+  aprovado: null,
   etapa_retorno: "",
 };
 
@@ -36,6 +36,7 @@ function Button({ children, primary = false, danger = false, ...props }) {
 }
 
 export default function BancadaTestesPage() {
+  const { profile } = useAuth();
   const [osList, setOsList] = useState([]);
   const [selectedOsId, setSelectedOsId] = useState("");
   const [form, setForm] = useState({ ...EMPTY });
@@ -79,8 +80,8 @@ export default function BancadaTestesPage() {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!selectedOs || form.aprovado === null || !form.tecnico) {
-      setStatus("Preencha técnico e o resultado do teste.");
+    if (!selectedOs || form.aprovado === null) {
+      setStatus("Selecione uma OS e o resultado do teste.");
       return;
     }
     if (!form.aprovado && !form.etapa_retorno) {
@@ -104,7 +105,7 @@ export default function BancadaTestesPage() {
           area_destino: novaArea,
           aprovado_bancada: form.aprovado,
           obs_bancada: form.obs_bancada,
-          tecnico_bancada: form.tecnico,
+          tecnico_bancada: profile?.nome,
         })
         .eq("id", selectedOs.id);
 
@@ -134,10 +135,16 @@ export default function BancadaTestesPage() {
               Aprove o produto ou retorne para a etapa de reparo correspondente.
             </p>
           </div>
-          <div className="rounded-2xl bg-[#FCFAFF] px-4 py-3 ring-1 ring-[#E9D5FF]">
-            <div className="text-xs font-semibold text-slate-500">OS pendentes</div>
-            <div className="text-xl font-black text-[#6B1F87]">
-              {loading ? "..." : osList.length}
+          <div className="flex items-center gap-4">
+            <div className="rounded-2xl bg-[#FCFAFF] px-4 py-3 ring-1 ring-[#E9D5FF]">
+              <div className="text-xs font-semibold text-slate-500">Técnico</div>
+              <div className="text-sm font-bold text-[#6B1F87]">{profile?.nome}</div>
+            </div>
+            <div className="rounded-2xl bg-[#FCFAFF] px-4 py-3 ring-1 ring-[#E9D5FF]">
+              <div className="text-xs font-semibold text-slate-500">OS pendentes</div>
+              <div className="text-xl font-black text-[#6B1F87]">
+                {loading ? "..." : osList.length}
+              </div>
             </div>
           </div>
         </div>
@@ -150,37 +157,24 @@ export default function BancadaTestesPage() {
             <h2 className="text-lg font-bold text-[#6B1F87]">Selecionar OS</h2>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <label>
-              <span className="text-sm font-semibold text-slate-600">OS para teste</span>
-              <select
-                value={selectedOsId}
-                onChange={(e) => setSelectedOsId(e.target.value)}
-                className={inputClass()}
-              >
-                <option value="">Selecione uma OS</option>
-                {osList.map((os) => (
-                  <option key={os.id} value={os.id}>
-                    {os.numero_os} — {os.marca || "Sem marca"} {os.modelo || ""}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label>
-              <span className="text-sm font-semibold text-slate-600">Técnico responsável</span>
-              <input
-                value={form.tecnico}
-                onChange={(e) => update("tecnico", e.target.value)}
-                disabled={!selectedOs}
-                className={inputClass(!selectedOs)}
-                placeholder="Nome do técnico"
-              />
-            </label>
-          </div>
+          <label>
+            <span className="text-sm font-semibold text-slate-600">OS para teste</span>
+            <select
+              value={selectedOsId}
+              onChange={(e) => setSelectedOsId(e.target.value)}
+              className={inputClass()}
+            >
+              <option value="">Selecione uma OS</option>
+              {osList.map((os) => (
+                <option key={os.id} value={os.id}>
+                  {os.numero_os} — {os.marca || "Sem marca"} {os.modelo || ""}
+                </option>
+              ))}
+            </select>
+          </label>
 
           {selectedOs && (
-            <div className="mt-5 grid gap-4 md:grid-cols-4">
+            <div className="mt-5 grid gap-4 grid-cols-2 md:grid-cols-4">
               {[
                 ["Fornecedor", selectedOs.fornecedor],
                 ["Lote", selectedOs.lote],

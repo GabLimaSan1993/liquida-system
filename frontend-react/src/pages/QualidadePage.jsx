@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ShieldCheck, Save, RotateCcw } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { useAuth } from "../AuthContext.jsx";
 
 const CHECKLIST_APROVACAO = [
   "Produto ligando corretamente",
@@ -42,18 +43,17 @@ function Button({ children, primary = false, ...props }) {
   return <button {...props} className={`${base} ${style}`}>{children}</button>;
 }
 
-function CheckItem({ label, checked, onChange, disabled }) {
+function CheckItem({ label, checked, onChange }) {
   return (
     <label className={`flex cursor-pointer items-start gap-3 rounded-2xl border px-4 py-3 text-sm transition ${
       checked
         ? "border-green-400 bg-green-50 text-green-800"
         : "border-[#E9D5FF] bg-white text-slate-600 hover:bg-[#FCFAFF]"
-    } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}>
+    }`}>
       <input
         type="checkbox"
         checked={checked}
         onChange={onChange}
-        disabled={disabled}
         className="mt-0.5"
       />
       <span className="font-medium">{label}</span>
@@ -62,9 +62,9 @@ function CheckItem({ label, checked, onChange, disabled }) {
 }
 
 export default function QualidadePage() {
+  const { profile } = useAuth();
   const [osList, setOsList] = useState([]);
   const [selectedOsId, setSelectedOsId] = useState("");
-  const [tecnico, setTecnico] = useState("");
   const [aprovacao, setAprovacao] = useState([]);
   const [descaracterizacao, setDescaracterizacao] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -78,7 +78,7 @@ export default function QualidadePage() {
 
   const tudoAprovado = aprovacao.length === CHECKLIST_APROVACAO.length;
   const tudoDescaracterizado = descaracterizacao.length === CHECKLIST_DESCARACTERIZACAO.length;
-  const podeFinalizr = tudoAprovado && tudoDescaracterizado && tecnico;
+  const podeFinalizar = tudoAprovado && tudoDescaracterizado && selectedOs;
 
   async function loadOs() {
     try {
@@ -107,7 +107,6 @@ export default function QualidadePage() {
 
   function reset() {
     setSelectedOsId("");
-    setTecnico("");
     setAprovacao([]);
     setDescaracterizacao([]);
     setStatus("");
@@ -115,7 +114,7 @@ export default function QualidadePage() {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!podeFinalizr) {
+    if (!podeFinalizar) {
       setStatus("Complete todos os itens do checklist antes de finalizar.");
       return;
     }
@@ -131,7 +130,7 @@ export default function QualidadePage() {
           etapa_atual: "Concluído",
           area_destino: null,
           checklist_qualidade: { aprovacao, descaracterizacao },
-          tecnico_qualidade: tecnico,
+          tecnico_qualidade: profile?.nome,
         })
         .eq("id", selectedOs.id);
 
@@ -157,10 +156,16 @@ export default function QualidadePage() {
               Checklist de aprovação final e descaracterização do produto.
             </p>
           </div>
-          <div className="rounded-2xl bg-[#FCFAFF] px-4 py-3 ring-1 ring-[#E9D5FF]">
-            <div className="text-xs font-semibold text-slate-500">OS pendentes</div>
-            <div className="text-xl font-black text-[#6B1F87]">
-              {loading ? "..." : osList.length}
+          <div className="flex items-center gap-4">
+            <div className="rounded-2xl bg-[#FCFAFF] px-4 py-3 ring-1 ring-[#E9D5FF]">
+              <div className="text-xs font-semibold text-slate-500">Técnico</div>
+              <div className="text-sm font-bold text-[#6B1F87]">{profile?.nome}</div>
+            </div>
+            <div className="rounded-2xl bg-[#FCFAFF] px-4 py-3 ring-1 ring-[#E9D5FF]">
+              <div className="text-xs font-semibold text-slate-500">OS pendentes</div>
+              <div className="text-xl font-black text-[#6B1F87]">
+                {loading ? "..." : osList.length}
+              </div>
             </div>
           </div>
         </div>
@@ -173,37 +178,24 @@ export default function QualidadePage() {
             <h2 className="text-lg font-bold text-[#6B1F87]">Selecionar OS</h2>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <label>
-              <span className="text-sm font-semibold text-slate-600">OS para qualidade</span>
-              <select
-                value={selectedOsId}
-                onChange={(e) => setSelectedOsId(e.target.value)}
-                className={inputClass()}
-              >
-                <option value="">Selecione uma OS</option>
-                {osList.map((os) => (
-                  <option key={os.id} value={os.id}>
-                    {os.numero_os} — {os.marca || "Sem marca"} {os.modelo || ""}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label>
-              <span className="text-sm font-semibold text-slate-600">Técnico responsável</span>
-              <input
-                value={tecnico}
-                onChange={(e) => setTecnico(e.target.value)}
-                disabled={!selectedOs}
-                className={inputClass(!selectedOs)}
-                placeholder="Nome do técnico"
-              />
-            </label>
-          </div>
+          <label>
+            <span className="text-sm font-semibold text-slate-600">OS para qualidade</span>
+            <select
+              value={selectedOsId}
+              onChange={(e) => setSelectedOsId(e.target.value)}
+              className={inputClass()}
+            >
+              <option value="">Selecione uma OS</option>
+              {osList.map((os) => (
+                <option key={os.id} value={os.id}>
+                  {os.numero_os} — {os.marca || "Sem marca"} {os.modelo || ""}
+                </option>
+              ))}
+            </select>
+          </label>
 
           {selectedOs && (
-            <div className="mt-5 grid gap-4 md:grid-cols-4">
+            <div className="mt-5 grid gap-4 grid-cols-2 md:grid-cols-4">
               {[
                 ["Fornecedor", selectedOs.fornecedor],
                 ["Lote", selectedOs.lote],
@@ -268,7 +260,7 @@ export default function QualidadePage() {
         )}
 
         <div className="flex flex-wrap gap-3">
-          <Button primary type="submit" disabled={saving || !podeFinalizr}>
+          <Button primary type="submit" disabled={saving || !podeFinalizar}>
             <Save className="h-4 w-4" />
             {saving ? "Salvando..." : "Finalizar qualidade"}
           </Button>

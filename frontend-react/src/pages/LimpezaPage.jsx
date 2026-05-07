@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Camera, Save, RotateCcw, X } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { useAuth } from "../AuthContext.jsx";
 
 function SectionCard({ children }) {
   return (
@@ -25,9 +26,9 @@ function Button({ children, primary = false, ...props }) {
 }
 
 export default function LimpezaPage() {
+  const { profile } = useAuth();
   const [osList, setOsList] = useState([]);
   const [selectedOsId, setSelectedOsId] = useState("");
-  const [tecnico, setTecnico] = useState("");
   const [fotos, setFotos] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -74,15 +75,14 @@ export default function LimpezaPage() {
 
   function reset() {
     setSelectedOsId("");
-    setTecnico("");
     setFotos([]);
     setStatus("");
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!selectedOs || !tecnico) {
-      setStatus("Preencha o técnico responsável.");
+    if (!selectedOs) {
+      setStatus("Selecione uma OS.");
       return;
     }
     if (fotos.length === 0) {
@@ -101,7 +101,7 @@ export default function LimpezaPage() {
           etapa_atual: "Qualidade",
           area_destino: "Qualidade",
           fotos_limpeza: fotos.map((f) => f.name),
-          tecnico_limpeza: tecnico,
+          tecnico_limpeza: profile?.nome,
         })
         .eq("id", selectedOs.id);
 
@@ -127,10 +127,16 @@ export default function LimpezaPage() {
               Registre as fotos do produto após a limpeza e finalize a etapa.
             </p>
           </div>
-          <div className="rounded-2xl bg-[#FCFAFF] px-4 py-3 ring-1 ring-[#E9D5FF]">
-            <div className="text-xs font-semibold text-slate-500">OS pendentes</div>
-            <div className="text-xl font-black text-[#6B1F87]">
-              {loading ? "..." : osList.length}
+          <div className="flex items-center gap-4">
+            <div className="rounded-2xl bg-[#FCFAFF] px-4 py-3 ring-1 ring-[#E9D5FF]">
+              <div className="text-xs font-semibold text-slate-500">Técnico</div>
+              <div className="text-sm font-bold text-[#6B1F87]">{profile?.nome}</div>
+            </div>
+            <div className="rounded-2xl bg-[#FCFAFF] px-4 py-3 ring-1 ring-[#E9D5FF]">
+              <div className="text-xs font-semibold text-slate-500">OS pendentes</div>
+              <div className="text-xl font-black text-[#6B1F87]">
+                {loading ? "..." : osList.length}
+              </div>
             </div>
           </div>
         </div>
@@ -143,37 +149,24 @@ export default function LimpezaPage() {
             <h2 className="text-lg font-bold text-[#6B1F87]">Selecionar OS</h2>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <label>
-              <span className="text-sm font-semibold text-slate-600">OS para limpeza</span>
-              <select
-                value={selectedOsId}
-                onChange={(e) => setSelectedOsId(e.target.value)}
-                className={inputClass()}
-              >
-                <option value="">Selecione uma OS</option>
-                {osList.map((os) => (
-                  <option key={os.id} value={os.id}>
-                    {os.numero_os} — {os.marca || "Sem marca"} {os.modelo || ""}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label>
-              <span className="text-sm font-semibold text-slate-600">Técnico responsável</span>
-              <input
-                value={tecnico}
-                onChange={(e) => setTecnico(e.target.value)}
-                disabled={!selectedOs}
-                className={inputClass(!selectedOs)}
-                placeholder="Nome do técnico"
-              />
-            </label>
-          </div>
+          <label>
+            <span className="text-sm font-semibold text-slate-600">OS para limpeza</span>
+            <select
+              value={selectedOsId}
+              onChange={(e) => setSelectedOsId(e.target.value)}
+              className={inputClass()}
+            >
+              <option value="">Selecione uma OS</option>
+              {osList.map((os) => (
+                <option key={os.id} value={os.id}>
+                  {os.numero_os} — {os.marca || "Sem marca"} {os.modelo || ""}
+                </option>
+              ))}
+            </select>
+          </label>
 
           {selectedOs && (
-            <div className="mt-5 grid gap-4 md:grid-cols-4">
+            <div className="mt-5 grid gap-4 grid-cols-2 md:grid-cols-4">
               {[
                 ["Fornecedor", selectedOs.fornecedor],
                 ["Lote", selectedOs.lote],
