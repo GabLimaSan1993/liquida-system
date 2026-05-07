@@ -6,22 +6,26 @@ import {
   salvarExecucaoReparo,
   condenarOs,
 } from "../services/reparoLinhaBrancaService.js";
+import {
+  REPAROS_MECANICOS,
+  REPAROS_ELETRICOS,
+  REPAROS_ESTETICOS,
+} from "../services/linhaBrancaService.js";
 
 const REPAROS_POR_AREA = {
-  "Reparo Mecânico": "reparos_mecanicos",
-  "Reparo Elétrico": "reparos_eletricos",
-  "Reparo Estético": "reparos_esteticos",
+  "Reparo Mecânico": { campo: "reparos_mecanicos", lista: REPAROS_MECANICOS },
+  "Reparo Elétrico": { campo: "reparos_eletricos", lista: REPAROS_ELETRICOS },
+  "Reparo Estético": { campo: "reparos_esteticos", lista: REPAROS_ESTETICOS },
 };
 
 const EMPTY_EXECUCAO = {
   tecnico: "",
   diagnostico_final: "",
-  servico_executado: "",
   peca_trocada: false,
-  descricao_peca: "",
+  pecas: [],
+  novaPeca: "",
   observacoes: "",
   reparos_adicionais: [],
-  novoReparo: "",
   dt_inicio: new Date().toISOString(),
 };
 
@@ -54,7 +58,7 @@ function ModalCondenar({ onConfirm, onCancel, saving }) {
   const [tecnico, setTecnico] = useState("");
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
       <div className="w-full max-w-md rounded-[28px] bg-white p-8 shadow-2xl">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
@@ -80,7 +84,6 @@ function ModalCondenar({ onConfirm, onCancel, saving }) {
               placeholder="Nome do técnico"
             />
           </label>
-
           <label>
             <span className="text-sm font-semibold text-slate-600">Motivo da condenação *</span>
             <textarea
@@ -123,17 +126,23 @@ export default function ReparoLinhaBrancaPage({ areaExecucao }) {
   const [condenando, setCondenando] = useState(false);
   const [showModalCondenar, setShowModalCondenar] = useState(false);
   const [status, setStatus] = useState("");
+  const [reparoAdicionalSelecionado, setReparoAdicionalSelecionado] = useState("");
 
   const selectedOs = useMemo(
     () => osList.find((o) => String(o.id) === String(selectedOsId)) || null,
     [osList, selectedOsId]
   );
 
+  const { campo, lista: listaCompleta } = REPAROS_POR_AREA[areaExecucao] || {};
+
   const reparosTriados = useMemo(() => {
-    if (!triagem) return [];
-    const campo = REPAROS_POR_AREA[areaExecucao];
+    if (!triagem || !campo) return [];
     return triagem[campo] || [];
-  }, [triagem, areaExecucao]);
+  }, [triagem, campo]);
+
+  const reparosDisponivelAdicional = useMemo(() => {
+    return listaCompleta?.filter((r) => !reparosTriados.includes(r) && !execucao.reparos_adicionais.includes(r)) || [];
+  }, [listaCompleta, reparosTriados, execucao.reparos_adicionais]);
 
   async function loadOs() {
     try {
@@ -165,17 +174,35 @@ export default function ReparoLinhaBrancaPage({ areaExecucao }) {
     setExecucao((cur) => ({ ...cur, [field]: value }));
   }
 
-  function adicionarReparoExtra() {
-    const novo = execucao.novoReparo.trim();
-    if (!novo) return;
+  // Peças
+  function adicionarPeca() {
+    const nova = execucao.novaPeca.trim();
+    if (!nova) return;
     setExecucao((cur) => ({
       ...cur,
-      reparos_adicionais: [...cur.reparos_adicionais, novo],
-      novoReparo: "",
+      pecas: [...cur.pecas, nova],
+      novaPeca: "",
     }));
   }
 
-  function removerReparoExtra(item) {
+  function removerPeca(index) {
+    setExecucao((cur) => ({
+      ...cur,
+      pecas: cur.pecas.filter((_, i) => i !== index),
+    }));
+  }
+
+  // Reparos adicionais
+  function adicionarReparoAdicional() {
+    if (!reparoAdicionalSelecionado) return;
+    setExecucao((cur) => ({
+      ...cur,
+      reparos_adicionais: [...cur.reparos_adicionais, reparoAdicionalSelecionado],
+    }));
+    setReparoAdicionalSelecionado("");
+  }
+
+  function removerReparoAdicional(item) {
     setExecucao((cur) => ({
       ...cur,
       reparos_adicionais: cur.reparos_adicionais.filter((r) => r !== item),
@@ -186,6 +213,7 @@ export default function ReparoLinhaBrancaPage({ areaExecucao }) {
     setSelectedOsId("");
     setTriagem(null);
     setExecucao({ ...EMPTY_EXECUCAO });
+    setReparoAdicionalSelecionado("");
     setStatus("");
   }
 
@@ -219,7 +247,12 @@ export default function ReparoLinhaBrancaPage({ areaExecucao }) {
       ].join(", ");
       await salvarExecucaoReparo(
         selectedOs,
-        { ...execucao, servico_executado: servicoCompleto },
+        {
+          ...execucao,
+          servico_executado: servicoCompleto,
+          peca_trocada: execucao.pecas.length > 0,
+          descricao_peca: execucao.pecas.join(", "),
+        },
         areaExecucao
       );
       setStatus(`Reparo da OS ${selectedOs.numero_os} salvo com sucesso!`);
@@ -267,7 +300,7 @@ export default function ReparoLinhaBrancaPage({ areaExecucao }) {
               <h2 className="text-lg font-bold text-[#6B1F87]">Selecionar OS</h2>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-4 md:grid-cols-2">
               <label>
                 <span className="text-sm font-semibold text-slate-600">OS para reparo</span>
                 <select
@@ -294,32 +327,6 @@ export default function ReparoLinhaBrancaPage({ areaExecucao }) {
                   placeholder="Nome do técnico"
                 />
               </label>
-
-              <label>
-                <span className="text-sm font-semibold text-slate-600">Peça trocada?</span>
-                <select
-                  value={execucao.peca_trocada ? "Sim" : "Não"}
-                  onChange={(e) => update("peca_trocada", e.target.value === "Sim")}
-                  disabled={!selectedOs}
-                  className={inputClass(!selectedOs)}
-                >
-                  <option>Não</option>
-                  <option>Sim</option>
-                </select>
-              </label>
-
-              {execucao.peca_trocada && (
-                <label>
-                  <span className="text-sm font-semibold text-slate-600">Descrição da peça</span>
-                  <input
-                    value={execucao.descricao_peca}
-                    onChange={(e) => update("descricao_peca", e.target.value)}
-                    disabled={!selectedOs}
-                    className={inputClass(!selectedOs)}
-                    placeholder="Ex: Compressor 220v"
-                  />
-                </label>
-              )}
             </div>
 
             {selectedOs && (
@@ -354,19 +361,27 @@ export default function ReparoLinhaBrancaPage({ areaExecucao }) {
                 )}
               </div>
 
+              {/* Reparos adicionais — dropdown */}
               <div className="mt-6">
                 <h3 className="mb-3 text-sm font-bold text-slate-600">Reparos adicionais encontrados</h3>
                 <div className="flex gap-2">
-                  <input
-                    value={execucao.novoReparo}
-                    onChange={(e) => update("novoReparo", e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), adicionarReparoExtra())}
+                  <select
+                    value={reparoAdicionalSelecionado}
+                    onChange={(e) => setReparoAdicionalSelecionado(e.target.value)}
                     className={inputClass()}
-                    placeholder="Descreva o reparo adicional e pressione Enter"
-                  />
-                  <Button type="button" onClick={adicionarReparoExtra}>
+                  >
+                    <option value="">Selecione um reparo adicional</option>
+                    {reparosDisponivelAdicional.map((r) => (
+                      <option key={r} value={r}>{r}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={adicionarReparoAdicional}
+                    className="rounded-2xl bg-white text-[#6B1F87] ring-1 ring-[#E9D5FF] hover:bg-[#FCFAFF] px-4"
+                  >
                     <Plus className="h-4 w-4" />
-                  </Button>
+                  </button>
                 </div>
 
                 {execucao.reparos_adicionais.length > 0 && (
@@ -374,7 +389,7 @@ export default function ReparoLinhaBrancaPage({ areaExecucao }) {
                     {execucao.reparos_adicionais.map((r) => (
                       <span
                         key={r}
-                        onClick={() => removerReparoExtra(r)}
+                        onClick={() => removerReparoAdicional(r)}
                         className="cursor-pointer rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700 hover:bg-orange-200"
                       >
                         {r} ✕
@@ -383,6 +398,47 @@ export default function ReparoLinhaBrancaPage({ areaExecucao }) {
                   </div>
                 )}
               </div>
+            </SectionCard>
+          )}
+
+          {/* Peças trocadas */}
+          {selectedOs && (
+            <SectionCard>
+              <h2 className="mb-4 text-lg font-bold text-[#6B1F87]">Peças trocadas</h2>
+              <div className="flex gap-2">
+                <input
+                  value={execucao.novaPeca}
+                  onChange={(e) => update("novaPeca", e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), adicionarPeca())}
+                  className={inputClass()}
+                  placeholder="Descreva a peça e pressione Enter ou +"
+                />
+                <button
+                  type="button"
+                  onClick={adicionarPeca}
+                  className="rounded-2xl bg-white text-[#6B1F87] ring-1 ring-[#E9D5FF] hover:bg-[#FCFAFF] px-4"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              </div>
+
+              {execucao.pecas.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {execucao.pecas.map((p, i) => (
+                    <span
+                      key={i}
+                      onClick={() => removerPeca(i)}
+                      className="cursor-pointer rounded-full bg-purple-100 px-3 py-1 text-xs font-semibold text-[#6B1F87] hover:bg-purple-200"
+                    >
+                      {p} ✕
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {execucao.pecas.length === 0 && (
+                <p className="mt-2 text-xs text-slate-400">Nenhuma peça adicionada. Deixe vazio se não houve troca.</p>
+              )}
             </SectionCard>
           )}
 
