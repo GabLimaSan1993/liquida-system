@@ -8,6 +8,7 @@ import {
   REPAROS_ELETRICOS,
   REPAROS_ESTETICOS,
 } from "../services/linhaBrancaService.js";
+import { useAuth } from "../AuthContext.jsx";
 
 const EMPTY_TRIAGEM = {
   tipo_produto: "",
@@ -16,7 +17,6 @@ const EMPTY_TRIAGEM = {
   reparos_eletricos: [],
   reparos_esteticos: [],
   observacoes_triagem: "",
-  triado_por: "",
 };
 
 function SectionCard({ children }) {
@@ -54,11 +54,9 @@ function CheckboxGroup({ title, options, selected, onToggle, disabled }) {
       <h3 className="text-sm font-black uppercase tracking-wide text-[#6B1F87]">
         {title}
       </h3>
-
       <div className="mt-4 grid gap-2">
         {options.map((item) => {
           const checked = selected.includes(item);
-
           return (
             <label
               key={item}
@@ -85,10 +83,10 @@ function CheckboxGroup({ title, options, selected, onToggle, disabled }) {
 }
 
 export default function LinhaBrancaTriagemPage() {
+  const { profile } = useAuth();
   const [osList, setOsList] = useState([]);
   const [selectedOsId, setSelectedOsId] = useState("");
   const [triagem, setTriagem] = useState({ ...EMPTY_TRIAGEM });
-
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
@@ -100,50 +98,39 @@ export default function LinhaBrancaTriagemPage() {
   const canSave = useMemo(() => {
     if (!selectedOs) return false;
     if (!triagem.tipo_produto) return false;
-
     if (triagem.precisa_reparo) {
       const totalReparos =
         triagem.reparos_mecanicos.length +
         triagem.reparos_eletricos.length +
         triagem.reparos_esteticos.length;
-
       return totalReparos > 0;
     }
-
     return true;
   }, [selectedOs, triagem]);
 
   async function loadOs() {
     try {
       setLoading(true);
-      setStatus("Carregando OS aguardando triagem...");
+      setStatus("");
       const data = await fetchOsAguardandoTriagemLinhaBranca();
       setOsList(data);
-      setStatus("");
     } catch (error) {
-      console.error(error);
       setStatus(`Erro ao carregar OS: ${error.message || "falha na consulta"}`);
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => {
-    loadOs();
-  }, []);
+  useEffect(() => { loadOs(); }, []);
 
   function update(field, value) {
-    setTriagem((current) => ({
-      ...current,
-      [field]: value,
-    }));
+    setTriagem((current) => ({ ...current, [field]: value }));
   }
 
   function toggleArray(field, value) {
     setTriagem((current) => {
       const list = current[field] || [];
       const exists = list.includes(value);
-
       return {
         ...current,
         [field]: exists ? list.filter((item) => item !== value) : [...list, value],
@@ -169,27 +156,22 @@ export default function LinhaBrancaTriagemPage() {
 
   async function handleSubmit(event) {
     event.preventDefault();
-
     if (!canSave) {
-      setStatus(
-        "Selecione uma OS, informe o tipo do produto e, se precisar reparo, selecione ao menos uma classificação."
-      );
+      setStatus("Selecione uma OS, informe o tipo do produto e, se precisar reparo, selecione ao menos uma classificação.");
       return;
     }
-
     try {
       setSaving(true);
       setStatus("Salvando triagem e encaminhando OS...");
-
-      await salvarTriagemLinhaBranca(selectedOs, triagem);
-
+      await salvarTriagemLinhaBranca(selectedOs, {
+        ...triagem,
+        triado_por: profile?.nome,
+      });
       setStatus(`Triagem da OS ${selectedOs.numero_os} salva com sucesso.`);
-
       setSelectedOsId("");
       setTriagem({ ...EMPTY_TRIAGEM });
       await loadOs();
     } catch (error) {
-      console.error(error);
       setStatus(`Erro ao salvar triagem: ${error.message || "falha no registro"}`);
     } finally {
       setSaving(false);
@@ -208,11 +190,16 @@ export default function LinhaBrancaTriagemPage() {
               Classifique a OS, identifique se há necessidade de reparo e direcione para a fila correta.
             </p>
           </div>
-
-          <div className="rounded-2xl bg-[#FCFAFF] px-4 py-3 ring-1 ring-[#E9D5FF]">
-            <div className="text-xs font-semibold text-slate-500">OS pendentes</div>
-            <div className="text-xl font-black text-[#6B1F87]">
-              {loading ? "..." : osList.length}
+          <div className="flex items-center gap-4">
+            <div className="rounded-2xl bg-[#FCFAFF] px-4 py-3 ring-1 ring-[#E9D5FF]">
+              <div className="text-xs font-semibold text-slate-500">Técnico</div>
+              <div className="text-sm font-bold text-[#6B1F87]">{profile?.nome}</div>
+            </div>
+            <div className="rounded-2xl bg-[#FCFAFF] px-4 py-3 ring-1 ring-[#E9D5FF]">
+              <div className="text-xs font-semibold text-slate-500">OS pendentes</div>
+              <div className="text-xl font-black text-[#6B1F87]">
+                {loading ? "..." : osList.length}
+              </div>
             </div>
           </div>
         </div>
@@ -225,7 +212,7 @@ export default function LinhaBrancaTriagemPage() {
             <h2 className="text-lg font-bold text-[#6B1F87]">Selecionar OS</h2>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <label>
               <span className="text-sm font-semibold text-slate-600">OS aguardando triagem</span>
               <select
@@ -252,9 +239,7 @@ export default function LinhaBrancaTriagemPage() {
               >
                 <option value="">Selecione</option>
                 {TIPOS_PRODUTO_LINHA_BRANCA.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
+                  <option key={item} value={item}>{item}</option>
                 ))}
               </select>
             </label>
@@ -271,50 +256,23 @@ export default function LinhaBrancaTriagemPage() {
                 <option>Sim</option>
               </select>
             </label>
-
-            <label>
-              <span className="text-sm font-semibold text-slate-600">Triado por</span>
-              <input
-                value={triagem.triado_por}
-                onChange={(e) => update("triado_por", e.target.value)}
-                disabled={!selectedOs}
-                className={inputClass(!selectedOs)}
-                placeholder="Nome do técnico"
-              />
-            </label>
           </div>
 
-          {selectedOs ? (
+          {selectedOs && (
             <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <div className="rounded-2xl bg-[#FCFAFF] p-4 ring-1 ring-[#E9D5FF]">
-                <div className="text-xs font-semibold text-slate-500">Fornecedor</div>
-                <div className="mt-1 text-sm font-bold text-[#6B1F87]">
-                  {selectedOs.fornecedor || "-"}
+              {[
+                ["Fornecedor", selectedOs.fornecedor],
+                ["Lote", selectedOs.lote],
+                ["Serial", selectedOs.serial_number],
+                ["Status atual", selectedOs.status_atual],
+              ].map(([label, val]) => (
+                <div key={label} className="rounded-2xl bg-[#FCFAFF] p-4 ring-1 ring-[#E9D5FF]">
+                  <div className="text-xs font-semibold text-slate-500">{label}</div>
+                  <div className="mt-1 text-sm font-bold text-[#6B1F87]">{val || "-"}</div>
                 </div>
-              </div>
-
-              <div className="rounded-2xl bg-[#FCFAFF] p-4 ring-1 ring-[#E9D5FF]">
-                <div className="text-xs font-semibold text-slate-500">Lote</div>
-                <div className="mt-1 text-sm font-bold text-[#6B1F87]">
-                  {selectedOs.lote || "-"}
-                </div>
-              </div>
-
-              <div className="rounded-2xl bg-[#FCFAFF] p-4 ring-1 ring-[#E9D5FF]">
-                <div className="text-xs font-semibold text-slate-500">Serial</div>
-                <div className="mt-1 text-sm font-bold text-[#6B1F87]">
-                  {selectedOs.serial_number || "-"}
-                </div>
-              </div>
-
-              <div className="rounded-2xl bg-[#FCFAFF] p-4 ring-1 ring-[#E9D5FF]">
-                <div className="text-xs font-semibold text-slate-500">Status atual</div>
-                <div className="mt-1 text-sm font-bold text-[#6B1F87]">
-                  {selectedOs.status_atual || "-"}
-                </div>
-              </div>
+              ))}
             </div>
-          ) : null}
+          )}
         </SectionCard>
 
         <div className={!triagem.precisa_reparo ? "pointer-events-none opacity-40" : ""}>
@@ -326,7 +284,6 @@ export default function LinhaBrancaTriagemPage() {
               disabled={!selectedOs || !triagem.precisa_reparo}
               onToggle={(item) => toggleArray("reparos_mecanicos", item)}
             />
-
             <CheckboxGroup
               title="Reparo Elétrico"
               options={REPAROS_ELETRICOS}
@@ -334,7 +291,6 @@ export default function LinhaBrancaTriagemPage() {
               disabled={!selectedOs || !triagem.precisa_reparo}
               onToggle={(item) => toggleArray("reparos_eletricos", item)}
             />
-
             <CheckboxGroup
               title="Reparo Estético"
               options={REPAROS_ESTETICOS}
@@ -347,7 +303,6 @@ export default function LinhaBrancaTriagemPage() {
 
         <SectionCard>
           <h2 className="mb-4 text-lg font-bold text-[#6B1F87]">Observações da triagem</h2>
-
           <textarea
             value={triagem.observacoes_triagem}
             onChange={(e) => update("observacoes_triagem", e.target.value)}
@@ -358,18 +313,17 @@ export default function LinhaBrancaTriagemPage() {
           />
         </SectionCard>
 
-        {status ? (
+        {status && (
           <div className="rounded-2xl bg-[#FCFAFF] p-4 text-sm font-semibold text-[#6B1F87] ring-1 ring-[#E9D5FF]">
             {status}
           </div>
-        ) : null}
+        )}
 
         <div className="flex flex-wrap gap-3">
           <Button primary type="submit" disabled={saving || !canSave}>
             <Save className="h-4 w-4" />
             {saving ? "Salvando..." : "Salvar triagem"}
           </Button>
-
           <Button type="button" onClick={resetTriagem}>
             <RotateCcw className="h-4 w-4" />
             Limpar
