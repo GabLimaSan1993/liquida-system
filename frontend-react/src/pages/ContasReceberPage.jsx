@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { supabase } from "../lib/supabase";
-import { sincronizarTiny } from "../services/tinyService.js";
+import { sincronizarTinyAno } from "../services/tinyService.js";
 import { RefreshCw } from "lucide-react";
 
 function SectionCard({ children }) {
@@ -77,11 +77,18 @@ export default function ContasReceberPage() {
   useEffect(() => { loadData(); }, []);
 
   async function handleSync() {
+    const anoAtual = new Date().getFullYear();
+    const anos = [2023, 2024, 2025, anoAtual].filter((a, i, arr) => arr.indexOf(a) === i);
+
     try {
       setSyncing(true);
-      setStatus("Sincronizando com Tiny...");
-      const result = await sincronizarTiny();
-      setStatus(`Sincronizado! ${result.contas_receber} contas a receber atualizadas.`);
+      let totalCR = 0;
+      for (const ano of anos) {
+        setStatus(`Sincronizando ${ano}...`);
+        const result = await sincronizarTinyAno(ano);
+        totalCR += result.contas_receber || 0;
+      }
+      setStatus(`Sincronizado! ${totalCR} contas a receber atualizadas.`);
       await loadData();
     } catch (err) {
       setStatus(`Erro: ${err.message}`);
@@ -111,7 +118,6 @@ export default function ContasReceberPage() {
 
   return (
     <div className="space-y-6">
-      {/* KPIs */}
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
         <div className="rounded-[24px] bg-green-50 p-5">
           <div className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-3">Total a Receber</div>
@@ -128,19 +134,12 @@ export default function ContasReceberPage() {
         </div>
       </div>
 
-      {/* Filtros */}
       <SectionCard>
         <div className="flex flex-wrap gap-3 items-end justify-between">
           <div className="flex flex-wrap gap-3 items-end">
             <div>
               <div className="text-xs font-semibold text-slate-500 mb-1">Buscar</div>
-              <input
-                type="text"
-                value={filters.busca}
-                onChange={(e) => update("busca", e.target.value)}
-                className={inputClass()}
-                placeholder="Cliente..."
-              />
+              <input type="text" value={filters.busca} onChange={(e) => update("busca", e.target.value)} className={inputClass()} placeholder="Cliente..." />
             </div>
             <div>
               <div className="text-xs font-semibold text-slate-500 mb-1">Situação</div>
@@ -160,23 +159,14 @@ export default function ContasReceberPage() {
               <div className="text-xs font-semibold text-slate-500 mb-1">Até</div>
               <input type="date" value={filters.dtFim} onChange={(e) => update("dtFim", e.target.value)} className={inputClass()} />
             </div>
-            <button onClick={loadData} className="rounded-2xl bg-[linear-gradient(135deg,#F97316_0%,#F59E0B_100%)] px-5 py-2.5 text-sm font-bold text-white">
-              Filtrar
-            </button>
-            <button onClick={() => setFilters({ situacao: "", dtInicio: "", dtFim: "", busca: "" })} className="rounded-2xl border border-[#E9D5FF] px-5 py-2.5 text-sm font-semibold text-[#6B1F87] bg-white">
-              Limpar
-            </button>
+            <button onClick={loadData} className="rounded-2xl bg-[linear-gradient(135deg,#F97316_0%,#F59E0B_100%)] px-5 py-2.5 text-sm font-bold text-white">Filtrar</button>
+            <button onClick={() => setFilters({ situacao: "", dtInicio: "", dtFim: "", busca: "" })} className="rounded-2xl border border-[#E9D5FF] px-5 py-2.5 text-sm font-semibold text-[#6B1F87] bg-white">Limpar</button>
           </div>
-          <button
-            onClick={handleSync}
-            disabled={syncing}
-            className="flex items-center gap-2 rounded-2xl bg-[#6B1F87] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#5B1E74] disabled:opacity-50 transition"
-          >
+          <button onClick={handleSync} disabled={syncing} className="flex items-center gap-2 rounded-2xl bg-[#6B1F87] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#5B1E74] disabled:opacity-50 transition">
             <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
             {syncing ? "Sincronizando..." : "Sincronizar Tiny"}
           </button>
         </div>
-
         {status && (
           <div className="mt-3 rounded-2xl bg-[#FCFAFF] px-4 py-3 text-sm font-semibold text-[#6B1F87] ring-1 ring-[#E9D5FF]">
             {status}
@@ -184,13 +174,11 @@ export default function ContasReceberPage() {
         )}
       </SectionCard>
 
-      {/* Tabela */}
       <SectionCard>
         <h2 className="text-lg font-bold text-[#6B1F87] mb-4">
           Contas a Receber
           <span className="ml-2 text-sm font-normal text-slate-400">{rows.length} registros</span>
         </h2>
-
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
