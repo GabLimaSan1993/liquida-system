@@ -5,7 +5,7 @@ import {
   ClipboardCheck, Wrench, Zap, Sparkles, FlaskConical,
   Camera, ShieldCheck, ChevronDown, ChevronRight, Layers,
   Truck, TrendingUp, Users, LogOut, X, ShoppingCart,
-  Landmark, BarChart2, Lock,
+  Landmark, BarChart2, Lock, TrendingDown,
 } from "lucide-react";
 import { useAuth } from "../AuthContext.jsx";
 import { signOut } from "../services/authService.js";
@@ -119,11 +119,10 @@ function SidebarContent({ profile, onClose, handleLogout }) {
       <nav className="flex-1 space-y-1">
         <NavItem to="/upload" icon={Upload} label="Uploads" onClick={onClose} />
 
-        {/* Tesouraria */}
         <CollapseGroup
           icon={TrendingUp}
           label="Tesouraria"
-          paths={["/analise-entrada", "/faturamento", "/financeiro", "/fechamentos"]}
+          paths={["/analise-entrada", "/faturamento", "/financeiro"]}
         >
           <SubGroup icon={ShoppingCart} label="Vendas" paths={["/faturamento"]}>
             <NavItem to="/faturamento" icon={DollarSign} label="Faturamento" indent onClick={onClose} />
@@ -135,9 +134,9 @@ function SidebarContent({ profile, onClose, handleLogout }) {
 
           <SubGroup icon={Landmark} label="Financeiro" paths={["/financeiro"]}>
             <NavItem to="/financeiro/fluxo-realizado" icon={BarChart2} label="Fluxo Realizado" indent onClick={onClose} />
+            <NavItem to="/financeiro/contas-pagar" icon={TrendingDown} label="Contas a Pagar" indent onClick={onClose} />
+            <NavItem to="/financeiro/contas-receber" icon={TrendingUp} label="Contas a Receber" indent onClick={onClose} />
             <NavItemDisabled icon={BarChart2} label="Conciliação" indent />
-            <NavItemDisabled icon={BarChart2} label="Contas a Pagar" indent />
-            <NavItemDisabled icon={BarChart2} label="Contas a Receber" indent />
             <NavItemDisabled icon={BarChart2} label="Fluxo Projetado" indent />
           </SubGroup>
 
@@ -146,12 +145,10 @@ function SidebarContent({ profile, onClose, handleLogout }) {
           </SubGroup>
         </CollapseGroup>
 
-        {/* Logística */}
         <CollapseGroup icon={Truck} label="Logística" paths={["/abertura-os"]}>
           <NavItem to="/abertura-os" icon={ClipboardList} label="Abertura de OS" indent onClick={onClose} />
         </CollapseGroup>
 
-        {/* Linha Branca */}
         <CollapseGroup icon={Layers} label="Linha Branca" paths={["/linha-branca"]}>
           <NavItem to="/linha-branca/triagem" icon={ClipboardCheck} label="Triagem" indent onClick={onClose} />
           <NavItem to="/linha-branca/reparo-mecanico" icon={Wrench} label="Reparo Mecânico" indent onClick={onClose} />
@@ -200,7 +197,6 @@ export default function Sidebar({ open, onClose, onDesktopClose }) {
 
   return (
     <>
-      {/* Desktop drawer */}
       <aside className="hidden lg:flex flex-col h-full w-[325px] gap-4 bg-[linear-gradient(180deg,#7F2D92_0%,#5B1E74_100%)] p-6 text-white overflow-y-auto">
         <div className="flex items-center justify-between">
           <Logo />
@@ -211,7 +207,6 @@ export default function Sidebar({ open, onClose, onDesktopClose }) {
         <SidebarContent profile={profile} onClose={onDesktopClose} handleLogout={handleLogout} />
       </aside>
 
-      {/* Mobile drawer */}
       <aside className={`fixed inset-y-0 left-0 z-40 w-[300px] flex flex-col gap-4 bg-[linear-gradient(180deg,#7F2D92_0%,#5B1E74_100%)] p-6 text-white overflow-y-auto transition-transform duration-300 lg:hidden ${
         open ? "translate-x-0" : "-translate-x-full"
       }`}>

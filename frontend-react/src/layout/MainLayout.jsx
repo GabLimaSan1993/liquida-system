@@ -9,6 +9,8 @@ const PAGE_META = {
   "/faturamento": { title: "Faturamento", subtitle: "Vendas · Vendas, cliente, fornecedor, lote e rentabilidade" },
   "/abertura-os": { title: "Abertura de OS", subtitle: "Logística · Registro e acompanhamento de ordens de serviço" },
   "/financeiro/fluxo-realizado": { title: "Fluxo de Caixa Realizado", subtitle: "Financeiro · Lançamentos do extrato bancário" },
+  "/financeiro/contas-pagar": { title: "Contas a Pagar", subtitle: "Financeiro · Obrigações financeiras sincronizadas do Tiny" },
+  "/financeiro/contas-receber": { title: "Contas a Receber", subtitle: "Financeiro · Recebimentos sincronizados do Tiny" },
   "/linha-branca/triagem": { title: "Triagem", subtitle: "Linha Branca · Classificação de entrada" },
   "/linha-branca/reparo-mecanico": { title: "Reparo Mecânico", subtitle: "Linha Branca · Execução de reparos mecânicos" },
   "/linha-branca/reparo-eletrico": { title: "Reparo Elétrico", subtitle: "Linha Branca · Execução de reparos elétricos" },

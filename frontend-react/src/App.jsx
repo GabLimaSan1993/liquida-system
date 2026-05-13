@@ -15,6 +15,8 @@ import BancadaTestesPage from "./pages/BancadaTestesPage.jsx";
 import LimpezaPage from "./pages/LimpezaPage.jsx";
 import QualidadePage from "./pages/QualidadePage.jsx";
 import FluxoCaixaRealizadoPage from "./pages/FluxoCaixaRealizadoPage.jsx";
+import ContasPagarPage from "./pages/ContasPagarPage.jsx";
+import ContasReceberPage from "./pages/ContasReceberPage.jsx";
 
 function ProtectedRoute({ tela, children }) {
   const { user, loading, hasAccess } = useAuth();
@@ -57,6 +59,8 @@ export default function App() {
         <Route path="/faturamento" element={<ProtectedRoute tela="/faturamento"><FaturamentoPage /></ProtectedRoute>} />
         <Route path="/abertura-os" element={<ProtectedRoute tela="/abertura-os"><AberturaOsPage /></ProtectedRoute>} />
         <Route path="/financeiro/fluxo-realizado" element={<ProtectedRoute tela="/financeiro/fluxo-realizado"><FluxoCaixaRealizadoPage /></ProtectedRoute>} />
+        <Route path="/financeiro/contas-pagar" element={<ProtectedRoute tela="/financeiro/contas-pagar"><ContasPagarPage /></ProtectedRoute>} />
+        <Route path="/financeiro/contas-receber" element={<ProtectedRoute tela="/financeiro/contas-receber"><ContasReceberPage /></ProtectedRoute>} />
         <Route path="/linha-branca/triagem" element={<ProtectedRoute tela="/linha-branca/triagem"><LinhaBrancaTriagemPage /></ProtectedRoute>} />
         <Route path="/linha-branca/reparo-mecanico" element={<ProtectedRoute tela="/linha-branca/reparo-mecanico"><ReparoLinhaBrancaPage areaExecucao="Reparo Mecânico" /></ProtectedRoute>} />
         <Route path="/linha-branca/reparo-eletrico" element={<ProtectedRoute tela="/linha-branca/reparo-eletrico"><ReparoLinhaBrancaPage areaExecucao="Reparo Elétrico" /></ProtectedRoute>} />
