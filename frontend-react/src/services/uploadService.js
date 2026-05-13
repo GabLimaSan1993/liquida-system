@@ -235,58 +235,37 @@ function excelSerialToIso(serial) {
   const value = Number(serial);
   if (!Number.isFinite(value)) return null;
   if (value < 1 || value > 80000) return null;
-
   const excelEpoch = new Date(Date.UTC(1899, 11, 30));
   const millis = Math.round(value * 24 * 60 * 60 * 1000);
   const date = new Date(excelEpoch.getTime() + millis);
-
   if (!isValidYear(date.getUTCFullYear())) return null;
   return date.toISOString();
 }
 
 function parseDateMaybe(value) {
   if (value === null || value === undefined || value === "") return null;
-
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
     return isValidYear(value.getUTCFullYear()) ? value.toISOString() : null;
   }
-
-  if (typeof value === "number") {
-    return excelSerialToIso(value);
-  }
-
+  if (typeof value === "number") return excelSerialToIso(value);
   const text = String(value).trim();
   if (!text) return null;
-
   if (/^\d+(\.\d+)?$/.test(text)) {
     const serialIso = excelSerialToIso(Number(text));
     if (serialIso) return serialIso;
   }
-
-  const br = text.match(
-    /^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/
-  );
-
+  const br = text.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/);
   if (br) {
     const [, dd, mm, yyyy, hh = "00", mi = "00", ss = "00"] = br;
     const year = Number(yyyy);
     if (!isValidYear(year)) return null;
-
     const iso = `${yyyy}-${mm}-${dd}T${hh}:${mi}:${ss}Z`;
     const parsed = new Date(iso);
-
-    if (!Number.isNaN(parsed.getTime()) && isValidYear(parsed.getUTCFullYear())) {
-      return parsed.toISOString();
-    }
-
+    if (!Number.isNaN(parsed.getTime()) && isValidYear(parsed.getUTCFullYear())) return parsed.toISOString();
     return null;
   }
-
   const parsedIso = new Date(text);
-  if (!Number.isNaN(parsedIso.getTime()) && isValidYear(parsedIso.getUTCFullYear())) {
-    return parsedIso.toISOString();
-  }
-
+  if (!Number.isNaN(parsedIso.getTime()) && isValidYear(parsedIso.getUTCFullYear())) return parsedIso.toISOString();
   return null;
 }
 
@@ -297,75 +276,40 @@ function parseDateOnly(value) {
 
 function parseNumberBr(value) {
   if (value === null || value === undefined || value === "") return null;
-
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? value : null;
-  }
-
-  let text = String(value).trim();
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  let text = String(value).trim().replace(/\s/g, "");
   if (!text) return null;
-
-  text = text.replace(/\s/g, "");
-
   const hasComma = text.includes(",");
   const hasDot = text.includes(".");
-
   if (hasComma && hasDot) {
     if (text.lastIndexOf(",") > text.lastIndexOf(".")) {
-      const normalized = text.replace(/\./g, "").replace(",", ".");
-      const number = Number(normalized);
-      return Number.isFinite(number) ? number : null;
+      const n = Number(text.replace(/\./g, "").replace(",", "."));
+      return Number.isFinite(n) ? n : null;
     }
-
-    const normalized = text.replace(/,/g, "");
-    const number = Number(normalized);
-    return Number.isFinite(number) ? number : null;
+    const n = Number(text.replace(/,/g, ""));
+    return Number.isFinite(n) ? n : null;
   }
-
   if (hasComma && !hasDot) {
-    const normalized = text.replace(",", ".");
-    const number = Number(normalized);
-    return Number.isFinite(number) ? number : null;
+    const n = Number(text.replace(",", "."));
+    return Number.isFinite(n) ? n : null;
   }
-
   if (hasDot && !hasComma) {
     const parts = text.split(".");
-
     if (parts.length === 2 && parts[1].length !== 3) {
-      const number = Number(text);
-      return Number.isFinite(number) ? number : null;
+      const n = Number(text);
+      return Number.isFinite(n) ? n : null;
     }
-
-    const normalized = text.replace(/\./g, "");
-    const number = Number(normalized);
-    return Number.isFinite(number) ? number : null;
+    const n = Number(text.replace(/\./g, ""));
+    return Number.isFinite(n) ? n : null;
   }
-
-  const number = Number(text);
-  return Number.isFinite(number) ? number : null;
+  const n = Number(text);
+  return Number.isFinite(n) ? n : null;
 }
 
 function isEncerrado(row) {
   const joined = `${row.etapa || ""} | ${row.desc_ult_log || ""} | ${row.desc_proc || ""}`.toUpperCase();
-
-  const palavrasEncerramento = [
-    "ENCERRADO",
-    "ENCERRADA",
-    "FINALIZADO",
-    "FINALIZADA",
-    "FECHADO",
-    "FECHADA",
-    "CONCLUIDO",
-    "CONCLUÍDO",
-    "CONCLUIDA",
-    "CONCLUÍDA",
-    "DISPONIVEL",
-    "DISPONÍVEL",
-    "LIBERADO",
-    "LIBERADA",
-  ];
-
-  return palavrasEncerramento.some((palavra) => joined.includes(palavra));
+  const palavras = ["ENCERRADO","ENCERRADA","FINALIZADO","FINALIZADA","FECHADO","FECHADA","CONCLUIDO","CONCLUÍDO","CONCLUIDA","CONCLUÍDA","DISPONIVEL","DISPONÍVEL","LIBERADO","LIBERADA"];
+  return palavras.some((p) => joined.includes(p));
 }
 
 function buildAgingUniqueKey(row) {
@@ -373,10 +317,7 @@ function buildAgingUniqueKey(row) {
 }
 
 async function generateHash(text) {
-  if (!window.crypto?.subtle) {
-    return text;
-  }
-
+  if (!window.crypto?.subtle) return text;
   const encoder = new TextEncoder();
   const data = encoder.encode(text);
   const hashBuffer = await window.crypto.subtle.digest("SHA-256", data);
@@ -394,7 +335,6 @@ async function generateFileHash(file) {
 
 async function readFileToRows(file) {
   const lowerName = file.name.toLowerCase();
-
   if (lowerName.endsWith(".csv")) {
     return new Promise((resolve, reject) => {
       Papa.parse(file, {
@@ -406,20 +346,17 @@ async function readFileToRows(file) {
       });
     });
   }
-
   if (lowerName.endsWith(".xlsx") || lowerName.endsWith(".xls")) {
     const buffer = await file.arrayBuffer();
     const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
     const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
     return XLSX.utils.sheet_to_json(firstSheet, { defval: null, raw: false });
   }
-
   throw new Error("Formato não suportado. Envie CSV, XLSX ou XLS.");
 }
 
 function mapAgingRow(raw) {
   const row = {};
-
   Object.keys(raw).forEach((key) => {
     const trimmed = String(key).trim();
     if (trimmed.toLowerCase().startsWith("unnamed:")) return;
@@ -489,26 +426,19 @@ function mapAgingRow(raw) {
   normalized.aging_day = aging !== null ? Math.trunc(aging) : null;
   normalized.chave_item = normalized.imei || normalized.serial_out || null;
   normalized.item_disponivel_venda = isEncerrado(normalized);
-  normalized.status_os = normalized.item_disponivel_venda
-    ? "Encerrado/Disponível para venda"
-    : "Em processo / não disponível";
+  normalized.status_os = normalized.item_disponivel_venda ? "Encerrado/Disponível para venda" : "Em processo / não disponível";
   normalized.unique_key = buildAgingUniqueKey(normalized);
 
   const filtered = {};
-  AGING_ALLOWED_COLUMNS.forEach((column) => {
-    filtered[column] = normalized[column] ?? null;
-  });
-
+  AGING_ALLOWED_COLUMNS.forEach((column) => { filtered[column] = normalized[column] ?? null; });
   return filtered;
 }
 
 function mapFaturamentoRow(raw) {
   const row = {};
-
   Object.keys(raw).forEach((key) => {
     const trimmed = String(key).trim();
     if (trimmed.toLowerCase().startsWith("unnamed:")) return;
-
     const mapped = FATURAMENTO_COLUMN_ALIASES[trimmed] || trimmed;
     row[mapped] = raw[key];
   });
@@ -582,75 +512,40 @@ function mapFaturamentoRow(raw) {
   normalized.unique_key = keyParts.join("|");
 
   const filtered = {};
-  FATURAMENTO_ALLOWED_COLUMNS.forEach((column) => {
-    filtered[column] = normalized[column] ?? null;
-  });
-
+  FATURAMENTO_ALLOWED_COLUMNS.forEach((column) => { filtered[column] = normalized[column] ?? null; });
   return filtered;
 }
 
 async function enrichRowsWithHashes(rows, file) {
   const fileHash = await generateFileHash(file);
-
   const enriched = [];
   for (const row of rows) {
     const rowHash = await generateHash(JSON.stringify(row));
-    enriched.push({
-      ...row,
-      file_name: file.name,
-      file_hash: fileHash,
-      row_hash: rowHash,
-    });
+    enriched.push({ ...row, file_name: file.name, file_hash: fileHash, row_hash: rowHash });
   }
-
   return enriched;
 }
 
 async function insertInBatches(table, records, onProgress) {
   const batchSize = 500;
   let inserted = 0;
-
   for (let i = 0; i < records.length; i += batchSize) {
     const batch = records.slice(i, i + batchSize);
-
-    const { error } = await supabase
-      .from(table)
-      .insert(batch);
-
-    if (error) {
-      throw error;
-    }
-
+    const { error } = await supabase.from(table).insert(batch);
+    if (error) throw error;
     inserted += batch.length;
-
-    if (onProgress) {
-      onProgress({
-        inserted,
-        duplicates: 0,
-        total: records.length,
-      });
-    }
+    if (onProgress) onProgress({ inserted, duplicates: 0, total: records.length });
   }
-
-  return {
-    inserted,
-    duplicates: 0,
-    total: records.length,
-  };
+  return { inserted, duplicates: 0, total: records.length };
 }
 
 export async function previewFile(file, type) {
   const rawRows = await readFileToRows(file);
-
   let mappedRows = [];
   if (type === "aging") {
-    mappedRows = rawRows
-      .map(mapAgingRow)
-      .filter((row) => row.num_os || row.chave_item || row.modelo);
+    mappedRows = rawRows.map(mapAgingRow).filter((row) => row.num_os || row.chave_item || row.modelo);
   } else if (type === "faturamento") {
-    mappedRows = rawRows
-      .map(mapFaturamentoRow)
-      .filter((row) => row.data_emissao && (row.numero_nf || row.sku || row.cliente));
+    mappedRows = rawRows.map(mapFaturamentoRow).filter((row) => row.data_emissao && (row.numero_nf || row.sku || row.cliente));
   } else {
     throw new Error("Tipo de arquivo inválido.");
   }
@@ -675,32 +570,72 @@ export async function previewFile(file, type) {
     };
   }
 
-  return {
-    totalRows: mappedRows.length,
-    previewRows: mappedRows.slice(0, 5),
-  };
+  return { totalRows: mappedRows.length, previewRows: mappedRows.slice(0, 5) };
 }
 
 export async function uploadAgingFile(file, onProgress) {
   const rawRows = await readFileToRows(file);
-
-  const mappedRows = rawRows
-    .map(mapAgingRow)
-    .filter((row) => row.num_os || row.chave_item || row.modelo);
-
+  const mappedRows = rawRows.map(mapAgingRow).filter((row) => row.num_os || row.chave_item || row.modelo);
   const enrichedRows = await enrichRowsWithHashes(mappedRows, file);
-
   return insertInBatches("aging_raw", enrichedRows, onProgress);
 }
 
 export async function uploadFaturamentoFile(file, onProgress) {
   const rawRows = await readFileToRows(file);
-
-  const mappedRows = rawRows
-    .map(mapFaturamentoRow)
-    .filter((row) => row.data_emissao && (row.numero_nf || row.sku || row.cliente));
-
+  const mappedRows = rawRows.map(mapFaturamentoRow).filter((row) => row.data_emissao && (row.numero_nf || row.sku || row.cliente));
   const enrichedRows = await enrichRowsWithHashes(mappedRows, file);
-
   return insertInBatches("faturamento_raw", enrichedRows, onProgress);
+}
+
+export async function uploadOfxFile(file, criado_por, onProgress) {
+  const text = await file.text();
+  const transactions = [];
+  const regex = /<STMTTRN>([\s\S]*?)<\/STMTTRN>/g;
+  let match;
+
+  while ((match = regex.exec(text)) !== null) {
+    const t = match[1];
+    const get = (tag) => {
+      const m = t.match(new RegExp(`<${tag}>([^\\n<]+)`));
+      return m ? m[1].trim() : null;
+    };
+
+    const dtposted = get("DTPOSTED")?.slice(0, 8);
+    const trnamt = parseFloat(get("TRNAMT") || "0");
+    const memo = get("MEMO");
+    const trntype = get("TRNTYPE");
+
+    let data = null;
+    if (dtposted && dtposted.length === 8) {
+      data = `${dtposted.slice(0, 4)}-${dtposted.slice(4, 6)}-${dtposted.slice(6, 8)}`;
+    }
+
+    const credito = trnamt > 0 ? trnamt : null;
+    const debito = trnamt < 0 ? Math.abs(trnamt) : null;
+
+    transactions.push({
+      data,
+      historico: memo,
+      credito,
+      debito,
+      tipo: trntype === "CREDIT" ? "Crédito" : "Débito",
+      banco: file.name,
+      criado_por,
+    });
+  }
+
+  if (transactions.length === 0) throw new Error("Nenhuma transação encontrada no OFX.");
+
+  const batchSize = 500;
+  let inserted = 0;
+
+  for (let i = 0; i < transactions.length; i += batchSize) {
+    const batch = transactions.slice(i, i + batchSize);
+    const { error } = await supabase.from("fluxo_caixa_realizado").insert(batch);
+    if (error) throw error;
+    inserted += batch.length;
+    if (onProgress) onProgress({ inserted, total: transactions.length });
+  }
+
+  return { inserted, total: transactions.length };
 }
