@@ -593,6 +593,9 @@ export async function uploadOfxFile(file, criado_por, onProgress) {
   const regex = /<STMTTRN>([\s\S]*?)<\/STMTTRN>/g;
   let match;
 
+  const bankid = text.match(/<BANKID>([^\n<]+)/)?.[1]?.trim() || "";
+  const acctid = text.match(/<ACCTID>([^\n<]+)/)?.[1]?.trim() || "";
+
   while ((match = regex.exec(text)) !== null) {
     const t = match[1];
     const get = (tag) => {
@@ -610,16 +613,15 @@ export async function uploadOfxFile(file, criado_por, onProgress) {
       data = `${dtposted.slice(0, 4)}-${dtposted.slice(4, 6)}-${dtposted.slice(6, 8)}`;
     }
 
-    const credito = trnamt > 0 ? trnamt : null;
-    const debito = trnamt < 0 ? Math.abs(trnamt) : null;
-
     transactions.push({
       data,
       historico: memo,
-      credito,
-      debito,
+      credito: trnamt > 0 ? trnamt : null,
+      debito: trnamt < 0 ? Math.abs(trnamt) : null,
       tipo: trntype === "CREDIT" ? "Crédito" : "Débito",
-      banco: file.name,
+      banco: bankid,
+      conta: acctid,
+      arquivo_origem: file.name,
       criado_por,
     });
   }
@@ -631,7 +633,7 @@ export async function uploadOfxFile(file, criado_por, onProgress) {
 
   for (let i = 0; i < transactions.length; i += batchSize) {
     const batch = transactions.slice(i, i + batchSize);
-    const { error } = await supabase.from("fluxo_caixa_realizado").insert(batch);
+    const { error } = await supabase.from("extrato_ofx").insert(batch);
     if (error) throw error;
     inserted += batch.length;
     if (onProgress) onProgress({ inserted, total: transactions.length });
