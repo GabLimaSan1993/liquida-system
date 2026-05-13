@@ -1,6 +1,4 @@
-import { supabase } from "../lib/supabase";
-
-export async function sincronizarTiny() {
+export async function sincronizarTiny(anoInicio = 2023) {
   const { data: { session } } = await supabase.auth.getSession();
   
   const response = await fetch(
@@ -11,6 +9,10 @@ export async function sincronizarTiny() {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${session?.access_token}`,
       },
+      body: JSON.stringify({
+        ano_inicio: anoInicio,
+        ano_fim: new Date().getFullYear(),
+      }),
     }
   );
 
