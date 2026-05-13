@@ -21,7 +21,6 @@ function KpiCard({ title, value, icon: Icon, color }) {
     purple: { bg: "bg-purple-50", text: "text-[#6B1F87]", icon: "text-[#6B1F87]" },
   };
   const c = colors[color] || colors.purple;
-
   return (
     <div className={`rounded-[24px] ${c.bg} p-5 ring-1 ring-white`}>
       <div className="flex items-center justify-between mb-3">
@@ -49,53 +48,102 @@ function getWeekNumber(dateStr) {
   return Math.ceil(((date - start) / 86400000 + start.getDay() + 1) / 7);
 }
 
-function getGroupKey(dateStr, groupBy) {
-  if (!dateStr) return "Sem data";
-  const [y, m, d] = dateStr.split("-");
-  if (groupBy === "dia") return `${d}/${m}/${y}`;
-  if (groupBy === "mes") return `${m}/${y}`;
-  if (groupBy === "ano") return y;
-  // semana
-  const week = getWeekNumber(dateStr);
-  return `Sem ${week} — ${y}`;
-}
-
-function GroupRow({ label, credito, debito, count, children }) {
-  const [open, setOpen] = useState(true);
-  const saldo = (credito || 0) - (debito || 0);
-
-  return (
-    <div>
-      <div
-        onClick={() => setOpen((o) => !o)}
-        className="flex items-center justify-between cursor-pointer px-4 py-3 bg-[#F4ECFA] rounded-2xl mb-1 hover:bg-purple-100 transition"
-      >
-        <div className="flex items-center gap-2">
-          {open ? <ChevronDown className="h-4 w-4 text-[#6B1F87]" /> : <ChevronRight className="h-4 w-4 text-[#6B1F87]" />}
-          <span className="font-bold text-[#6B1F87] text-sm">{label}</span>
-          <span className="text-xs text-slate-400">{count} reg.</span>
-        </div>
-        <div className="flex items-center gap-6 text-sm font-semibold">
-          <span className="text-green-700">{fmt(credito)}</span>
-          <span className="text-red-700">{fmt(debito)}</span>
-          <span className={saldo >= 0 ? "text-[#6B1F87]" : "text-red-700"}>{fmt(saldo)}</span>
-        </div>
-      </div>
-      {open && <div className="mb-2">{children}</div>}
-    </div>
-  );
+function getWeekRange(dateStr) {
+  const date = new Date(dateStr + "T12:00:00");
+  const day = date.getDay();
+  const monday = new Date(date);
+  monday.setDate(date.getDate() - (day === 0 ? 6 : day - 1));
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  const fmt2 = (d) => `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}`;
+  return `${fmt2(monday)} a ${fmt2(sunday)}`;
 }
 
 function TransactionRow({ row }) {
   return (
-    <div className="grid grid-cols-[100px_1fr_120px_120px_100px] gap-2 px-4 py-2.5 text-sm border-b border-[#F4ECFA] hover:bg-[#FCFAFF] transition">
-      <span className="text-slate-500">{fmtDate(row.data)}</span>
-      <span className="text-slate-700 truncate">{row.historico || "-"}</span>
+    <div className="grid grid-cols-[1fr_130px_130px_90px] gap-2 px-6 py-2.5 text-sm border-b border-[#F4ECFA] hover:bg-[#FCFAFF] transition">
+      <span className="text-slate-600 truncate">{row.historico || "-"}</span>
       <span className="text-right text-green-700 font-medium">{row.credito ? fmt(row.credito) : "-"}</span>
       <span className="text-right text-red-700 font-medium">{row.debito ? fmt(row.debito) : "-"}</span>
-      <span className={`text-right text-xs font-semibold rounded-full px-2 py-0.5 ${
-        row.tipo === "Crédito" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+      <span className={`text-right text-xs font-semibold ${
+        row.tipo === "Crédito" ? "text-green-600" : "text-red-600"
       }`}>{row.tipo}</span>
+    </div>
+  );
+}
+
+function DayGroup({ date, rows, defaultOpen = true }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const credito = rows.reduce((s, r) => s + (r.credito || 0), 0);
+  const debito = rows.reduce((s, r) => s + (r.debito || 0), 0);
+  const saldo = credito - debito;
+
+  return (
+    <div className="mb-1">
+      <div
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center justify-between cursor-pointer px-4 py-2.5 bg-white rounded-xl hover:bg-purple-50 transition border border-[#E9D5FF]"
+      >
+        <div className="flex items-center gap-2">
+          {open ? <ChevronDown className="h-3.5 w-3.5 text-[#6B1F87]" /> : <ChevronRight className="h-3.5 w-3.5 text-[#6B1F87]" />}
+          <span className="font-bold text-[#6B1F87] text-sm">{fmtDate(date)}</span>
+          <span className="text-xs text-slate-400">{rows.length} reg.</span>
+        </div>
+        <div className="flex items-center gap-6 text-xs font-semibold">
+          {credito > 0 && <span className="text-green-700">{fmt(credito)}</span>}
+          {debito > 0 && <span className="text-red-700">{fmt(debito)}</span>}
+          <span className={`font-bold ${saldo >= 0 ? "text-[#6B1F87]" : "text-red-700"}`}>{fmt(saldo)}</span>
+        </div>
+      </div>
+      {open && (
+        <div className="ml-2 mt-1 rounded-xl overflow-hidden border border-[#E9D5FF]">
+          {/* Header mini */}
+          <div className="grid grid-cols-[1fr_130px_130px_90px] gap-2 px-6 py-2 text-xs font-bold uppercase tracking-wide text-slate-400 bg-[#FCFAFF] border-b border-[#E9D5FF]">
+            <span>Histórico</span>
+            <span className="text-right">Crédito</span>
+            <span className="text-right">Débito</span>
+            <span className="text-right">Tipo</span>
+          </div>
+          {rows.map((row) => <TransactionRow key={row.id} row={row} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WeekGroup({ weekLabel, days, defaultOpen = true }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const allRows = Object.values(days).flat();
+  const credito = allRows.reduce((s, r) => s + (r.credito || 0), 0);
+  const debito = allRows.reduce((s, r) => s + (r.debito || 0), 0);
+  const saldo = credito - debito;
+  const count = allRows.length;
+
+  return (
+    <div className="mb-3">
+      <div
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center justify-between cursor-pointer px-4 py-3 bg-[#4C1D95] rounded-2xl hover:bg-[#3b1672] transition"
+      >
+        <div className="flex items-center gap-2">
+          {open ? <ChevronDown className="h-4 w-4 text-white" /> : <ChevronRight className="h-4 w-4 text-white" />}
+          <span className="font-bold text-white text-sm">{weekLabel}</span>
+          <span className="text-xs text-white/50">{count} reg.</span>
+        </div>
+        <div className="flex items-center gap-6 text-sm font-bold">
+          <span className="text-green-300">{fmt(credito)}</span>
+          <span className="text-red-300">{fmt(debito)}</span>
+          <span className={`text-white`}>{fmt(saldo)}</span>
+        </div>
+      </div>
+
+      {open && (
+        <div className="mt-2 ml-2 space-y-1">
+          {Object.entries(days).map(([date, rows]) => (
+            <DayGroup key={date} date={date} rows={rows} defaultOpen={Object.keys(days).length === 1} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -142,29 +190,60 @@ export default function FluxoCaixaRealizadoPage() {
 
   const bancos = useMemo(() => [...new Set(rows.map((r) => r.banco).filter(Boolean))], [rows]);
 
-  const grouped = useMemo(() => {
-    const map = {};
+  // Agrupa por semana → dia
+  const groupedBySemana = useMemo(() => {
+    const weeks = {};
     rows.forEach((row) => {
-      const key = getGroupKey(row.data, groupBy);
-      if (!map[key]) map[key] = { credito: 0, debito: 0, rows: [] };
-      map[key].credito += row.credito || 0;
-      map[key].debito += row.debito || 0;
-      map[key].rows.push(row);
+      if (!row.data) return;
+      const week = getWeekNumber(row.data);
+      const year = row.data.slice(0, 4);
+      const range = getWeekRange(row.data);
+      const weekKey = `Sem ${week} — ${range}/${year}`;
+      if (!weeks[weekKey]) weeks[weekKey] = {};
+      if (!weeks[weekKey][row.data]) weeks[weekKey][row.data] = [];
+      weeks[weekKey][row.data].push(row);
     });
-    return map;
-  }, [rows, groupBy]);
+    return weeks;
+  }, [rows]);
+
+  // Agrupa por mês → dia
+  const groupedByMes = useMemo(() => {
+    const months = {};
+    rows.forEach((row) => {
+      if (!row.data) return;
+      const [y, m] = row.data.split("-");
+      const monthKey = `${m}/${y}`;
+      if (!months[monthKey]) months[monthKey] = {};
+      if (!months[monthKey][row.data]) months[monthKey][row.data] = [];
+      months[monthKey][row.data].push(row);
+    });
+    return months;
+  }, [rows]);
+
+  // Agrupa só por dia
+  const groupedByDia = useMemo(() => {
+    const days = {};
+    rows.forEach((row) => {
+      if (!row.data) return;
+      if (!days[row.data]) days[row.data] = [];
+      days[row.data].push(row);
+    });
+    return days;
+  }, [rows]);
 
   function update(field, value) {
     setFilters((cur) => ({ ...cur, [field]: value }));
   }
 
+  const fmt2 = (v) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
+
   return (
     <div className="space-y-6">
       {/* KPIs */}
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
-        <KpiCard title="Total Créditos" value={fmt(totalCredito)} icon={TrendingUp} color="green" />
-        <KpiCard title="Total Débitos" value={fmt(totalDebito)} icon={TrendingDown} color="red" />
-        <KpiCard title="Saldo do Período" value={fmt(saldo)} icon={Wallet} color={saldo >= 0 ? "purple" : "red"} />
+        <KpiCard title="Total Créditos" value={fmt2(totalCredito)} icon={TrendingUp} color="green" />
+        <KpiCard title="Total Débitos" value={fmt2(totalDebito)} icon={TrendingDown} color="red" />
+        <KpiCard title="Saldo do Período" value={fmt2(saldo)} icon={Wallet} color={saldo >= 0 ? "purple" : "red"} />
       </div>
 
       {/* Filtros */}
@@ -172,21 +251,11 @@ export default function FluxoCaixaRealizadoPage() {
         <div className="flex flex-wrap gap-3 items-end">
           <div>
             <div className="text-xs font-semibold text-slate-500 mb-1">De</div>
-            <input
-              type="date"
-              value={filters.dtInicio}
-              onChange={(e) => update("dtInicio", e.target.value)}
-              className={inputClass()}
-            />
+            <input type="date" value={filters.dtInicio} onChange={(e) => update("dtInicio", e.target.value)} className={inputClass()} />
           </div>
           <div>
             <div className="text-xs font-semibold text-slate-500 mb-1">Até</div>
-            <input
-              type="date"
-              value={filters.dtFim}
-              onChange={(e) => update("dtFim", e.target.value)}
-              className={inputClass()}
-            />
+            <input type="date" value={filters.dtFim} onChange={(e) => update("dtFim", e.target.value)} className={inputClass()} />
           </div>
           <div>
             <div className="text-xs font-semibold text-slate-500 mb-1">Tipo</div>
@@ -203,10 +272,7 @@ export default function FluxoCaixaRealizadoPage() {
               {bancos.map((b) => <option key={b}>{b}</option>)}
             </select>
           </div>
-          <button
-            onClick={loadData}
-            className="rounded-2xl bg-[linear-gradient(135deg,#F97316_0%,#F59E0B_100%)] px-5 py-2.5 text-sm font-bold text-white"
-          >
+          <button onClick={loadData} className="rounded-2xl bg-[linear-gradient(135deg,#F97316_0%,#F59E0B_100%)] px-5 py-2.5 text-sm font-bold text-white">
             Aplicar filtros
           </button>
           <button
@@ -220,20 +286,18 @@ export default function FluxoCaixaRealizadoPage() {
 
       {/* Tabela */}
       <SectionCard>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-bold text-[#6B1F87]">
             Lançamentos
             <span className="ml-2 text-sm font-normal text-slate-400">{rows.length} registros</span>
           </h2>
           <div className="flex gap-2">
-            {["dia", "semana", "mes", "ano"].map((g) => (
+            {["dia", "semana", "mes"].map((g) => (
               <button
                 key={g}
                 onClick={() => setGroupBy(g)}
                 className={`rounded-2xl px-3 py-1.5 text-xs font-bold transition ${
-                  groupBy === g
-                    ? "bg-[#6B1F87] text-white"
-                    : "bg-[#FCFAFF] text-[#6B1F87] ring-1 ring-[#E9D5FF]"
+                  groupBy === g ? "bg-[#6B1F87] text-white" : "bg-[#FCFAFF] text-[#6B1F87] ring-1 ring-[#E9D5FF]"
                 }`}
               >
                 {g.charAt(0).toUpperCase() + g.slice(1)}
@@ -242,44 +306,32 @@ export default function FluxoCaixaRealizadoPage() {
           </div>
         </div>
 
-        {/* Header tabela */}
-        <div className="grid grid-cols-[100px_1fr_120px_120px_100px] gap-2 px-4 py-2 text-xs font-bold uppercase tracking-wide text-slate-400 border-b border-[#E9D5FF]">
-          <span>Data</span>
-          <span>Histórico</span>
-          <span className="text-right">Crédito</span>
-          <span className="text-right">Débito</span>
-          <span className="text-right">Tipo</span>
-        </div>
-
         {loading ? (
           <div className="py-12 text-center text-slate-400">Carregando...</div>
-        ) : Object.keys(grouped).length === 0 ? (
+        ) : rows.length === 0 ? (
           <div className="py-12 text-center text-slate-400">Nenhum lançamento encontrado.</div>
         ) : (
-          <div className="mt-2 space-y-2">
-            {Object.entries(grouped).map(([key, group]) => (
-              <GroupRow
-                key={key}
-                label={key}
-                credito={group.credito}
-                debito={group.debito}
-                count={group.rows.length}
-              >
-                {group.rows.map((row) => (
-                  <TransactionRow key={row.id} row={row} />
-                ))}
-              </GroupRow>
+          <div className="space-y-1">
+            {groupBy === "semana" && Object.entries(groupedBySemana).map(([week, days]) => (
+              <WeekGroup key={week} weekLabel={week} days={days} />
+            ))}
+
+            {groupBy === "mes" && Object.entries(groupedByMes).map(([month, days]) => (
+              <WeekGroup key={month} weekLabel={month} days={days} />
+            ))}
+
+            {groupBy === "dia" && Object.entries(groupedByDia).map(([date, dayRows]) => (
+              <DayGroup key={date} date={date} rows={dayRows} defaultOpen={false} />
             ))}
           </div>
         )}
 
         {/* Totais */}
-        <div className="mt-4 grid grid-cols-[100px_1fr_120px_120px_100px] gap-2 px-4 py-3 bg-[#4C1D95] rounded-2xl text-white text-sm font-bold">
-          <span>Total</span>
-          <span></span>
-          <span className="text-right text-green-300">{fmt(totalCredito)}</span>
-          <span className="text-right text-red-300">{fmt(totalDebito)}</span>
-          <span className="text-right">{fmt(saldo)}</span>
+        <div className="mt-6 grid grid-cols-[1fr_130px_130px_90px] gap-2 px-4 py-3 bg-[#4C1D95] rounded-2xl text-white text-sm font-bold">
+          <span>Total Geral</span>
+          <span className="text-right text-green-300">{fmt2(totalCredito)}</span>
+          <span className="text-right text-red-300">{fmt2(totalDebito)}</span>
+          <span className="text-right">{fmt2(saldo)}</span>
         </div>
       </SectionCard>
     </div>
