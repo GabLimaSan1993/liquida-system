@@ -4,7 +4,8 @@ import {
   Upload, BarChart3, Bell, DollarSign, ClipboardList,
   ClipboardCheck, Wrench, Zap, Sparkles, FlaskConical,
   Camera, ShieldCheck, ChevronDown, ChevronRight, Layers,
-  Truck, TrendingUp, Users, LogOut, X,
+  Truck, TrendingUp, Users, LogOut, X, ShoppingCart,
+  Landmark, BarChart2, Lock,
 } from "lucide-react";
 import { useAuth } from "../AuthContext.jsx";
 import { signOut } from "../services/authService.js";
@@ -40,6 +41,16 @@ function NavItem({ to, icon: Icon, label, indent = false, onClick }) {
   );
 }
 
+function NavItemDisabled({ icon: Icon, label, indent = false }) {
+  return (
+    <div className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3 text-white/30 cursor-not-allowed ${indent ? "pl-6" : ""}`}>
+      <Icon className="h-4 w-4 shrink-0" />
+      <span className="font-medium">{label}</span>
+      <Lock className="h-3 w-3 ml-auto" />
+    </div>
+  );
+}
+
 function CollapseGroup({ icon: Icon, label, paths, children }) {
   const location = useLocation();
   const isActive = paths.some((p) => location.pathname.startsWith(p));
@@ -68,6 +79,34 @@ function CollapseGroup({ icon: Icon, label, paths, children }) {
   );
 }
 
+function SubGroup({ icon: Icon, label, paths, children }) {
+  const location = useLocation();
+  const isActive = paths.some((p) => location.pathname.startsWith(p));
+  const [open, setOpen] = useState(isActive);
+
+  return (
+    <div>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className={`w-full flex items-center justify-between rounded-2xl pl-6 pr-4 py-2.5 transition-all text-sm ${
+          isActive ? "text-white font-bold" : "text-white/70 hover:text-white hover:bg-white/10"
+        }`}
+      >
+        <div className="flex items-center gap-2">
+          <Icon className="h-3.5 w-3.5 shrink-0" />
+          <span className="font-semibold">{label}</span>
+        </div>
+        {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+      </button>
+      {open && (
+        <div className="ml-4 border-l border-white/10 pl-2 space-y-0.5">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SidebarContent({ profile, onClose, handleLogout }) {
   return (
     <>
@@ -80,15 +119,39 @@ function SidebarContent({ profile, onClose, handleLogout }) {
       <nav className="flex-1 space-y-1">
         <NavItem to="/upload" icon={Upload} label="Uploads" onClick={onClose} />
 
-        <CollapseGroup icon={TrendingUp} label="Tesouraria" paths={["/analise-entrada", "/faturamento"]}>
-          <NavItem to="/analise-entrada" icon={BarChart3} label="Análise de Entrada" indent onClick={onClose} />
-          <NavItem to="/faturamento" icon={DollarSign} label="Faturamento" indent onClick={onClose} />
+        {/* Tesouraria */}
+        <CollapseGroup
+          icon={TrendingUp}
+          label="Tesouraria"
+          paths={["/analise-entrada", "/faturamento", "/financeiro", "/fechamentos"]}
+        >
+          <SubGroup icon={ShoppingCart} label="Vendas" paths={["/faturamento"]}>
+            <NavItem to="/faturamento" icon={DollarSign} label="Faturamento" indent onClick={onClose} />
+          </SubGroup>
+
+          <SubGroup icon={BarChart3} label="Compras" paths={["/analise-entrada"]}>
+            <NavItem to="/analise-entrada" icon={BarChart3} label="Análise de Entrada" indent onClick={onClose} />
+          </SubGroup>
+
+          <SubGroup icon={Landmark} label="Financeiro" paths={["/financeiro"]}>
+            <NavItem to="/financeiro/fluxo-realizado" icon={BarChart2} label="Fluxo Realizado" indent onClick={onClose} />
+            <NavItemDisabled icon={BarChart2} label="Conciliação" indent />
+            <NavItemDisabled icon={BarChart2} label="Contas a Pagar" indent />
+            <NavItemDisabled icon={BarChart2} label="Contas a Receber" indent />
+            <NavItemDisabled icon={BarChart2} label="Fluxo Projetado" indent />
+          </SubGroup>
+
+          <SubGroup icon={BarChart2} label="Fechamentos" paths={["/fechamentos"]}>
+            <NavItemDisabled icon={BarChart2} label="Em breve" indent />
+          </SubGroup>
         </CollapseGroup>
 
+        {/* Logística */}
         <CollapseGroup icon={Truck} label="Logística" paths={["/abertura-os"]}>
           <NavItem to="/abertura-os" icon={ClipboardList} label="Abertura de OS" indent onClick={onClose} />
         </CollapseGroup>
 
+        {/* Linha Branca */}
         <CollapseGroup icon={Layers} label="Linha Branca" paths={["/linha-branca"]}>
           <NavItem to="/linha-branca/triagem" icon={ClipboardCheck} label="Triagem" indent onClick={onClose} />
           <NavItem to="/linha-branca/reparo-mecanico" icon={Wrench} label="Reparo Mecânico" indent onClick={onClose} />

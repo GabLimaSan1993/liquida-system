@@ -5,9 +5,10 @@ import { Menu } from "lucide-react";
 
 const PAGE_META = {
   "/upload": { title: "Uploads", subtitle: "Envie as bases para análise" },
-  "/analise-entrada": { title: "Análise de Entrada", subtitle: "Acompanhe entrada, disponibilidade, itens vendidos, PMV e rentabilidade" },
-  "/faturamento": { title: "Faturamento", subtitle: "Vendas, cliente, fornecedor, lote e rentabilidade" },
-  "/abertura-os": { title: "Abertura de OS", subtitle: "Registro e acompanhamento de ordens de serviço" },
+  "/analise-entrada": { title: "Análise de Entrada", subtitle: "Compras · Acompanhe entrada, disponibilidade, itens vendidos, PMV e rentabilidade" },
+  "/faturamento": { title: "Faturamento", subtitle: "Vendas · Vendas, cliente, fornecedor, lote e rentabilidade" },
+  "/abertura-os": { title: "Abertura de OS", subtitle: "Logística · Registro e acompanhamento de ordens de serviço" },
+  "/financeiro/fluxo-realizado": { title: "Fluxo de Caixa Realizado", subtitle: "Financeiro · Lançamentos do extrato bancário" },
   "/linha-branca/triagem": { title: "Triagem", subtitle: "Linha Branca · Classificação de entrada" },
   "/linha-branca/reparo-mecanico": { title: "Reparo Mecânico", subtitle: "Linha Branca · Execução de reparos mecânicos" },
   "/linha-branca/reparo-eletrico": { title: "Reparo Elétrico", subtitle: "Linha Branca · Execução de reparos elétricos" },
@@ -15,7 +16,7 @@ const PAGE_META = {
   "/linha-branca/bancada-testes": { title: "Bancada de Testes", subtitle: "Linha Branca · Aprovação ou retorno para reparo" },
   "/linha-branca/limpeza": { title: "Limpeza", subtitle: "Linha Branca · Registro fotográfico pós-limpeza" },
   "/linha-branca/qualidade": { title: "Qualidade", subtitle: "Linha Branca · Checklist de aprovação e descaracterização" },
-  "/gerenciar-usuarios": { title: "Gerenciar Usuários", subtitle: "Cadastro e permissões de acesso" },
+  "/gerenciar-usuarios": { title: "Gerenciar Usuários", subtitle: "Sistema · Cadastro e permissões de acesso" },
 };
 
 export default function MainLayout() {
@@ -44,14 +45,13 @@ export default function MainLayout() {
 
       <div className="flex min-h-screen">
 
-        {/* Sidebar desktop — drawer fixo */}
+        {/* Sidebar desktop */}
         <div className={`hidden lg:block fixed top-0 left-0 h-full z-40 transition-transform duration-300 ${desktopOpen ? "translate-x-0" : "-translate-x-full"}`}
           style={{ width: "325px" }}
         >
           <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} onDesktopClose={() => setDesktopOpen(false)} />
         </div>
 
-        {/* Overlay desktop quando sidebar aberta */}
         {desktopOpen && (
           <div
             className="hidden lg:block fixed inset-0 z-30 bg-black/30"
