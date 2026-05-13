@@ -1,3 +1,5 @@
+import { supabase } from "../lib/supabase";
+
 export async function sincronizarTiny(anoInicio = 2023) {
   const { data: { session } } = await supabase.auth.getSession();
   
