@@ -57,7 +57,8 @@ export default function ContasPagarPage() {
       let query = supabase
         .from("contas_pagar")
         .select("*")
-        .order("data_vencimento", { ascending: true });
+        .order("data_vencimento", { ascending: true })
+        .limit(50000);
 
       if (filters.situacao) query = query.eq("situacao", filters.situacao);
       if (filters.dtInicio) query = query.gte("data_vencimento", filters.dtInicio);
@@ -197,7 +198,7 @@ export default function ContasPagarPage() {
               {loading ? (
                 <tr><td colSpan={8} className="text-center py-12 text-slate-400">Carregando...</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={8} className="text-center py-12 text-slate-400">Nenhuma conta encontrada. Sincronize com o Tiny.</td></tr>
+                <tr><td colSpan={8} className="text-center py-12 text-slate-400">Nenhuma conta encontrada.</td></tr>
               ) : (
                 rows.map((row) => {
                   const hoje = new Date().toISOString().slice(0, 10);
