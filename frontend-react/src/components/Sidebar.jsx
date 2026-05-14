@@ -5,7 +5,7 @@ import {
   ClipboardCheck, Wrench, Zap, Sparkles, FlaskConical,
   Camera, ShieldCheck, ChevronDown, ChevronRight, Layers,
   Truck, TrendingUp, Users, LogOut, X, ShoppingCart,
-  Landmark, BarChart2, Lock, TrendingDown,
+  Landmark, BarChart2, Lock, TrendingDown, Database,
 } from "lucide-react";
 import { useAuth } from "../AuthContext.jsx";
 import { signOut } from "../services/authService.js";
@@ -136,6 +136,7 @@ function SidebarContent({ profile, onClose, handleLogout }) {
             <NavItem to="/financeiro/fluxo-realizado" icon={BarChart2} label="Fluxo Realizado" indent onClick={onClose} />
             <NavItem to="/financeiro/contas-pagar" icon={TrendingDown} label="Contas a Pagar" indent onClick={onClose} />
             <NavItem to="/financeiro/contas-receber" icon={TrendingUp} label="Contas a Receber" indent onClick={onClose} />
+            <NavItem to="/financeiro/carga-historica" icon={Database} label="Carga Histórica" indent onClick={onClose} />
             <NavItemDisabled icon={BarChart2} label="Conciliação" indent />
             <NavItemDisabled icon={BarChart2} label="Fluxo Projetado" indent />
           </SubGroup>
