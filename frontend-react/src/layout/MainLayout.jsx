@@ -11,6 +11,7 @@ const PAGE_META = {
   "/financeiro/fluxo-realizado": { title: "Fluxo de Caixa Realizado", subtitle: "Financeiro · Lançamentos do extrato bancário" },
   "/financeiro/contas-pagar": { title: "Contas a Pagar", subtitle: "Financeiro · Obrigações financeiras sincronizadas do Tiny" },
   "/financeiro/contas-receber": { title: "Contas a Receber", subtitle: "Financeiro · Recebimentos sincronizados do Tiny" },
+  "/financeiro/carga-historica": { title: "Carga Histórica", subtitle: "Financeiro · Sincronização histórica de dados do Tiny" },
   "/linha-branca/triagem": { title: "Triagem", subtitle: "Linha Branca · Classificação de entrada" },
   "/linha-branca/reparo-mecanico": { title: "Reparo Mecânico", subtitle: "Linha Branca · Execução de reparos mecânicos" },
   "/linha-branca/reparo-eletrico": { title: "Reparo Elétrico", subtitle: "Linha Branca · Execução de reparos elétricos" },
