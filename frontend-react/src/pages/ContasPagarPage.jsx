@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { supabase } from "../lib/supabase";
 import { sincronizarTinyAno } from "../services/tinyService.js";
-import { RefreshCw, ChevronDown, X } from "lucide-react";
+import { RefreshCw, X } from "lucide-react";
 
 function SectionCard({ children }) {
   return (
@@ -45,19 +45,25 @@ function addDays(days) {
   return d.toISOString().slice(0, 10);
 }
 
-function KpiCard({ title, value, subtitle, color, onClick, active }) {
+function subDays(days) {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+
+function KpiCard({ title, value, subtitle, color, onClick }) {
   const colors = {
-    red: { bg: active ? "bg-red-600" : "bg-red-50", text: active ? "text-white" : "text-red-700", sub: active ? "text-red-100" : "text-red-400" },
-    green: { bg: active ? "bg-green-600" : "bg-green-50", text: active ? "text-white" : "text-green-700", sub: active ? "text-green-100" : "text-green-400" },
-    orange: { bg: active ? "bg-orange-500" : "bg-orange-50", text: active ? "text-white" : "text-orange-700", sub: active ? "text-orange-100" : "text-orange-400" },
-    blue: { bg: active ? "bg-blue-600" : "bg-blue-50", text: active ? "text-white" : "text-blue-700", sub: active ? "text-blue-100" : "text-blue-400" },
-    purple: { bg: active ? "bg-[#6B1F87]" : "bg-purple-50", text: active ? "text-white" : "text-[#6B1F87]", sub: active ? "text-purple-200" : "text-purple-400" },
+    red: { bg: "bg-red-50", text: "text-red-700", sub: "text-red-400" },
+    green: { bg: "bg-green-50", text: "text-green-700", sub: "text-green-400" },
+    orange: { bg: "bg-orange-50", text: "text-orange-700", sub: "text-orange-400" },
+    blue: { bg: "bg-blue-50", text: "text-blue-700", sub: "text-blue-400" },
+    purple: { bg: "bg-purple-50", text: "text-[#6B1F87]", sub: "text-purple-400" },
   };
   const c = colors[color] || colors.purple;
   return (
     <div
       onClick={onClick}
-      className={`rounded-[24px] ${c.bg} p-5 transition ${onClick ? "cursor-pointer hover:opacity-90" : ""}`}
+      className={`rounded-[24px] ${c.bg} p-5 transition ${onClick ? "cursor-pointer hover:opacity-90 hover:shadow-md" : ""}`}
     >
       <div className={`text-xs font-semibold uppercase tracking-widest mb-3 ${c.sub}`}>{title}</div>
       <div className={`text-2xl font-black ${c.text}`}>{value}</div>
@@ -66,31 +72,16 @@ function KpiCard({ title, value, subtitle, color, onClick, active }) {
   );
 }
 
-function AVencerModal({ rows, onClose }) {
-  const hoje = new Date().toISOString().slice(0, 10);
-  const d7 = addDays(7);
-  const d14 = addDays(14);
-  const d21 = addDays(21);
-  const d28 = addDays(28);
-
-  const faixas = [
-    { label: "Próximos 7 dias", rows: rows.filter((r) => r.data_vencimento >= hoje && r.data_vencimento <= d7) },
-    { label: "8 a 14 dias", rows: rows.filter((r) => r.data_vencimento > d7 && r.data_vencimento <= d14) },
-    { label: "15 a 21 dias", rows: rows.filter((r) => r.data_vencimento > d14 && r.data_vencimento <= d21) },
-    { label: "22 a 28 dias", rows: rows.filter((r) => r.data_vencimento > d21 && r.data_vencimento <= d28) },
-    { label: "+ 28 dias", rows: rows.filter((r) => r.data_vencimento > d28) },
-  ];
-
+function FaixaModal({ title, faixas, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
       <div className="w-full max-w-2xl rounded-[28px] bg-white p-8 shadow-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-black text-[#6B1F87]">A Vencer</h2>
+          <h2 className="text-xl font-black text-[#6B1F87]">{title}</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
             <X className="h-5 w-5" />
           </button>
         </div>
-
         <div className="space-y-4">
           {faixas.map((faixa) => (
             <div key={faixa.label} className="rounded-2xl bg-[#FCFAFF] p-4 ring-1 ring-[#E9D5FF]">
@@ -127,7 +118,7 @@ export default function ContasPagarPage() {
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [status, setStatus] = useState("");
-  const [showAVencer, setShowAVencer] = useState(false);
+  const [modal, setModal] = useState(null); // "avencer" | "vencidos"
   const [filters, setFilters] = useState({
     situacao: "",
     dtInicio: "",
@@ -207,15 +198,43 @@ export default function ContasPagarPage() {
     [rows, hoje]
   );
 
-  const totalParcial = useMemo(() =>
-    rows.filter((r) => r.situacao === "parcial").reduce((s, r) => s + (r.saldo || 0), 0),
-    [rows]
-  );
+  // Faixas A Vencer
+  const faixasAVencer = useMemo(() => {
+    const d7 = addDays(7);
+    const d14 = addDays(14);
+    const d21 = addDays(21);
+    const d28 = addDays(28);
+    return [
+      { label: "Próximos 7 dias", rows: aVencer.filter((r) => r.data_vencimento <= d7) },
+      { label: "8 a 14 dias", rows: aVencer.filter((r) => r.data_vencimento > d7 && r.data_vencimento <= d14) },
+      { label: "15 a 21 dias", rows: aVencer.filter((r) => r.data_vencimento > d14 && r.data_vencimento <= d21) },
+      { label: "22 a 28 dias", rows: aVencer.filter((r) => r.data_vencimento > d21 && r.data_vencimento <= d28) },
+      { label: "+ 28 dias", rows: aVencer.filter((r) => r.data_vencimento > d28) },
+    ];
+  }, [aVencer]);
+
+  // Faixas Vencidos
+  const faixasVencidos = useMemo(() => {
+    const d10 = subDays(10);
+    const d30 = subDays(30);
+    const d60 = subDays(60);
+    const d90 = subDays(90);
+    return [
+      { label: "Até 10 dias", rows: vencidos.filter((r) => r.data_vencimento >= d10) },
+      { label: "11 a 30 dias", rows: vencidos.filter((r) => r.data_vencimento < d10 && r.data_vencimento >= d30) },
+      { label: "31 a 60 dias", rows: vencidos.filter((r) => r.data_vencimento < d30 && r.data_vencimento >= d60) },
+      { label: "61 a 90 dias", rows: vencidos.filter((r) => r.data_vencimento < d60 && r.data_vencimento >= d90) },
+      { label: "+ 90 dias", rows: vencidos.filter((r) => r.data_vencimento < d90) },
+    ];
+  }, [vencidos]);
 
   return (
     <>
-      {showAVencer && (
-        <AVencerModal rows={aVencer} onClose={() => setShowAVencer(false)} />
+      {modal === "avencer" && (
+        <FaixaModal title="A Vencer" faixas={faixasAVencer} onClose={() => setModal(null)} />
+      )}
+      {modal === "vencidos" && (
+        <FaixaModal title="Vencidos" faixas={faixasVencidos} onClose={() => setModal(null)} />
       )}
 
       <div className="space-y-6">
@@ -231,13 +250,14 @@ export default function ContasPagarPage() {
             value={fmt(aVencer.reduce((s, r) => s + (r.saldo || 0), 0))}
             subtitle={`${aVencer.length} contas — clique para detalhar`}
             color="blue"
-            onClick={() => setShowAVencer(true)}
+            onClick={() => setModal("avencer")}
           />
           <KpiCard
             title="Vencidos"
             value={fmt(vencidos.reduce((s, r) => s + (r.saldo || 0), 0))}
-            subtitle={`${vencidos.length} contas`}
+            subtitle={`${vencidos.length} contas — clique para detalhar`}
             color="orange"
+            onClick={() => setModal("vencidos")}
           />
           <KpiCard
             title="Total Pago"
