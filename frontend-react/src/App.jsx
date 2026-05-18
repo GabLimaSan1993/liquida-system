@@ -29,6 +29,23 @@ function ProtectedRoute({ tela, children }) {
   return children;
 }
 
+function DefaultRedirect() {
+  const { profile, loading } = useAuth();
+
+  if (loading) return <div className="min-h-screen flex items-center justify-center text-purple-700 font-bold">Carregando...</div>;
+  if (!profile) return <Navigate to="/login" replace />;
+
+  if (profile.is_master) return <Navigate to="/upload" replace />;
+
+  if (profile.area_tecnica === "refrigeracao") return <Navigate to="/linha-branca/triagem" replace />;
+
+  if (["climatizacao", "lavadoras", "diversos"].includes(profile.area_tecnica)) return <Navigate to="/linha-branca/triagem-reparos" replace />;
+
+  if (profile.telas_permitidas?.length > 0) return <Navigate to={profile.telas_permitidas[0]} replace />;
+
+  return <Navigate to="/sem-acesso" replace />;
+}
+
 function SemAcessoPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#FAF6FF]">
@@ -48,7 +65,7 @@ export default function App() {
 
   return (
     <Routes>
-      <Route path="/login" element={!user ? <LoginPage /> : <Navigate to="/upload" replace />} />
+      <Route path="/login" element={!user ? <LoginPage /> : <Navigate to="/" replace />} />
       <Route path="/sem-acesso" element={<SemAcessoPage />} />
 
       <Route element={
@@ -56,7 +73,9 @@ export default function App() {
           <MainLayout />
         </ProtectedRoute>
       }>
-        <Route path="/" element={<Navigate to="/upload" replace />} />
+        <Route path="/" element={<DefaultRedirect />} />
+
+        {/* Financeiro / Operacional */}
         <Route path="/upload" element={<ProtectedRoute tela="/upload"><UploadPage /></ProtectedRoute>} />
         <Route path="/analise-entrada" element={<ProtectedRoute tela="/analise-entrada"><AnalysisEntryPage /></ProtectedRoute>} />
         <Route path="/faturamento" element={<ProtectedRoute tela="/faturamento"><FaturamentoPage /></ProtectedRoute>} />
@@ -66,7 +85,7 @@ export default function App() {
         <Route path="/financeiro/contas-receber" element={<ProtectedRoute tela="/financeiro/contas-receber"><ContasReceberPage /></ProtectedRoute>} />
         <Route path="/financeiro/carga-historica" element={<ProtectedRoute tela="/financeiro/carga-historica"><CargaHistoricaPage /></ProtectedRoute>} />
 
-        {/* Linha Branca — Master */}
+        {/* Linha Branca — Master (separado por área) */}
         <Route path="/linha-branca/triagem" element={<ProtectedRoute tela="/linha-branca/triagem"><LinhaBrancaTriagemPage /></ProtectedRoute>} />
         <Route path="/linha-branca/reparo-mecanico" element={<ProtectedRoute tela="/linha-branca/reparo-mecanico"><ReparoLinhaBrancaPage areaExecucao="Reparo Mecânico" /></ProtectedRoute>} />
         <Route path="/linha-branca/reparo-eletrico" element={<ProtectedRoute tela="/linha-branca/reparo-eletrico"><ReparoLinhaBrancaPage areaExecucao="Reparo Elétrico" /></ProtectedRoute>} />
