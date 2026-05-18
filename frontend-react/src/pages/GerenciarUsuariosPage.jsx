@@ -7,6 +7,9 @@ const TELAS = [
   { id: "/analise-entrada", label: "Análise de Entrada" },
   { id: "/faturamento", label: "Faturamento" },
   { id: "/abertura-os", label: "Abertura de OS" },
+  { id: "/financeiro/fluxo-realizado", label: "Financeiro — Fluxo Realizado" },
+  { id: "/financeiro/contas-pagar", label: "Financeiro — Contas a Pagar" },
+  { id: "/financeiro/contas-receber", label: "Financeiro — Contas a Receber" },
   { id: "/linha-branca/triagem", label: "Linha Branca — Triagem" },
   { id: "/linha-branca/reparo-mecanico", label: "Linha Branca — Reparo Mecânico" },
   { id: "/linha-branca/reparo-eletrico", label: "Linha Branca — Reparo Elétrico" },
@@ -14,6 +17,14 @@ const TELAS = [
   { id: "/linha-branca/bancada-testes", label: "Linha Branca — Bancada de Testes" },
   { id: "/linha-branca/limpeza", label: "Linha Branca — Limpeza" },
   { id: "/linha-branca/qualidade", label: "Linha Branca — Qualidade" },
+];
+
+const AREAS_TECNICAS = [
+  { value: "", label: "Nenhuma (não é técnico)" },
+  { value: "refrigeracao", label: "Refrigeração" },
+  { value: "climatizacao", label: "Climatização" },
+  { value: "lavadoras", label: "Lavadoras" },
+  { value: "diversos", label: "Diversos" },
 ];
 
 function SectionCard({ children }) {
@@ -36,12 +47,34 @@ function Button({ children, primary = false, ...props }) {
   return <button {...props} className={`${base} ${style}`}>{children}</button>;
 }
 
+function AreaBadge({ area }) {
+  const styles = {
+    refrigeracao: "bg-blue-100 text-blue-700",
+    climatizacao: "bg-cyan-100 text-cyan-700",
+    lavadoras: "bg-green-100 text-green-700",
+    diversos: "bg-orange-100 text-orange-700",
+  };
+  const labels = {
+    refrigeracao: "Refrigeração",
+    climatizacao: "Climatização",
+    lavadoras: "Lavadoras",
+    diversos: "Diversos",
+  };
+  if (!area) return null;
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${styles[area] || "bg-slate-100 text-slate-600"}`}>
+      {labels[area] || area}
+    </span>
+  );
+}
+
 function ModalNovoUsuario({ onSave, onCancel }) {
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [isMaster, setIsMaster] = useState(false);
   const [telas, setTelas] = useState([]);
+  const [areaTecnica, setAreaTecnica] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -58,7 +91,7 @@ function ModalNovoUsuario({ onSave, onCancel }) {
     }
     try {
       setSaving(true);
-      await onSave(email, senha, nome, isMaster, telas);
+      await onSave(email, senha, nome, isMaster, telas, areaTecnica);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -106,28 +139,39 @@ function ModalNovoUsuario({ onSave, onCancel }) {
           </label>
 
           {!isMaster && (
-            <div>
-              <div className="text-sm font-semibold text-slate-600 mb-2">Telas permitidas</div>
-              <div className="space-y-2">
-                {TELAS.map((tela) => (
-                  <label
-                    key={tela.id}
-                    className={`flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-3 text-sm transition ${
-                      telas.includes(tela.id)
-                        ? "border-[#F59E0B] bg-amber-50 text-amber-800"
-                        : "border-[#E9D5FF] text-slate-600 hover:bg-[#FCFAFF]"
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={telas.includes(tela.id)}
-                      onChange={() => toggleTela(tela.id)}
-                    />
-                    <span className="font-medium">{tela.label}</span>
-                  </label>
-                ))}
+            <>
+              <div>
+                <span className="text-sm font-semibold text-slate-600">Área técnica</span>
+                <select value={areaTecnica} onChange={(e) => setAreaTecnica(e.target.value)} className={inputClass()}>
+                  {AREAS_TECNICAS.map((a) => (
+                    <option key={a.value} value={a.value}>{a.label}</option>
+                  ))}
+                </select>
               </div>
-            </div>
+
+              <div>
+                <div className="text-sm font-semibold text-slate-600 mb-2">Telas permitidas</div>
+                <div className="space-y-2">
+                  {TELAS.map((tela) => (
+                    <label
+                      key={tela.id}
+                      className={`flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-3 text-sm transition ${
+                        telas.includes(tela.id)
+                          ? "border-[#F59E0B] bg-amber-50 text-amber-800"
+                          : "border-[#E9D5FF] text-slate-600 hover:bg-[#FCFAFF]"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={telas.includes(tela.id)}
+                        onChange={() => toggleTela(tela.id)}
+                      />
+                      <span className="font-medium">{tela.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </>
           )}
 
           {error && (
@@ -160,6 +204,7 @@ function ModalNovoUsuario({ onSave, onCancel }) {
 function ModalPermissoes({ usuario, onSave, onCancel }) {
   const [telas, setTelas] = useState(usuario.telas_permitidas || []);
   const [isMaster, setIsMaster] = useState(usuario.is_master || false);
+  const [areaTecnica, setAreaTecnica] = useState(usuario.area_tecnica || "");
   const [saving, setSaving] = useState(false);
 
   function toggleTela(id) {
@@ -171,7 +216,7 @@ function ModalPermissoes({ usuario, onSave, onCancel }) {
   async function handleSave() {
     try {
       setSaving(true);
-      await onSave(usuario.id, telas, isMaster);
+      await onSave(usuario.id, telas, isMaster, areaTecnica);
     } finally {
       setSaving(false);
     }
@@ -204,28 +249,39 @@ function ModalPermissoes({ usuario, onSave, onCancel }) {
           </label>
 
           {!isMaster && (
-            <div>
-              <div className="text-sm font-semibold text-slate-600 mb-2">Telas permitidas</div>
-              <div className="space-y-2">
-                {TELAS.map((tela) => (
-                  <label
-                    key={tela.id}
-                    className={`flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-3 text-sm transition ${
-                      telas.includes(tela.id)
-                        ? "border-[#F59E0B] bg-amber-50 text-amber-800"
-                        : "border-[#E9D5FF] text-slate-600 hover:bg-[#FCFAFF]"
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={telas.includes(tela.id)}
-                      onChange={() => toggleTela(tela.id)}
-                    />
-                    <span className="font-medium">{tela.label}</span>
-                  </label>
-                ))}
+            <>
+              <div>
+                <span className="text-sm font-semibold text-slate-600">Área técnica</span>
+                <select value={areaTecnica} onChange={(e) => setAreaTecnica(e.target.value)} className={inputClass()}>
+                  {AREAS_TECNICAS.map((a) => (
+                    <option key={a.value} value={a.value}>{a.label}</option>
+                  ))}
+                </select>
               </div>
-            </div>
+
+              <div>
+                <div className="text-sm font-semibold text-slate-600 mb-2">Telas permitidas</div>
+                <div className="space-y-2">
+                  {TELAS.map((tela) => (
+                    <label
+                      key={tela.id}
+                      className={`flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-3 text-sm transition ${
+                        telas.includes(tela.id)
+                          ? "border-[#F59E0B] bg-amber-50 text-amber-800"
+                          : "border-[#E9D5FF] text-slate-600 hover:bg-[#FCFAFF]"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={telas.includes(tela.id)}
+                        onChange={() => toggleTela(tela.id)}
+                      />
+                      <span className="font-medium">{tela.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </>
           )}
 
           <div className="flex gap-3 pt-2">
@@ -270,15 +326,15 @@ export default function GerenciarUsuariosPage() {
 
   useEffect(() => { loadUsuarios(); }, []);
 
-  async function handleCreateUser(email, senha, nome, isMaster, telas) {
-    await createUser(email, senha, nome, isMaster, telas);
+  async function handleCreateUser(email, senha, nome, isMaster, telas, areaTecnica) {
+    await createUser(email, senha, nome, isMaster, telas, areaTecnica);
     setShowNovo(false);
     setStatus("Usuário criado com sucesso!");
     await loadUsuarios();
   }
 
-  async function handleUpdatePermissions(userId, telas, isMaster) {
-    await updateUserPermissions(userId, telas, isMaster);
+  async function handleUpdatePermissions(userId, telas, isMaster, areaTecnica) {
+    await updateUserPermissions(userId, telas, isMaster, areaTecnica);
     setEditando(null);
     setStatus("Permissões atualizadas!");
     await loadUsuarios();
@@ -337,7 +393,7 @@ export default function GerenciarUsuariosPage() {
                   <div>
                     <div className="font-bold text-[#6B1F87]">{u.nome}</div>
                     <div className="text-xs text-slate-400">{u.email}</div>
-                    <div className="mt-1">
+                    <div className="mt-1 flex items-center gap-2">
                       {u.is_master ? (
                         <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-semibold text-purple-700">
                           Master
@@ -347,6 +403,7 @@ export default function GerenciarUsuariosPage() {
                           {u.telas_permitidas?.length || 0} tela(s)
                         </span>
                       )}
+                      <AreaBadge area={u.area_tecnica} />
                     </div>
                   </div>
                   <Button onClick={() => setEditando(u)}>

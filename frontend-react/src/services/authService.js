@@ -35,7 +35,7 @@ export async function fetchAllProfiles() {
   return data || [];
 }
 
-export async function createUser(email, password, nome, isMaster, telasPermitidas) {
+export async function createUser(email, password, nome, isMaster, telasPermitidas, areaTecnica) {
   const { data, error } = await supabase.auth.admin.createUser({
     email,
     password,
@@ -51,16 +51,21 @@ export async function createUser(email, password, nome, isMaster, telasPermitida
       email,
       is_master: isMaster,
       telas_permitidas: telasPermitidas,
+      area_tecnica: areaTecnica || null,
     });
 
   if (profileError) throw profileError;
   return data.user;
 }
 
-export async function updateUserPermissions(userId, telasPermitidas, isMaster) {
+export async function updateUserPermissions(userId, telasPermitidas, isMaster, areaTecnica) {
   const { error } = await supabase
     .from("user_profiles")
-    .update({ telas_permitidas: telasPermitidas, is_master: isMaster })
+    .update({
+      telas_permitidas: telasPermitidas,
+      is_master: isMaster,
+      area_tecnica: areaTecnica || null,
+    })
     .eq("id", userId);
   if (error) throw error;
 }
