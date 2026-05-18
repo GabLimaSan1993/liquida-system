@@ -16,6 +16,8 @@ const PAGE_META = {
   "/linha-branca/reparo-mecanico": { title: "Reparo Mecânico", subtitle: "Linha Branca · Execução de reparos mecânicos" },
   "/linha-branca/reparo-eletrico": { title: "Reparo Elétrico", subtitle: "Linha Branca · Execução de reparos elétricos" },
   "/linha-branca/reparo-estetico": { title: "Reparo Estético", subtitle: "Linha Branca · Execução de reparos estéticos" },
+  "/linha-branca/reparos": { title: "Reparos", subtitle: "Linha Branca · Reparo unificado — Mecânico, Elétrico e Estético" },
+  "/linha-branca/triagem-reparos": { title: "Triagem + Reparos", subtitle: "Linha Branca · Triagem e reparo unificados" },
   "/linha-branca/bancada-testes": { title: "Bancada de Testes", subtitle: "Linha Branca · Aprovação ou retorno para reparo" },
   "/linha-branca/limpeza": { title: "Limpeza", subtitle: "Linha Branca · Registro fotográfico pós-limpeza" },
   "/linha-branca/qualidade": { title: "Qualidade", subtitle: "Linha Branca · Checklist de aprovação e descaracterização" },
@@ -49,7 +51,8 @@ export default function MainLayout() {
       <div className="flex min-h-screen">
 
         {/* Sidebar desktop */}
-        <div className={`hidden lg:block fixed top-0 left-0 h-full z-40 transition-transform duration-300 ${desktopOpen ? "translate-x-0" : "-translate-x-full"}`}
+        <div
+          className={`hidden lg:block fixed top-0 left-0 h-full z-40 transition-transform duration-300 ${desktopOpen ? "translate-x-0" : "-translate-x-full"}`}
           style={{ width: "325px" }}
         >
           <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} onDesktopClose={() => setDesktopOpen(false)} />

@@ -11,6 +11,8 @@ import FaturamentoPage from "./pages/FaturamentoPage.jsx";
 import AberturaOsPage from "./pages/AberturaOsPage.jsx";
 import LinhaBrancaTriagemPage from "./pages/LinhaBrancaTriagemPage.jsx";
 import ReparoLinhaBrancaPage from "./pages/ReparoLinhaBrancaPage.jsx";
+import ReparosRefrigeracaoPage from "./pages/ReparosRefrigeracaoPage.jsx";
+import TriagemReparosPage from "./pages/TriagemReparosPage.jsx";
 import BancadaTestesPage from "./pages/BancadaTestesPage.jsx";
 import LimpezaPage from "./pages/LimpezaPage.jsx";
 import QualidadePage from "./pages/QualidadePage.jsx";
@@ -63,13 +65,24 @@ export default function App() {
         <Route path="/financeiro/contas-pagar" element={<ProtectedRoute tela="/financeiro/contas-pagar"><ContasPagarPage /></ProtectedRoute>} />
         <Route path="/financeiro/contas-receber" element={<ProtectedRoute tela="/financeiro/contas-receber"><ContasReceberPage /></ProtectedRoute>} />
         <Route path="/financeiro/carga-historica" element={<ProtectedRoute tela="/financeiro/carga-historica"><CargaHistoricaPage /></ProtectedRoute>} />
+
+        {/* Linha Branca — Master */}
         <Route path="/linha-branca/triagem" element={<ProtectedRoute tela="/linha-branca/triagem"><LinhaBrancaTriagemPage /></ProtectedRoute>} />
         <Route path="/linha-branca/reparo-mecanico" element={<ProtectedRoute tela="/linha-branca/reparo-mecanico"><ReparoLinhaBrancaPage areaExecucao="Reparo Mecânico" /></ProtectedRoute>} />
         <Route path="/linha-branca/reparo-eletrico" element={<ProtectedRoute tela="/linha-branca/reparo-eletrico"><ReparoLinhaBrancaPage areaExecucao="Reparo Elétrico" /></ProtectedRoute>} />
         <Route path="/linha-branca/reparo-estetico" element={<ProtectedRoute tela="/linha-branca/reparo-estetico"><ReparoLinhaBrancaPage areaExecucao="Reparo Estético" /></ProtectedRoute>} />
+
+        {/* Linha Branca — Refrigeração */}
+        <Route path="/linha-branca/reparos" element={<ProtectedRoute tela="/linha-branca/reparos"><ReparosRefrigeracaoPage /></ProtectedRoute>} />
+
+        {/* Linha Branca — Outras linhas */}
+        <Route path="/linha-branca/triagem-reparos" element={<ProtectedRoute tela="/linha-branca/triagem-reparos"><TriagemReparosPage /></ProtectedRoute>} />
+
+        {/* Compartilhadas */}
         <Route path="/linha-branca/bancada-testes" element={<ProtectedRoute tela="/linha-branca/bancada-testes"><BancadaTestesPage /></ProtectedRoute>} />
         <Route path="/linha-branca/limpeza" element={<ProtectedRoute tela="/linha-branca/limpeza"><LimpezaPage /></ProtectedRoute>} />
         <Route path="/linha-branca/qualidade" element={<ProtectedRoute tela="/linha-branca/qualidade"><QualidadePage /></ProtectedRoute>} />
+
         <Route path="/gerenciar-usuarios" element={<ProtectedRoute tela="/gerenciar-usuarios"><GerenciarUsuariosPage /></ProtectedRoute>} />
       </Route>
     </Routes>
