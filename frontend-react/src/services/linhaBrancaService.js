@@ -7,7 +7,9 @@ export const TIPOS_PRODUTO_LINHA_BRANCA = [
   "Portáteis",
 ];
 
-// Listas para Refrigeração (triagem separada)
+// =====================
+// REFRIGERAÇÃO — Triagem
+// =====================
 export const REPAROS_MECANICOS = [
   "AFERIÇÃO DE TEMPERATURA FREEZER",
   "AFERIÇÃO DE TEMP. REFRIGERADOR",
@@ -24,11 +26,68 @@ export const REPAROS_MECANICOS = [
   "GABINETE",
 ];
 
-// Mantém vazio para refrigeração — lista unificada acima
 export const REPAROS_ELETRICOS = [];
 export const REPAROS_ESTETICOS = [];
 
-// Lista para Lavadoras (tela unificada)
+// =====================
+// REFRIGERAÇÃO — Reparos
+// =====================
+export const REPAROS_MECANICOS_REFRIG = [
+  "COMPRESSOR",
+  "VAZAMENTO - LINHA DE ALTA",
+  "VAZAMENTO - LINHA DE BAIXA",
+  "ENTUPIMENTO - LINHA DE ALTA",
+  "ENTUPIMENTO - LINHA DE BAIXA",
+  "CONTAMINAÇÃO LEVE",
+  "CONTAMINAÇÃO MÉDIA",
+  "CONTAMINAÇÃO GRAVE",
+  "FILTRO SECANTE",
+  "CAPILAR",
+  "VÁLVULA STEP",
+  "EVAPORADORA",
+  "PRÉ CONDENSADORA",
+];
+
+export const REPAROS_ELETRICOS_REFRIG = [
+  "PLACA PRINCIPAL",
+  "PLACA INVERTER",
+  "DISPLAY / INTERFACE",
+  "FILTRO DE LINHA",
+  "RELÉ DE PARTIDA",
+  "PROTETOR TÉRMICO - COMPRESSOR",
+  "RESISTÊNCIA DE DEGELO",
+  "SENSOR",
+  "TERMO FUSÍVEL",
+  "MOTOVENTILADOR",
+  "DUMPER",
+  "RESISTÊNCIA DO DRENO",
+  "TERMOSTATO",
+  "LÂMPADAS / LED",
+  "CABO AC",
+  "VÁLVULA DE ENTRADA",
+  "ROTOR ICE MAKER",
+  "MÁQUINA DE DEGELO",
+  "TABLET",
+  "CHAVE FIM DE CURSO",
+  "REPARO DE PLACA",
+];
+
+export const REPAROS_ESTETICOS_REFRIG = [
+  "GABINETE",
+  "PORTA REFRIGERADOR",
+  "PORTA DO FREEZER",
+  "BASE DO COMPRESSOR",
+  "SUPORTE DA PORTA FREEZER",
+  "SUPORTE DA PORTA REFRIGERADOR",
+  "PUXADOR",
+  "PÉ NIVELADOR",
+  "RODIZIO",
+  "GAXETAS",
+];
+
+// =====================
+// LAVADORAS — Triagem
+// =====================
 export const REPAROS_LAVADORAS = [
   "TESTE CICLO DE LAVAGEM",
   "TESTE CICLO DE SECAGEM",
@@ -40,7 +99,64 @@ export const REPAROS_LAVADORAS = [
   "VALIDAÇÃO PARCIAL",
 ];
 
-// Lista para Climatização (tela unificada)
+// =====================
+// LAVADORAS — Reparos
+// =====================
+export const REPAROS_MECANICOS_LAVADORAS = [
+  "CESTO",
+  "TAMBOR",
+  "EIXO TRIPÉ",
+  "AMORTECEDOR",
+  "VARETA DE SUSPENSÃO",
+  "ROLAMENTO",
+  "RETENTOR",
+  "PRESSOSTATO",
+  "CORREIA",
+  "MANGUEIRA DE DRENAGEM",
+  "MANGUEIRA CACHIMBO",
+  "MANGUEIRA DO DISPENSER",
+  "MANGUEIRA FILTRO DE DRENAGEM",
+  "GAXETA",
+  "CONJUNTO DO CÂMBIO",
+];
+
+export const REPAROS_ELETRICOS_LAVADORAS = [
+  "MOTOR",
+  "MOTOR INVERTER",
+  "PLACA PRINCIPAL",
+  "PLACA INVERTER",
+  "PLACA DE POTÊNCIA",
+  "FILTRO DE LINHA",
+  "CHICOTE ELÉTRICO",
+  "TERMOSTATO",
+  "RESISTÊNCIA DE SECAGEM",
+  "MOTO-VENTILADOR",
+  "PLACA DISPLAY",
+  "CABO AC",
+  "VÁLVULA DE ENTRADA",
+  "BOMBA DE DRENAGEM",
+  "COMPRESSOR",
+  "SENSOR DE TEMPERATURA",
+  "PLACA SELETORA",
+  "REPARO DE PLACA",
+];
+
+export const REPAROS_ESTETICOS_LAVADORAS = [
+  "GABINETE",
+  "TAMPA FIXA",
+  "TAMPA MÓVEL",
+  "PÉ NIVELADOR",
+  "PAINEL DISPLAY",
+  "DISPENSER",
+  "PORTA FRONT LOAD",
+  "PAINEL FRONTAL",
+  "TAMPA TRASEIRA",
+  "BASE DO GABINETE",
+];
+
+// =====================
+// CLIMATIZAÇÃO — Triagem
+// =====================
 export const REPAROS_CLIMATIZACAO = [
   "AFERIÇÃO DE TEMPERATURA",
   "TESTES ELÉTRICO",
@@ -49,6 +165,63 @@ export const REPAROS_CLIMATIZACAO = [
   "ESTÉTICA SEM AVARIA",
   "ESTÉTICA AVARIA LEVE",
   "TESTE PARCIAL",
+];
+
+// =====================
+// CLIMATIZAÇÃO — Reparos
+// =====================
+export const REPAROS_MECANICOS_CLIMATIZACAO = [
+  "VAZAMENTO DE GÁS",
+  "CONEXÃO EVAPORADORA",
+  "VÁLVULA DE SERVIÇO",
+  "TURBINA",
+  "COMPRESSOR",
+  "SERPENTINA",
+  "CAPILAR",
+  "VÁLVULA SCHRADER",
+  "TROCA DO FLUIDO DE GÁS REFRIGERANTE",
+  "LIMPEZA DO SISTEMA",
+  "VÁLVULA DE PRESSÃO",
+  "VÁLVULA DE EXPANSÃO",
+  "VÁLVULA SOLENOIDE",
+  "CHASSI",
+  "COXIM DO COMPRESSOR",
+];
+
+export const REPAROS_ELETRICOS_CLIMATIZACAO = [
+  "PLACA PRINCIPAL",
+  "PLACA DISPLAY",
+  "PLACA RECEPTORA",
+  "PLACA WI-FI",
+  "PLACA SELETORA",
+  "PLACA INVERTER",
+  "PLACA DE POTÊNCIA",
+  "FILTRO DE LINHA",
+  "TRANSFORMADOR",
+  "MOTO-VENTILADOR",
+  "SENSOR DE TEMPERATURA",
+  "CHICOTE ELÉTRICO",
+  "MOTOR DE PASSO",
+  "BOIA DO DRENO",
+  "BOMBA DE DRENAGEM",
+  "BORNEIRA",
+  "REPARO DE PLACA",
+];
+
+export const REPAROS_ESTETICOS_CLIMATIZACAO = [
+  "CARENAGEM",
+  "ALETA",
+  "FILTRO DE AR",
+  "COLETOR DE DRENO",
+  "ISOLAMENTO TÉRMICO",
+  "MANGUEIRA DE DRENAGEM",
+  "SUPORTE EVAP.",
+  "SOLDA PLÁSTICA",
+  "GRELHA DO VENTILADOR",
+  "TAMPA DA BORNEIRA",
+  "PAINEL CASSETE",
+  "ALÇA",
+  "FUNILARIA",
 ];
 
 export async function fetchOsAguardandoTriagemLinhaBranca() {

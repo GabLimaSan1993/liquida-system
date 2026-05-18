@@ -7,16 +7,16 @@ import {
   condenarOs,
 } from "../services/reparoLinhaBrancaService.js";
 import {
-  REPAROS_MECANICOS,
-  REPAROS_ELETRICOS,
-  REPAROS_ESTETICOS,
+  REPAROS_MECANICOS_REFRIG,
+  REPAROS_ELETRICOS_REFRIG,
+  REPAROS_ESTETICOS_REFRIG,
 } from "../services/linhaBrancaService.js";
 import { useAuth } from "../AuthContext.jsx";
 
 const TODAS_AREAS = [
-  { label: "Mecânico", campo: "reparos_mecanicos", lista: REPAROS_MECANICOS },
-  { label: "Elétrico", campo: "reparos_eletricos", lista: REPAROS_ELETRICOS },
-  { label: "Estético", campo: "reparos_esteticos", lista: REPAROS_ESTETICOS },
+  { label: "Mecânico", campo: "reparos_mecanicos", lista: REPAROS_MECANICOS_REFRIG },
+  { label: "Elétrico", campo: "reparos_eletricos", lista: REPAROS_ELETRICOS_REFRIG },
+  { label: "Estético", campo: "reparos_esteticos", lista: REPAROS_ESTETICOS_REFRIG },
 ];
 
 const EMPTY_EXECUCAO = {
@@ -52,6 +52,30 @@ function Button({ children, primary = false, danger = false, ...props }) {
   return <button {...props} className={`${base} ${style}`}>{children}</button>;
 }
 
+function CheckboxGroup({ title, options, selected, onToggle }) {
+  return (
+    <div className="rounded-[24px] bg-[#FCFAFF] p-4 ring-1 ring-[#E9D5FF]">
+      <h3 className="text-sm font-black uppercase tracking-wide text-[#6B1F87] mb-4">{title}</h3>
+      <div className="grid gap-2">
+        {options.map((item) => {
+          const checked = selected.includes(item);
+          return (
+            <label
+              key={item}
+              className={`flex cursor-pointer items-start gap-3 rounded-2xl border px-3 py-2 text-sm transition ${
+                checked ? "border-[#F59E0B] bg-white text-[#6B1F87]" : "border-[#E9D5FF] bg-white text-slate-600 hover:bg-[#FCFAFF]"
+              }`}
+            >
+              <input type="checkbox" checked={checked} onChange={() => onToggle(item)} className="mt-1" />
+              <span className="font-medium">{item}</span>
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function ModalCondenar({ onConfirm, onCancel, saving, tecnico }) {
   const [motivo, setMotivo] = useState("");
   return (
@@ -62,13 +86,9 @@ function ModalCondenar({ onConfirm, onCancel, saving, tecnico }) {
             <AlertTriangle className="h-5 w-5 text-red-500" />
             <h2 className="text-lg font-black text-red-600">Condenar material</h2>
           </div>
-          <button onClick={onCancel} className="text-slate-400 hover:text-slate-600">
-            <X className="h-5 w-5" />
-          </button>
+          <button onClick={onCancel} className="text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
         </div>
-        <p className="text-sm text-slate-500 mb-6">
-          O produto será encaminhado para o <strong>Scrap</strong>. Essa ação não pode ser desfeita.
-        </p>
+        <p className="text-sm text-slate-500 mb-6">O produto será encaminhado para o <strong>Scrap</strong>. Essa ação não pode ser desfeita.</p>
         <div className="space-y-4">
           <div className="rounded-2xl bg-[#FCFAFF] p-4 ring-1 ring-[#E9D5FF]">
             <div className="text-xs font-semibold text-slate-500">Técnico responsável</div>
@@ -76,29 +96,14 @@ function ModalCondenar({ onConfirm, onCancel, saving, tecnico }) {
           </div>
           <label>
             <span className="text-sm font-semibold text-slate-600">Motivo da condenação *</span>
-            <textarea
-              value={motivo}
-              onChange={(e) => setMotivo(e.target.value)}
-              rows={3}
-              className={inputClass()}
-              placeholder="Descreva o motivo pelo qual o produto está sendo condenado."
-            />
+            <textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={3} className={inputClass()} placeholder="Descreva o motivo pelo qual o produto está sendo condenado." />
           </label>
         </div>
         <div className="mt-6 flex gap-3">
-          <button
-            onClick={() => onConfirm(motivo, tecnico)}
-            disabled={!motivo || saving}
-            className="flex-1 rounded-2xl bg-red-500 py-3 text-sm font-bold text-white hover:bg-red-600 disabled:opacity-50 transition"
-          >
+          <button onClick={() => onConfirm(motivo, tecnico)} disabled={!motivo || saving} className="flex-1 rounded-2xl bg-red-500 py-3 text-sm font-bold text-white hover:bg-red-600 disabled:opacity-50 transition">
             {saving ? "Condenando..." : "Confirmar condenação"}
           </button>
-          <button
-            onClick={onCancel}
-            className="flex-1 rounded-2xl bg-slate-100 py-3 text-sm font-bold text-slate-600 hover:bg-slate-200 transition"
-          >
-            Cancelar
-          </button>
+          <button onClick={onCancel} className="flex-1 rounded-2xl bg-slate-100 py-3 text-sm font-bold text-slate-600 hover:bg-slate-200 transition">Cancelar</button>
         </div>
       </div>
     </div>
@@ -111,46 +116,30 @@ export default function ReparosRefrigeracaoPage() {
   const [selectedOsId, setSelectedOsId] = useState("");
   const [triagem, setTriagem] = useState(null);
   const [execucao, setExecucao] = useState({ ...EMPTY_EXECUCAO });
+  const [reparosSelecionados, setReparosSelecionados] = useState({
+    mecanico: [],
+    eletrico: [],
+    estetico: [],
+  });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [condenando, setCondenando] = useState(false);
   const [showModalCondenar, setShowModalCondenar] = useState(false);
   const [status, setStatus] = useState("");
-  const [areaAdicional, setAreaAdicional] = useState("");
-  const [reparoAdicionalSelecionado, setReparoAdicionalSelecionado] = useState("");
 
   const selectedOs = useMemo(
     () => osList.find((o) => String(o.id) === String(selectedOsId)) || null,
     [osList, selectedOsId]
   );
 
-  // Todos os reparos triados de todas as áreas
-  const reparosTriados = useMemo(() => {
-    if (!triagem) return [];
-    return TODAS_AREAS.flatMap(({ campo, label }) =>
-      (triagem[campo] || []).map((r) => ({ reparo: r, area: label }))
-    );
-  }, [triagem]);
-
-  // Lista completa de reparos disponíveis para adicionar
-  const listaAdicional = useMemo(() => {
-    const area = TODAS_AREAS.find((a) => a.label === areaAdicional);
-    if (!area) return [];
-    const jaTriados = reparosTriados.map((r) => r.reparo);
-    const jaAdicionados = execucao.reparos_adicionais.map((r) => r.reparo);
-    return area.lista.filter((r) => !jaTriados.includes(r) && !jaAdicionados.includes(r));
-  }, [areaAdicional, reparosTriados, execucao.reparos_adicionais]);
-
   async function loadOs() {
     try {
       setLoading(true);
-      // Busca OS de todas as áreas de reparo
       const [mec, ele, est] = await Promise.all([
         fetchOsParaReparo("Reparo Mecânico"),
         fetchOsParaReparo("Reparo Elétrico"),
         fetchOsParaReparo("Reparo Estético"),
       ]);
-      // Une e deduplica por id
       const map = new Map();
       [...mec, ...ele, ...est].forEach((os) => map.set(os.id, os));
       setOsList([...map.values()]);
@@ -166,6 +155,7 @@ export default function ReparosRefrigeracaoPage() {
   async function handleSelectOs(osId) {
     setSelectedOsId(osId);
     setTriagem(null);
+    setReparosSelecionados({ mecanico: [], eletrico: [], estetico: [] });
     if (!osId) return;
     try {
       const t = await fetchTriagemDaOs(osId);
@@ -173,6 +163,16 @@ export default function ReparosRefrigeracaoPage() {
     } catch (err) {
       setStatus(`Erro ao buscar triagem: ${err.message}`);
     }
+  }
+
+  function toggleReparo(area, item) {
+    setReparosSelecionados((cur) => {
+      const list = cur[area] || [];
+      return {
+        ...cur,
+        [area]: list.includes(item) ? list.filter((r) => r !== item) : [...list, item],
+      };
+    });
   }
 
   function update(field, value) {
@@ -189,28 +189,11 @@ export default function ReparosRefrigeracaoPage() {
     setExecucao((cur) => ({ ...cur, pecas: cur.pecas.filter((_, i) => i !== index) }));
   }
 
-  function adicionarReparoAdicional() {
-    if (!reparoAdicionalSelecionado || !areaAdicional) return;
-    setExecucao((cur) => ({
-      ...cur,
-      reparos_adicionais: [...cur.reparos_adicionais, { reparo: reparoAdicionalSelecionado, area: areaAdicional }],
-    }));
-    setReparoAdicionalSelecionado("");
-  }
-
-  function removerReparoAdicional(reparo) {
-    setExecucao((cur) => ({
-      ...cur,
-      reparos_adicionais: cur.reparos_adicionais.filter((r) => r.reparo !== reparo),
-    }));
-  }
-
   function reset() {
     setSelectedOsId("");
     setTriagem(null);
     setExecucao({ ...EMPTY_EXECUCAO });
-    setAreaAdicional("");
-    setReparoAdicionalSelecionado("");
+    setReparosSelecionados({ mecanico: [], eletrico: [], estetico: [] });
     setStatus("");
   }
 
@@ -239,11 +222,11 @@ export default function ReparosRefrigeracaoPage() {
       setSaving(true);
       setStatus("Salvando...");
       const servicoCompleto = [
-        ...reparosTriados.map((r) => r.reparo),
-        ...execucao.reparos_adicionais.map((r) => r.reparo),
+        ...reparosSelecionados.mecanico,
+        ...reparosSelecionados.eletrico,
+        ...reparosSelecionados.estetico,
       ].join(", ");
 
-      // Salva como Reparo Mecânico (área principal) mas com todos os reparos
       await salvarExecucaoReparo(
         selectedOs,
         {
@@ -281,9 +264,7 @@ export default function ReparosRefrigeracaoPage() {
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h2 className="text-2xl font-black text-[#6B1F87]">Reparos — Refrigeração</h2>
-              <p className="mt-1 text-sm text-slate-500">
-                Reparo unificado — Mecânico, Elétrico e Estético.
-              </p>
+              <p className="mt-1 text-sm text-slate-500">Reparo unificado — Mecânico, Elétrico e Estético.</p>
             </div>
             <div className="flex items-center gap-4">
               <div className="rounded-2xl bg-[#FCFAFF] px-4 py-3 ring-1 ring-[#E9D5FF]">
@@ -317,12 +298,7 @@ export default function ReparosRefrigeracaoPage() {
             </label>
             {selectedOs && (
               <div className="mt-5 grid gap-4 grid-cols-2 md:grid-cols-4">
-                {[
-                  ["Fornecedor", selectedOs.fornecedor],
-                  ["Lote", selectedOs.lote],
-                  ["Serial", selectedOs.serial_number],
-                  ["Modelo", selectedOs.modelo],
-                ].map(([label, val]) => (
+                {[["Fornecedor", selectedOs.fornecedor], ["Lote", selectedOs.lote], ["Serial", selectedOs.serial_number], ["Modelo", selectedOs.modelo]].map(([label, val]) => (
                   <div key={label} className="rounded-2xl bg-[#FCFAFF] p-4 ring-1 ring-[#E9D5FF]">
                     <div className="text-xs font-semibold text-slate-500">{label}</div>
                     <div className="mt-1 text-sm font-bold text-[#6B1F87]">{val || "-"}</div>
@@ -333,80 +309,68 @@ export default function ReparosRefrigeracaoPage() {
           </SectionCard>
 
           {selectedOs && (
-            <SectionCard>
-              <h2 className="mb-4 text-lg font-bold text-[#6B1F87]">Reparos da triagem</h2>
-              {TODAS_AREAS.map(({ label }) => {
-                const reparosDaArea = reparosTriados.filter((r) => r.area === label);
-                if (reparosDaArea.length === 0) return null;
-                return (
-                  <div key={label} className="mb-4">
-                    <div className="text-xs font-bold uppercase tracking-wide text-slate-400 mb-2">{label}</div>
-                    <div className="flex flex-wrap gap-2">
-                      {reparosDaArea.map((r) => (
-                        <span key={r.reparo} className="rounded-full bg-purple-100 px-3 py-1 text-xs font-semibold text-[#6B1F87]">
-                          {r.reparo}
-                        </span>
-                      ))}
-                    </div>
+            <>
+              {/* Verificações da triagem */}
+              {triagem && (triagem.reparos_mecanicos?.length > 0) && (
+                <SectionCard>
+                  <h2 className="mb-4 text-lg font-bold text-[#6B1F87]">Verificações da triagem</h2>
+                  <div className="flex flex-wrap gap-2">
+                    {triagem.reparos_mecanicos.map((r) => (
+                      <span key={r} className="rounded-full bg-purple-100 px-3 py-1 text-xs font-semibold text-[#6B1F87]">{r}</span>
+                    ))}
                   </div>
-                );
-              })}
+                </SectionCard>
+              )}
 
-              <div className="mt-6">
-                <h3 className="mb-3 text-sm font-bold text-slate-600">Reparos adicionais encontrados</h3>
+              {/* Reparos */}
+              <div className="grid gap-6 xl:grid-cols-3">
+                <CheckboxGroup
+                  title="Reparo Mecânico"
+                  options={REPAROS_MECANICOS_REFRIG}
+                  selected={reparosSelecionados.mecanico}
+                  onToggle={(item) => toggleReparo("mecanico", item)}
+                />
+                <CheckboxGroup
+                  title="Reparo Elétrico"
+                  options={REPAROS_ELETRICOS_REFRIG}
+                  selected={reparosSelecionados.eletrico}
+                  onToggle={(item) => toggleReparo("eletrico", item)}
+                />
+                <CheckboxGroup
+                  title="Reparo Estético"
+                  options={REPAROS_ESTETICOS_REFRIG}
+                  selected={reparosSelecionados.estetico}
+                  onToggle={(item) => toggleReparo("estetico", item)}
+                />
+              </div>
+
+              {/* Peças trocadas */}
+              <SectionCard>
+                <h2 className="mb-4 text-lg font-bold text-[#6B1F87]">Peças trocadas</h2>
                 <div className="flex gap-2">
-                  <select value={areaAdicional} onChange={(e) => { setAreaAdicional(e.target.value); setReparoAdicionalSelecionado(""); }} className={inputClass()}>
-                    <option value="">Área do reparo</option>
-                    {TODAS_AREAS.map((a) => <option key={a.label} value={a.label}>{a.label}</option>)}
-                  </select>
-                  <select value={reparoAdicionalSelecionado} onChange={(e) => setReparoAdicionalSelecionado(e.target.value)} className={inputClass()} disabled={!areaAdicional}>
-                    <option value="">Selecione o reparo</option>
-                    {listaAdicional.map((r) => <option key={r} value={r}>{r}</option>)}
-                  </select>
-                  <button type="button" onClick={adicionarReparoAdicional} className="rounded-2xl bg-white text-[#6B1F87] ring-1 ring-[#E9D5FF] hover:bg-[#FCFAFF] px-4">
+                  <input
+                    value={execucao.novaPeca}
+                    onChange={(e) => update("novaPeca", e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), adicionarPeca())}
+                    className={inputClass()}
+                    placeholder="Descreva a peça e pressione Enter ou +"
+                  />
+                  <button type="button" onClick={adicionarPeca} className="rounded-2xl bg-white text-[#6B1F87] ring-1 ring-[#E9D5FF] hover:bg-[#FCFAFF] px-4">
                     <Plus className="h-4 w-4" />
                   </button>
                 </div>
-                {execucao.reparos_adicionais.length > 0 && (
+                {execucao.pecas.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {execucao.reparos_adicionais.map((r) => (
-                      <span key={r.reparo} onClick={() => removerReparoAdicional(r.reparo)} className="cursor-pointer rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700 hover:bg-orange-200">
-                        {r.area} — {r.reparo} ✕
-                      </span>
+                    {execucao.pecas.map((p, i) => (
+                      <span key={i} onClick={() => removerPeca(i)} className="cursor-pointer rounded-full bg-purple-100 px-3 py-1 text-xs font-semibold text-[#6B1F87] hover:bg-purple-200">{p} ✕</span>
                     ))}
                   </div>
                 )}
-              </div>
-            </SectionCard>
+              </SectionCard>
+            </>
           )}
 
-          {selectedOs && (
-            <SectionCard>
-              <h2 className="mb-4 text-lg font-bold text-[#6B1F87]">Peças trocadas</h2>
-              <div className="flex gap-2">
-                <input
-                  value={execucao.novaPeca}
-                  onChange={(e) => update("novaPeca", e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), adicionarPeca())}
-                  className={inputClass()}
-                  placeholder="Descreva a peça e pressione Enter ou +"
-                />
-                <button type="button" onClick={adicionarPeca} className="rounded-2xl bg-white text-[#6B1F87] ring-1 ring-[#E9D5FF] hover:bg-[#FCFAFF] px-4">
-                  <Plus className="h-4 w-4" />
-                </button>
-              </div>
-              {execucao.pecas.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {execucao.pecas.map((p, i) => (
-                    <span key={i} onClick={() => removerPeca(i)} className="cursor-pointer rounded-full bg-purple-100 px-3 py-1 text-xs font-semibold text-[#6B1F87] hover:bg-purple-200">
-                      {p} ✕
-                    </span>
-                  ))}
-                </div>
-              )}
-            </SectionCard>
-          )}
-
+          {/* Diagnóstico */}
           <SectionCard>
             <h2 className="mb-4 text-lg font-bold text-[#6B1F87]">Diagnóstico e observações</h2>
             <div className="space-y-4">
@@ -422,9 +386,7 @@ export default function ReparosRefrigeracaoPage() {
           </SectionCard>
 
           {status && (
-            <div className="rounded-2xl bg-[#FCFAFF] p-4 text-sm font-semibold text-[#6B1F87] ring-1 ring-[#E9D5FF]">
-              {status}
-            </div>
+            <div className="rounded-2xl bg-[#FCFAFF] p-4 text-sm font-semibold text-[#6B1F87] ring-1 ring-[#E9D5FF]">{status}</div>
           )}
 
           <div className="flex flex-wrap gap-3">

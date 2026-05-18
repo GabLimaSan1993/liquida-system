@@ -6,6 +6,12 @@ import {
   TIPOS_PRODUTO_LINHA_BRANCA,
   REPAROS_LAVADORAS,
   REPAROS_CLIMATIZACAO,
+  REPAROS_MECANICOS_LAVADORAS,
+  REPAROS_ELETRICOS_LAVADORAS,
+  REPAROS_ESTETICOS_LAVADORAS,
+  REPAROS_MECANICOS_CLIMATIZACAO,
+  REPAROS_ELETRICOS_CLIMATIZACAO,
+  REPAROS_ESTETICOS_CLIMATIZACAO,
 } from "../services/linhaBrancaService.js";
 import {
   fetchOsParaReparo,
@@ -28,11 +34,24 @@ const EMPTY_EXECUCAO = {
   pecas: [],
   novaPeca: "",
   observacoes: "",
-  reparos_adicionais: [],
   dt_inicio: new Date().toISOString(),
 };
 
 const ETAPA = { TRIAGEM: "triagem", REPARO: "reparo" };
+
+function getReparosListas(tipoProduto) {
+  if (tipoProduto === "Lavadoras") return {
+    mecanico: REPAROS_MECANICOS_LAVADORAS,
+    eletrico: REPAROS_ELETRICOS_LAVADORAS,
+    estetico: REPAROS_ESTETICOS_LAVADORAS,
+  };
+  if (tipoProduto === "Ar-condicionado") return {
+    mecanico: REPAROS_MECANICOS_CLIMATIZACAO,
+    eletrico: REPAROS_ELETRICOS_CLIMATIZACAO,
+    estetico: REPAROS_ESTETICOS_CLIMATIZACAO,
+  };
+  return { mecanico: [], eletrico: [], estetico: [] };
+}
 
 function SectionCard({ children }) {
   return (
@@ -61,8 +80,8 @@ function Button({ children, primary = false, danger = false, ...props }) {
 function CheckboxGroup({ title, options, selected, onToggle, disabled }) {
   return (
     <div className="rounded-[24px] bg-[#FCFAFF] p-4 ring-1 ring-[#E9D5FF]">
-      <h3 className="text-sm font-black uppercase tracking-wide text-[#6B1F87]">{title}</h3>
-      <div className="mt-4 grid gap-2">
+      <h3 className="text-sm font-black uppercase tracking-wide text-[#6B1F87] mb-4">{title}</h3>
+      <div className="grid gap-2">
         {options.map((item) => {
           const checked = selected.includes(item);
           return (
@@ -125,8 +144,7 @@ export default function TriagemReparosPage() {
   const [etapa, setEtapa] = useState(ETAPA.TRIAGEM);
   const [triagem, setTriagem] = useState({ ...EMPTY_TRIAGEM });
   const [execucao, setExecucao] = useState({ ...EMPTY_EXECUCAO });
-  const [areaAdicional, setAreaAdicional] = useState("");
-  const [reparoAdicionalSelecionado, setReparoAdicionalSelecionado] = useState("");
+  const [reparosSelecionados, setReparosSelecionados] = useState({ mecanico: [], eletrico: [], estetico: [] });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [condenando, setCondenando] = useState(false);
@@ -145,15 +163,21 @@ export default function TriagemReparosPage() {
 
   const selectedOs = etapa === ETAPA.TRIAGEM ? selectedOsTriagem : selectedOsReparo;
 
-  // Lista de verificações baseada no tipo de produto
+  // Lista de triagem baseada no tipo de produto
   const listaTriagem = useMemo(() => {
     if (triagem.tipo_produto === "Lavadoras") return REPAROS_LAVADORAS;
     if (triagem.tipo_produto === "Ar-condicionado") return REPAROS_CLIMATIZACAO;
     return [];
   }, [triagem.tipo_produto]);
 
-  // Reparos triados para etapa de reparo
-  const reparosTriados = useMemo(() => {
+  // Listas de reparo baseadas no tipo de produto da OS selecionada
+  const listasReparo = useMemo(() => {
+    if (!selectedOsReparo) return { mecanico: [], eletrico: [], estetico: [] };
+    return getReparosListas(selectedOsReparo.tipo_produto);
+  }, [selectedOsReparo]);
+
+  // Verificações da triagem
+  const verificacoesTriagem = useMemo(() => {
     if (!selectedOsReparo) return [];
     return [
       ...(selectedOsReparo.reparos_mecanicos || []),
@@ -161,17 +185,6 @@ export default function TriagemReparosPage() {
       ...(selectedOsReparo.reparos_esteticos || []),
     ];
   }, [selectedOsReparo]);
-
-  // Lista adicional para reparo
-  const listaAdicional = useMemo(() => {
-    if (!selectedOsReparo) return [];
-    const tipoProduto = selectedOsReparo.tipo_produto || "";
-    let lista = [];
-    if (tipoProduto === "Lavadoras") lista = REPAROS_LAVADORAS;
-    if (tipoProduto === "Ar-condicionado") lista = REPAROS_CLIMATIZACAO;
-    const jaAdicionados = execucao.reparos_adicionais.map((r) => r.reparo || r);
-    return lista.filter((r) => !reparosTriados.includes(r) && !jaAdicionados.includes(r));
-  }, [selectedOsReparo, reparosTriados, execucao.reparos_adicionais]);
 
   async function loadOs() {
     try {
@@ -219,6 +232,16 @@ export default function TriagemReparosPage() {
     }));
   }
 
+  function toggleReparo(area, item) {
+    setReparosSelecionados((cur) => {
+      const list = cur[area] || [];
+      return {
+        ...cur,
+        [area]: list.includes(item) ? list.filter((r) => r !== item) : [...list, item],
+      };
+    });
+  }
+
   function updateExecucao(field, value) {
     setExecucao((cur) => ({ ...cur, [field]: value }));
   }
@@ -233,28 +256,11 @@ export default function TriagemReparosPage() {
     setExecucao((cur) => ({ ...cur, pecas: cur.pecas.filter((_, i) => i !== index) }));
   }
 
-  function adicionarReparoAdicional() {
-    if (!reparoAdicionalSelecionado) return;
-    setExecucao((cur) => ({
-      ...cur,
-      reparos_adicionais: [...cur.reparos_adicionais, reparoAdicionalSelecionado],
-    }));
-    setReparoAdicionalSelecionado("");
-  }
-
-  function removerReparoAdicional(reparo) {
-    setExecucao((cur) => ({
-      ...cur,
-      reparos_adicionais: cur.reparos_adicionais.filter((r) => r !== reparo),
-    }));
-  }
-
   function reset() {
     setSelectedOsId("");
     setTriagem({ ...EMPTY_TRIAGEM });
     setExecucao({ ...EMPTY_EXECUCAO });
-    setAreaAdicional("");
-    setReparoAdicionalSelecionado("");
+    setReparosSelecionados({ mecanico: [], eletrico: [], estetico: [] });
     setStatus("");
   }
 
@@ -290,8 +296,9 @@ export default function TriagemReparosPage() {
     try {
       setSaving(true);
       const servicoCompleto = [
-        ...reparosTriados,
-        ...execucao.reparos_adicionais,
+        ...reparosSelecionados.mecanico,
+        ...reparosSelecionados.eletrico,
+        ...reparosSelecionados.estetico,
       ].join(", ");
       await salvarExecucaoReparo(
         selectedOsReparo,
@@ -381,6 +388,7 @@ export default function TriagemReparosPage() {
           </div>
         </SectionCard>
 
+        {/* ETAPA TRIAGEM */}
         {etapa === ETAPA.TRIAGEM && (
           <form onSubmit={handleSalvarTriagem} className="space-y-6">
             <SectionCard>
@@ -454,6 +462,7 @@ export default function TriagemReparosPage() {
           </form>
         )}
 
+        {/* ETAPA REPARO */}
         {etapa === ETAPA.REPARO && (
           <form onSubmit={handleSalvarReparo} className="space-y-6">
             <SectionCard>
@@ -482,39 +491,38 @@ export default function TriagemReparosPage() {
               )}
             </SectionCard>
 
-            {selectedOsReparo && (
+            {selectedOsReparo && verificacoesTriagem.length > 0 && (
               <SectionCard>
                 <h2 className="mb-4 text-lg font-bold text-[#6B1F87]">Verificações da triagem</h2>
-                {reparosTriados.length === 0 ? (
-                  <p className="text-sm text-slate-400">Nenhuma verificação triada.</p>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {reparosTriados.map((r) => (
-                      <span key={r} className="rounded-full bg-purple-100 px-3 py-1 text-xs font-semibold text-[#6B1F87]">{r}</span>
-                    ))}
-                  </div>
-                )}
-
-                {listaAdicional.length > 0 && (
-                  <div className="mt-4">
-                    <h3 className="mb-3 text-sm font-bold text-slate-600">Verificações adicionais</h3>
-                    <div className="flex gap-2">
-                      <select value={reparoAdicionalSelecionado} onChange={(e) => setReparoAdicionalSelecionado(e.target.value)} className={inputClass()}>
-                        <option value="">Selecione</option>
-                        {listaAdicional.map((r) => <option key={r} value={r}>{r}</option>)}
-                      </select>
-                      <button type="button" onClick={adicionarReparoAdicional} className="rounded-2xl bg-white text-[#6B1F87] ring-1 ring-[#E9D5FF] hover:bg-[#FCFAFF] px-4"><Plus className="h-4 w-4" /></button>
-                    </div>
-                    {execucao.reparos_adicionais.length > 0 && (
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {execucao.reparos_adicionais.map((r) => (
-                          <span key={r} onClick={() => removerReparoAdicional(r)} className="cursor-pointer rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700 hover:bg-orange-200">{r} ✕</span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
+                <div className="flex flex-wrap gap-2">
+                  {verificacoesTriagem.map((r) => (
+                    <span key={r} className="rounded-full bg-purple-100 px-3 py-1 text-xs font-semibold text-[#6B1F87]">{r}</span>
+                  ))}
+                </div>
               </SectionCard>
+            )}
+
+            {selectedOsReparo && (
+              <div className="grid gap-6 xl:grid-cols-3">
+                <CheckboxGroup
+                  title="Reparo Mecânico"
+                  options={listasReparo.mecanico}
+                  selected={reparosSelecionados.mecanico}
+                  onToggle={(item) => toggleReparo("mecanico", item)}
+                />
+                <CheckboxGroup
+                  title="Reparo Elétrico"
+                  options={listasReparo.eletrico}
+                  selected={reparosSelecionados.eletrico}
+                  onToggle={(item) => toggleReparo("eletrico", item)}
+                />
+                <CheckboxGroup
+                  title="Reparo Estético"
+                  options={listasReparo.estetico}
+                  selected={reparosSelecionados.estetico}
+                  onToggle={(item) => toggleReparo("estetico", item)}
+                />
+              </div>
             )}
 
             {selectedOsReparo && (
