@@ -52,8 +52,25 @@ export function AuthProvider({ children }) {
     return profile.telas_permitidas?.includes(tela);
   }
 
+  // Área técnica do usuário logado
+  const areaTecnica = profile?.area_tecnica || null;
+
+  // Verifica se é técnico de refrigeração
+  const isRefrigeracao = areaTecnica === "refrigeracao";
+
+  // Verifica se é técnico de outras linhas (climatizacao, lavadoras, diversos)
+  const isOutrasLinhas = ["climatizacao", "lavadoras", "diversos"].includes(areaTecnica);
+
   return (
-    <AuthContext.Provider value={{ user, profile, loading, hasAccess }}>
+    <AuthContext.Provider value={{
+      user,
+      profile,
+      loading,
+      hasAccess,
+      areaTecnica,
+      isRefrigeracao,
+      isOutrasLinhas,
+    }}>
       {children}
     </AuthContext.Provider>
   );

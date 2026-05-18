@@ -107,71 +107,114 @@ function SubGroup({ icon: Icon, label, paths, children }) {
   );
 }
 
+function LinhaBrancaMaster({ onClose }) {
+  return (
+    <CollapseGroup icon={Layers} label="Linha Branca" paths={["/linha-branca"]}>
+      <NavItem to="/linha-branca/triagem" icon={ClipboardCheck} label="Triagem" indent onClick={onClose} />
+      <NavItem to="/linha-branca/reparo-mecanico" icon={Wrench} label="Reparo Mecânico" indent onClick={onClose} />
+      <NavItem to="/linha-branca/reparo-eletrico" icon={Zap} label="Reparo Elétrico" indent onClick={onClose} />
+      <NavItem to="/linha-branca/reparo-estetico" icon={Sparkles} label="Reparo Estético" indent onClick={onClose} />
+      <NavItem to="/linha-branca/bancada-testes" icon={FlaskConical} label="Bancada de Testes" indent onClick={onClose} />
+      <NavItem to="/linha-branca/limpeza" icon={Camera} label="Limpeza" indent onClick={onClose} />
+      <NavItem to="/linha-branca/qualidade" icon={ShieldCheck} label="Qualidade" indent onClick={onClose} />
+    </CollapseGroup>
+  );
+}
+
+function LinhaBrancaRefrigeracao({ onClose }) {
+  return (
+    <CollapseGroup icon={Layers} label="Linha Branca" paths={["/linha-branca"]}>
+      <NavItem to="/linha-branca/triagem" icon={ClipboardCheck} label="Triagem" indent onClick={onClose} />
+      <NavItem to="/linha-branca/reparos" icon={Wrench} label="Reparos" indent onClick={onClose} />
+      <NavItem to="/linha-branca/bancada-testes" icon={FlaskConical} label="Bancada de Testes" indent onClick={onClose} />
+      <NavItem to="/linha-branca/limpeza" icon={Camera} label="Limpeza" indent onClick={onClose} />
+      <NavItem to="/linha-branca/qualidade" icon={ShieldCheck} label="Qualidade" indent onClick={onClose} />
+    </CollapseGroup>
+  );
+}
+
+function LinhaBrancaOutras({ onClose }) {
+  return (
+    <CollapseGroup icon={Layers} label="Linha Branca" paths={["/linha-branca"]}>
+      <NavItem to="/linha-branca/triagem-reparos" icon={Wrench} label="Triagem + Reparos" indent onClick={onClose} />
+      <NavItem to="/linha-branca/bancada-testes" icon={FlaskConical} label="Bancada de Testes" indent onClick={onClose} />
+      <NavItem to="/linha-branca/limpeza" icon={Camera} label="Limpeza" indent onClick={onClose} />
+      <NavItem to="/linha-branca/qualidade" icon={ShieldCheck} label="Qualidade" indent onClick={onClose} />
+    </CollapseGroup>
+  );
+}
+
 function SidebarContent({ profile, onClose, handleLogout }) {
+  const { isRefrigeracao, isOutrasLinhas } = useAuth();
+  const isMaster = profile?.is_master;
+
+  function renderLinhaBranca() {
+    if (isMaster) return <LinhaBrancaMaster onClose={onClose} />;
+    if (isRefrigeracao) return <LinhaBrancaRefrigeracao onClose={onClose} />;
+    if (isOutrasLinhas) return <LinhaBrancaOutras onClose={onClose} />;
+    return null;
+  }
+
   return (
     <>
       <div className="rounded-3xl bg-white/10 p-4 ring-1 ring-white/10">
         <div className="text-xs text-white/70">Usuário</div>
         <div className="mt-0.5 text-sm font-bold">{profile?.nome || "..."}</div>
-        <div className="text-xs text-white/50">{profile?.is_master ? "Master" : "Usuário"}</div>
+        <div className="text-xs text-white/50">{profile?.is_master ? "Master" : profile?.area_tecnica || "Usuário"}</div>
       </div>
 
       <nav className="flex-1 space-y-1">
-        <NavItem to="/upload" icon={Upload} label="Uploads" onClick={onClose} />
+        {isMaster && (
+          <>
+            <NavItem to="/upload" icon={Upload} label="Uploads" onClick={onClose} />
 
-        <CollapseGroup
-          icon={TrendingUp}
-          label="Tesouraria"
-          paths={["/analise-entrada", "/faturamento", "/financeiro"]}
-        >
-          <SubGroup icon={ShoppingCart} label="Vendas" paths={["/faturamento"]}>
-            <NavItem to="/faturamento" icon={DollarSign} label="Faturamento" indent onClick={onClose} />
-          </SubGroup>
+            <CollapseGroup
+              icon={TrendingUp}
+              label="Tesouraria"
+              paths={["/analise-entrada", "/faturamento", "/financeiro"]}
+            >
+              <SubGroup icon={ShoppingCart} label="Vendas" paths={["/faturamento"]}>
+                <NavItem to="/faturamento" icon={DollarSign} label="Faturamento" indent onClick={onClose} />
+              </SubGroup>
 
-          <SubGroup icon={BarChart3} label="Compras" paths={["/analise-entrada"]}>
-            <NavItem to="/analise-entrada" icon={BarChart3} label="Análise de Entrada" indent onClick={onClose} />
-          </SubGroup>
+              <SubGroup icon={BarChart3} label="Compras" paths={["/analise-entrada"]}>
+                <NavItem to="/analise-entrada" icon={BarChart3} label="Análise de Entrada" indent onClick={onClose} />
+              </SubGroup>
 
-          <SubGroup icon={Landmark} label="Financeiro" paths={["/financeiro"]}>
-            <NavItem to="/financeiro/fluxo-realizado" icon={BarChart2} label="Fluxo Realizado" indent onClick={onClose} />
-            <NavItem to="/financeiro/contas-pagar" icon={TrendingDown} label="Contas a Pagar" indent onClick={onClose} />
-            <NavItem to="/financeiro/contas-receber" icon={TrendingUp} label="Contas a Receber" indent onClick={onClose} />
-            <NavItem to="/financeiro/carga-historica" icon={Database} label="Carga Histórica" indent onClick={onClose} />
-            <NavItemDisabled icon={BarChart2} label="Conciliação" indent />
-            <NavItemDisabled icon={BarChart2} label="Fluxo Projetado" indent />
-          </SubGroup>
+              <SubGroup icon={Landmark} label="Financeiro" paths={["/financeiro"]}>
+                <NavItem to="/financeiro/fluxo-realizado" icon={BarChart2} label="Fluxo Realizado" indent onClick={onClose} />
+                <NavItem to="/financeiro/contas-pagar" icon={TrendingDown} label="Contas a Pagar" indent onClick={onClose} />
+                <NavItem to="/financeiro/contas-receber" icon={TrendingUp} label="Contas a Receber" indent onClick={onClose} />
+                <NavItem to="/financeiro/carga-historica" icon={Database} label="Carga Histórica" indent onClick={onClose} />
+                <NavItemDisabled icon={BarChart2} label="Conciliação" indent />
+                <NavItemDisabled icon={BarChart2} label="Fluxo Projetado" indent />
+              </SubGroup>
 
-          <SubGroup icon={BarChart2} label="Fechamentos" paths={["/fechamentos"]}>
-            <NavItemDisabled icon={BarChart2} label="Em breve" indent />
-          </SubGroup>
-        </CollapseGroup>
+              <SubGroup icon={BarChart2} label="Fechamentos" paths={["/fechamentos"]}>
+                <NavItemDisabled icon={BarChart2} label="Em breve" indent />
+              </SubGroup>
+            </CollapseGroup>
 
-        <CollapseGroup icon={Truck} label="Logística" paths={["/abertura-os"]}>
-          <NavItem to="/abertura-os" icon={ClipboardList} label="Abertura de OS" indent onClick={onClose} />
-        </CollapseGroup>
-
-        <CollapseGroup icon={Layers} label="Linha Branca" paths={["/linha-branca"]}>
-          <NavItem to="/linha-branca/triagem" icon={ClipboardCheck} label="Triagem" indent onClick={onClose} />
-          <NavItem to="/linha-branca/reparo-mecanico" icon={Wrench} label="Reparo Mecânico" indent onClick={onClose} />
-          <NavItem to="/linha-branca/reparo-eletrico" icon={Zap} label="Reparo Elétrico" indent onClick={onClose} />
-          <NavItem to="/linha-branca/reparo-estetico" icon={Sparkles} label="Reparo Estético" indent onClick={onClose} />
-          <NavItem to="/linha-branca/bancada-testes" icon={FlaskConical} label="Bancada de Testes" indent onClick={onClose} />
-          <NavItem to="/linha-branca/limpeza" icon={Camera} label="Limpeza" indent onClick={onClose} />
-          <NavItem to="/linha-branca/qualidade" icon={ShieldCheck} label="Qualidade" indent onClick={onClose} />
-        </CollapseGroup>
-
-        <div className="pt-2">
-          <div className="px-4 text-xs font-bold text-white/50 uppercase">Sistema</div>
-        </div>
-
-        {profile?.is_master && (
-          <NavItem to="/gerenciar-usuarios" icon={Users} label="Gerenciar Usuários" onClick={onClose} />
+            <CollapseGroup icon={Truck} label="Logística" paths={["/abertura-os"]}>
+              <NavItem to="/abertura-os" icon={ClipboardList} label="Abertura de OS" indent onClick={onClose} />
+            </CollapseGroup>
+          </>
         )}
 
-        <button className="w-full flex items-center gap-3 rounded-2xl px-4 py-3 text-white/60 cursor-default">
-          <Bell className="h-4 w-4" />
-          <span>Alertas</span>
-        </button>
+        {renderLinhaBranca()}
+
+        {isMaster && (
+          <>
+            <div className="pt-2">
+              <div className="px-4 text-xs font-bold text-white/50 uppercase">Sistema</div>
+            </div>
+            <NavItem to="/gerenciar-usuarios" icon={Users} label="Gerenciar Usuários" onClick={onClose} />
+            <button className="w-full flex items-center gap-3 rounded-2xl px-4 py-3 text-white/60 cursor-default">
+              <Bell className="h-4 w-4" />
+              <span>Alertas</span>
+            </button>
+          </>
+        )}
       </nav>
 
       <button
