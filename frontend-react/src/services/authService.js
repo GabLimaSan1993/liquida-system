@@ -36,26 +36,30 @@ export async function fetchAllProfiles() {
 }
 
 export async function createUser(email, password, nome, isMaster, telasPermitidas, areaTecnica) {
-  const { data, error } = await supabase.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-  });
-  if (error) throw error;
+  const { data: { session } } = await supabase.auth.getSession();
 
-  const { error: profileError } = await supabase
-    .from("user_profiles")
-    .insert({
-      id: data.user.id,
-      nome,
-      email,
-      is_master: isMaster,
-      telas_permitidas: telasPermitidas,
-      area_tecnica: areaTecnica || null,
-    });
+  const response = await fetch(
+    "https://fndkyainfdiyorwdsvkr.supabase.co/functions/v1/criar-usuario",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${session?.access_token}`,
+      },
+      body: JSON.stringify({
+        email,
+        password,
+        nome,
+        is_master: isMaster,
+        telas_permitidas: telasPermitidas,
+        area_tecnica: areaTecnica || null,
+      }),
+    }
+  );
 
-  if (profileError) throw profileError;
-  return data.user;
+  const data = await response.json();
+  if (!data.success) throw new Error(data.error || "Erro ao criar usuário");
+  return data;
 }
 
 export async function updateUserPermissions(userId, telasPermitidas, isMaster, areaTecnica) {
