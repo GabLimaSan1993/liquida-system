@@ -5,8 +5,6 @@ import {
   salvarTriagemLinhaBranca,
   TIPOS_PRODUTO_LINHA_BRANCA,
   REPAROS_MECANICOS,
-  REPAROS_ELETRICOS,
-  REPAROS_ESTETICOS,
 } from "../services/linhaBrancaService.js";
 import { useAuth } from "../AuthContext.jsx";
 
@@ -51,9 +49,7 @@ function Button({ children, primary = false, ...props }) {
 function CheckboxGroup({ title, options, selected, onToggle, disabled }) {
   return (
     <div className="rounded-[24px] bg-[#FCFAFF] p-4 ring-1 ring-[#E9D5FF]">
-      <h3 className="text-sm font-black uppercase tracking-wide text-[#6B1F87]">
-        {title}
-      </h3>
+      <h3 className="text-sm font-black uppercase tracking-wide text-[#6B1F87]">{title}</h3>
       <div className="mt-4 grid gap-2">
         {options.map((item) => {
           const checked = selected.includes(item);
@@ -99,11 +95,7 @@ export default function LinhaBrancaTriagemPage() {
     if (!selectedOs) return false;
     if (!triagem.tipo_produto) return false;
     if (triagem.precisa_reparo) {
-      const totalReparos =
-        triagem.reparos_mecanicos.length +
-        triagem.reparos_eletricos.length +
-        triagem.reparos_esteticos.length;
-      return totalReparos > 0;
+      return triagem.reparos_mecanicos.length > 0;
     }
     return true;
   }, [selectedOs, triagem]);
@@ -115,7 +107,7 @@ export default function LinhaBrancaTriagemPage() {
       const data = await fetchOsAguardandoTriagemLinhaBranca();
       setOsList(data);
     } catch (error) {
-      setStatus(`Erro ao carregar OS: ${error.message || "falha na consulta"}`);
+      setStatus(`Erro ao carregar OS: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -143,8 +135,8 @@ export default function LinhaBrancaTriagemPage() {
       ...current,
       precisa_reparo: value,
       reparos_mecanicos: value ? current.reparos_mecanicos : [],
-      reparos_eletricos: value ? current.reparos_eletricos : [],
-      reparos_esteticos: value ? current.reparos_esteticos : [],
+      reparos_eletricos: [],
+      reparos_esteticos: [],
     }));
   }
 
@@ -172,7 +164,7 @@ export default function LinhaBrancaTriagemPage() {
       setTriagem({ ...EMPTY_TRIAGEM });
       await loadOs();
     } catch (error) {
-      setStatus(`Erro ao salvar triagem: ${error.message || "falha no registro"}`);
+      setStatus(`Erro ao salvar triagem: ${error.message}`);
     } finally {
       setSaving(false);
     }
@@ -184,10 +176,10 @@ export default function LinhaBrancaTriagemPage() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h1 className="text-2xl font-black tracking-tight text-[#6B1F87]">
-              Gestão de Linha Branca — Triagem
+              Triagem — Refrigeração
             </h1>
             <p className="mt-1 text-sm text-slate-500">
-              Classifique a OS, identifique se há necessidade de reparo e direcione para a fila correta.
+              Classifique a OS e identifique os pontos de verificação.
             </p>
           </div>
           <div className="flex items-center gap-4">
@@ -276,29 +268,13 @@ export default function LinhaBrancaTriagemPage() {
         </SectionCard>
 
         <div className={!triagem.precisa_reparo ? "pointer-events-none opacity-40" : ""}>
-          <div className="grid gap-6 xl:grid-cols-3">
-            <CheckboxGroup
-              title="Reparo Mecânico"
-              options={REPAROS_MECANICOS}
-              selected={triagem.reparos_mecanicos}
-              disabled={!selectedOs || !triagem.precisa_reparo}
-              onToggle={(item) => toggleArray("reparos_mecanicos", item)}
-            />
-            <CheckboxGroup
-              title="Reparo Elétrico"
-              options={REPAROS_ELETRICOS}
-              selected={triagem.reparos_eletricos}
-              disabled={!selectedOs || !triagem.precisa_reparo}
-              onToggle={(item) => toggleArray("reparos_eletricos", item)}
-            />
-            <CheckboxGroup
-              title="Reparo Estético"
-              options={REPAROS_ESTETICOS}
-              selected={triagem.reparos_esteticos}
-              disabled={!selectedOs || !triagem.precisa_reparo}
-              onToggle={(item) => toggleArray("reparos_esteticos", item)}
-            />
-          </div>
+          <CheckboxGroup
+            title="Verificações de Reparo"
+            options={REPAROS_MECANICOS}
+            selected={triagem.reparos_mecanicos}
+            disabled={!selectedOs || !triagem.precisa_reparo}
+            onToggle={(item) => toggleArray("reparos_mecanicos", item)}
+          />
         </div>
 
         <SectionCard>

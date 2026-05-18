@@ -4,9 +4,8 @@ import {
   fetchOsAguardandoTriagemLinhaBranca,
   salvarTriagemLinhaBranca,
   TIPOS_PRODUTO_LINHA_BRANCA,
-  REPAROS_MECANICOS,
-  REPAROS_ELETRICOS,
-  REPAROS_ESTETICOS,
+  REPAROS_LAVADORAS,
+  REPAROS_CLIMATIZACAO,
 } from "../services/linhaBrancaService.js";
 import {
   fetchOsParaReparo,
@@ -14,12 +13,6 @@ import {
   condenarOs,
 } from "../services/reparoLinhaBrancaService.js";
 import { useAuth } from "../AuthContext.jsx";
-
-const TODAS_AREAS = [
-  { label: "Mecânico", campo: "reparos_mecanicos", lista: REPAROS_MECANICOS },
-  { label: "Elétrico", campo: "reparos_eletricos", lista: REPAROS_ELETRICOS },
-  { label: "Estético", campo: "reparos_esteticos", lista: REPAROS_ESTETICOS },
-];
 
 const EMPTY_TRIAGEM = {
   tipo_produto: "",
@@ -152,20 +145,33 @@ export default function TriagemReparosPage() {
 
   const selectedOs = etapa === ETAPA.TRIAGEM ? selectedOsTriagem : selectedOsReparo;
 
+  // Lista de verificações baseada no tipo de produto
+  const listaTriagem = useMemo(() => {
+    if (triagem.tipo_produto === "Lavadoras") return REPAROS_LAVADORAS;
+    if (triagem.tipo_produto === "Ar-condicionado") return REPAROS_CLIMATIZACAO;
+    return [];
+  }, [triagem.tipo_produto]);
+
+  // Reparos triados para etapa de reparo
   const reparosTriados = useMemo(() => {
     if (!selectedOsReparo) return [];
-    return TODAS_AREAS.flatMap(({ campo, label }) =>
-      (selectedOsReparo[campo] || []).map((r) => ({ reparo: r, area: label }))
-    );
+    return [
+      ...(selectedOsReparo.reparos_mecanicos || []),
+      ...(selectedOsReparo.reparos_eletricos || []),
+      ...(selectedOsReparo.reparos_esteticos || []),
+    ];
   }, [selectedOsReparo]);
 
+  // Lista adicional para reparo
   const listaAdicional = useMemo(() => {
-    const area = TODAS_AREAS.find((a) => a.label === areaAdicional);
-    if (!area) return [];
-    const jaTriados = reparosTriados.map((r) => r.reparo);
-    const jaAdicionados = execucao.reparos_adicionais.map((r) => r.reparo);
-    return area.lista.filter((r) => !jaTriados.includes(r) && !jaAdicionados.includes(r));
-  }, [areaAdicional, reparosTriados, execucao.reparos_adicionais]);
+    if (!selectedOsReparo) return [];
+    const tipoProduto = selectedOsReparo.tipo_produto || "";
+    let lista = [];
+    if (tipoProduto === "Lavadoras") lista = REPAROS_LAVADORAS;
+    if (tipoProduto === "Ar-condicionado") lista = REPAROS_CLIMATIZACAO;
+    const jaAdicionados = execucao.reparos_adicionais.map((r) => r.reparo || r);
+    return lista.filter((r) => !reparosTriados.includes(r) && !jaAdicionados.includes(r));
+  }, [selectedOsReparo, reparosTriados, execucao.reparos_adicionais]);
 
   async function loadOs() {
     try {
@@ -193,10 +199,13 @@ export default function TriagemReparosPage() {
     setTriagem((cur) => ({ ...cur, [field]: value }));
   }
 
-  function toggleArray(field, value) {
+  function toggleReparoTriagem(item) {
     setTriagem((cur) => {
-      const list = cur[field] || [];
-      return { ...cur, [field]: list.includes(value) ? list.filter((i) => i !== value) : [...list, value] };
+      const list = cur.reparos_mecanicos || [];
+      return {
+        ...cur,
+        reparos_mecanicos: list.includes(item) ? list.filter((i) => i !== item) : [...list, item],
+      };
     });
   }
 
@@ -205,8 +214,8 @@ export default function TriagemReparosPage() {
       ...cur,
       precisa_reparo: value,
       reparos_mecanicos: value ? cur.reparos_mecanicos : [],
-      reparos_eletricos: value ? cur.reparos_eletricos : [],
-      reparos_esteticos: value ? cur.reparos_esteticos : [],
+      reparos_eletricos: [],
+      reparos_esteticos: [],
     }));
   }
 
@@ -225,10 +234,10 @@ export default function TriagemReparosPage() {
   }
 
   function adicionarReparoAdicional() {
-    if (!reparoAdicionalSelecionado || !areaAdicional) return;
+    if (!reparoAdicionalSelecionado) return;
     setExecucao((cur) => ({
       ...cur,
-      reparos_adicionais: [...cur.reparos_adicionais, { reparo: reparoAdicionalSelecionado, area: areaAdicional }],
+      reparos_adicionais: [...cur.reparos_adicionais, reparoAdicionalSelecionado],
     }));
     setReparoAdicionalSelecionado("");
   }
@@ -236,7 +245,7 @@ export default function TriagemReparosPage() {
   function removerReparoAdicional(reparo) {
     setExecucao((cur) => ({
       ...cur,
-      reparos_adicionais: cur.reparos_adicionais.filter((r) => r.reparo !== reparo),
+      reparos_adicionais: cur.reparos_adicionais.filter((r) => r !== reparo),
     }));
   }
 
@@ -255,9 +264,9 @@ export default function TriagemReparosPage() {
       setStatus("Selecione uma OS e informe o tipo do produto.");
       return;
     }
-    if (triagem.precisa_reparo) {
-      const total = triagem.reparos_mecanicos.length + triagem.reparos_eletricos.length + triagem.reparos_esteticos.length;
-      if (total === 0) { setStatus("Selecione ao menos um reparo."); return; }
+    if (triagem.precisa_reparo && triagem.reparos_mecanicos.length === 0) {
+      setStatus("Selecione ao menos uma verificação.");
+      return;
     }
     try {
       setSaving(true);
@@ -281,8 +290,8 @@ export default function TriagemReparosPage() {
     try {
       setSaving(true);
       const servicoCompleto = [
-        ...reparosTriados.map((r) => r.reparo),
-        ...execucao.reparos_adicionais.map((r) => r.reparo),
+        ...reparosTriados,
+        ...execucao.reparos_adicionais,
       ].join(", ");
       await salvarExecucaoReparo(
         selectedOsReparo,
@@ -393,7 +402,9 @@ export default function TriagemReparosPage() {
                   <span className="text-sm font-semibold text-slate-600">Tipo do produto</span>
                   <select value={triagem.tipo_produto} onChange={(e) => updateTriagem("tipo_produto", e.target.value)} disabled={!selectedOsTriagem} className={inputClass(!selectedOsTriagem)}>
                     <option value="">Selecione</option>
-                    {TIPOS_PRODUTO_LINHA_BRANCA.map((item) => <option key={item} value={item}>{item}</option>)}
+                    {TIPOS_PRODUTO_LINHA_BRANCA.filter((t) => t !== "Refrigeração").map((item) => (
+                      <option key={item} value={item}>{item}</option>
+                    ))}
                   </select>
                 </label>
                 <label>
@@ -416,13 +427,17 @@ export default function TriagemReparosPage() {
               )}
             </SectionCard>
 
-            <div className={!triagem.precisa_reparo ? "pointer-events-none opacity-40" : ""}>
-              <div className="grid gap-6 xl:grid-cols-3">
-                <CheckboxGroup title="Reparo Mecânico" options={REPAROS_MECANICOS} selected={triagem.reparos_mecanicos} disabled={!selectedOsTriagem || !triagem.precisa_reparo} onToggle={(item) => toggleArray("reparos_mecanicos", item)} />
-                <CheckboxGroup title="Reparo Elétrico" options={REPAROS_ELETRICOS} selected={triagem.reparos_eletricos} disabled={!selectedOsTriagem || !triagem.precisa_reparo} onToggle={(item) => toggleArray("reparos_eletricos", item)} />
-                <CheckboxGroup title="Reparo Estético" options={REPAROS_ESTETICOS} selected={triagem.reparos_esteticos} disabled={!selectedOsTriagem || !triagem.precisa_reparo} onToggle={(item) => toggleArray("reparos_esteticos", item)} />
+            {triagem.tipo_produto && listaTriagem.length > 0 && (
+              <div className={!triagem.precisa_reparo ? "pointer-events-none opacity-40" : ""}>
+                <CheckboxGroup
+                  title={`Verificações — ${triagem.tipo_produto}`}
+                  options={listaTriagem}
+                  selected={triagem.reparos_mecanicos}
+                  disabled={!selectedOsTriagem || !triagem.precisa_reparo}
+                  onToggle={toggleReparoTriagem}
+                />
               </div>
-            </div>
+            )}
 
             <SectionCard>
               <h2 className="mb-4 text-lg font-bold text-[#6B1F87]">Observações da triagem</h2>
@@ -469,42 +484,36 @@ export default function TriagemReparosPage() {
 
             {selectedOsReparo && (
               <SectionCard>
-                <h2 className="mb-4 text-lg font-bold text-[#6B1F87]">Reparos da triagem</h2>
-                {TODAS_AREAS.map(({ label }) => {
-                  const reps = reparosTriados.filter((r) => r.area === label);
-                  if (reps.length === 0) return null;
-                  return (
-                    <div key={label} className="mb-4">
-                      <div className="text-xs font-bold uppercase tracking-wide text-slate-400 mb-2">{label}</div>
-                      <div className="flex flex-wrap gap-2">
-                        {reps.map((r) => <span key={r.reparo} className="rounded-full bg-purple-100 px-3 py-1 text-xs font-semibold text-[#6B1F87]">{r.reparo}</span>)}
-                      </div>
-                    </div>
-                  );
-                })}
-                <div className="mt-4">
-                  <h3 className="mb-3 text-sm font-bold text-slate-600">Reparos adicionais</h3>
-                  <div className="flex gap-2">
-                    <select value={areaAdicional} onChange={(e) => { setAreaAdicional(e.target.value); setReparoAdicionalSelecionado(""); }} className={inputClass()}>
-                      <option value="">Área</option>
-                      {TODAS_AREAS.map((a) => <option key={a.label} value={a.label}>{a.label}</option>)}
-                    </select>
-                    <select value={reparoAdicionalSelecionado} onChange={(e) => setReparoAdicionalSelecionado(e.target.value)} className={inputClass()} disabled={!areaAdicional}>
-                      <option value="">Reparo</option>
-                      {listaAdicional.map((r) => <option key={r} value={r}>{r}</option>)}
-                    </select>
-                    <button type="button" onClick={adicionarReparoAdicional} className="rounded-2xl bg-white text-[#6B1F87] ring-1 ring-[#E9D5FF] hover:bg-[#FCFAFF] px-4"><Plus className="h-4 w-4" /></button>
+                <h2 className="mb-4 text-lg font-bold text-[#6B1F87]">Verificações da triagem</h2>
+                {reparosTriados.length === 0 ? (
+                  <p className="text-sm text-slate-400">Nenhuma verificação triada.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {reparosTriados.map((r) => (
+                      <span key={r} className="rounded-full bg-purple-100 px-3 py-1 text-xs font-semibold text-[#6B1F87]">{r}</span>
+                    ))}
                   </div>
-                  {execucao.reparos_adicionais.length > 0 && (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {execucao.reparos_adicionais.map((r) => (
-                        <span key={r.reparo} onClick={() => removerReparoAdicional(r.reparo)} className="cursor-pointer rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700 hover:bg-orange-200">
-                          {r.area} — {r.reparo} ✕
-                        </span>
-                      ))}
+                )}
+
+                {listaAdicional.length > 0 && (
+                  <div className="mt-4">
+                    <h3 className="mb-3 text-sm font-bold text-slate-600">Verificações adicionais</h3>
+                    <div className="flex gap-2">
+                      <select value={reparoAdicionalSelecionado} onChange={(e) => setReparoAdicionalSelecionado(e.target.value)} className={inputClass()}>
+                        <option value="">Selecione</option>
+                        {listaAdicional.map((r) => <option key={r} value={r}>{r}</option>)}
+                      </select>
+                      <button type="button" onClick={adicionarReparoAdicional} className="rounded-2xl bg-white text-[#6B1F87] ring-1 ring-[#E9D5FF] hover:bg-[#FCFAFF] px-4"><Plus className="h-4 w-4" /></button>
                     </div>
-                  )}
-                </div>
+                    {execucao.reparos_adicionais.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {execucao.reparos_adicionais.map((r) => (
+                          <span key={r} onClick={() => removerReparoAdicional(r)} className="cursor-pointer rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700 hover:bg-orange-200">{r} ✕</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </SectionCard>
             )}
 
