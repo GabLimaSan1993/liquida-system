@@ -4,7 +4,7 @@ import {
   FileText, Layers, ChevronDown
 } from "lucide-react";
 import {
-  PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend
+  PieChart, Pie, Cell, Tooltip, ResponsiveContainer
 } from "recharts";
 import { supabase } from "../../lib/supabase";
 
@@ -46,30 +46,48 @@ function normalizaCanal(val) {
 function normalizaCondicao(val) {
   if (!val) return "Não informado";
   const v = val.trim().toUpperCase();
-  if (["BOM", "BOA", "BOM "].includes(v))           return "Bom";
-  if (["EXCELENTE", "LIKE NEW"].includes(v))         return "Excelente";
-  if (["TRINCADO", "TELA TRINCADA"].includes(v))     return "Trincado";
-  if (["MEDIA", "REGULAR"].includes(v))              return "Regular";
-  if (v === "ONLINE")                                return "Online";
+  if (["BOM", "BOA", "BOM "].includes(v))       return "Bom";
+  if (["EXCELENTE", "LIKE NEW"].includes(v))     return "Excelente";
+  if (["TRINCADO", "TELA TRINCADA"].includes(v)) return "Trincado";
+  if (["MEDIA", "REGULAR"].includes(v))          return "Regular";
+  if (v === "ONLINE")                            return "Online";
   return "Outros";
 }
 
 function normalizaFuncional(val) {
   if (!val) return "Sem triagem";
   const v = val.trim().toUpperCase();
-  if (["BOM", "BOA", "BOM "].includes(v))                 return "Bom";
-  if (["EXCELENTE", "LIKE NEW"].includes(v))               return "Excelente/Like New";
-  if (["TRINCADO", "TELA TRINCADA"].includes(v))           return "Trincado";
-  if (["MUITO BOM"].includes(v))                           return "Muito Bom";
-  if (["MEDIA", "REGULAR"].includes(v))                    return "Regular";
-  if (v.includes("NÃO LIGA") || v.includes("BLOQUEADO"))  return "Não liga/Bloqueado";
-  if (v.includes("DEVOLUÇÃO PROCEDENTE"))                  return "Dev. Procedente";
-  if (v.includes("DEVOLUÇÃO IMPROCEDENTE"))                return "Dev. Improcedente";
-  if (["RECUSADO","GENERICO","ONLINE","#N/D"].includes(v)) return "Outros";
+  if (["BOM", "BOA", "BOM "].includes(v))                  return "Bom";
+  if (["EXCELENTE", "LIKE NEW"].includes(v))                return "Excelente/Like New";
+  if (["TRINCADO", "TELA TRINCADA"].includes(v))            return "Trincado";
+  if (["MUITO BOM"].includes(v))                            return "Muito Bom";
+  if (["MEDIA", "REGULAR"].includes(v))                     return "Regular";
+  if (v.includes("NÃO LIGA") || v.includes("BLOQUEADO"))   return "Não liga/Bloqueado";
+  if (v.includes("DEVOLUÇÃO PROCEDENTE"))                   return "Dev. Procedente";
+  if (v.includes("DEVOLUÇÃO IMPROCEDENTE"))                 return "Dev. Improcedente";
+  if (["RECUSADO","GENERICO","ONLINE","#N/D"].includes(v))  return "Outros";
   return val.trim();
 }
 
 // ── Paletas ───────────────────────────────────────────────
+const LP_COLORS = {
+  "Bom":           "#7F2D92",
+  "Trincado":      "#F97316",
+  "Excelente":     "#F59E0B",
+  "Regular":       "#5B1E74",
+  "Online":        "#C084FC",
+  "Não informado": "#94a3b8",
+  "Outros":        "#64748b",
+};
+
+const LP_CANAL = {
+  "YBV (Lojas)": "#7F2D92",
+  "Online":      "#F97316",
+  "GRV":         "#F59E0B",
+  "Devolução":   "#5B1E74",
+  "N/A":         "#94a3b8",
+};
+
 const GRADE_COLORS = {
   "EXCELENTE":     "bg-emerald-500",
   "MUITO BOM":     "bg-emerald-400",
@@ -80,24 +98,6 @@ const GRADE_COLORS = {
   "Não informado": "bg-slate-300",
 };
 
-const CANAL_COLORS = {
-  "YBV (Lojas)": "bg-purple-500",
-  "Online":      "bg-blue-400",
-  "GRV":         "bg-emerald-500",
-  "Devolução":   "bg-orange-400",
-  "N/A":         "bg-slate-300",
-};
-
-const CONDICAO_COLORS = {
-  "Excelente":     "#10b981",
-  "Bom":           "#3b82f6",
-  "Trincado":      "#ef4444",
-  "Regular":       "#f59e0b",
-  "Online":        "#8b5cf6",
-  "Não informado": "#94a3b8",
-  "Outros":        "#64748b",
-};
-
 // ── Componentes base ─────────────────────────────────────
 function TabBtn({ label, icon: Icon, active, onClick, badge }) {
   return (
@@ -105,7 +105,7 @@ function TabBtn({ label, icon: Icon, active, onClick, badge }) {
       onClick={onClick}
       className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all whitespace-nowrap ${
         active
-          ? "bg-purple-600 text-white shadow-md"
+          ? "bg-[#7F2D92] text-white shadow-md"
           : "text-slate-500 hover:bg-slate-100"
       }`}
     >
@@ -133,7 +133,7 @@ function Card({ children, className = "" }) {
 function SectionTitle({ children, icon: Icon }) {
   return (
     <h3 className="font-black text-slate-800 flex items-center gap-2 mb-4">
-      <Icon className="h-4 w-4 text-purple-600" />
+      <Icon className="h-4 w-4 text-[#7F2D92]" />
       {children}
     </h3>
   );
@@ -171,7 +171,7 @@ function KpiMini({ label, value, sub, color = "bg-purple-50 ring-purple-200 text
 function Loader() {
   return (
     <div className="flex items-center justify-center h-48">
-      <div className="h-8 w-8 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin" />
+      <div className="h-8 w-8 border-4 border-purple-200 border-t-[#7F2D92] rounded-full animate-spin" />
     </div>
   );
 }
@@ -182,7 +182,7 @@ function MesSelector({ meses, mesSel, onChange }) {
       <select
         value={mesSel}
         onChange={(e) => onChange(e.target.value)}
-        className="appearance-none bg-white border border-slate-200 rounded-xl px-4 py-2 pr-8 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-400 cursor-pointer"
+        className="appearance-none bg-white border border-slate-200 rounded-xl px-4 py-2 pr-8 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7F2D92] cursor-pointer"
       >
         {meses.map(m => (
           <option key={m} value={m}>{m}</option>
@@ -193,47 +193,127 @@ function MesSelector({ meses, mesSel, onChange }) {
   );
 }
 
-// ── Pizza ─────────────────────────────────────────────────
+// ── Pizza rosca interativa ────────────────────────────────
 function PizzaCondicao({ dados, total }) {
+  const [ativo, setAtivo] = useState(null);
   const RADIAN = Math.PI / 180;
 
-  function renderLabel({ cx, cy, midAngle, innerRadius, outerRadius, percent }) {
-    if (percent < 0.04) return null;
-    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+  function renderLabel({ cx, cy, midAngle, outerRadius, percent, name }) {
+    if (percent < 0.03) return null;
+    const radius = outerRadius + 30;
     const x = cx + radius * Math.cos(-midAngle * RADIAN);
     const y = cy + radius * Math.sin(-midAngle * RADIAN);
     return (
-      <text x={x} y={y} fill="white" textAnchor="middle"
-        dominantBaseline="central" style={{ fontSize: 11, fontWeight: 700 }}>
-        {(percent * 100).toFixed(0)}%
+      <text
+        x={x} y={y}
+        textAnchor={x > cx ? "start" : "end"}
+        dominantBaseline="central"
+        style={{ fontSize: 11, fontWeight: 600, fill: "#475569" }}
+      >
+        {`${name} · ${(percent * 100).toFixed(1)}%`}
       </text>
     );
   }
 
+  function CustomTooltip({ active, payload }) {
+    if (!active || !payload?.length) return null;
+    const { name, value } = payload[0];
+    return (
+      <div className="bg-white rounded-2xl shadow-xl ring-1 ring-purple-100 px-4 py-3 text-sm">
+        <div className="flex items-center gap-2 mb-1">
+          <div className="h-3 w-3 rounded-full shrink-0"
+            style={{ backgroundColor: LP_COLORS[name] || "#94a3b8" }} />
+          <span className="font-bold text-slate-700">{name}</span>
+        </div>
+        <div className="font-black text-lg" style={{ color: "#7F2D92" }}>{fmtN(value)}</div>
+        <div className="text-slate-400 text-xs">{fmtPct(value, total)} do total</div>
+      </div>
+    );
+  }
+
   return (
-    <ResponsiveContainer width="100%" height={240}>
-      <PieChart>
-        <Pie
-          data={dados}
-          cx="50%"
-          cy="50%"
-          outerRadius={95}
-          dataKey="value"
-          labelLine={false}
-          label={renderLabel}
-        >
-          {dados.map((entry) => (
-            <Cell key={entry.name} fill={CONDICAO_COLORS[entry.name] || "#94a3b8"} />
-          ))}
-        </Pie>
-        <Tooltip
-          formatter={(value, name) => [
-            `${fmtN(value)} (${fmtPct(value, total)})`, name
-          ]}
-          contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 12 }}
-        />
-      </PieChart>
-    </ResponsiveContainer>
+    <div>
+      <div className="relative">
+        <ResponsiveContainer width="100%" height={280}>
+          <PieChart>
+            <Pie
+              data={dados}
+              cx="50%"
+              cy="50%"
+              innerRadius={72}
+              outerRadius={105}
+              paddingAngle={2}
+              dataKey="value"
+              labelLine={false}
+              label={renderLabel}
+              onMouseEnter={(_, idx) => setAtivo(idx)}
+              onMouseLeave={() => setAtivo(null)}
+            >
+              {dados.map((entry, idx) => (
+                <Cell
+                  key={entry.name}
+                  fill={LP_COLORS[entry.name] || "#94a3b8"}
+                  opacity={ativo === null || ativo === idx ? 1 : 0.4}
+                  stroke={ativo === idx ? "#fff" : "transparent"}
+                  strokeWidth={ativo === idx ? 3 : 0}
+                  style={{ cursor: "pointer", transition: "opacity 0.2s" }}
+                />
+              ))}
+            </Pie>
+            <Tooltip content={<CustomTooltip />} />
+            {/* Total no centro */}
+            <text x="50%" y="46%" textAnchor="middle" dominantBaseline="central"
+              style={{ fontSize: 22, fontWeight: 900, fill: "#4C1D95" }}>
+              {fmtN(total)}
+            </text>
+            <text x="50%" y="56%" textAnchor="middle" dominantBaseline="central"
+              style={{ fontSize: 11, fill: "#94a3b8" }}>
+              aparelhos
+            </text>
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Legenda interativa com todos os status */}
+      <div className="mt-2 space-y-1.5 border-t border-slate-100 pt-3">
+        {dados.map(({ name, value }, idx) => (
+          <div
+            key={name}
+            className={`flex items-center justify-between text-xs rounded-xl px-3 py-2 transition-all cursor-default ${
+              ativo === idx
+                ? "ring-1 ring-purple-200"
+                : "hover:bg-slate-50"
+            }`}
+            style={ativo === idx ? { backgroundColor: "#FAF5FF" } : {}}
+            onMouseEnter={() => setAtivo(idx)}
+            onMouseLeave={() => setAtivo(null)}
+          >
+            <div className="flex items-center gap-2">
+              <div className="h-3 w-3 rounded-full shrink-0"
+                style={{ backgroundColor: LP_COLORS[name] || "#94a3b8" }} />
+              <span className="font-semibold text-slate-600">{name}</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-20 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${total > 0 ? (value / total) * 100 : 0}%`,
+                    backgroundColor: LP_COLORS[name] || "#94a3b8",
+                  }}
+                />
+              </div>
+              <span className="text-slate-400 w-10 text-right font-medium">
+                {fmtPct(value, total)}
+              </span>
+              <span className="font-bold text-slate-700 w-14 text-right">
+                {fmtN(value)}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -247,10 +327,8 @@ function TabRecebimento({ mes }) {
   useEffect(() => {
     async function load() {
       setLoading(true);
-
       const mesAnt = mesAnterior(mes);
 
-      // Mês atual e anterior em paralelo
       const [{ data: rows }, { data: rowsAnt }] = await Promise.all([
         filtraMes(
           supabase.from("assurant_triagem")
@@ -275,7 +353,6 @@ function TabRecebimento({ mes }) {
 
       rows.forEach(r => {
         totalRecebidos++;
-
         const canal = normalizaCanal(r.tipo_de_rede);
         canais[canal] = (canais[canal] || 0) + 1;
 
@@ -299,9 +376,9 @@ function TabRecebimento({ mes }) {
         canaisAnt[canal] = (canaisAnt[canal] || 0) + 1;
       });
 
-      const topModelos     = Object.entries(modelos).sort((a, b) => b[1] - a[1]).slice(0, 8);
-      const topStatus      = Object.entries(statusMap).sort((a, b) => b[1] - a[1]).slice(0, 8);
-      const pizzaCondicao  = Object.entries(condicoes)
+      const topModelos    = Object.entries(modelos).sort((a, b) => b[1] - a[1]).slice(0, 8);
+      const topStatus     = Object.entries(statusMap).sort((a, b) => b[1] - a[1]).slice(0, 8);
+      const pizzaCondicao = Object.entries(condicoes)
         .sort((a, b) => b[1] - a[1])
         .map(([name, value]) => ({ name, value }));
 
@@ -351,17 +428,29 @@ function TabRecebimento({ mes }) {
           <SectionTitle icon={Package}>Volume por Canal</SectionTitle>
           <div className="space-y-5">
             {canaisArr.map(([canal, qtd]) => {
-              const qtdAnt  = canaisAnt[canal] || 0;
-              const delta   = qtd - qtdAnt;
+              const qtdAnt   = canaisAnt[canal] || 0;
+              const delta    = qtd - qtdAnt;
               const deltaPos = delta >= 0;
               const deltaPct = qtdAnt > 0
                 ? ((delta / qtdAnt) * 100).toFixed(1)
                 : null;
+              const pctTotal = totalRecebidos > 0
+                ? ((qtd / totalRecebidos) * 100).toFixed(1)
+                : "0";
+              const pctAnt = totalAnt > 0
+                ? (qtdAnt / totalAnt) * 100
+                : 0;
+              const barWidth = Math.max(Number(pctTotal), 4);
 
               return (
-                <div key={canal} className="space-y-1.5">
+                <div key={canal} className="space-y-2">
+                  {/* Cabeçalho */}
                   <div className="flex items-center justify-between text-sm">
-                    <span className="font-semibold text-slate-700">{canal}</span>
+                    <div className="flex items-center gap-2">
+                      <div className="h-3 w-3 rounded-full shrink-0"
+                        style={{ backgroundColor: LP_CANAL[canal] || "#94a3b8" }} />
+                      <span className="font-semibold text-slate-700">{canal}</span>
+                    </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <span className={`text-xs font-bold px-2 py-0.5 rounded-lg ${
                         deltaPos
@@ -377,23 +466,39 @@ function TabRecebimento({ mes }) {
                       </div>
                     </div>
                   </div>
-                  {/* Barra mês atual */}
-                  <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+
+                  {/* Barra mês atual com % embutido */}
+                  <div className="relative h-6 bg-slate-100 rounded-xl overflow-hidden">
                     <div
-                      className={`h-full rounded-full ${CANAL_COLORS[canal] || "bg-slate-400"}`}
-                      style={{ width: `${totalRecebidos > 0 ? (qtd / totalRecebidos) * 100 : 0}%` }}
-                    />
+                      className="h-full rounded-xl flex items-center justify-end pr-2 transition-all duration-700"
+                      style={{
+                        width: `${barWidth}%`,
+                        backgroundColor: LP_CANAL[canal] || "#94a3b8",
+                      }}
+                    >
+                      {Number(pctTotal) >= 10 && (
+                        <span className="text-white text-xs font-bold">{pctTotal}%</span>
+                      )}
+                    </div>
+                    {Number(pctTotal) < 10 && (
+                      <span
+                        className="absolute top-1/2 -translate-y-1/2 text-xs font-bold text-slate-600"
+                        style={{ left: `calc(${barWidth}% + 6px)` }}
+                      >
+                        {pctTotal}%
+                      </span>
+                    )}
                   </div>
+
                   {/* Barra mês anterior */}
-                  <div className="h-1 bg-slate-50 rounded-full overflow-hidden">
+                  <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
                     <div
-                      className="h-full rounded-full bg-slate-300"
-                      style={{ width: `${totalAnt > 0 ? (qtdAnt / totalAnt) * 100 : 0}%` }}
+                      className="h-full rounded-full bg-slate-300 transition-all duration-700"
+                      style={{ width: `${pctAnt}%` }}
                     />
                   </div>
-                  <div className="flex justify-between text-xs text-slate-400">
-                    <span>{fmtPct(qtd, totalRecebidos)} do total</span>
-                    <span>▬ cinza = mês anterior</span>
+                  <div className="text-xs text-slate-400 text-right">
+                    ▬ cinza = mês anterior ({fmtN(qtdAnt)})
                   </div>
                 </div>
               );
@@ -405,21 +510,6 @@ function TabRecebimento({ mes }) {
         <Card>
           <SectionTitle icon={Layers}>Por Condição</SectionTitle>
           <PizzaCondicao dados={pizzaCondicao} total={totalRecebidos} />
-          <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
-            {pizzaCondicao.map(({ name, value }) => (
-              <div key={name} className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2">
-                  <div className="h-2.5 w-2.5 rounded-full shrink-0"
-                    style={{ backgroundColor: CONDICAO_COLORS[name] || "#94a3b8" }} />
-                  <span className="font-medium text-slate-600">{name}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-slate-400">{fmtPct(value, totalRecebidos)}</span>
-                  <span className="font-bold text-slate-700 w-14 text-right">{fmtN(value)}</span>
-                </div>
-              </div>
-            ))}
-          </div>
         </Card>
 
         {/* Top modelos */}
@@ -443,7 +533,6 @@ function TabRecebimento({ mes }) {
             ))}
           </div>
         </Card>
-
       </div>
     </div>
   );
@@ -636,11 +725,11 @@ function TabTriagemEstetica({ mes }) {
 
   function colorEstetica(v) {
     const u = (v || "").toUpperCase();
-    if (u === "QUEBRADO")                    return "bg-red-400";
+    if (u === "QUEBRADO")                     return "bg-red-400";
     if (["LIKE NEW","EXCELENTE"].includes(u)) return "bg-emerald-400";
-    if (u === "MUITO BOM")                   return "bg-emerald-300";
-    if (u === "BOM")                         return "bg-blue-400";
-    if (u === "REGULAR")                     return "bg-yellow-400";
+    if (u === "MUITO BOM")                    return "bg-emerald-300";
+    if (u === "BOM")                          return "bg-blue-400";
+    if (u === "REGULAR")                      return "bg-yellow-400";
     return "bg-slate-300";
   }
 
@@ -920,7 +1009,8 @@ export default function AssurantDashboardPage() {
             <MesSelector meses={meses} mesSel={mesSel} onChange={setMesSel} />
           )}
           {totais && (
-            <span className="text-xs font-semibold text-purple-600 bg-purple-50 ring-1 ring-purple-200 px-3 py-1.5 rounded-xl">
+            <span className="text-xs font-semibold px-3 py-1.5 rounded-xl"
+              style={{ backgroundColor: "#FAF5FF", color: "#7F2D92", outline: "1px solid #E9D5FF" }}>
               {fmtN(totais.total)} recebidos · {fmtN(totais.finalizados)} finalizados
             </span>
           )}
