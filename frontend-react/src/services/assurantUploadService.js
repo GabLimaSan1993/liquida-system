@@ -1,5 +1,5 @@
 import * as XLSX from "xlsx";
-import { supabase } from "../supabase.js";
+import { supabase } from "../lib/supabase";
 
 function parseDate(val) {
   if (!val || val === "N/A" || val === "") return null;
