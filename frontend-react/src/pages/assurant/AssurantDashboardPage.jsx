@@ -29,10 +29,18 @@ function mesAnterior(mes) {
     : `${ano}-${String(m - 1).padStart(2, "0")}`;
 }
 
-function filtraMes(query, mes) {
-  return query
-    .gte("data_recebimento", `${mes}-01`)
-    .lt("data_recebimento", `${proximoMes(mes)}-01`);
+function filtraMes(query, meses) {
+  const lista = Array.isArray(meses) ? meses : [meses];
+  if (lista.length === 0) return query;
+  if (lista.length === 1) {
+    return query
+      .gte("data_recebimento", `${lista[0]}-01`)
+      .lt("data_recebimento", `${proximoMes(lista[0])}-01`);
+  }
+  const filtros = lista.map(m =>
+    `and(data_recebimento.gte.${m}-01,data_recebimento.lt.${proximoMes(m)}-01)`
+  ).join(",");
+  return query.or(filtros);
 }
 
 function normalizaCanal(val) {
@@ -201,19 +209,98 @@ function Loader() {
   );
 }
 
+// ── Seletor de mês com múltipla seleção ──────────────────
 function MesSelector({ meses, mesSel, onChange }) {
+  const [open, setOpen] = useState(false);
+  const todos = mesSel.length === meses.length;
+
+  function toggleMes(m) {
+    if (mesSel.includes(m)) {
+      if (mesSel.length === 1) return;
+      onChange(mesSel.filter(x => x !== m));
+    } else {
+      onChange([...mesSel, m]);
+    }
+  }
+
+  function toggleTodos() {
+    if (todos) {
+      onChange([meses[0]]);
+    } else {
+      onChange([...meses]);
+    }
+  }
+
+  const label = todos
+    ? "Todos os meses"
+    : mesSel.length === 1
+    ? mesSel[0]
+    : `${mesSel.length} meses selecionados`;
+
   return (
     <div className="relative">
-      <select
-        value={mesSel}
-        onChange={(e) => onChange(e.target.value)}
-        className="appearance-none bg-white border border-slate-200 rounded-xl px-4 py-2 pr-8 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7F2D92] cursor-pointer"
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7F2D92] cursor-pointer hover:border-purple-300 transition-all min-w-[200px] justify-between"
       >
-        {meses.map(m => (
-          <option key={m} value={m}>{m}</option>
-        ))}
-      </select>
-      <ChevronDown className="absolute right-2 top-2.5 h-4 w-4 text-slate-400 pointer-events-none" />
+        <span className="truncate">{label}</span>
+        <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform shrink-0 ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full mt-2 z-20 bg-white rounded-2xl shadow-xl ring-1 ring-slate-200 p-2 min-w-[200px] max-h-80 overflow-y-auto">
+
+            {/* Selecionar tudo */}
+            <button
+              onClick={toggleTodos}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all mb-1 ${
+                todos ? "bg-[#7F2D92] text-white" : "text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              <div className={`h-4 w-4 rounded border-2 flex items-center justify-center shrink-0 transition-all ${
+                todos ? "border-white bg-white" : "border-slate-300"
+              }`}>
+                {todos && (
+                  <svg className="h-2.5 w-2.5" viewBox="0 0 10 10" fill="none">
+                    <path d="M1.5 5L4 7.5L8.5 2.5" stroke="#7F2D92" strokeWidth="1.5"
+                      strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                )}
+              </div>
+              Todos os meses
+            </button>
+
+            <div className="h-px bg-slate-100 mx-2 mb-1" />
+
+            {meses.map(m => {
+              const sel = mesSel.includes(m);
+              return (
+                <button
+                  key={m}
+                  onClick={() => toggleMes(m)}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-all ${
+                    sel ? "text-[#7F2D92] font-semibold bg-purple-50" : "text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  <div className={`h-4 w-4 rounded border-2 flex items-center justify-center shrink-0 transition-all ${
+                    sel ? "border-[#7F2D92] bg-[#7F2D92]" : "border-slate-300"
+                  }`}>
+                    {sel && (
+                      <svg className="h-2.5 w-2.5" viewBox="0 0 10 10" fill="none">
+                        <path d="M1.5 5L4 7.5L8.5 2.5" stroke="white" strokeWidth="1.5"
+                          strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    )}
+                  </div>
+                  {m}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -260,14 +347,10 @@ function PizzaCondicao({ dados, total }) {
         <PieChart>
           <Pie
             data={dados}
-            cx="50%"
-            cy="50%"
-            innerRadius={72}
-            outerRadius={105}
-            paddingAngle={2}
-            dataKey="value"
-            labelLine={false}
-            label={renderLabel}
+            cx="50%" cy="50%"
+            innerRadius={72} outerRadius={105}
+            paddingAngle={2} dataKey="value"
+            labelLine={false} label={renderLabel}
             onMouseEnter={(_, idx) => setAtivo(idx)}
             onMouseLeave={() => setAtivo(null)}
           >
@@ -351,17 +434,17 @@ function RoscaMarcasModelos({ rows, total }) {
     .map(([name, value]) => ({ name, value }));
 
   const marcaAtiva = marcaSel || dadosMarcas[0]?.name;
-// DEPOIS
-const todosModelosMarca = marcaAtiva
-  ? Object.entries(modelosPorMarca[marcaAtiva] || {})
-      .sort((a, b) => b[1] - a[1])
-  : [];
 
-const totalMarca = todosModelosMarca.reduce((s, [, v]) => s + v, 0); // total real da marca
+  const todosModelosMarca = marcaAtiva
+    ? Object.entries(modelosPorMarca[marcaAtiva] || {})
+        .sort((a, b) => b[1] - a[1])
+    : [];
 
-const dadosModelos = todosModelosMarca
-  .slice(0, 8)
-  .map(([name, value]) => ({ name, value })); // top 8 para exibição
+  const totalMarca = todosModelosMarca.reduce((s, [, v]) => s + v, 0);
+
+  const dadosModelos = todosModelosMarca
+    .slice(0, 8)
+    .map(([name, value]) => ({ name, value }));
 
   function TooltipMarca({ active, payload }) {
     if (!active || !payload?.length) return null;
@@ -393,7 +476,6 @@ const dadosModelos = todosModelosMarca
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
       {/* Rosca marcas */}
       <Card>
         <SectionTitle icon={Package}>Volume por Marca</SectionTitle>
@@ -404,9 +486,7 @@ const dadosModelos = todosModelosMarca
               cx="50%" cy="50%"
               innerRadius={60} outerRadius={90}
               paddingAngle={2} dataKey="value"
-              onClick={(entry) => setMarcaSel(
-                marcaSel === entry.name ? null : entry.name
-              )}
+              onClick={(entry) => setMarcaSel(marcaSel === entry.name ? null : entry.name)}
               style={{ cursor: "pointer" }}
             >
               {dadosMarcas.map((entry) => (
@@ -533,46 +613,52 @@ function TabRecebimento({ mes }) {
   useEffect(() => {
     async function load() {
       setLoading(true);
-      const mesAnt = mesAnterior(mes);
 
-      const [{ data: rows }, { data: rowsAnt }] = await Promise.all([
+      const lista = Array.isArray(mes) ? mes : [mes];
+      const mesAnt = lista.length === 1 ? mesAnterior(lista[0]) : null;
+
+      const promises = [
         filtraMes(
           supabase.from("assurant_triagem")
             .select("tipo_de_rede, condicao, modelo, status_atual, data_recebimento"),
-          mes
+          lista
         ),
-        filtraMes(
-          supabase.from("assurant_triagem").select("tipo_de_rede"),
-          mesAnt
-        ),
-      ]);
+      ];
+
+      if (mesAnt) {
+        promises.push(
+          filtraMes(
+            supabase.from("assurant_triagem").select("tipo_de_rede"),
+            mesAnt
+          )
+        );
+      }
+
+      const results = await Promise.all(promises);
+      const rows    = results[0].data;
+      const rowsAnt = mesAnt ? (results[1].data || []) : [];
 
       if (!rows) { setLoading(false); return; }
 
       const canais    = {};
       const condicoes = {};
       const statusMap = {};
-      let totalRecebidos = 0;
-      let comData        = 0;
-      let semData        = 0;
+      let totalRecebidos = 0, comData = 0, semData = 0;
 
       rows.forEach(r => {
         totalRecebidos++;
         const canal = normalizaCanal(r.tipo_de_rede);
         canais[canal] = (canais[canal] || 0) + 1;
-
         const cond = normalizaCondicao(r.condicao);
         condicoes[cond] = (condicoes[cond] || 0) + 1;
-
         const st = r.status_atual || "Não informado";
         statusMap[st] = (statusMap[st] || 0) + 1;
-
         if (r.data_recebimento) comData++; else semData++;
       });
 
       const canaisAnt = {};
       let totalAnt = 0;
-      (rowsAnt || []).forEach(r => {
+      rowsAnt.forEach(r => {
         totalAnt++;
         const canal = normalizaCanal(r.tipo_de_rede);
         canaisAnt[canal] = (canaisAnt[canal] || 0) + 1;
@@ -584,9 +670,9 @@ function TabRecebimento({ mes }) {
         .map(([name, value]) => ({ name, value }));
 
       setData({
-        canais, canaisAnt, totalAnt,
+        canais, canaisAnt, totalAnt, mesAnt,
         pizzaCondicao, topStatus, rows,
-        totalRecebidos, comData, semData, mesAnt,
+        totalRecebidos, comData, semData,
       });
       setLoading(false);
     }
@@ -594,12 +680,12 @@ function TabRecebimento({ mes }) {
   }, [mes]);
 
   if (loading) return <Loader />;
-  if (!data)   return <p className="text-slate-400 text-sm">Sem dados para este mês.</p>;
+  if (!data)   return <p className="text-slate-400 text-sm">Sem dados para este período.</p>;
 
   const {
-    canais, canaisAnt, totalAnt,
+    canais, canaisAnt, totalAnt, mesAnt,
     pizzaCondicao, topStatus, rows,
-    totalRecebidos, comData, semData, mesAnt,
+    totalRecebidos, comData, semData,
   } = data;
 
   const canaisArr = Object.entries(canais).sort((a, b) => b[1] - a[1]);
@@ -609,8 +695,15 @@ function TabRecebimento({ mes }) {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiMini label="Total Recebido"  value={fmtN(totalRecebidos)}
           color="bg-purple-50 ring-purple-200 text-purple-700" />
-        <KpiMini label="Mês Anterior"    value={fmtN(totalAnt)} sub={mesAnt}
-          color="bg-slate-50 ring-slate-200 text-slate-600" />
+        {mesAnt ? (
+          <KpiMini label="Mês Anterior" value={fmtN(totalAnt)} sub={mesAnt}
+            color="bg-slate-50 ring-slate-200 text-slate-600" />
+        ) : (
+          <KpiMini label="Meses Selecionados"
+            value={Array.isArray(mes) ? mes.length : 1}
+            sub="período acumulado"
+            color="bg-slate-50 ring-slate-200 text-slate-600" />
+        )}
         <KpiMini label="Com Data Receb." value={fmtN(comData)}
           sub={fmtPct(comData, totalRecebidos)}
           color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
@@ -627,7 +720,9 @@ function TabRecebimento({ mes }) {
               const qtdAnt   = canaisAnt[canal] || 0;
               const delta    = qtd - qtdAnt;
               const deltaPos = delta >= 0;
-              const deltaPct = qtdAnt > 0 ? ((delta / qtdAnt) * 100).toFixed(1) : null;
+              const deltaPct = mesAnt && qtdAnt > 0
+                ? ((delta / qtdAnt) * 100).toFixed(1)
+                : null;
               const pctTotal = totalRecebidos > 0
                 ? ((qtd / totalRecebidos) * 100).toFixed(1) : "0";
               const pctAnt   = totalAnt > 0 ? (qtdAnt / totalAnt) * 100 : 0;
@@ -642,15 +737,19 @@ function TabRecebimento({ mes }) {
                       <span className="font-semibold text-slate-700">{canal}</span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded-lg ${
-                        deltaPos ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-500"
-                      }`}>
-                        {deltaPos ? "▲" : "▼"} {fmtN(Math.abs(delta))}
-                        {deltaPct && ` · ${Math.abs(deltaPct)}%`}
-                      </span>
+                      {mesAnt && (
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-lg ${
+                          deltaPos ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-500"
+                        }`}>
+                          {deltaPos ? "▲" : "▼"} {fmtN(Math.abs(delta))}
+                          {deltaPct && ` · ${Math.abs(deltaPct)}%`}
+                        </span>
+                      )}
                       <div className="text-right">
                         <div className="font-bold text-slate-800">{fmtN(qtd)}</div>
-                        <div className="text-xs text-slate-400">ant: {fmtN(qtdAnt)}</div>
+                        {mesAnt && (
+                          <div className="text-xs text-slate-400">ant: {fmtN(qtdAnt)}</div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -672,13 +771,17 @@ function TabRecebimento({ mes }) {
                     )}
                   </div>
 
-                  <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full bg-slate-300 transition-all duration-700"
-                      style={{ width: `${pctAnt}%` }} />
-                  </div>
-                  <div className="text-xs text-slate-400 text-right">
-                    ▬ cinza = mês anterior ({fmtN(qtdAnt)})
-                  </div>
+                  {mesAnt && (
+                    <>
+                      <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full bg-slate-300 transition-all duration-700"
+                          style={{ width: `${pctAnt}%` }} />
+                      </div>
+                      <div className="text-xs text-slate-400 text-right">
+                        ▬ cinza = mês anterior ({fmtN(qtdAnt)})
+                      </div>
+                    </>
+                  )}
                 </div>
               );
             })}
@@ -723,10 +826,7 @@ function TabTriagemFuncional({ mes }) {
       );
       if (!rows) { setLoading(false); return; }
 
-      const funcionais = {};
-      const grades     = {};
-      const resultados = {};
-      const baterias   = {};
+      const funcionais = {}, grades = {}, resultados = {}, baterias = {};
       let total = 0, semTriagem = 0, comTriagem = 0;
 
       rows.forEach(r => {
@@ -842,14 +942,10 @@ function TabTriagemEstetica({ mes }) {
       rows.forEach(r => {
         total++;
         if (r.data_cosmetico) comEstetica++; else semEstetica++;
-        const tela = r.tela || "Não informado";
-        telas[tela] = (telas[tela] || 0) + 1;
-        const lat = r.laterais || "Não informado";
-        lateraisM[lat] = (lateraisM[lat] || 0) + 1;
-        const tras = r.traseira || "Não informado";
-        traseirasM[tras] = (traseirasM[tras] || 0) + 1;
-        const grade = r.grade || "Não informado";
-        gradesM[grade] = (gradesM[grade] || 0) + 1;
+        telas[r.tela || "Não informado"] = (telas[r.tela || "Não informado"] || 0) + 1;
+        lateraisM[r.laterais || "Não informado"] = (lateraisM[r.laterais || "Não informado"] || 0) + 1;
+        traseirasM[r.traseira || "Não informado"] = (traseirasM[r.traseira || "Não informado"] || 0) + 1;
+        gradesM[r.grade || "Não informado"] = (gradesM[r.grade || "Não informado"] || 0) + 1;
         if (r.defeitos_adicionais?.trim()) {
           const def = r.defeitos_adicionais.trim();
           defeitosM[def] = (defeitosM[def] || 0) + 1;
@@ -1064,7 +1160,7 @@ function TabLaudos({ mes }) {
 export default function AssurantDashboardPage() {
   const [aba, setAba]       = useState("recebimento");
   const [meses, setMeses]   = useState([]);
-  const [mesSel, setMesSel] = useState("");
+  const [mesSel, setMesSel] = useState([]);
   const [totais, setTotais] = useState(null);
 
   useEffect(() => {
@@ -1080,14 +1176,14 @@ export default function AssurantDashboardPage() {
           data.map(r => r.data_recebimento?.slice(0, 7))
         )].filter(Boolean);
         setMeses(unique);
-        if (unique.length > 0) setMesSel(unique[0]);
+        if (unique.length > 0) setMesSel([unique[0]]);
       }
     }
     loadMeses();
   }, []);
 
   useEffect(() => {
-    if (!mesSel) return;
+    if (!mesSel.length) return;
     async function loadTotais() {
       const base = () => supabase
         .from("assurant_triagem")
@@ -1123,7 +1219,9 @@ export default function AssurantDashboardPage() {
           <span className="text-2xl">📦</span>
           <div>
             <h2 className="text-lg font-black text-slate-800">Operação Assurant</h2>
-            <p className="text-xs text-slate-500">Warehouse · filtrado por data real de recebimento</p>
+            <p className="text-xs text-slate-500">
+              Warehouse · filtrado por data real de recebimento
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
@@ -1146,7 +1244,7 @@ export default function AssurantDashboardPage() {
         ))}
       </div>
 
-      {mesSel && (
+      {mesSel.length > 0 && (
         <>
           {aba === "recebimento" && <TabRecebimento      mes={mesSel} />}
           {aba === "funcional"   && <TabTriagemFuncional  mes={mesSel} />}
