@@ -57,16 +57,27 @@ function normalizaCondicao(val) {
 function normalizaFuncional(val) {
   if (!val) return "Sem triagem";
   const v = val.trim().toUpperCase();
-  if (["BOM", "BOA", "BOM "].includes(v))                  return "Bom";
-  if (["EXCELENTE", "LIKE NEW"].includes(v))                return "Excelente/Like New";
-  if (["TRINCADO", "TELA TRINCADA"].includes(v))            return "Trincado";
-  if (["MUITO BOM"].includes(v))                            return "Muito Bom";
-  if (["MEDIA", "REGULAR"].includes(v))                     return "Regular";
-  if (v.includes("NÃO LIGA") || v.includes("BLOQUEADO"))   return "Não liga/Bloqueado";
-  if (v.includes("DEVOLUÇÃO PROCEDENTE"))                   return "Dev. Procedente";
-  if (v.includes("DEVOLUÇÃO IMPROCEDENTE"))                 return "Dev. Improcedente";
-  if (["RECUSADO","GENERICO","ONLINE","#N/D"].includes(v))  return "Outros";
+  if (["BOM", "BOA", "BOM "].includes(v))                 return "Bom";
+  if (["EXCELENTE", "LIKE NEW"].includes(v))               return "Excelente/Like New";
+  if (["TRINCADO", "TELA TRINCADA"].includes(v))           return "Trincado";
+  if (["MUITO BOM"].includes(v))                           return "Muito Bom";
+  if (["MEDIA", "REGULAR"].includes(v))                    return "Regular";
+  if (v.includes("NÃO LIGA") || v.includes("BLOQUEADO"))  return "Não liga/Bloqueado";
+  if (v.includes("DEVOLUÇÃO PROCEDENTE"))                  return "Dev. Procedente";
+  if (v.includes("DEVOLUÇÃO IMPROCEDENTE"))                return "Dev. Improcedente";
+  if (["RECUSADO","GENERICO","ONLINE","#N/D"].includes(v)) return "Outros";
   return val.trim();
+}
+
+function getMarca(modelo) {
+  if (!modelo) return "OUTROS";
+  const m = modelo.trim().toUpperCase();
+  if (m.startsWith("SAMSUNG"))  return "SAMSUNG";
+  if (m.startsWith("APPLE"))    return "APPLE";
+  if (m.startsWith("MOTOROLA")) return "MOTOROLA";
+  if (m.startsWith("LG"))       return "LG";
+  if (m.startsWith("XIAOMI"))   return "XIAOMI";
+  return "OUTROS";
 }
 
 // ── Paletas ───────────────────────────────────────────────
@@ -87,6 +98,20 @@ const LP_CANAL = {
   "Devolução":   "#5B1E74",
   "N/A":         "#94a3b8",
 };
+
+const MARCA_COLORS = {
+  "SAMSUNG":  "#7F2D92",
+  "APPLE":    "#F97316",
+  "MOTOROLA": "#F59E0B",
+  "LG":       "#5B1E74",
+  "XIAOMI":   "#C084FC",
+  "OUTROS":   "#94a3b8",
+};
+
+const MODEL_SHADES = [
+  "#7F2D92","#9B3AAD","#B347C8","#C55FD4",
+  "#F97316","#F59E0B","#5B1E74","#C084FC",
+];
 
 const GRADE_COLORS = {
   "EXCELENTE":     "bg-emerald-500",
@@ -193,7 +218,7 @@ function MesSelector({ meses, mesSel, onChange }) {
   );
 }
 
-// ── Pizza rosca interativa ────────────────────────────────
+// ── Pizza rosca condição ──────────────────────────────────
 function PizzaCondicao({ dados, total }) {
   const [ativo, setAtivo] = useState(null);
   const RADIAN = Math.PI / 180;
@@ -204,12 +229,10 @@ function PizzaCondicao({ dados, total }) {
     const x = cx + radius * Math.cos(-midAngle * RADIAN);
     const y = cy + radius * Math.sin(-midAngle * RADIAN);
     return (
-      <text
-        x={x} y={y}
+      <text x={x} y={y}
         textAnchor={x > cx ? "start" : "end"}
         dominantBaseline="central"
-        style={{ fontSize: 11, fontWeight: 600, fill: "#475569" }}
-      >
+        style={{ fontSize: 11, fontWeight: 600, fill: "#475569" }}>
         {`${name} · ${(percent * 100).toFixed(1)}%`}
       </text>
     );
@@ -233,56 +256,49 @@ function PizzaCondicao({ dados, total }) {
 
   return (
     <div>
-      <div className="relative">
-        <ResponsiveContainer width="100%" height={280}>
-          <PieChart>
-            <Pie
-              data={dados}
-              cx="50%"
-              cy="50%"
-              innerRadius={72}
-              outerRadius={105}
-              paddingAngle={2}
-              dataKey="value"
-              labelLine={false}
-              label={renderLabel}
-              onMouseEnter={(_, idx) => setAtivo(idx)}
-              onMouseLeave={() => setAtivo(null)}
-            >
-              {dados.map((entry, idx) => (
-                <Cell
-                  key={entry.name}
-                  fill={LP_COLORS[entry.name] || "#94a3b8"}
-                  opacity={ativo === null || ativo === idx ? 1 : 0.4}
-                  stroke={ativo === idx ? "#fff" : "transparent"}
-                  strokeWidth={ativo === idx ? 3 : 0}
-                  style={{ cursor: "pointer", transition: "opacity 0.2s" }}
-                />
-              ))}
-            </Pie>
-            <Tooltip content={<CustomTooltip />} />
-            {/* Total no centro */}
-            <text x="50%" y="46%" textAnchor="middle" dominantBaseline="central"
-              style={{ fontSize: 22, fontWeight: 900, fill: "#4C1D95" }}>
-              {fmtN(total)}
-            </text>
-            <text x="50%" y="56%" textAnchor="middle" dominantBaseline="central"
-              style={{ fontSize: 11, fill: "#94a3b8" }}>
-              aparelhos
-            </text>
-          </PieChart>
-        </ResponsiveContainer>
-      </div>
+      <ResponsiveContainer width="100%" height={280}>
+        <PieChart>
+          <Pie
+            data={dados}
+            cx="50%"
+            cy="50%"
+            innerRadius={72}
+            outerRadius={105}
+            paddingAngle={2}
+            dataKey="value"
+            labelLine={false}
+            label={renderLabel}
+            onMouseEnter={(_, idx) => setAtivo(idx)}
+            onMouseLeave={() => setAtivo(null)}
+          >
+            {dados.map((entry, idx) => (
+              <Cell
+                key={entry.name}
+                fill={LP_COLORS[entry.name] || "#94a3b8"}
+                opacity={ativo === null || ativo === idx ? 1 : 0.4}
+                stroke={ativo === idx ? "#fff" : "transparent"}
+                strokeWidth={ativo === idx ? 3 : 0}
+                style={{ cursor: "pointer", transition: "opacity 0.2s" }}
+              />
+            ))}
+          </Pie>
+          <Tooltip content={<CustomTooltip />} />
+          <text x="50%" y="46%" textAnchor="middle" dominantBaseline="central"
+            style={{ fontSize: 22, fontWeight: 900, fill: "#4C1D95" }}>
+            {fmtN(total)}
+          </text>
+          <text x="50%" y="56%" textAnchor="middle" dominantBaseline="central"
+            style={{ fontSize: 11, fill: "#94a3b8" }}>
+            aparelhos
+          </text>
+        </PieChart>
+      </ResponsiveContainer>
 
-      {/* Legenda interativa com todos os status */}
       <div className="mt-2 space-y-1.5 border-t border-slate-100 pt-3">
         {dados.map(({ name, value }, idx) => (
-          <div
-            key={name}
+          <div key={name}
             className={`flex items-center justify-between text-xs rounded-xl px-3 py-2 transition-all cursor-default ${
-              ativo === idx
-                ? "ring-1 ring-purple-200"
-                : "hover:bg-slate-50"
+              ativo === idx ? "ring-1 ring-purple-200" : "hover:bg-slate-50"
             }`}
             style={ativo === idx ? { backgroundColor: "#FAF5FF" } : {}}
             onMouseEnter={() => setAtivo(idx)}
@@ -295,13 +311,11 @@ function PizzaCondicao({ dados, total }) {
             </div>
             <div className="flex items-center gap-3">
               <div className="w-20 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                <div
-                  className="h-full rounded-full transition-all duration-500"
+                <div className="h-full rounded-full transition-all duration-500"
                   style={{
                     width: `${total > 0 ? (value / total) * 100 : 0}%`,
                     backgroundColor: LP_COLORS[name] || "#94a3b8",
-                  }}
-                />
+                  }} />
               </div>
               <span className="text-slate-400 w-10 text-right font-medium">
                 {fmtPct(value, total)}
@@ -313,6 +327,195 @@ function PizzaCondicao({ dados, total }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ── Rosca dupla: Marcas + Modelos ────────────────────────
+function RoscaMarcasModelos({ rows, total }) {
+  const [marcaSel, setMarcaSel] = useState(null);
+
+  const marcas = {};
+  const modelosPorMarca = {};
+
+  rows.forEach(r => {
+    const marca = getMarca(r.modelo);
+    marcas[marca] = (marcas[marca] || 0) + 1;
+    if (!modelosPorMarca[marca]) modelosPorMarca[marca] = {};
+    const mod = r.modelo || "Não informado";
+    modelosPorMarca[marca][mod] = (modelosPorMarca[marca][mod] || 0) + 1;
+  });
+
+  const dadosMarcas = Object.entries(marcas)
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, value]) => ({ name, value }));
+
+  const marcaAtiva = marcaSel || dadosMarcas[0]?.name;
+  const dadosModelos = marcaAtiva
+    ? Object.entries(modelosPorMarca[marcaAtiva] || {})
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 8)
+        .map(([name, value]) => ({ name, value }))
+    : [];
+
+  const totalMarca = dadosModelos.reduce((s, d) => s + d.value, 0);
+
+  function TooltipMarca({ active, payload }) {
+    if (!active || !payload?.length) return null;
+    const { name, value } = payload[0];
+    return (
+      <div className="bg-white rounded-2xl shadow-xl ring-1 ring-purple-100 px-4 py-3 text-sm">
+        <div className="flex items-center gap-2 mb-1">
+          <div className="h-3 w-3 rounded-full"
+            style={{ backgroundColor: MARCA_COLORS[name] || "#94a3b8" }} />
+          <span className="font-bold text-slate-700">{name}</span>
+        </div>
+        <div className="font-black text-lg" style={{ color: "#7F2D92" }}>{fmtN(value)}</div>
+        <div className="text-slate-400 text-xs">{fmtPct(value, total)} do total</div>
+      </div>
+    );
+  }
+
+  function TooltipModelo({ active, payload }) {
+    if (!active || !payload?.length) return null;
+    const { name, value } = payload[0];
+    return (
+      <div className="bg-white rounded-2xl shadow-xl ring-1 ring-purple-100 px-4 py-3 text-sm max-w-[220px]">
+        <span className="font-bold text-slate-700 text-xs leading-tight block">{name}</span>
+        <div className="font-black text-lg mt-1" style={{ color: "#F97316" }}>{fmtN(value)}</div>
+        <div className="text-slate-400 text-xs">{fmtPct(value, totalMarca)} de {marcaAtiva}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+      {/* Rosca marcas */}
+      <Card>
+        <SectionTitle icon={Package}>Volume por Marca</SectionTitle>
+        <ResponsiveContainer width="100%" height={220}>
+          <PieChart>
+            <Pie
+              data={dadosMarcas}
+              cx="50%" cy="50%"
+              innerRadius={60} outerRadius={90}
+              paddingAngle={2} dataKey="value"
+              onClick={(entry) => setMarcaSel(
+                marcaSel === entry.name ? null : entry.name
+              )}
+              style={{ cursor: "pointer" }}
+            >
+              {dadosMarcas.map((entry) => (
+                <Cell
+                  key={entry.name}
+                  fill={MARCA_COLORS[entry.name] || "#94a3b8"}
+                  opacity={marcaSel === null || marcaSel === entry.name ? 1 : 0.35}
+                  stroke={marcaSel === entry.name ? "#fff" : "transparent"}
+                  strokeWidth={marcaSel === entry.name ? 3 : 0}
+                />
+              ))}
+            </Pie>
+            <Tooltip content={<TooltipMarca />} />
+            <text x="50%" y="46%" textAnchor="middle" dominantBaseline="central"
+              style={{ fontSize: 18, fontWeight: 900, fill: "#4C1D95" }}>
+              {fmtN(total)}
+            </text>
+            <text x="50%" y="56%" textAnchor="middle" dominantBaseline="central"
+              style={{ fontSize: 10, fill: "#94a3b8" }}>
+              total
+            </text>
+          </PieChart>
+        </ResponsiveContainer>
+
+        <div className="space-y-1.5 border-t border-slate-100 pt-3">
+          {dadosMarcas.map(({ name, value }) => (
+            <button key={name}
+              onClick={() => setMarcaSel(marcaSel === name ? null : name)}
+              className={`w-full flex items-center justify-between text-xs rounded-xl px-3 py-2 transition-all ${
+                marcaSel === name ? "ring-2 ring-purple-400" : "hover:bg-slate-50"
+              }`}
+              style={marcaSel === name ? { backgroundColor: "#FAF5FF" } : {}}
+            >
+              <div className="flex items-center gap-2">
+                <div className="h-3 w-3 rounded-full shrink-0"
+                  style={{ backgroundColor: MARCA_COLORS[name] || "#94a3b8" }} />
+                <span className="font-semibold text-slate-700">{name}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-slate-400">{fmtPct(value, total)}</span>
+                <span className="font-bold text-slate-800 w-12 text-right">{fmtN(value)}</span>
+              </div>
+            </button>
+          ))}
+        </div>
+        <p className="text-xs text-slate-400 text-center mt-2">
+          Clique na marca para filtrar os modelos →
+        </p>
+      </Card>
+
+      {/* Rosca modelos */}
+      <Card>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-black text-slate-800 flex items-center gap-2">
+            <Package className="h-4 w-4 text-[#F97316]" />
+            Modelos
+          </h3>
+          <span className="text-xs font-bold px-3 py-1 rounded-xl"
+            style={{ backgroundColor: "#FAF5FF", color: "#7F2D92", outline: "1px solid #E9D5FF" }}>
+            {marcaAtiva}
+          </span>
+        </div>
+
+        {dadosModelos.length === 0 ? (
+          <div className="flex items-center justify-center h-40 text-slate-400 text-sm">
+            Sem dados para esta marca
+          </div>
+        ) : (
+          <>
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie
+                  data={dadosModelos}
+                  cx="50%" cy="50%"
+                  innerRadius={60} outerRadius={90}
+                  paddingAngle={2} dataKey="value"
+                >
+                  {dadosModelos.map((_, idx) => (
+                    <Cell key={idx} fill={MODEL_SHADES[idx % MODEL_SHADES.length]} />
+                  ))}
+                </Pie>
+                <Tooltip content={<TooltipModelo />} />
+                <text x="50%" y="44%" textAnchor="middle" dominantBaseline="central"
+                  style={{ fontSize: 18, fontWeight: 900, fill: "#4C1D95" }}>
+                  {fmtN(totalMarca)}
+                </text>
+                <text x="50%" y="54%" textAnchor="middle" dominantBaseline="central"
+                  style={{ fontSize: 9, fill: "#94a3b8" }}>
+                  {marcaAtiva}
+                </text>
+              </PieChart>
+            </ResponsiveContainer>
+
+            <div className="space-y-1.5 border-t border-slate-100 pt-3 max-h-48 overflow-y-auto">
+              {dadosModelos.map(({ name, value }, idx) => (
+                <div key={name}
+                  className="flex items-center justify-between text-xs px-2 py-1.5 rounded-lg hover:bg-slate-50">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="h-2.5 w-2.5 rounded-full shrink-0"
+                      style={{ backgroundColor: MODEL_SHADES[idx % MODEL_SHADES.length] }} />
+                    <span className="font-medium text-slate-600 truncate">{name}</span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 ml-2">
+                    <span className="text-slate-400">{fmtPct(value, totalMarca)}</span>
+                    <span className="font-bold text-slate-800 w-10 text-right">{fmtN(value)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </Card>
     </div>
   );
 }
@@ -345,7 +548,6 @@ function TabRecebimento({ mes }) {
 
       const canais    = {};
       const condicoes = {};
-      const modelos   = {};
       const statusMap = {};
       let totalRecebidos = 0;
       let comData        = 0;
@@ -358,9 +560,6 @@ function TabRecebimento({ mes }) {
 
         const cond = normalizaCondicao(r.condicao);
         condicoes[cond] = (condicoes[cond] || 0) + 1;
-
-        const mod = r.modelo || "Não informado";
-        modelos[mod] = (modelos[mod] || 0) + 1;
 
         const st = r.status_atual || "Não informado";
         statusMap[st] = (statusMap[st] || 0) + 1;
@@ -376,7 +575,6 @@ function TabRecebimento({ mes }) {
         canaisAnt[canal] = (canaisAnt[canal] || 0) + 1;
       });
 
-      const topModelos    = Object.entries(modelos).sort((a, b) => b[1] - a[1]).slice(0, 8);
       const topStatus     = Object.entries(statusMap).sort((a, b) => b[1] - a[1]).slice(0, 8);
       const pizzaCondicao = Object.entries(condicoes)
         .sort((a, b) => b[1] - a[1])
@@ -384,7 +582,7 @@ function TabRecebimento({ mes }) {
 
       setData({
         canais, canaisAnt, totalAnt,
-        pizzaCondicao, topModelos, topStatus,
+        pizzaCondicao, topStatus, rows,
         totalRecebidos, comData, semData, mesAnt,
       });
       setLoading(false);
@@ -397,7 +595,7 @@ function TabRecebimento({ mes }) {
 
   const {
     canais, canaisAnt, totalAnt,
-    pizzaCondicao, topModelos, topStatus,
+    pizzaCondicao, topStatus, rows,
     totalRecebidos, comData, semData, mesAnt,
   } = data;
 
@@ -405,13 +603,10 @@ function TabRecebimento({ mes }) {
 
   return (
     <div className="space-y-4">
-
-      {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiMini label="Total Recebido"  value={fmtN(totalRecebidos)}
           color="bg-purple-50 ring-purple-200 text-purple-700" />
-        <KpiMini label="Mês Anterior"    value={fmtN(totalAnt)}
-          sub={mesAnt}
+        <KpiMini label="Mês Anterior"    value={fmtN(totalAnt)} sub={mesAnt}
           color="bg-slate-50 ring-slate-200 text-slate-600" />
         <KpiMini label="Com Data Receb." value={fmtN(comData)}
           sub={fmtPct(comData, totalRecebidos)}
@@ -422,8 +617,6 @@ function TabRecebimento({ mes }) {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-        {/* Volume por canal com comparativo */}
         <Card>
           <SectionTitle icon={Package}>Volume por Canal</SectionTitle>
           <div className="space-y-5">
@@ -431,20 +624,14 @@ function TabRecebimento({ mes }) {
               const qtdAnt   = canaisAnt[canal] || 0;
               const delta    = qtd - qtdAnt;
               const deltaPos = delta >= 0;
-              const deltaPct = qtdAnt > 0
-                ? ((delta / qtdAnt) * 100).toFixed(1)
-                : null;
+              const deltaPct = qtdAnt > 0 ? ((delta / qtdAnt) * 100).toFixed(1) : null;
               const pctTotal = totalRecebidos > 0
-                ? ((qtd / totalRecebidos) * 100).toFixed(1)
-                : "0";
-              const pctAnt = totalAnt > 0
-                ? (qtdAnt / totalAnt) * 100
-                : 0;
+                ? ((qtd / totalRecebidos) * 100).toFixed(1) : "0";
+              const pctAnt   = totalAnt > 0 ? (qtdAnt / totalAnt) * 100 : 0;
               const barWidth = Math.max(Number(pctTotal), 4);
 
               return (
                 <div key={canal} className="space-y-2">
-                  {/* Cabeçalho */}
                   <div className="flex items-center justify-between text-sm">
                     <div className="flex items-center gap-2">
                       <div className="h-3 w-3 rounded-full shrink-0"
@@ -453,9 +640,7 @@ function TabRecebimento({ mes }) {
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <span className={`text-xs font-bold px-2 py-0.5 rounded-lg ${
-                        deltaPos
-                          ? "bg-emerald-50 text-emerald-600"
-                          : "bg-red-50 text-red-500"
+                        deltaPos ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-500"
                       }`}>
                         {deltaPos ? "▲" : "▼"} {fmtN(Math.abs(delta))}
                         {deltaPct && ` · ${Math.abs(deltaPct)}%`}
@@ -467,35 +652,26 @@ function TabRecebimento({ mes }) {
                     </div>
                   </div>
 
-                  {/* Barra mês atual com % embutido */}
                   <div className="relative h-6 bg-slate-100 rounded-xl overflow-hidden">
                     <div
                       className="h-full rounded-xl flex items-center justify-end pr-2 transition-all duration-700"
-                      style={{
-                        width: `${barWidth}%`,
-                        backgroundColor: LP_CANAL[canal] || "#94a3b8",
-                      }}
+                      style={{ width: `${barWidth}%`, backgroundColor: LP_CANAL[canal] || "#94a3b8" }}
                     >
                       {Number(pctTotal) >= 10 && (
                         <span className="text-white text-xs font-bold">{pctTotal}%</span>
                       )}
                     </div>
                     {Number(pctTotal) < 10 && (
-                      <span
-                        className="absolute top-1/2 -translate-y-1/2 text-xs font-bold text-slate-600"
-                        style={{ left: `calc(${barWidth}% + 6px)` }}
-                      >
+                      <span className="absolute top-1/2 -translate-y-1/2 text-xs font-bold text-slate-600"
+                        style={{ left: `calc(${barWidth}% + 6px)` }}>
                         {pctTotal}%
                       </span>
                     )}
                   </div>
 
-                  {/* Barra mês anterior */}
                   <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-slate-300 transition-all duration-700"
-                      style={{ width: `${pctAnt}%` }}
-                    />
+                    <div className="h-full rounded-full bg-slate-300 transition-all duration-700"
+                      style={{ width: `${pctAnt}%` }} />
                   </div>
                   <div className="text-xs text-slate-400 text-right">
                     ▬ cinza = mês anterior ({fmtN(qtdAnt)})
@@ -506,34 +682,23 @@ function TabRecebimento({ mes }) {
           </div>
         </Card>
 
-        {/* Pizza condição */}
         <Card>
           <SectionTitle icon={Layers}>Por Condição</SectionTitle>
           <PizzaCondicao dados={pizzaCondicao} total={totalRecebidos} />
         </Card>
-
-        {/* Top modelos */}
-        <Card>
-          <SectionTitle icon={Package}>Top Modelos Recebidos</SectionTitle>
-          <div className="space-y-3">
-            {topModelos.map(([mod, qtd]) => (
-              <StatRow key={mod} label={mod} value={qtd}
-                total={totalRecebidos} color="bg-emerald-400" />
-            ))}
-          </div>
-        </Card>
-
-        {/* Status atual */}
-        <Card>
-          <SectionTitle icon={Clock}>Status Atual</SectionTitle>
-          <div className="space-y-3">
-            {topStatus.map(([st, qtd]) => (
-              <StatRow key={st} label={st} value={qtd}
-                total={totalRecebidos} color="bg-purple-400" />
-            ))}
-          </div>
-        </Card>
       </div>
+
+      <RoscaMarcasModelos rows={rows} total={totalRecebidos} />
+
+      <Card>
+        <SectionTitle icon={Clock}>Status Atual</SectionTitle>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          {topStatus.map(([st, qtd]) => (
+            <StatRow key={st} label={st} value={qtd}
+              total={totalRecebidos} color="bg-purple-400" />
+          ))}
+        </div>
+      </Card>
     </div>
   );
 }
@@ -553,32 +718,24 @@ function TabTriagemFuncional({ mes }) {
           .select("triagem_funcional, grade, resultado_triagem_funcional, data_funcional, status_bateria"),
         mes
       );
-
       if (!rows) { setLoading(false); return; }
 
       const funcionais = {};
       const grades     = {};
       const resultados = {};
       const baterias   = {};
-      let total      = 0;
-      let semTriagem = 0;
-      let comTriagem = 0;
+      let total = 0, semTriagem = 0, comTriagem = 0;
 
       rows.forEach(r => {
         total++;
         const func = normalizaFuncional(r.triagem_funcional);
         funcionais[func] = (funcionais[func] || 0) + 1;
         if (!r.triagem_funcional) semTriagem++; else comTriagem++;
-
         const grade = r.grade || "Não informado";
         grades[grade] = (grades[grade] || 0) + 1;
-
         const res = r.resultado_triagem_funcional || "Não informado";
         resultados[res] = (resultados[res] || 0) + 1;
-
-        if (r.status_bateria) {
-          baterias[r.status_bateria] = (baterias[r.status_bateria] || 0) + 1;
-        }
+        if (r.status_bateria) baterias[r.status_bateria] = (baterias[r.status_bateria] || 0) + 1;
       });
 
       setData({ funcionais, grades, resultados, baterias, total, semTriagem, comTriagem });
@@ -601,11 +758,9 @@ function TabTriagemFuncional({ mes }) {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiMini label="Total"       value={fmtN(total)}
           color="bg-purple-50 ring-purple-200 text-purple-700" />
-        <KpiMini label="Com Triagem" value={fmtN(comTriagem)}
-          sub={fmtPct(comTriagem, total)}
+        <KpiMini label="Com Triagem" value={fmtN(comTriagem)} sub={fmtPct(comTriagem, total)}
           color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
-        <KpiMini label="Sem Triagem" value={fmtN(semTriagem)}
-          sub={fmtPct(semTriagem, total)}
+        <KpiMini label="Sem Triagem" value={fmtN(semTriagem)} sub={fmtPct(semTriagem, total)}
           color="bg-orange-50 ring-orange-200 text-orange-700" />
         <KpiMini label="Resultados"  value={Object.keys(resultados).length}
           color="bg-blue-50 ring-blue-200 text-blue-700" />
@@ -641,8 +796,7 @@ function TabTriagemFuncional({ mes }) {
           <SectionTitle icon={CheckCircle}>Resultado da Triagem</SectionTitle>
           <div className="space-y-3">
             {resultadosArr.map(([res, qtd]) => (
-              <StatRow key={res} label={res} value={qtd} total={total}
-                color="bg-blue-400" />
+              <StatRow key={res} label={res} value={qtd} total={total} color="bg-blue-400" />
             ))}
           </div>
         </Card>
@@ -652,8 +806,7 @@ function TabTriagemFuncional({ mes }) {
             <SectionTitle icon={Layers}>Status da Bateria</SectionTitle>
             <div className="space-y-3">
               {bateriasArr.map(([bat, qtd]) => (
-                <StatRow key={bat} label={bat} value={qtd} total={total}
-                  color="bg-purple-400" />
+                <StatRow key={bat} label={bat} value={qtd} total={total} color="bg-purple-400" />
               ))}
             </div>
           </Card>
@@ -678,34 +831,22 @@ function TabTriagemEstetica({ mes }) {
           .select("tela, laterais, traseira, defeitos_adicionais, grade, data_cosmetico"),
         mes
       );
-
       if (!rows) { setLoading(false); return; }
 
-      const telas      = {};
-      const lateraisM  = {};
-      const traseirasM = {};
-      const defeitosM  = {};
-      const gradesM    = {};
-      let total       = 0;
-      let comEstetica = 0;
-      let semEstetica = 0;
+      const telas = {}, lateraisM = {}, traseirasM = {}, defeitosM = {}, gradesM = {};
+      let total = 0, comEstetica = 0, semEstetica = 0;
 
       rows.forEach(r => {
         total++;
         if (r.data_cosmetico) comEstetica++; else semEstetica++;
-
         const tela = r.tela || "Não informado";
         telas[tela] = (telas[tela] || 0) + 1;
-
         const lat = r.laterais || "Não informado";
         lateraisM[lat] = (lateraisM[lat] || 0) + 1;
-
         const tras = r.traseira || "Não informado";
         traseirasM[tras] = (traseirasM[tras] || 0) + 1;
-
         const grade = r.grade || "Não informado";
         gradesM[grade] = (gradesM[grade] || 0) + 1;
-
         if (r.defeitos_adicionais?.trim()) {
           const def = r.defeitos_adicionais.trim();
           defeitosM[def] = (defeitosM[def] || 0) + 1;
@@ -738,11 +879,9 @@ function TabTriagemEstetica({ mes }) {
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
         <KpiMini label="Total"        value={fmtN(total)}
           color="bg-purple-50 ring-purple-200 text-purple-700" />
-        <KpiMini label="Com Estética" value={fmtN(comEstetica)}
-          sub={fmtPct(comEstetica, total)}
+        <KpiMini label="Com Estética" value={fmtN(comEstetica)} sub={fmtPct(comEstetica, total)}
           color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
-        <KpiMini label="Sem Estética" value={fmtN(semEstetica)}
-          sub={fmtPct(semEstetica, total)}
+        <KpiMini label="Sem Estética" value={fmtN(semEstetica)} sub={fmtPct(semEstetica, total)}
           color="bg-orange-50 ring-orange-200 text-orange-700" />
       </div>
 
@@ -814,18 +953,11 @@ function TabLaudos({ mes }) {
           .select("data_laudo, data_alocacao, data_oracle, reanalise, status_atual, grade, modelo"),
         mes
       );
-
       if (!rows) { setLoading(false); return; }
 
-      let total           = 0;
-      let comLaudo        = 0;
-      let semLaudo        = 0;
-      let comReanalise    = 0;
-      let comAlocacao     = 0;
-      let comOracle       = 0;
-      let aguardandoLaudo = 0;
-      const gradesLaudo  = {};
-      const modelosLaudo = {};
+      let total = 0, comLaudo = 0, semLaudo = 0, comReanalise = 0;
+      let comAlocacao = 0, comOracle = 0, aguardandoLaudo = 0;
+      const gradesLaudo = {}, modelosLaudo = {};
 
       rows.forEach(r => {
         total++;
@@ -834,7 +966,6 @@ function TabLaudos({ mes }) {
         if (r.data_alocacao) comAlocacao++;
         if (r.data_oracle) comOracle++;
         if (r.status_atual?.toLowerCase().includes("laudo")) aguardandoLaudo++;
-
         if (r.data_laudo) {
           const grade = r.grade || "Não informado";
           gradesLaudo[grade] = (gradesLaudo[grade] || 0) + 1;
@@ -862,34 +993,26 @@ function TabLaudos({ mes }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiMini label="Com Laudo"     value={fmtN(comLaudo)}
-          sub={fmtPct(comLaudo, total)}
+        <KpiMini label="Com Laudo"     value={fmtN(comLaudo)} sub={fmtPct(comLaudo, total)}
           color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
-        <KpiMini label="Sem Laudo"     value={fmtN(semLaudo)}
-          sub={fmtPct(semLaudo, total)}
+        <KpiMini label="Sem Laudo"     value={fmtN(semLaudo)} sub={fmtPct(semLaudo, total)}
           color="bg-orange-50 ring-orange-200 text-orange-700" />
-        <KpiMini label="Aguard. Laudo" value={fmtN(aguardandoLaudo)}
-          sub="em status atual"
+        <KpiMini label="Aguard. Laudo" value={fmtN(aguardandoLaudo)} sub="em status atual"
           color="bg-yellow-50 ring-yellow-200 text-yellow-700" />
-        <KpiMini label="Com Reanálise" value={fmtN(comReanalise)}
-          sub={fmtPct(comReanalise, total)}
+        <KpiMini label="Com Reanálise" value={fmtN(comReanalise)} sub={fmtPct(comReanalise, total)}
           color="bg-red-50 ring-red-200 text-red-700" />
       </div>
 
       <Card>
         <SectionTitle icon={FileText}>Pipeline Pós-Laudo</SectionTitle>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <KpiMini label="Com Laudo"    value={fmtN(comLaudo)}
-            sub={fmtPct(comLaudo, total)}
+          <KpiMini label="Com Laudo"    value={fmtN(comLaudo)} sub={fmtPct(comLaudo, total)}
             color="bg-purple-50 ring-purple-200 text-purple-700" />
-          <KpiMini label="Com Alocação" value={fmtN(comAlocacao)}
-            sub={fmtPct(comAlocacao, total)}
+          <KpiMini label="Com Alocação" value={fmtN(comAlocacao)} sub={fmtPct(comAlocacao, total)}
             color="bg-blue-50 ring-blue-200 text-blue-700" />
-          <KpiMini label="Com Oracle"   value={fmtN(comOracle)}
-            sub={fmtPct(comOracle, total)}
+          <KpiMini label="Com Oracle"   value={fmtN(comOracle)} sub={fmtPct(comOracle, total)}
             color="bg-teal-50 ring-teal-200 text-teal-700" />
-          <KpiMini label="Reanálise"    value={fmtN(comReanalise)}
-            sub={fmtPct(comReanalise, total)}
+          <KpiMini label="Reanálise"    value={fmtN(comReanalise)} sub={fmtPct(comReanalise, total)}
             color="bg-red-50 ring-red-200 text-red-700" />
         </div>
       </Card>
@@ -909,8 +1032,7 @@ function TabLaudos({ mes }) {
           <SectionTitle icon={Package}>Top Modelos com Laudo</SectionTitle>
           <div className="space-y-3">
             {topModelosLaudo.map(([mod, qtd]) => (
-              <StatRow key={mod} label={mod} value={qtd} total={comLaudo}
-                color="bg-purple-400" />
+              <StatRow key={mod} label={mod} value={qtd} total={comLaudo} color="bg-purple-400" />
             ))}
           </div>
         </Card>
@@ -993,15 +1115,12 @@ export default function AssurantDashboardPage() {
   return (
     <div className="space-y-5">
 
-      {/* Cabeçalho */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <span className="text-2xl">📦</span>
           <div>
             <h2 className="text-lg font-black text-slate-800">Operação Assurant</h2>
-            <p className="text-xs text-slate-500">
-              Warehouse · filtrado por data real de recebimento
-            </p>
+            <p className="text-xs text-slate-500">Warehouse · filtrado por data real de recebimento</p>
           </div>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
@@ -1017,21 +1136,13 @@ export default function AssurantDashboardPage() {
         </div>
       </div>
 
-      {/* Abas */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1">
         {ABAS.map(a => (
-          <TabBtn
-            key={a.key}
-            label={a.label}
-            icon={a.icon}
-            active={aba === a.key}
-            onClick={() => setAba(a.key)}
-            badge={a.badge}
-          />
+          <TabBtn key={a.key} label={a.label} icon={a.icon}
+            active={aba === a.key} onClick={() => setAba(a.key)} badge={a.badge} />
         ))}
       </div>
 
-      {/* Conteúdo */}
       {mesSel && (
         <>
           {aba === "recebimento" && <TabRecebimento      mes={mesSel} />}
@@ -1041,7 +1152,6 @@ export default function AssurantDashboardPage() {
         </>
       )}
 
-      {/* Alerta reparo */}
       <div className="bg-orange-50 ring-1 ring-orange-200 rounded-2xl p-4 flex items-start gap-3">
         <AlertTriangle className="h-5 w-5 text-orange-500 shrink-0 mt-0.5" />
         <div>
