@@ -351,14 +351,17 @@ function RoscaMarcasModelos({ rows, total }) {
     .map(([name, value]) => ({ name, value }));
 
   const marcaAtiva = marcaSel || dadosMarcas[0]?.name;
-  const dadosModelos = marcaAtiva
-    ? Object.entries(modelosPorMarca[marcaAtiva] || {})
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 8)
-        .map(([name, value]) => ({ name, value }))
-    : [];
+// DEPOIS
+const todosModelosMarca = marcaAtiva
+  ? Object.entries(modelosPorMarca[marcaAtiva] || {})
+      .sort((a, b) => b[1] - a[1])
+  : [];
 
-  const totalMarca = dadosModelos.reduce((s, d) => s + d.value, 0);
+const totalMarca = todosModelosMarca.reduce((s, [, v]) => s + v, 0); // total real da marca
+
+const dadosModelos = todosModelosMarca
+  .slice(0, 8)
+  .map(([name, value]) => ({ name, value })); // top 8 para exibição
 
   function TooltipMarca({ active, payload }) {
     if (!active || !payload?.length) return null;
