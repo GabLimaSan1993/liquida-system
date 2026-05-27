@@ -15,13 +15,6 @@ function fmtPct(v, total) {
   return ((v / total) * 100).toFixed(1).replace(".", ",") + "%";
 }
 
-function proximoMes(mes) {
-  const [ano, m] = mes.split("-").map(Number);
-  return m === 12
-    ? `${ano + 1}-01`
-    : `${ano}-${String(m + 1).padStart(2, "0")}`;
-}
-
 function mesAnterior(mes) {
   const [ano, m] = mes.split("-").map(Number);
   return m === 1
@@ -29,41 +22,8 @@ function mesAnterior(mes) {
     : `${ano}-${String(m - 1).padStart(2, "0")}`;
 }
 
-function filtraMes(query, meses) {
-  const lista = Array.isArray(meses) ? meses : [meses];
-  if (lista.length === 0) return query;
-  if (lista.length === 1) {
-    return query
-      .gte("data_recebimento", `${lista[0]}-01`)
-      .lt("data_recebimento", `${proximoMes(lista[0])}-01`);
-  }
-  const filtros = lista.map(m =>
-    `and(data_recebimento.gte.${m}-01,data_recebimento.lt.${proximoMes(m)}-01)`
-  ).join(",");
-  return query.or(filtros);
-}
-
-function normalizaCanal(val) {
-  if (!val) return "N/A";
-  const v = val.trim();
-  if (v === "Loja Vivo" || v === "Loja Samsung") return "YBV (Lojas)";
-  if (v === "DEV") return "Devolução";
-  return v;
-}
-
-function normalizaCondicao(val) {
-  if (!val) return "Não informado";
-  const v = val.trim().toUpperCase();
-  if (["BOM", "BOA", "BOM "].includes(v))       return "Bom";
-  if (["EXCELENTE", "LIKE NEW"].includes(v))     return "Excelente";
-  if (["TRINCADO", "TELA TRINCADA"].includes(v)) return "Trincado";
-  if (["MEDIA", "REGULAR"].includes(v))          return "Regular";
-  if (v === "ONLINE")                            return "Online";
-  return "Outros";
-}
-
 function normalizaFuncional(val) {
-  if (!val) return "Sem triagem";
+  if (!val || val === "Sem triagem") return "Sem triagem";
   const v = val.trim().toUpperCase();
   if (["BOM", "BOA", "BOM "].includes(v))                 return "Bom";
   if (["EXCELENTE", "LIKE NEW"].includes(v))               return "Excelente/Like New";
@@ -75,6 +35,17 @@ function normalizaFuncional(val) {
   if (v.includes("DEVOLUÇÃO IMPROCEDENTE"))                return "Dev. Improcedente";
   if (["RECUSADO","GENERICO","ONLINE","#N/D"].includes(v)) return "Outros";
   return val.trim();
+}
+
+function normalizaCondicao(val) {
+  if (!val) return "Não informado";
+  const v = val.trim().toUpperCase();
+  if (["BOM", "BOA", "BOM "].includes(v))       return "Bom";
+  if (["EXCELENTE", "LIKE NEW"].includes(v))     return "Excelente";
+  if (["TRINCADO", "TELA TRINCADA"].includes(v)) return "Trincado";
+  if (["MEDIA", "REGULAR"].includes(v))          return "Regular";
+  if (v === "ONLINE")                            return "Online";
+  return "Outros";
 }
 
 function getMarca(modelo) {
@@ -224,11 +195,8 @@ function MesSelector({ meses, mesSel, onChange }) {
   }
 
   function toggleTodos() {
-    if (todos) {
-      onChange([meses[0]]);
-    } else {
-      onChange([...meses]);
-    }
+    if (todos) onChange([meses[0]]);
+    else onChange([...meses]);
   }
 
   const label = todos
@@ -241,7 +209,7 @@ function MesSelector({ meses, mesSel, onChange }) {
     <div className="relative">
       <button
         onClick={() => setOpen(o => !o)}
-        className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7F2D92] cursor-pointer hover:border-purple-300 transition-all min-w-[200px] justify-between"
+        className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7F2D92] cursor-pointer hover:border-purple-300 transition-all min-w-[210px] justify-between"
       >
         <span className="truncate">{label}</span>
         <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform shrink-0 ${open ? "rotate-180" : ""}`} />
@@ -250,16 +218,14 @@ function MesSelector({ meses, mesSel, onChange }) {
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-2 z-20 bg-white rounded-2xl shadow-xl ring-1 ring-slate-200 p-2 min-w-[200px] max-h-80 overflow-y-auto">
-
-            {/* Selecionar tudo */}
+          <div className="absolute right-0 top-full mt-2 z-20 bg-white rounded-2xl shadow-xl ring-1 ring-slate-200 p-2 min-w-[210px] max-h-80 overflow-y-auto">
             <button
               onClick={toggleTodos}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all mb-1 ${
                 todos ? "bg-[#7F2D92] text-white" : "text-slate-600 hover:bg-slate-50"
               }`}
             >
-              <div className={`h-4 w-4 rounded border-2 flex items-center justify-center shrink-0 transition-all ${
+              <div className={`h-4 w-4 rounded border-2 flex items-center justify-center shrink-0 ${
                 todos ? "border-white bg-white" : "border-slate-300"
               }`}>
                 {todos && (
@@ -277,14 +243,12 @@ function MesSelector({ meses, mesSel, onChange }) {
             {meses.map(m => {
               const sel = mesSel.includes(m);
               return (
-                <button
-                  key={m}
-                  onClick={() => toggleMes(m)}
+                <button key={m} onClick={() => toggleMes(m)}
                   className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-all ${
                     sel ? "text-[#7F2D92] font-semibold bg-purple-50" : "text-slate-600 hover:bg-slate-50"
                   }`}
                 >
-                  <div className={`h-4 w-4 rounded border-2 flex items-center justify-center shrink-0 transition-all ${
+                  <div className={`h-4 w-4 rounded border-2 flex items-center justify-center shrink-0 ${
                     sel ? "border-[#7F2D92] bg-[#7F2D92]" : "border-slate-300"
                   }`}>
                     {sel && (
@@ -316,8 +280,7 @@ function PizzaCondicao({ dados, total }) {
     const x = cx + radius * Math.cos(-midAngle * RADIAN);
     const y = cy + radius * Math.sin(-midAngle * RADIAN);
     return (
-      <text x={x} y={y}
-        textAnchor={x > cx ? "start" : "end"}
+      <text x={x} y={y} textAnchor={x > cx ? "start" : "end"}
         dominantBaseline="central"
         style={{ fontSize: 11, fontWeight: 600, fill: "#475569" }}>
         {`${name} · ${(percent * 100).toFixed(1)}%`}
@@ -346,8 +309,7 @@ function PizzaCondicao({ dados, total }) {
       <ResponsiveContainer width="100%" height={280}>
         <PieChart>
           <Pie
-            data={dados}
-            cx="50%" cy="50%"
+            data={dados} cx="50%" cy="50%"
             innerRadius={72} outerRadius={105}
             paddingAngle={2} dataKey="value"
             labelLine={false} label={renderLabel}
@@ -355,8 +317,7 @@ function PizzaCondicao({ dados, total }) {
             onMouseLeave={() => setAtivo(null)}
           >
             {dados.map((entry, idx) => (
-              <Cell
-                key={entry.name}
+              <Cell key={entry.name}
                 fill={LP_COLORS[entry.name] || "#94a3b8"}
                 opacity={ativo === null || ativo === idx ? 1 : 0.4}
                 stroke={ativo === idx ? "#fff" : "transparent"}
@@ -400,12 +361,8 @@ function PizzaCondicao({ dados, total }) {
                     backgroundColor: LP_COLORS[name] || "#94a3b8",
                   }} />
               </div>
-              <span className="text-slate-400 w-10 text-right font-medium">
-                {fmtPct(value, total)}
-              </span>
-              <span className="font-bold text-slate-700 w-14 text-right">
-                {fmtN(value)}
-              </span>
+              <span className="text-slate-400 w-10 text-right font-medium">{fmtPct(value, total)}</span>
+              <span className="font-bold text-slate-700 w-14 text-right">{fmtN(value)}</span>
             </div>
           </div>
         ))}
@@ -415,36 +372,16 @@ function PizzaCondicao({ dados, total }) {
 }
 
 // ── Rosca dupla: Marcas + Modelos ────────────────────────
-function RoscaMarcasModelos({ rows, total }) {
+function RoscaMarcasModelos({ dadosMarcas, modelosPorMarca, total }) {
   const [marcaSel, setMarcaSel] = useState(null);
-
-  const marcas = {};
-  const modelosPorMarca = {};
-
-  rows.forEach(r => {
-    const marca = getMarca(r.modelo);
-    marcas[marca] = (marcas[marca] || 0) + 1;
-    if (!modelosPorMarca[marca]) modelosPorMarca[marca] = {};
-    const mod = r.modelo || "Não informado";
-    modelosPorMarca[marca][mod] = (modelosPorMarca[marca][mod] || 0) + 1;
-  });
-
-  const dadosMarcas = Object.entries(marcas)
-    .sort((a, b) => b[1] - a[1])
-    .map(([name, value]) => ({ name, value }));
-
   const marcaAtiva = marcaSel || dadosMarcas[0]?.name;
 
   const todosModelosMarca = marcaAtiva
-    ? Object.entries(modelosPorMarca[marcaAtiva] || {})
-        .sort((a, b) => b[1] - a[1])
+    ? Object.entries(modelosPorMarca[marcaAtiva] || {}).sort((a, b) => b[1] - a[1])
     : [];
 
   const totalMarca = todosModelosMarca.reduce((s, [, v]) => s + v, 0);
-
-  const dadosModelos = todosModelosMarca
-    .slice(0, 8)
-    .map(([name, value]) => ({ name, value }));
+  const dadosModelos = todosModelosMarca.slice(0, 8).map(([name, value]) => ({ name, value }));
 
   function TooltipMarca({ active, payload }) {
     if (!active || !payload?.length) return null;
@@ -452,8 +389,7 @@ function RoscaMarcasModelos({ rows, total }) {
     return (
       <div className="bg-white rounded-2xl shadow-xl ring-1 ring-purple-100 px-4 py-3 text-sm">
         <div className="flex items-center gap-2 mb-1">
-          <div className="h-3 w-3 rounded-full"
-            style={{ backgroundColor: MARCA_COLORS[name] || "#94a3b8" }} />
+          <div className="h-3 w-3 rounded-full" style={{ backgroundColor: MARCA_COLORS[name] || "#94a3b8" }} />
           <span className="font-bold text-slate-700">{name}</span>
         </div>
         <div className="font-black text-lg" style={{ color: "#7F2D92" }}>{fmtN(value)}</div>
@@ -476,22 +412,19 @@ function RoscaMarcasModelos({ rows, total }) {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      {/* Rosca marcas */}
       <Card>
         <SectionTitle icon={Package}>Volume por Marca</SectionTitle>
         <ResponsiveContainer width="100%" height={220}>
           <PieChart>
             <Pie
-              data={dadosMarcas}
-              cx="50%" cy="50%"
+              data={dadosMarcas} cx="50%" cy="50%"
               innerRadius={60} outerRadius={90}
               paddingAngle={2} dataKey="value"
               onClick={(entry) => setMarcaSel(marcaSel === entry.name ? null : entry.name)}
               style={{ cursor: "pointer" }}
             >
               {dadosMarcas.map((entry) => (
-                <Cell
-                  key={entry.name}
+                <Cell key={entry.name}
                   fill={MARCA_COLORS[entry.name] || "#94a3b8"}
                   opacity={marcaSel === null || marcaSel === entry.name ? 1 : 0.35}
                   stroke={marcaSel === entry.name ? "#fff" : "transparent"}
@@ -501,13 +434,9 @@ function RoscaMarcasModelos({ rows, total }) {
             </Pie>
             <Tooltip content={<TooltipMarca />} />
             <text x="50%" y="46%" textAnchor="middle" dominantBaseline="central"
-              style={{ fontSize: 18, fontWeight: 900, fill: "#4C1D95" }}>
-              {fmtN(total)}
-            </text>
+              style={{ fontSize: 18, fontWeight: 900, fill: "#4C1D95" }}>{fmtN(total)}</text>
             <text x="50%" y="56%" textAnchor="middle" dominantBaseline="central"
-              style={{ fontSize: 10, fill: "#94a3b8" }}>
-              total
-            </text>
+              style={{ fontSize: 10, fill: "#94a3b8" }}>total</text>
           </PieChart>
         </ResponsiveContainer>
 
@@ -532,12 +461,9 @@ function RoscaMarcasModelos({ rows, total }) {
             </button>
           ))}
         </div>
-        <p className="text-xs text-slate-400 text-center mt-2">
-          Clique na marca para filtrar os modelos →
-        </p>
+        <p className="text-xs text-slate-400 text-center mt-2">Clique na marca para filtrar os modelos →</p>
       </Card>
 
-      {/* Rosca modelos */}
       <Card>
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-black text-slate-800 flex items-center gap-2">
@@ -551,39 +477,28 @@ function RoscaMarcasModelos({ rows, total }) {
         </div>
 
         {dadosModelos.length === 0 ? (
-          <div className="flex items-center justify-center h-40 text-slate-400 text-sm">
-            Sem dados para esta marca
-          </div>
+          <div className="flex items-center justify-center h-40 text-slate-400 text-sm">Sem dados</div>
         ) : (
           <>
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>
-                <Pie
-                  data={dadosModelos}
-                  cx="50%" cy="50%"
-                  innerRadius={60} outerRadius={90}
-                  paddingAngle={2} dataKey="value"
-                >
+                <Pie data={dadosModelos} cx="50%" cy="50%"
+                  innerRadius={60} outerRadius={90} paddingAngle={2} dataKey="value">
                   {dadosModelos.map((_, idx) => (
                     <Cell key={idx} fill={MODEL_SHADES[idx % MODEL_SHADES.length]} />
                   ))}
                 </Pie>
                 <Tooltip content={<TooltipModelo />} />
                 <text x="50%" y="44%" textAnchor="middle" dominantBaseline="central"
-                  style={{ fontSize: 18, fontWeight: 900, fill: "#4C1D95" }}>
-                  {fmtN(totalMarca)}
-                </text>
+                  style={{ fontSize: 18, fontWeight: 900, fill: "#4C1D95" }}>{fmtN(totalMarca)}</text>
                 <text x="50%" y="54%" textAnchor="middle" dominantBaseline="central"
-                  style={{ fontSize: 9, fill: "#94a3b8" }}>
-                  {marcaAtiva}
-                </text>
+                  style={{ fontSize: 9, fill: "#94a3b8" }}>{marcaAtiva}</text>
               </PieChart>
             </ResponsiveContainer>
 
             <div className="space-y-1.5 border-t border-slate-100 pt-3 max-h-48 overflow-y-auto">
               {dadosModelos.map(({ name, value }, idx) => (
-                <div key={name}
-                  className="flex items-center justify-between text-xs px-2 py-1.5 rounded-lg hover:bg-slate-50">
+                <div key={name} className="flex items-center justify-between text-xs px-2 py-1.5 rounded-lg hover:bg-slate-50">
                   <div className="flex items-center gap-2 min-w-0">
                     <div className="h-2.5 w-2.5 rounded-full shrink-0"
                       style={{ backgroundColor: MODEL_SHADES[idx % MODEL_SHADES.length] }} />
@@ -613,65 +528,67 @@ function TabRecebimento({ mes }) {
   useEffect(() => {
     async function load() {
       setLoading(true);
-
-      const lista = Array.isArray(mes) ? mes : [mes];
+      const lista  = Array.isArray(mes) ? mes : [mes];
       const mesAnt = lista.length === 1 ? mesAnterior(lista[0]) : null;
 
       const promises = [
-        filtraMes(
-          supabase.from("assurant_triagem")
-            .select("tipo_de_rede, condicao, modelo, status_atual, data_recebimento"),
-          lista
-        ),
+        supabase.rpc("assurant_dash_recebimento", { meses: lista }),
       ];
-
       if (mesAnt) {
-        promises.push(
-          filtraMes(
-            supabase.from("assurant_triagem").select("tipo_de_rede"),
-            mesAnt
-          )
-        );
+        promises.push(supabase.rpc("assurant_dash_recebimento", { meses: [mesAnt] }));
       }
 
-      const results = await Promise.all(promises);
-      const rows    = results[0].data;
-      const rowsAnt = mesAnt ? (results[1].data || []) : [];
+      const results  = await Promise.all(promises);
+      const rows     = results[0].data || [];
+      const rowsAnt  = mesAnt ? (results[1].data || []) : [];
 
-      if (!rows) { setLoading(false); return; }
-
+      // Agregar canais
       const canais    = {};
       const condicoes = {};
       const statusMap = {};
+      const marcas    = {};
+      const modelosPorMarca = {};
       let totalRecebidos = 0, comData = 0, semData = 0;
 
       rows.forEach(r => {
-        totalRecebidos++;
-        const canal = normalizaCanal(r.tipo_de_rede);
-        canais[canal] = (canais[canal] || 0) + 1;
+        const qtd = Number(r.total);
+        totalRecebidos += qtd;
+        if (r.com_data) comData += qtd; else semData += qtd;
+
+        // Canal
+        canais[r.canal] = (canais[r.canal] || 0) + qtd;
+
+        // Condição normalizada
         const cond = normalizaCondicao(r.condicao);
-        condicoes[cond] = (condicoes[cond] || 0) + 1;
-        const st = r.status_atual || "Não informado";
-        statusMap[st] = (statusMap[st] || 0) + 1;
-        if (r.data_recebimento) comData++; else semData++;
+        condicoes[cond] = (condicoes[cond] || 0) + qtd;
+
+        // Status
+        statusMap[r.status_atual] = (statusMap[r.status_atual] || 0) + qtd;
+
+        // Marcas e modelos
+        const marca = getMarca(r.modelo);
+        marcas[marca] = (marcas[marca] || 0) + qtd;
+        if (!modelosPorMarca[marca]) modelosPorMarca[marca] = {};
+        modelosPorMarca[marca][r.modelo] = (modelosPorMarca[marca][r.modelo] || 0) + qtd;
       });
 
+      // Mês anterior — só canais
       const canaisAnt = {};
       let totalAnt = 0;
       rowsAnt.forEach(r => {
-        totalAnt++;
-        const canal = normalizaCanal(r.tipo_de_rede);
-        canaisAnt[canal] = (canaisAnt[canal] || 0) + 1;
+        const qtd = Number(r.total);
+        totalAnt += qtd;
+        canaisAnt[r.canal] = (canaisAnt[r.canal] || 0) + qtd;
       });
 
       const topStatus     = Object.entries(statusMap).sort((a, b) => b[1] - a[1]).slice(0, 8);
-      const pizzaCondicao = Object.entries(condicoes)
-        .sort((a, b) => b[1] - a[1])
-        .map(([name, value]) => ({ name, value }));
+      const pizzaCondicao = Object.entries(condicoes).sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value }));
+      const dadosMarcas   = Object.entries(marcas).sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value }));
 
       setData({
         canais, canaisAnt, totalAnt, mesAnt,
-        pizzaCondicao, topStatus, rows,
+        pizzaCondicao, topStatus,
+        dadosMarcas, modelosPorMarca,
         totalRecebidos, comData, semData,
       });
       setLoading(false);
@@ -684,7 +601,8 @@ function TabRecebimento({ mes }) {
 
   const {
     canais, canaisAnt, totalAnt, mesAnt,
-    pizzaCondicao, topStatus, rows,
+    pizzaCondicao, topStatus,
+    dadosMarcas, modelosPorMarca,
     totalRecebidos, comData, semData,
   } = data;
 
@@ -693,7 +611,7 @@ function TabRecebimento({ mes }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiMini label="Total Recebido"  value={fmtN(totalRecebidos)}
+        <KpiMini label="Total Recebido" value={fmtN(totalRecebidos)}
           color="bg-purple-50 ring-purple-200 text-purple-700" />
         {mesAnt ? (
           <KpiMini label="Mês Anterior" value={fmtN(totalAnt)} sub={mesAnt}
@@ -720,11 +638,8 @@ function TabRecebimento({ mes }) {
               const qtdAnt   = canaisAnt[canal] || 0;
               const delta    = qtd - qtdAnt;
               const deltaPos = delta >= 0;
-              const deltaPct = mesAnt && qtdAnt > 0
-                ? ((delta / qtdAnt) * 100).toFixed(1)
-                : null;
-              const pctTotal = totalRecebidos > 0
-                ? ((qtd / totalRecebidos) * 100).toFixed(1) : "0";
+              const deltaPct = mesAnt && qtdAnt > 0 ? ((delta / qtdAnt) * 100).toFixed(1) : null;
+              const pctTotal = totalRecebidos > 0 ? ((qtd / totalRecebidos) * 100).toFixed(1) : "0";
               const pctAnt   = totalAnt > 0 ? (qtdAnt / totalAnt) * 100 : 0;
               const barWidth = Math.max(Number(pctTotal), 4);
 
@@ -747,18 +662,14 @@ function TabRecebimento({ mes }) {
                       )}
                       <div className="text-right">
                         <div className="font-bold text-slate-800">{fmtN(qtd)}</div>
-                        {mesAnt && (
-                          <div className="text-xs text-slate-400">ant: {fmtN(qtdAnt)}</div>
-                        )}
+                        {mesAnt && <div className="text-xs text-slate-400">ant: {fmtN(qtdAnt)}</div>}
                       </div>
                     </div>
                   </div>
 
                   <div className="relative h-6 bg-slate-100 rounded-xl overflow-hidden">
-                    <div
-                      className="h-full rounded-xl flex items-center justify-end pr-2 transition-all duration-700"
-                      style={{ width: `${barWidth}%`, backgroundColor: LP_CANAL[canal] || "#94a3b8" }}
-                    >
+                    <div className="h-full rounded-xl flex items-center justify-end pr-2 transition-all duration-700"
+                      style={{ width: `${barWidth}%`, backgroundColor: LP_CANAL[canal] || "#94a3b8" }}>
                       {Number(pctTotal) >= 10 && (
                         <span className="text-white text-xs font-bold">{pctTotal}%</span>
                       )}
@@ -794,14 +705,17 @@ function TabRecebimento({ mes }) {
         </Card>
       </div>
 
-      <RoscaMarcasModelos rows={rows} total={totalRecebidos} />
+      <RoscaMarcasModelos
+        dadosMarcas={dadosMarcas}
+        modelosPorMarca={modelosPorMarca}
+        total={totalRecebidos}
+      />
 
       <Card>
         <SectionTitle icon={Clock}>Status Atual</SectionTitle>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {topStatus.map(([st, qtd]) => (
-            <StatRow key={st} label={st} value={qtd}
-              total={totalRecebidos} color="bg-purple-400" />
+            <StatRow key={st} label={st} value={qtd} total={totalRecebidos} color="bg-purple-400" />
           ))}
         </div>
       </Card>
@@ -819,26 +733,24 @@ function TabTriagemFuncional({ mes }) {
   useEffect(() => {
     async function load() {
       setLoading(true);
-      const { data: rows } = await filtraMes(
-        supabase.from("assurant_triagem")
-          .select("triagem_funcional, grade, resultado_triagem_funcional, data_funcional, status_bateria"),
-        mes
-      );
+      const lista = Array.isArray(mes) ? mes : [mes];
+      const { data: rows } = await supabase.rpc("assurant_dash_funcional", { meses: lista });
       if (!rows) { setLoading(false); return; }
 
       const funcionais = {}, grades = {}, resultados = {}, baterias = {};
       let total = 0, semTriagem = 0, comTriagem = 0;
 
       rows.forEach(r => {
-        total++;
+        const qtd = Number(r.total);
+        total += qtd;
         const func = normalizaFuncional(r.triagem_funcional);
-        funcionais[func] = (funcionais[func] || 0) + 1;
-        if (!r.triagem_funcional) semTriagem++; else comTriagem++;
-        const grade = r.grade || "Não informado";
-        grades[grade] = (grades[grade] || 0) + 1;
-        const res = r.resultado_triagem_funcional || "Não informado";
-        resultados[res] = (resultados[res] || 0) + 1;
-        if (r.status_bateria) baterias[r.status_bateria] = (baterias[r.status_bateria] || 0) + 1;
+        funcionais[func] = (funcionais[func] || 0) + qtd;
+        if (r.triagem_funcional === "Sem triagem") semTriagem += qtd; else comTriagem += qtd;
+        grades[r.grade] = (grades[r.grade] || 0) + qtd;
+        resultados[r.resultado_triagem_funcional] = (resultados[r.resultado_triagem_funcional] || 0) + qtd;
+        if (r.status_bateria && r.status_bateria !== "Sem info") {
+          baterias[r.status_bateria] = (baterias[r.status_bateria] || 0) + qtd;
+        }
       });
 
       setData({ funcionais, grades, resultados, baterias, total, semTriagem, comTriagem });
@@ -929,26 +841,23 @@ function TabTriagemEstetica({ mes }) {
   useEffect(() => {
     async function load() {
       setLoading(true);
-      const { data: rows } = await filtraMes(
-        supabase.from("assurant_triagem")
-          .select("tela, laterais, traseira, defeitos_adicionais, grade, data_cosmetico"),
-        mes
-      );
+      const lista = Array.isArray(mes) ? mes : [mes];
+      const { data: rows } = await supabase.rpc("assurant_dash_estetica", { meses: lista });
       if (!rows) { setLoading(false); return; }
 
       const telas = {}, lateraisM = {}, traseirasM = {}, defeitosM = {}, gradesM = {};
       let total = 0, comEstetica = 0, semEstetica = 0;
 
       rows.forEach(r => {
-        total++;
-        if (r.data_cosmetico) comEstetica++; else semEstetica++;
-        telas[r.tela || "Não informado"] = (telas[r.tela || "Não informado"] || 0) + 1;
-        lateraisM[r.laterais || "Não informado"] = (lateraisM[r.laterais || "Não informado"] || 0) + 1;
-        traseirasM[r.traseira || "Não informado"] = (traseirasM[r.traseira || "Não informado"] || 0) + 1;
-        gradesM[r.grade || "Não informado"] = (gradesM[r.grade || "Não informado"] || 0) + 1;
+        const qtd = Number(r.total);
+        total += qtd;
+        if (r.com_estetica) comEstetica += qtd; else semEstetica += qtd;
+        telas[r.tela]       = (telas[r.tela]       || 0) + qtd;
+        lateraisM[r.laterais]  = (lateraisM[r.laterais]  || 0) + qtd;
+        traseirasM[r.traseira] = (traseirasM[r.traseira] || 0) + qtd;
+        gradesM[r.grade]    = (gradesM[r.grade]    || 0) + qtd;
         if (r.defeitos_adicionais?.trim()) {
-          const def = r.defeitos_adicionais.trim();
-          defeitosM[def] = (defeitosM[def] || 0) + 1;
+          defeitosM[r.defeitos_adicionais] = (defeitosM[r.defeitos_adicionais] || 0) + qtd;
         }
       });
 
@@ -1047,11 +956,8 @@ function TabLaudos({ mes }) {
   useEffect(() => {
     async function load() {
       setLoading(true);
-      const { data: rows } = await filtraMes(
-        supabase.from("assurant_triagem")
-          .select("data_laudo, data_alocacao, data_oracle, reanalise, status_atual, grade, modelo"),
-        mes
-      );
+      const lista = Array.isArray(mes) ? mes : [mes];
+      const { data: rows } = await supabase.rpc("assurant_dash_laudos", { meses: lista });
       if (!rows) { setLoading(false); return; }
 
       let total = 0, comLaudo = 0, semLaudo = 0, comReanalise = 0;
@@ -1059,17 +965,16 @@ function TabLaudos({ mes }) {
       const gradesLaudo = {}, modelosLaudo = {};
 
       rows.forEach(r => {
-        total++;
-        if (r.data_laudo) comLaudo++; else semLaudo++;
-        if (r.reanalise === "Sim") comReanalise++;
-        if (r.data_alocacao) comAlocacao++;
-        if (r.data_oracle) comOracle++;
-        if (r.status_atual?.toLowerCase().includes("laudo")) aguardandoLaudo++;
-        if (r.data_laudo) {
-          const grade = r.grade || "Não informado";
-          gradesLaudo[grade] = (gradesLaudo[grade] || 0) + 1;
-          const mod = r.modelo || "Não informado";
-          modelosLaudo[mod] = (modelosLaudo[mod] || 0) + 1;
+        const qtd = Number(r.total);
+        total += qtd;
+        if (r.com_laudo) comLaudo += qtd; else semLaudo += qtd;
+        if (r.com_reanalise) comReanalise += qtd;
+        if (r.com_alocacao) comAlocacao += qtd;
+        if (r.com_oracle) comOracle += qtd;
+        if (r.aguardando_laudo) aguardandoLaudo += qtd;
+        if (r.com_laudo) {
+          gradesLaudo[r.grade] = (gradesLaudo[r.grade] || 0) + qtd;
+          modelosLaudo[r.modelo] = (modelosLaudo[r.modelo] || 0) + qtd;
         }
       });
 
@@ -1165,18 +1070,11 @@ export default function AssurantDashboardPage() {
 
   useEffect(() => {
     async function loadMeses() {
-      const { data } = await supabase
-        .from("assurant_triagem")
-        .select("data_recebimento")
-        .not("data_recebimento", "is", null)
-        .order("data_recebimento", { ascending: false });
-
+      const { data } = await supabase.rpc("assurant_meses_disponiveis");
       if (data) {
-        const unique = [...new Set(
-          data.map(r => r.data_recebimento?.slice(0, 7))
-        )].filter(Boolean);
-        setMeses(unique);
-        if (unique.length > 0) setMesSel([unique[0]]);
+        const lista = data.map(r => r.mes).filter(Boolean);
+        setMeses(lista);
+        if (lista.length > 0) setMesSel([lista[0]]);
       }
     }
     loadMeses();
@@ -1185,21 +1083,8 @@ export default function AssurantDashboardPage() {
   useEffect(() => {
     if (!mesSel.length) return;
     async function loadTotais() {
-      const base = () => supabase
-        .from("assurant_triagem")
-        .select("*", { count: "exact", head: true });
-
-      const [
-        { count: total },
-        { count: comLaudo },
-        { count: finalizados },
-      ] = await Promise.all([
-        filtraMes(base(), mesSel),
-        filtraMes(base(), mesSel).not("data_laudo", "is", null),
-        filtraMes(base(), mesSel).eq("status_atual", "Finalizado"),
-      ]);
-
-      setTotais({ total, comLaudo, finalizados });
+      const { data } = await supabase.rpc("assurant_dash_totais", { meses: mesSel });
+      if (data?.[0]) setTotais(data[0]);
     }
     loadTotais();
   }, [mesSel]);
@@ -1208,20 +1093,17 @@ export default function AssurantDashboardPage() {
     { key: "recebimento", label: "Recebimento",       icon: Package,     badge: totais?.total },
     { key: "funcional",   label: "Triagem Funcional", icon: CheckCircle, badge: null },
     { key: "estetica",    label: "Triagem Estética",  icon: Layers,      badge: null },
-    { key: "laudos",      label: "Laudos",            icon: FileText,    badge: totais?.comLaudo },
+    { key: "laudos",      label: "Laudos",            icon: FileText,    badge: totais?.com_laudo },
   ];
 
   return (
     <div className="space-y-5">
-
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <span className="text-2xl">📦</span>
           <div>
             <h2 className="text-lg font-black text-slate-800">Operação Assurant</h2>
-            <p className="text-xs text-slate-500">
-              Warehouse · filtrado por data real de recebimento
-            </p>
+            <p className="text-xs text-slate-500">Warehouse · filtrado por data real de recebimento</p>
           </div>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
@@ -1256,16 +1138,13 @@ export default function AssurantDashboardPage() {
       <div className="bg-orange-50 ring-1 ring-orange-200 rounded-2xl p-4 flex items-start gap-3">
         <AlertTriangle className="h-5 w-5 text-orange-500 shrink-0 mt-0.5" />
         <div>
-          <p className="text-sm font-bold text-orange-800">
-            Operação de Reparo sem contrato formal
-          </p>
+          <p className="text-sm font-bold text-orange-800">Operação de Reparo sem contrato formal</p>
           <p className="text-xs text-orange-600 mt-0.5">
             Cláusula 6.2 do Apêndice A exclui reparo do contrato atual.
             Incluir no próximo aditivo com precificação própria.
           </p>
         </div>
       </div>
-
     </div>
   );
 }
