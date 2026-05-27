@@ -6,6 +6,7 @@ import {
   Camera, ShieldCheck, ChevronDown, ChevronRight, Layers,
   Truck, TrendingUp, Users, LogOut, X, ShoppingCart,
   Landmark, BarChart2, Lock, TrendingDown, Database,
+  Package, Clock,
 } from "lucide-react";
 import { useAuth } from "../AuthContext.jsx";
 import { signOut } from "../services/authService.js";
@@ -197,6 +198,13 @@ function SidebarContent({ profile, onClose, handleLogout }) {
 
             <CollapseGroup icon={Truck} label="Logística" paths={["/abertura-os"]}>
               <NavItem to="/abertura-os" icon={ClipboardList} label="Abertura de OS" indent onClick={onClose} />
+            </CollapseGroup>
+
+            {/* Assurant Warehouse */}
+            <CollapseGroup icon={Package} label="Assurant Warehouse" paths={["/assurant"]}>
+              <NavItem to="/assurant/dashboard" icon={BarChart3} label="Dashboard" indent onClick={onClose} />
+              <NavItemDisabled icon={Clock} label="SLA Diário" indent />
+              <NavItemDisabled icon={DollarSign} label="DRE Gerencial" indent />
             </CollapseGroup>
           </>
         )}

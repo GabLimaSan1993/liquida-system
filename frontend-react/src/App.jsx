@@ -21,6 +21,9 @@ import ContasPagarPage from "./pages/ContasPagarPage.jsx";
 import ContasReceberPage from "./pages/ContasReceberPage.jsx";
 import CargaHistoricaPage from "./pages/CargaHistoricaPage.jsx";
 
+// Assurant Warehouse
+import AssurantDashboardPage from "./pages/assurant/AssurantDashboardPage.jsx";
+
 function ProtectedRoute({ tela, children }) {
   const { user, loading, hasAccess } = useAuth();
   if (loading) return <div className="min-h-screen flex items-center justify-center text-purple-700 font-bold">Carregando...</div>;
@@ -31,18 +34,12 @@ function ProtectedRoute({ tela, children }) {
 
 function DefaultRedirect() {
   const { profile, loading } = useAuth();
-
   if (loading) return <div className="min-h-screen flex items-center justify-center text-purple-700 font-bold">Carregando...</div>;
   if (!profile) return <Navigate to="/login" replace />;
-
   if (profile.is_master) return <Navigate to="/upload" replace />;
-
   if (profile.area_tecnica === "refrigeracao") return <Navigate to="/linha-branca/triagem" replace />;
-
   if (["climatizacao", "lavadoras", "diversos"].includes(profile.area_tecnica)) return <Navigate to="/linha-branca/triagem-reparos" replace />;
-
   if (profile.telas_permitidas?.length > 0) return <Navigate to={profile.telas_permitidas[0]} replace />;
-
   return <Navigate to="/sem-acesso" replace />;
 }
 
@@ -60,7 +57,6 @@ function SemAcessoPage() {
 
 export default function App() {
   const { user, loading } = useAuth();
-
   if (loading) return <div className="min-h-screen flex items-center justify-center text-purple-700 font-bold">Carregando...</div>;
 
   return (
@@ -85,7 +81,7 @@ export default function App() {
         <Route path="/financeiro/contas-receber" element={<ProtectedRoute tela="/financeiro/contas-receber"><ContasReceberPage /></ProtectedRoute>} />
         <Route path="/financeiro/carga-historica" element={<ProtectedRoute tela="/financeiro/carga-historica"><CargaHistoricaPage /></ProtectedRoute>} />
 
-        {/* Linha Branca — Master (separado por área) */}
+        {/* Linha Branca — Master */}
         <Route path="/linha-branca/triagem" element={<ProtectedRoute tela="/linha-branca/triagem"><LinhaBrancaTriagemPage /></ProtectedRoute>} />
         <Route path="/linha-branca/reparo-mecanico" element={<ProtectedRoute tela="/linha-branca/reparo-mecanico"><ReparoLinhaBrancaPage areaExecucao="Reparo Mecânico" /></ProtectedRoute>} />
         <Route path="/linha-branca/reparo-eletrico" element={<ProtectedRoute tela="/linha-branca/reparo-eletrico"><ReparoLinhaBrancaPage areaExecucao="Reparo Elétrico" /></ProtectedRoute>} />
@@ -94,7 +90,7 @@ export default function App() {
         {/* Linha Branca — Refrigeração */}
         <Route path="/linha-branca/reparos" element={<ProtectedRoute tela="/linha-branca/reparos"><ReparosRefrigeracaoPage /></ProtectedRoute>} />
 
-        {/* Linha Branca — Outras linhas */}
+        {/* Linha Branca — Outras */}
         <Route path="/linha-branca/triagem-reparos" element={<ProtectedRoute tela="/linha-branca/triagem-reparos"><TriagemReparosPage /></ProtectedRoute>} />
 
         {/* Compartilhadas */}
@@ -103,6 +99,9 @@ export default function App() {
         <Route path="/linha-branca/qualidade" element={<ProtectedRoute tela="/linha-branca/qualidade"><QualidadePage /></ProtectedRoute>} />
 
         <Route path="/gerenciar-usuarios" element={<ProtectedRoute tela="/gerenciar-usuarios"><GerenciarUsuariosPage /></ProtectedRoute>} />
+
+        {/* Assurant Warehouse */}
+        <Route path="/assurant/dashboard" element={<ProtectedRoute tela="/assurant/dashboard"><AssurantDashboardPage /></ProtectedRoute>} />
       </Route>
     </Routes>
   );

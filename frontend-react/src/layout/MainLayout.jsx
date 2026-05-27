@@ -22,6 +22,8 @@ const PAGE_META = {
   "/linha-branca/limpeza": { title: "Limpeza", subtitle: "Linha Branca · Registro fotográfico pós-limpeza" },
   "/linha-branca/qualidade": { title: "Qualidade", subtitle: "Linha Branca · Checklist de aprovação e descaracterização" },
   "/gerenciar-usuarios": { title: "Gerenciar Usuários", subtitle: "Sistema · Cadastro e permissões de acesso" },
+  // Assurant Warehouse
+  "/assurant/dashboard": { title: "Assurant Warehouse", subtitle: "Dashboard · SLA, volumes e resultado financeiro" },
 };
 
 export default function MainLayout() {
