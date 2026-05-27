@@ -1,10 +1,14 @@
+import Papa from "papaparse";
 import * as XLSX from "xlsx";
 import { supabase } from "../lib/supabase";
 
 function parseDate(val) {
   if (!val || val === "N/A" || val === "") return null;
-  const [datePart, timePart] = String(val).split(" ");
-  const [d, m, y] = datePart.split("/");
+  const str = String(val).trim();
+  const [datePart, timePart] = str.split(" ");
+  const parts = datePart.split("/");
+  if (parts.length !== 3) return null;
+  const [d, m, y] = parts;
   return new Date(`${y}-${m}-${d}T${timePart || "00:00:00"}`).toISOString();
 }
 
@@ -46,60 +50,123 @@ function parseRow(row, userId, mesReferencia) {
   };
 }
 
+// ── Preview — lê só as primeiras 10 linhas ───────────────
 export async function previewTriagemAssurant(file) {
-  const buffer = await file.arrayBuffer();
-  const wb     = XLSX.read(buffer, { type: "array", cellDates: false });
-  const ws     = wb.Sheets[wb.SheetNames[0]];
-  const rows   = XLSX.utils.sheet_to_json(ws, { defval: "" });
+  return new Promise((resolve, reject) => {
+    const previewRows = [];
+    let totalRows = 0;
+    let headers = null;
 
-  if (rows.length === 0) throw new Error("Planilha vazia ou formato inválido.");
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      encoding: "UTF-8",
+      step: (result, parser) => {
+        if (!headers) headers = Object.keys(result.data);
 
-  const colsObrigatorias = ["Voucher", "IMEI", "Tipo_de_Rede", "Data_Recebimento"];
-  const colsArquivo = Object.keys(rows[0]);
-  const faltando = colsObrigatorias.filter(c => !colsArquivo.includes(c));
-  if (faltando.length > 0) {
-    throw new Error(`Colunas obrigatórias não encontradas: ${faltando.join(", ")}`);
-  }
+        // Validar colunas na primeira linha
+        if (totalRows === 0) {
+          const colsObrigatorias = ["Voucher", "IMEI", "Tipo_de_Rede", "Data_Recebimento"];
+          const faltando = colsObrigatorias.filter(c => !headers.includes(c));
+          if (faltando.length > 0) {
+            parser.abort();
+            reject(new Error(`Colunas obrigatórias não encontradas: ${faltando.join(", ")}`));
+            return;
+          }
+        }
 
-  return {
-    totalRows: rows.length,
-    previewRows: rows.slice(0, 3).map(r => ({
-      Voucher:       r.Voucher,
-      IMEI:          r.IMEI,
-      Modelo:        r.Modelo,
-      Tipo_de_Rede:  r.Tipo_de_Rede,
-      Grade:         r.Grade,
-      Data_Recebimento: r.Data_Recebimento,
-    })),
-  };
+        totalRows++;
+
+        if (previewRows.length < 5) {
+          const r = result.data;
+          previewRows.push({
+            Voucher:          r["Voucher"],
+            IMEI:             r["IMEI"],
+            Modelo:           r["Modelo"],
+            Tipo_de_Rede:     r["Tipo_de_Rede"],
+            Grade:            r["Grade"],
+            Data_Recebimento: r["Data_Recebimento"],
+          });
+        }
+      },
+      complete: () => resolve({ totalRows, previewRows }),
+      error: (err) => reject(new Error(err.message)),
+    });
+  });
 }
 
+// ── Upload com streaming — processa em chunks de 500 ─────
 export async function uploadTriagemAssurant(file, userId, mesReferencia, onProgress) {
-  const buffer = await file.arrayBuffer();
-  const wb     = XLSX.read(buffer, { type: "array", cellDates: false });
-  const ws     = wb.Sheets[wb.SheetNames[0]];
-  const rows   = XLSX.utils.sheet_to_json(ws, { defval: "" });
+  return new Promise((resolve, reject) => {
+    let chunk   = [];
+    let inserted   = 0;
+    let duplicates = 0;
+    let total      = 0;
+    let hasError   = false;
 
-  const parsed  = rows.map(r => parseRow(r, userId, mesReferencia));
-  const BATCH   = 500;
-  let inserted  = 0;
-  let duplicates = 0;
-  const total   = parsed.length;
+    // Fila de inserções para não sobrecarregar o Supabase
+    const insertQueue = [];
+    let processing = false;
 
-  for (let i = 0; i < parsed.length; i += BATCH) {
-    const lote = parsed.slice(i, i + BATCH);
-    const { data, error } = await supabase
-      .from("assurant_triagem")
-      .upsert(lote, { onConflict: "voucher", ignoreDuplicates: true })
-      .select();
+    async function processQueue() {
+      if (processing || insertQueue.length === 0) return;
+      processing = true;
 
-    if (error) throw new Error(error.message);
+      while (insertQueue.length > 0) {
+        const batch = insertQueue.shift();
+        try {
+          const { data, error } = await supabase
+            .from("assurant_triagem")
+            .upsert(batch, { onConflict: "voucher", ignoreDuplicates: true })
+            .select("id");
 
-    inserted   += data?.length || 0;
-    duplicates += lote.length - (data?.length || 0);
+          if (error) throw new Error(error.message);
 
-    onProgress?.({ inserted, duplicates, total });
-  }
+          inserted   += data?.length || 0;
+          duplicates += batch.length - (data?.length || 0);
+          onProgress?.({ inserted, duplicates, total });
+        } catch (e) {
+          hasError = true;
+          reject(e);
+          return;
+        }
+      }
 
-  return { inserted, duplicates, total };
+      processing = false;
+    }
+
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      encoding: "UTF-8",
+      step: (result) => {
+        if (hasError) return;
+
+        total++;
+        chunk.push(parseRow(result.data, userId, mesReferencia));
+
+        if (chunk.length >= 500) {
+          insertQueue.push([...chunk]);
+          chunk = [];
+          processQueue();
+        }
+      },
+      complete: async () => {
+        // Inserir o último chunk que sobrou
+        if (chunk.length > 0) {
+          insertQueue.push([...chunk]);
+        }
+
+        // Aguardar fila zerar
+        while (insertQueue.length > 0 || processing) {
+          await new Promise(r => setTimeout(r, 200));
+        }
+
+        if (!hasError) {
+          resolve({ inserted, duplicates, total });
+        }
+      },
+      error: (err) => reject(new Error(err.message)),
+    });
+  });
 }
