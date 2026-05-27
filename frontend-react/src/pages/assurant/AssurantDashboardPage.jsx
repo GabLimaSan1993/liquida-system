@@ -3,6 +3,9 @@ import {
   Package, Clock, AlertTriangle, CheckCircle,
   FileText, Layers, ChevronDown
 } from "lucide-react";
+import {
+  PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend
+} from "recharts";
 import { supabase } from "../../lib/supabase";
 
 // ── Helpers ──────────────────────────────────────────────
@@ -19,25 +22,17 @@ function proximoMes(mes) {
     : `${ano}-${String(m + 1).padStart(2, "0")}`;
 }
 
+function mesAnterior(mes) {
+  const [ano, m] = mes.split("-").map(Number);
+  return m === 1
+    ? `${ano - 1}-12`
+    : `${ano}-${String(m - 1).padStart(2, "0")}`;
+}
+
 function filtraMes(query, mes) {
   return query
     .gte("data_recebimento", `${mes}-01`)
     .lt("data_recebimento", `${proximoMes(mes)}-01`);
-}
-
-function normalizaFuncional(val) {
-  if (!val) return "Sem triagem";
-  const v = val.trim().toUpperCase();
-  if (["BOM", "BOA", "BOM "].includes(v))           return "Bom";
-  if (["EXCELENTE", "LIKE NEW"].includes(v))         return "Excelente/Like New";
-  if (["TRINCADO", "TELA TRINCADA"].includes(v))     return "Trincado";
-  if (["MUITO BOM"].includes(v))                     return "Muito Bom";
-  if (["MEDIA", "REGULAR"].includes(v))              return "Regular";
-  if (v.includes("NÃO LIGA") || v.includes("BLOQUEADO")) return "Não liga/Bloqueado";
-  if (v.includes("DEVOLUÇÃO PROCEDENTE"))            return "Dev. Procedente";
-  if (v.includes("DEVOLUÇÃO IMPROCEDENTE"))          return "Dev. Improcedente";
-  if (["RECUSADO","GENERICO","ONLINE","#N/D"].includes(v)) return "Outros";
-  return val.trim();
 }
 
 function normalizaCanal(val) {
@@ -47,6 +42,61 @@ function normalizaCanal(val) {
   if (v === "DEV") return "Devolução";
   return v;
 }
+
+function normalizaCondicao(val) {
+  if (!val) return "Não informado";
+  const v = val.trim().toUpperCase();
+  if (["BOM", "BOA", "BOM "].includes(v))           return "Bom";
+  if (["EXCELENTE", "LIKE NEW"].includes(v))         return "Excelente";
+  if (["TRINCADO", "TELA TRINCADA"].includes(v))     return "Trincado";
+  if (["MEDIA", "REGULAR"].includes(v))              return "Regular";
+  if (v === "ONLINE")                                return "Online";
+  return "Outros";
+}
+
+function normalizaFuncional(val) {
+  if (!val) return "Sem triagem";
+  const v = val.trim().toUpperCase();
+  if (["BOM", "BOA", "BOM "].includes(v))                 return "Bom";
+  if (["EXCELENTE", "LIKE NEW"].includes(v))               return "Excelente/Like New";
+  if (["TRINCADO", "TELA TRINCADA"].includes(v))           return "Trincado";
+  if (["MUITO BOM"].includes(v))                           return "Muito Bom";
+  if (["MEDIA", "REGULAR"].includes(v))                    return "Regular";
+  if (v.includes("NÃO LIGA") || v.includes("BLOQUEADO"))  return "Não liga/Bloqueado";
+  if (v.includes("DEVOLUÇÃO PROCEDENTE"))                  return "Dev. Procedente";
+  if (v.includes("DEVOLUÇÃO IMPROCEDENTE"))                return "Dev. Improcedente";
+  if (["RECUSADO","GENERICO","ONLINE","#N/D"].includes(v)) return "Outros";
+  return val.trim();
+}
+
+// ── Paletas ───────────────────────────────────────────────
+const GRADE_COLORS = {
+  "EXCELENTE":     "bg-emerald-500",
+  "MUITO BOM":     "bg-emerald-400",
+  "BOM":           "bg-blue-400",
+  "REGULAR":       "bg-yellow-400",
+  "QUEBRADO":      "bg-red-400",
+  "LIKE NEW":      "bg-teal-400",
+  "Não informado": "bg-slate-300",
+};
+
+const CANAL_COLORS = {
+  "YBV (Lojas)": "bg-purple-500",
+  "Online":      "bg-blue-400",
+  "GRV":         "bg-emerald-500",
+  "Devolução":   "bg-orange-400",
+  "N/A":         "bg-slate-300",
+};
+
+const CONDICAO_COLORS = {
+  "Excelente":     "#10b981",
+  "Bom":           "#3b82f6",
+  "Trincado":      "#ef4444",
+  "Regular":       "#f59e0b",
+  "Online":        "#8b5cf6",
+  "Não informado": "#94a3b8",
+  "Outros":        "#64748b",
+};
 
 // ── Componentes base ─────────────────────────────────────
 function TabBtn({ label, icon: Icon, active, onClick, badge }) {
@@ -101,7 +151,8 @@ function StatRow({ label, value, total, color = "bg-purple-400" }) {
         </div>
       </div>
       <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-        <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(p, 100)}%` }} />
+        <div className={`h-full rounded-full ${color}`}
+          style={{ width: `${Math.min(p, 100)}%` }} />
       </div>
     </div>
   );
@@ -142,15 +193,49 @@ function MesSelector({ meses, mesSel, onChange }) {
   );
 }
 
-const GRADE_COLORS = {
-  "EXCELENTE":     "bg-emerald-500",
-  "MUITO BOM":     "bg-emerald-400",
-  "BOM":           "bg-blue-400",
-  "REGULAR":       "bg-yellow-400",
-  "QUEBRADO":      "bg-red-400",
-  "LIKE NEW":      "bg-teal-400",
-  "Não informado": "bg-slate-300",
-};
+// ── Pizza ─────────────────────────────────────────────────
+function PizzaCondicao({ dados, total }) {
+  const RADIAN = Math.PI / 180;
+
+  function renderLabel({ cx, cy, midAngle, innerRadius, outerRadius, percent }) {
+    if (percent < 0.04) return null;
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+    return (
+      <text x={x} y={y} fill="white" textAnchor="middle"
+        dominantBaseline="central" style={{ fontSize: 11, fontWeight: 700 }}>
+        {(percent * 100).toFixed(0)}%
+      </text>
+    );
+  }
+
+  return (
+    <ResponsiveContainer width="100%" height={240}>
+      <PieChart>
+        <Pie
+          data={dados}
+          cx="50%"
+          cy="50%"
+          outerRadius={95}
+          dataKey="value"
+          labelLine={false}
+          label={renderLabel}
+        >
+          {dados.map((entry) => (
+            <Cell key={entry.name} fill={CONDICAO_COLORS[entry.name] || "#94a3b8"} />
+          ))}
+        </Pie>
+        <Tooltip
+          formatter={(value, name) => [
+            `${fmtN(value)} (${fmtPct(value, total)})`, name
+          ]}
+          contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 12 }}
+        />
+      </PieChart>
+    </ResponsiveContainer>
+  );
+}
 
 // ══════════════════════════════════════════════════════════
 // ABA 1 — RECEBIMENTO
@@ -162,12 +247,21 @@ function TabRecebimento({ mes }) {
   useEffect(() => {
     async function load() {
       setLoading(true);
-      const { data: rows } = await filtraMes(
-        supabase
-          .from("assurant_triagem")
-          .select("tipo_de_rede, condicao, modelo, status_atual, data_recebimento"),
-        mes
-      );
+
+      const mesAnt = mesAnterior(mes);
+
+      // Mês atual e anterior em paralelo
+      const [{ data: rows }, { data: rowsAnt }] = await Promise.all([
+        filtraMes(
+          supabase.from("assurant_triagem")
+            .select("tipo_de_rede, condicao, modelo, status_atual, data_recebimento"),
+          mes
+        ),
+        filtraMes(
+          supabase.from("assurant_triagem").select("tipo_de_rede"),
+          mesAnt
+        ),
+      ]);
 
       if (!rows) { setLoading(false); return; }
 
@@ -185,7 +279,7 @@ function TabRecebimento({ mes }) {
         const canal = normalizaCanal(r.tipo_de_rede);
         canais[canal] = (canais[canal] || 0) + 1;
 
-        const cond = r.condicao || "Não informado";
+        const cond = normalizaCondicao(r.condicao);
         condicoes[cond] = (condicoes[cond] || 0) + 1;
 
         const mod = r.modelo || "Não informado";
@@ -197,10 +291,25 @@ function TabRecebimento({ mes }) {
         if (r.data_recebimento) comData++; else semData++;
       });
 
-      const topModelos = Object.entries(modelos).sort((a, b) => b[1] - a[1]).slice(0, 8);
-      const topStatus  = Object.entries(statusMap).sort((a, b) => b[1] - a[1]).slice(0, 8);
+      const canaisAnt = {};
+      let totalAnt = 0;
+      (rowsAnt || []).forEach(r => {
+        totalAnt++;
+        const canal = normalizaCanal(r.tipo_de_rede);
+        canaisAnt[canal] = (canaisAnt[canal] || 0) + 1;
+      });
 
-      setData({ canais, condicoes, topModelos, topStatus, totalRecebidos, comData, semData });
+      const topModelos     = Object.entries(modelos).sort((a, b) => b[1] - a[1]).slice(0, 8);
+      const topStatus      = Object.entries(statusMap).sort((a, b) => b[1] - a[1]).slice(0, 8);
+      const pizzaCondicao  = Object.entries(condicoes)
+        .sort((a, b) => b[1] - a[1])
+        .map(([name, value]) => ({ name, value }));
+
+      setData({
+        canais, canaisAnt, totalAnt,
+        pizzaCondicao, topModelos, topStatus,
+        totalRecebidos, comData, semData, mesAnt,
+      });
       setLoading(false);
     }
     load();
@@ -209,54 +318,111 @@ function TabRecebimento({ mes }) {
   if (loading) return <Loader />;
   if (!data)   return <p className="text-slate-400 text-sm">Sem dados para este mês.</p>;
 
-  const { canais, condicoes, topModelos, topStatus, totalRecebidos, comData, semData } = data;
-  const canaisArr    = Object.entries(canais).sort((a, b) => b[1] - a[1]);
-  const condicoesArr = Object.entries(condicoes).sort((a, b) => b[1] - a[1]);
+  const {
+    canais, canaisAnt, totalAnt,
+    pizzaCondicao, topModelos, topStatus,
+    totalRecebidos, comData, semData, mesAnt,
+  } = data;
 
-  const CANAL_COLORS = {
-    "YBV (Lojas)": "bg-purple-500",
-    "Online":      "bg-blue-400",
-    "GRV":         "bg-emerald-500",
-    "Devolução":   "bg-orange-400",
-    "N/A":         "bg-slate-300",
-  };
+  const canaisArr = Object.entries(canais).sort((a, b) => b[1] - a[1]);
 
   return (
     <div className="space-y-4">
+
+      {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiMini label="Total Recebido"  value={fmtN(totalRecebidos)}
           color="bg-purple-50 ring-purple-200 text-purple-700" />
+        <KpiMini label="Mês Anterior"    value={fmtN(totalAnt)}
+          sub={mesAnt}
+          color="bg-slate-50 ring-slate-200 text-slate-600" />
         <KpiMini label="Com Data Receb." value={fmtN(comData)}
           sub={fmtPct(comData, totalRecebidos)}
           color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
         <KpiMini label="Sem Data Receb." value={fmtN(semData)}
           sub={fmtPct(semData, totalRecebidos)}
           color="bg-orange-50 ring-orange-200 text-orange-700" />
-        <KpiMini label="Canais Ativos"   value={canaisArr.length}
-          color="bg-blue-50 ring-blue-200 text-blue-700" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+        {/* Volume por canal com comparativo */}
         <Card>
           <SectionTitle icon={Package}>Volume por Canal</SectionTitle>
-          <div className="space-y-3">
-            {canaisArr.map(([canal, qtd]) => (
-              <StatRow key={canal} label={canal} value={qtd}
-                total={totalRecebidos} color={CANAL_COLORS[canal] || "bg-slate-400"} />
-            ))}
+          <div className="space-y-5">
+            {canaisArr.map(([canal, qtd]) => {
+              const qtdAnt  = canaisAnt[canal] || 0;
+              const delta   = qtd - qtdAnt;
+              const deltaPos = delta >= 0;
+              const deltaPct = qtdAnt > 0
+                ? ((delta / qtdAnt) * 100).toFixed(1)
+                : null;
+
+              return (
+                <div key={canal} className="space-y-1.5">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-semibold text-slate-700">{canal}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-lg ${
+                        deltaPos
+                          ? "bg-emerald-50 text-emerald-600"
+                          : "bg-red-50 text-red-500"
+                      }`}>
+                        {deltaPos ? "▲" : "▼"} {fmtN(Math.abs(delta))}
+                        {deltaPct && ` · ${Math.abs(deltaPct)}%`}
+                      </span>
+                      <div className="text-right">
+                        <div className="font-bold text-slate-800">{fmtN(qtd)}</div>
+                        <div className="text-xs text-slate-400">ant: {fmtN(qtdAnt)}</div>
+                      </div>
+                    </div>
+                  </div>
+                  {/* Barra mês atual */}
+                  <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${CANAL_COLORS[canal] || "bg-slate-400"}`}
+                      style={{ width: `${totalRecebidos > 0 ? (qtd / totalRecebidos) * 100 : 0}%` }}
+                    />
+                  </div>
+                  {/* Barra mês anterior */}
+                  <div className="h-1 bg-slate-50 rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-slate-300"
+                      style={{ width: `${totalAnt > 0 ? (qtdAnt / totalAnt) * 100 : 0}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-xs text-slate-400">
+                    <span>{fmtPct(qtd, totalRecebidos)} do total</span>
+                    <span>▬ cinza = mês anterior</span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </Card>
 
+        {/* Pizza condição */}
         <Card>
           <SectionTitle icon={Layers}>Por Condição</SectionTitle>
-          <div className="space-y-3">
-            {condicoesArr.slice(0, 8).map(([cond, qtd]) => (
-              <StatRow key={cond} label={cond} value={qtd}
-                total={totalRecebidos} color="bg-blue-400" />
+          <PizzaCondicao dados={pizzaCondicao} total={totalRecebidos} />
+          <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
+            {pizzaCondicao.map(({ name, value }) => (
+              <div key={name} className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <div className="h-2.5 w-2.5 rounded-full shrink-0"
+                    style={{ backgroundColor: CONDICAO_COLORS[name] || "#94a3b8" }} />
+                  <span className="font-medium text-slate-600">{name}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-400">{fmtPct(value, totalRecebidos)}</span>
+                  <span className="font-bold text-slate-700 w-14 text-right">{fmtN(value)}</span>
+                </div>
+              </div>
             ))}
           </div>
         </Card>
 
+        {/* Top modelos */}
         <Card>
           <SectionTitle icon={Package}>Top Modelos Recebidos</SectionTitle>
           <div className="space-y-3">
@@ -267,6 +433,7 @@ function TabRecebimento({ mes }) {
           </div>
         </Card>
 
+        {/* Status atual */}
         <Card>
           <SectionTitle icon={Clock}>Status Atual</SectionTitle>
           <div className="space-y-3">
@@ -276,6 +443,7 @@ function TabRecebimento({ mes }) {
             ))}
           </div>
         </Card>
+
       </div>
     </div>
   );
@@ -292,18 +460,17 @@ function TabTriagemFuncional({ mes }) {
     async function load() {
       setLoading(true);
       const { data: rows } = await filtraMes(
-        supabase
-          .from("assurant_triagem")
+        supabase.from("assurant_triagem")
           .select("triagem_funcional, grade, resultado_triagem_funcional, data_funcional, status_bateria"),
         mes
       );
 
       if (!rows) { setLoading(false); return; }
 
-      const funcionais  = {};
-      const grades      = {};
-      const resultados  = {};
-      const baterias    = {};
+      const funcionais = {};
+      const grades     = {};
+      const resultados = {};
+      const baterias   = {};
       let total      = 0;
       let semTriagem = 0;
       let comTriagem = 0;
@@ -312,7 +479,6 @@ function TabTriagemFuncional({ mes }) {
         total++;
         const func = normalizaFuncional(r.triagem_funcional);
         funcionais[func] = (funcionais[func] || 0) + 1;
-
         if (!r.triagem_funcional) semTriagem++; else comTriagem++;
 
         const grade = r.grade || "Não informado";
@@ -364,8 +530,9 @@ function TabTriagemFuncional({ mes }) {
               <StatRow key={func} label={func} value={qtd} total={total}
                 color={
                   ["Bom","Excelente/Like New","Muito Bom"].includes(func) ? "bg-emerald-400" :
-                  ["Trincado","Não liga/Bloqueado"].includes(func)        ? "bg-red-400" :
-                  func === "Sem triagem" ? "bg-slate-300" : "bg-yellow-400"
+                  ["Trincado","Não liga/Bloqueado"].includes(func)        ? "bg-red-400"     :
+                  func === "Sem triagem"                                  ? "bg-slate-300"   :
+                  "bg-yellow-400"
                 } />
             ))}
           </div>
@@ -418,8 +585,7 @@ function TabTriagemEstetica({ mes }) {
     async function load() {
       setLoading(true);
       const { data: rows } = await filtraMes(
-        supabase
-          .from("assurant_triagem")
+        supabase.from("assurant_triagem")
           .select("tela, laterais, traseira, defeitos_adicionais, grade, data_cosmetico"),
         mes
       );
@@ -470,23 +636,23 @@ function TabTriagemEstetica({ mes }) {
 
   function colorEstetica(v) {
     const u = (v || "").toUpperCase();
-    if (u === "QUEBRADO") return "bg-red-400";
+    if (u === "QUEBRADO")                    return "bg-red-400";
     if (["LIKE NEW","EXCELENTE"].includes(u)) return "bg-emerald-400";
-    if (u === "MUITO BOM") return "bg-emerald-300";
-    if (u === "BOM") return "bg-blue-400";
-    if (u === "REGULAR") return "bg-yellow-400";
+    if (u === "MUITO BOM")                   return "bg-emerald-300";
+    if (u === "BOM")                         return "bg-blue-400";
+    if (u === "REGULAR")                     return "bg-yellow-400";
     return "bg-slate-300";
   }
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-        <KpiMini label="Total"          value={fmtN(total)}
+        <KpiMini label="Total"        value={fmtN(total)}
           color="bg-purple-50 ring-purple-200 text-purple-700" />
-        <KpiMini label="Com Estética"   value={fmtN(comEstetica)}
+        <KpiMini label="Com Estética" value={fmtN(comEstetica)}
           sub={fmtPct(comEstetica, total)}
           color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
-        <KpiMini label="Sem Estética"   value={fmtN(semEstetica)}
+        <KpiMini label="Sem Estética" value={fmtN(semEstetica)}
           sub={fmtPct(semEstetica, total)}
           color="bg-orange-50 ring-orange-200 text-orange-700" />
       </div>
@@ -533,7 +699,7 @@ function TabTriagemEstetica({ mes }) {
           <Card className="lg:col-span-2">
             <SectionTitle icon={AlertTriangle}>Defeitos Adicionais</SectionTitle>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              {Object.entries(defeitosM).sort((a,b) => b[1]-a[1]).slice(0, 10).map(([def, qtd]) => (
+              {Object.entries(defeitosM).sort((a,b) => b[1]-a[1]).slice(0,10).map(([def, qtd]) => (
                 <StatRow key={def} label={def} value={qtd} total={total} color="bg-orange-400" />
               ))}
             </div>
@@ -555,8 +721,7 @@ function TabLaudos({ mes }) {
     async function load() {
       setLoading(true);
       const { data: rows } = await filtraMes(
-        supabase
-          .from("assurant_triagem")
+        supabase.from("assurant_triagem")
           .select("data_laudo, data_alocacao, data_oracle, reanalise, status_atual, grade, modelo"),
         mes
       );
@@ -570,8 +735,8 @@ function TabLaudos({ mes }) {
       let comAlocacao     = 0;
       let comOracle       = 0;
       let aguardandoLaudo = 0;
-      const gradesLaudo   = {};
-      const modelosLaudo  = {};
+      const gradesLaudo  = {};
+      const modelosLaudo = {};
 
       rows.forEach(r => {
         total++;
@@ -608,16 +773,16 @@ function TabLaudos({ mes }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiMini label="Com Laudo"      value={fmtN(comLaudo)}
+        <KpiMini label="Com Laudo"     value={fmtN(comLaudo)}
           sub={fmtPct(comLaudo, total)}
           color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
-        <KpiMini label="Sem Laudo"      value={fmtN(semLaudo)}
+        <KpiMini label="Sem Laudo"     value={fmtN(semLaudo)}
           sub={fmtPct(semLaudo, total)}
           color="bg-orange-50 ring-orange-200 text-orange-700" />
-        <KpiMini label="Aguard. Laudo"  value={fmtN(aguardandoLaudo)}
+        <KpiMini label="Aguard. Laudo" value={fmtN(aguardandoLaudo)}
           sub="em status atual"
           color="bg-yellow-50 ring-yellow-200 text-yellow-700" />
-        <KpiMini label="Com Reanálise"  value={fmtN(comReanalise)}
+        <KpiMini label="Com Reanálise" value={fmtN(comReanalise)}
           sub={fmtPct(comReanalise, total)}
           color="bg-red-50 ring-red-200 text-red-700" />
       </div>
@@ -688,7 +853,6 @@ export default function AssurantDashboardPage() {
   const [mesSel, setMesSel] = useState("");
   const [totais, setTotais] = useState(null);
 
-  // Meses disponíveis baseados em data_recebimento
   useEffect(() => {
     async function loadMeses() {
       const { data } = await supabase
@@ -708,7 +872,6 @@ export default function AssurantDashboardPage() {
     loadMeses();
   }, []);
 
-  // Totais do mês selecionado
   useEffect(() => {
     if (!mesSel) return;
     async function loadTotais() {
@@ -716,9 +879,15 @@ export default function AssurantDashboardPage() {
         .from("assurant_triagem")
         .select("*", { count: "exact", head: true });
 
-      const { count: total }       = await filtraMes(base(), mesSel);
-      const { count: comLaudo }    = await filtraMes(base(), mesSel).not("data_laudo", "is", null);
-      const { count: finalizados } = await filtraMes(base(), mesSel).eq("status_atual", "Finalizado");
+      const [
+        { count: total },
+        { count: comLaudo },
+        { count: finalizados },
+      ] = await Promise.all([
+        filtraMes(base(), mesSel),
+        filtraMes(base(), mesSel).not("data_laudo", "is", null),
+        filtraMes(base(), mesSel).eq("status_atual", "Finalizado"),
+      ]);
 
       setTotais({ total, comLaudo, finalizados });
     }
@@ -775,10 +944,10 @@ export default function AssurantDashboardPage() {
       {/* Conteúdo */}
       {mesSel && (
         <>
-          {aba === "recebimento" && <TabRecebimento   mes={mesSel} />}
-          {aba === "funcional"   && <TabTriagemFuncional mes={mesSel} />}
-          {aba === "estetica"    && <TabTriagemEstetica  mes={mesSel} />}
-          {aba === "laudos"      && <TabLaudos           mes={mesSel} />}
+          {aba === "recebimento" && <TabRecebimento      mes={mesSel} />}
+          {aba === "funcional"   && <TabTriagemFuncional  mes={mesSel} />}
+          {aba === "estetica"    && <TabTriagemEstetica   mes={mesSel} />}
+          {aba === "laudos"      && <TabLaudos            mes={mesSel} />}
         </>
       )}
 
