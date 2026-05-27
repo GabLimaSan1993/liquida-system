@@ -1,11 +1,15 @@
 import { useState } from "react";
-import { FileSpreadsheet, Upload, Landmark } from "lucide-react";
+import { FileSpreadsheet, Upload, Landmark, Package } from "lucide-react";
 import {
   previewFile,
   uploadAgingFile,
   uploadFaturamentoFile,
   uploadOfxFile,
 } from "../services/uploadService.js";
+import {
+  previewTriagemAssurant,
+  uploadTriagemAssurant,
+} from "../services/assurantUploadService.js";
 import { useAuth } from "../AuthContext.jsx";
 
 function SectionCard({ children, className = "" }) {
@@ -32,7 +36,8 @@ function Badge({ children, color = "purple" }) {
   const colors = {
     purple: "bg-[#7F2D92] text-white",
     orange: "bg-[#F59E0B] text-white",
-    blue: "bg-blue-600 text-white",
+    blue:   "bg-blue-600 text-white",
+    teal:   "bg-teal-600 text-white",
   };
   return (
     <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${colors[color]}`}>
@@ -53,18 +58,9 @@ function ProgressBar({ value }) {
 }
 
 function UploadBox({
-  title,
-  description,
-  icon,
-  accept,
-  file,
-  onChangeFile,
-  onPreview,
-  onUpload,
-  preview,
-  loadingPreview,
-  loadingUpload,
-  showPreview = true,
+  title, description, icon, accept, file, onChangeFile,
+  onPreview, onUpload, preview, loadingPreview, loadingUpload,
+  showPreview = true, extra = null,
 }) {
   const Icon = icon;
   return (
@@ -78,6 +74,9 @@ function UploadBox({
           <Icon className="h-5 w-5" />
         </div>
       </div>
+
+      {/* Extra — slot para conteúdo adicional (ex: seletor de mês) */}
+      {extra && <div className="mt-4">{extra}</div>}
 
       <div className="mt-5 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-[#E9D5FF]">
         <input
@@ -126,29 +125,40 @@ function UploadBox({
 }
 
 export default function UploadPage() {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
 
-  const [agingFile, setAgingFile] = useState(null);
+  // ── Estados existentes ────────────────────────────────
+  const [agingFile, setAgingFile]           = useState(null);
   const [faturamentoFile, setFaturamentoFile] = useState(null);
-  const [ofxFile, setOfxFile] = useState(null);
-
-  const [agingPreview, setAgingPreview] = useState(null);
+  const [ofxFile, setOfxFile]               = useState(null);
+  const [agingPreview, setAgingPreview]     = useState(null);
   const [faturamentoPreview, setFaturamentoPreview] = useState(null);
 
-  const [loadingAgingPreview, setLoadingAgingPreview] = useState(false);
+  const [loadingAgingPreview, setLoadingAgingPreview]           = useState(false);
   const [loadingFaturamentoPreview, setLoadingFaturamentoPreview] = useState(false);
-
-  const [loadingAgingUpload, setLoadingAgingUpload] = useState(false);
+  const [loadingAgingUpload, setLoadingAgingUpload]             = useState(false);
   const [loadingFaturamentoUpload, setLoadingFaturamentoUpload] = useState(false);
-  const [loadingOfxUpload, setLoadingOfxUpload] = useState(false);
+  const [loadingOfxUpload, setLoadingOfxUpload]                 = useState(false);
 
-  const [status, setStatus] = useState("");
+  // ── Estados Assurant ──────────────────────────────────
+  const [triagemFile, setTriagemFile]       = useState(null);
+  const [triagemPreview, setTriagemPreview] = useState(null);
+  const [loadingTriagemPreview, setLoadingTriagemPreview] = useState(false);
+  const [loadingTriagemUpload, setLoadingTriagemUpload]   = useState(false);
+  const [mesRefTriagem, setMesRefTriagem]   = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  });
+
+  // ── Status global ─────────────────────────────────────
+  const [status, setStatus]     = useState("");
   const [progress, setProgress] = useState(0);
 
   const [historyCards, setHistoryCards] = useState([
-    { type: "Aging", name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
-    { type: "Faturamento", name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
-    { type: "Extrato OFX", name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+    { type: "Aging",           name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+    { type: "Faturamento",     name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+    { type: "Extrato OFX",     name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+    { type: "Triagem Assurant",name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
   ]);
 
   function updateHistoryCard(type, payload) {
@@ -157,6 +167,7 @@ export default function UploadPage() {
     );
   }
 
+  // ── Handlers existentes ───────────────────────────────
   async function handlePreviewAging() {
     try {
       if (!agingFile) { setStatus("Selecione um arquivo de Aging."); return; }
@@ -252,7 +263,7 @@ export default function UploadPage() {
       });
       updateHistoryCard("Extrato OFX", { name: ofxFile.name, status: "Concluído", rows: result.total.toLocaleString("pt-BR"), progress: 100 });
       setProgress(100);
-      setStatus(`Extrato OFX importado com sucesso! ${result.inserted.toLocaleString("pt-BR")} transações inseridas.`);
+      setStatus(`Extrato OFX importado! ${result.inserted.toLocaleString("pt-BR")} transações inseridas.`);
     } catch (error) {
       setStatus(`Erro no upload do OFX: ${error.message}`);
       updateHistoryCard("Extrato OFX", { status: "Erro" });
@@ -261,6 +272,54 @@ export default function UploadPage() {
     }
   }
 
+  // ── Handler Assurant ──────────────────────────────────
+  async function handlePreviewTriagem() {
+    try {
+      if (!triagemFile) { setStatus("Selecione um arquivo de Triagem."); return; }
+      setLoadingTriagemPreview(true);
+      setStatus("Validando estrutura da Triagem Assurant...");
+      const preview = await previewTriagemAssurant(triagemFile);
+      setTriagemPreview(preview);
+      updateHistoryCard("Triagem Assurant", { name: triagemFile.name, status: "Validado", rows: preview.totalRows.toLocaleString("pt-BR"), progress: 15 });
+      setStatus(`Triagem validada. ${preview.totalRows.toLocaleString("pt-BR")} linhas encontradas.`);
+    } catch (error) {
+      setStatus(`Erro ao validar Triagem: ${error.message}`);
+    } finally {
+      setLoadingTriagemPreview(false);
+    }
+  }
+
+  async function handleUploadTriagem() {
+    try {
+      if (!triagemFile) { setStatus("Selecione um arquivo de Triagem."); return; }
+      if (!mesRefTriagem) { setStatus("Selecione o mês de referência."); return; }
+      setLoadingTriagemUpload(true);
+      setProgress(0);
+      setStatus("Iniciando upload da Triagem Assurant...");
+      updateHistoryCard("Triagem Assurant", { name: triagemFile.name, status: "Enviando", progress: 5 });
+      const result = await uploadTriagemAssurant(
+        triagemFile,
+        user.id,
+        mesRefTriagem,
+        ({ inserted, duplicates, total }) => {
+          const pct = total ? Math.round((inserted + duplicates) / total * 100) : 0;
+          setProgress(pct);
+          updateHistoryCard("Triagem Assurant", { name: triagemFile.name, status: "Enviando", rows: total.toLocaleString("pt-BR"), progress: pct });
+          setStatus(`Triagem: ${inserted.toLocaleString("pt-BR")} inseridos, ${duplicates.toLocaleString("pt-BR")} duplicados.`);
+        }
+      );
+      updateHistoryCard("Triagem Assurant", { name: triagemFile.name, status: "Concluído", rows: result.total.toLocaleString("pt-BR"), progress: 100 });
+      setProgress(100);
+      setStatus(`Upload da Triagem Assurant concluído! Inseridos: ${result.inserted.toLocaleString("pt-BR")} | Total: ${result.total.toLocaleString("pt-BR")}.`);
+    } catch (error) {
+      setStatus(`Erro no upload da Triagem: ${error.message}`);
+      updateHistoryCard("Triagem Assurant", { status: "Erro" });
+    } finally {
+      setLoadingTriagemUpload(false);
+    }
+  }
+
+  // ── Render ────────────────────────────────────────────
   return (
     <SectionCard>
       <div className="p-6">
@@ -269,6 +328,7 @@ export default function UploadPage() {
           <Badge color="orange">Operacional</Badge>
         </div>
 
+        {/* Uploads existentes */}
         <div className="mt-4 grid gap-4 xl:grid-cols-2">
           <UploadBox
             title="Base de Aging"
@@ -310,8 +370,38 @@ export default function UploadPage() {
             loadingUpload={loadingOfxUpload}
             showPreview={false}
           />
+
+          {/* ── Assurant Triagem ── */}
+          <UploadBox
+            title="Triagem Assurant — Diária"
+            description="Importe a planilha de triagem, recebimento e expedição do Warehouse."
+            icon={Package}
+            accept=".csv,.xlsx,.xls"
+            file={triagemFile}
+            onChangeFile={(file) => { setTriagemFile(file); setTriagemPreview(null); }}
+            onPreview={handlePreviewTriagem}
+            onUpload={handleUploadTriagem}
+            preview={triagemPreview}
+            loadingPreview={loadingTriagemPreview}
+            loadingUpload={loadingTriagemUpload}
+            extra={
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">
+                  Mês de referência
+                </label>
+                <input
+                  type="month"
+                  value={mesRefTriagem}
+                  onChange={(e) => setMesRefTriagem(e.target.value)}
+                  disabled={loadingTriagemUpload || loadingTriagemPreview}
+                  className="rounded-xl border border-[#D8B4FE] px-3 py-2 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-400 disabled:opacity-50 bg-white"
+                />
+              </div>
+            }
+          />
         </div>
 
+        {/* Status global */}
         <div className="mt-4 rounded-2xl bg-[#FCFAFF] p-4 ring-1 ring-[#E9D5FF]">
           <div className="text-sm font-semibold text-[#6B1F87]">Status do upload</div>
           <div className="mt-1 text-sm text-slate-600">
@@ -322,7 +412,8 @@ export default function UploadPage() {
           </div>
         </div>
 
-        <div className="mt-4 grid gap-4 md:grid-cols-3">
+        {/* Cards de histórico */}
+        <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {historyCards.map((item) => (
             <div key={item.type} className="rounded-[24px] bg-[#FCFAFF] p-4 ring-1 ring-[#E9D5FF]">
               <div className="flex items-center justify-between">
@@ -331,7 +422,7 @@ export default function UploadPage() {
                 </span>
                 <span className="text-xs text-slate-500">{item.rows} linhas</span>
               </div>
-              <div className="mt-3 font-semibold">{item.name}</div>
+              <div className="mt-3 font-semibold text-sm">{item.name}</div>
               <div className="mt-1 text-sm text-slate-500">{item.status}</div>
               <div className="mt-4">
                 <ProgressBar value={item.progress} />
@@ -339,6 +430,7 @@ export default function UploadPage() {
             </div>
           ))}
         </div>
+
       </div>
     </SectionCard>
   );
