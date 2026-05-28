@@ -32,7 +32,7 @@ export async function previewMovimentacao(file) {
       header: true,
       skipEmptyLines: true,
       encoding: "UTF-8",
-      delimiter: "\t",
+      delimiter: ";",
       step: (result, parser) => {
         if (!headers) {
           headers = Object.keys(result.data);
@@ -104,7 +104,7 @@ export async function uploadMovimentacao(file, userId, onProgress) {
       header: true,
       skipEmptyLines: true,
       encoding: "UTF-8",
-      delimiter: "\t",
+      delimiter: ";",
       step: (result) => {
         if (hasError) return;
 
