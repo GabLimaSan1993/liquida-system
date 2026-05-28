@@ -23,6 +23,7 @@ import CargaHistoricaPage from "./pages/CargaHistoricaPage.jsx";
 
 // Assurant Warehouse
 import AssurantDashboardPage from "./pages/assurant/AssurantDashboardPage.jsx";
+import AssurantSLAPage from "./pages/assurant/AssurantSLAPage.jsx";
 
 function ProtectedRoute({ tela, children }) {
   const { user, loading, hasAccess } = useAuth();
@@ -102,6 +103,7 @@ export default function App() {
 
         {/* Assurant Warehouse */}
         <Route path="/assurant/dashboard" element={<ProtectedRoute tela="/assurant/dashboard"><AssurantDashboardPage /></ProtectedRoute>} />
+        <Route path="/assurant/sla" element={<ProtectedRoute tela="/assurant/sla"><AssurantSLAPage /></ProtectedRoute>} />
       </Route>
     </Routes>
   );
