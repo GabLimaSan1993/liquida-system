@@ -6,7 +6,7 @@ import {
   Camera, ShieldCheck, ChevronDown, ChevronRight, Layers,
   Truck, TrendingUp, Users, LogOut, X, ShoppingCart,
   Landmark, BarChart2, Lock, TrendingDown, Database,
-  Package, Clock,
+  Package, Clock, LayoutDashboard,
 } from "lucide-react";
 import { useAuth } from "../AuthContext.jsx";
 import { signOut } from "../services/authService.js";
@@ -111,13 +111,13 @@ function SubGroup({ icon: Icon, label, paths, children }) {
 function LinhaBrancaMaster({ onClose }) {
   return (
     <CollapseGroup icon={Layers} label="Linha Branca" paths={["/linha-branca"]}>
-      <NavItem to="/linha-branca/triagem"         icon={ClipboardCheck} label="Triagem"           indent onClick={onClose} />
-      <NavItem to="/linha-branca/reparo-mecanico" icon={Wrench}         label="Reparo Mecânico"   indent onClick={onClose} />
-      <NavItem to="/linha-branca/reparo-eletrico" icon={Zap}            label="Reparo Elétrico"   indent onClick={onClose} />
-      <NavItem to="/linha-branca/reparo-estetico" icon={Sparkles}       label="Reparo Estético"   indent onClick={onClose} />
-      <NavItem to="/linha-branca/bancada-testes"  icon={FlaskConical}   label="Bancada de Testes" indent onClick={onClose} />
-      <NavItem to="/linha-branca/limpeza"         icon={Camera}         label="Limpeza"           indent onClick={onClose} />
-      <NavItem to="/linha-branca/qualidade"       icon={ShieldCheck}    label="Qualidade"         indent onClick={onClose} />
+      <NavItem to="/linha-branca/triagem"          icon={ClipboardCheck} label="Triagem"           indent onClick={onClose} />
+      <NavItem to="/linha-branca/reparo-mecanico"  icon={Wrench}         label="Reparo Mecânico"   indent onClick={onClose} />
+      <NavItem to="/linha-branca/reparo-eletrico"  icon={Zap}            label="Reparo Elétrico"   indent onClick={onClose} />
+      <NavItem to="/linha-branca/reparo-estetico"  icon={Sparkles}       label="Reparo Estético"   indent onClick={onClose} />
+      <NavItem to="/linha-branca/bancada-testes"   icon={FlaskConical}   label="Bancada de Testes" indent onClick={onClose} />
+      <NavItem to="/linha-branca/limpeza"          icon={Camera}         label="Limpeza"           indent onClick={onClose} />
+      <NavItem to="/linha-branca/qualidade"        icon={ShieldCheck}    label="Qualidade"         indent onClick={onClose} />
     </CollapseGroup>
   );
 }
@@ -125,11 +125,11 @@ function LinhaBrancaMaster({ onClose }) {
 function LinhaBrancaRefrigeracao({ onClose }) {
   return (
     <CollapseGroup icon={Layers} label="Linha Branca" paths={["/linha-branca"]}>
-      <NavItem to="/linha-branca/triagem"        icon={ClipboardCheck} label="Triagem"           indent onClick={onClose} />
-      <NavItem to="/linha-branca/reparos"        icon={Wrench}         label="Reparos"           indent onClick={onClose} />
-      <NavItem to="/linha-branca/bancada-testes" icon={FlaskConical}   label="Bancada de Testes" indent onClick={onClose} />
-      <NavItem to="/linha-branca/limpeza"        icon={Camera}         label="Limpeza"           indent onClick={onClose} />
-      <NavItem to="/linha-branca/qualidade"      icon={ShieldCheck}    label="Qualidade"         indent onClick={onClose} />
+      <NavItem to="/linha-branca/triagem"         icon={ClipboardCheck} label="Triagem"           indent onClick={onClose} />
+      <NavItem to="/linha-branca/reparos"         icon={Wrench}         label="Reparos"           indent onClick={onClose} />
+      <NavItem to="/linha-branca/bancada-testes"  icon={FlaskConical}   label="Bancada de Testes" indent onClick={onClose} />
+      <NavItem to="/linha-branca/limpeza"         icon={Camera}         label="Limpeza"           indent onClick={onClose} />
+      <NavItem to="/linha-branca/qualidade"       icon={ShieldCheck}    label="Qualidade"         indent onClick={onClose} />
     </CollapseGroup>
   );
 }
@@ -183,7 +183,7 @@ function SidebarContent({ profile, onClose, handleLogout }) {
               </SubGroup>
 
               <SubGroup icon={Landmark} label="Financeiro" paths={["/financeiro"]}>
-                <NavItem to="/financeiro/fluxo-realizado" icon={BarChart2}   label="Fluxo Realizado"  indent onClick={onClose} />
+                <NavItem to="/financeiro/fluxo-realizado" icon={BarChart2}    label="Fluxo Realizado"  indent onClick={onClose} />
                 <NavItem to="/financeiro/contas-pagar"    icon={TrendingDown} label="Contas a Pagar"   indent onClick={onClose} />
                 <NavItem to="/financeiro/contas-receber"  icon={TrendingUp}   label="Contas a Receber" indent onClick={onClose} />
                 <NavItem to="/financeiro/carga-historica" icon={Database}     label="Carga Histórica"  indent onClick={onClose} />
@@ -202,8 +202,9 @@ function SidebarContent({ profile, onClose, handleLogout }) {
 
             {/* Assurant Warehouse */}
             <CollapseGroup icon={Package} label="Assurant Warehouse" paths={["/assurant"]}>
-              <NavItem to="/assurant/dashboard" icon={BarChart3} label="Dashboard"          indent onClick={onClose} />
-              <NavItem to="/assurant/sla"       icon={Clock}     label="SLA & Rastreabilidade" indent onClick={onClose} />
+              <NavItem to="/assurant/dashboard" icon={BarChart3}       label="Dashboard"             indent onClick={onClose} />
+              <NavItem to="/assurant/sla"       icon={Clock}           label="SLA & Rastreabilidade" indent onClick={onClose} />
+              <NavItem to="/assurant/layout"    icon={LayoutDashboard} label="Layout Warehouse"       indent onClick={onClose} />
               <NavItemDisabled icon={DollarSign} label="DRE Gerencial" indent />
             </CollapseGroup>
           </>
