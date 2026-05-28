@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FileSpreadsheet, Upload, Landmark, Package } from "lucide-react";
+import { FileSpreadsheet, Upload, Landmark, Package, GitBranch } from "lucide-react";
 import {
   previewFile,
   uploadAgingFile,
@@ -10,6 +10,10 @@ import {
   previewTriagemAssurant,
   uploadTriagemAssurant,
 } from "../services/assurantUploadService.js";
+import {
+  previewMovimentacao,
+  uploadMovimentacao,
+} from "../services/assurantMovimentacaoService.js";
 import { useAuth } from "../AuthContext.jsx";
 
 function SectionCard({ children, className = "" }) {
@@ -70,12 +74,11 @@ function UploadBox({
           <div className="text-lg font-bold text-[#6B1F87]">{title}</div>
           <div className="mt-1 text-sm text-slate-500">{description}</div>
         </div>
-        <div className="rounded-2xl bg-[linear-gradient(135deg,#F97316_0%,#F59E0B_100%)] p-3 text-white shadow-lg">
+        <div className="rounded-2xl bg-[linear-gradient(135deg,#F97316_0%,#F59E0B_100%)] p-3 text-white shadow-lg shrink-0 ml-3">
           <Icon className="h-5 w-5" />
         </div>
       </div>
 
-      {/* Extra — slot para conteúdo adicional (ex: seletor de mês) */}
       {extra && <div className="mt-4">{extra}</div>}
 
       <div className="mt-5 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-[#E9D5FF]">
@@ -128,37 +131,43 @@ export default function UploadPage() {
   const { profile, user } = useAuth();
 
   // ── Estados existentes ────────────────────────────────
-  const [agingFile, setAgingFile]           = useState(null);
-  const [faturamentoFile, setFaturamentoFile] = useState(null);
-  const [ofxFile, setOfxFile]               = useState(null);
-  const [agingPreview, setAgingPreview]     = useState(null);
+  const [agingFile, setAgingFile]                   = useState(null);
+  const [faturamentoFile, setFaturamentoFile]       = useState(null);
+  const [ofxFile, setOfxFile]                       = useState(null);
+  const [agingPreview, setAgingPreview]             = useState(null);
   const [faturamentoPreview, setFaturamentoPreview] = useState(null);
-
-  const [loadingAgingPreview, setLoadingAgingPreview]           = useState(false);
+  const [loadingAgingPreview, setLoadingAgingPreview]             = useState(false);
   const [loadingFaturamentoPreview, setLoadingFaturamentoPreview] = useState(false);
-  const [loadingAgingUpload, setLoadingAgingUpload]             = useState(false);
-  const [loadingFaturamentoUpload, setLoadingFaturamentoUpload] = useState(false);
-  const [loadingOfxUpload, setLoadingOfxUpload]                 = useState(false);
+  const [loadingAgingUpload, setLoadingAgingUpload]               = useState(false);
+  const [loadingFaturamentoUpload, setLoadingFaturamentoUpload]   = useState(false);
+  const [loadingOfxUpload, setLoadingOfxUpload]                   = useState(false);
 
-  // ── Estados Assurant ──────────────────────────────────
-  const [triagemFile, setTriagemFile]       = useState(null);
-  const [triagemPreview, setTriagemPreview] = useState(null);
+  // ── Estados Triagem Assurant ──────────────────────────
+  const [triagemFile, setTriagemFile]               = useState(null);
+  const [triagemPreview, setTriagemPreview]         = useState(null);
   const [loadingTriagemPreview, setLoadingTriagemPreview] = useState(false);
   const [loadingTriagemUpload, setLoadingTriagemUpload]   = useState(false);
-  const [mesRefTriagem, setMesRefTriagem]   = useState(() => {
+  const [mesRefTriagem, setMesRefTriagem]           = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   });
+
+  // ── Estados Movimentação Assurant ─────────────────────
+  const [movFile, setMovFile]                       = useState(null);
+  const [movPreview, setMovPreview]                 = useState(null);
+  const [loadingMovPreview, setLoadingMovPreview]   = useState(false);
+  const [loadingMovUpload, setLoadingMovUpload]     = useState(false);
 
   // ── Status global ─────────────────────────────────────
   const [status, setStatus]     = useState("");
   const [progress, setProgress] = useState(0);
 
   const [historyCards, setHistoryCards] = useState([
-    { type: "Aging",           name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
-    { type: "Faturamento",     name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
-    { type: "Extrato OFX",     name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
-    { type: "Triagem Assurant",name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+    { type: "Aging",                  name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+    { type: "Faturamento",            name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+    { type: "Extrato OFX",            name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+    { type: "Triagem Assurant",       name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+    { type: "Movimentação Assurant",  name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
   ]);
 
   function updateHistoryCard(type, payload) {
@@ -272,7 +281,7 @@ export default function UploadPage() {
     }
   }
 
-  // ── Handler Assurant ──────────────────────────────────
+  // ── Handler Triagem Assurant ──────────────────────────
   async function handlePreviewTriagem() {
     try {
       if (!triagemFile) { setStatus("Selecione um arquivo de Triagem."); return; }
@@ -298,9 +307,7 @@ export default function UploadPage() {
       setStatus("Iniciando upload da Triagem Assurant...");
       updateHistoryCard("Triagem Assurant", { name: triagemFile.name, status: "Enviando", progress: 5 });
       const result = await uploadTriagemAssurant(
-        triagemFile,
-        user.id,
-        mesRefTriagem,
+        triagemFile, user.id, mesRefTriagem,
         ({ inserted, duplicates, total }) => {
           const pct = total ? Math.round((inserted + duplicates) / total * 100) : 0;
           setProgress(pct);
@@ -319,6 +326,50 @@ export default function UploadPage() {
     }
   }
 
+  // ── Handler Movimentação Assurant ─────────────────────
+  async function handlePreviewMovimentacao() {
+    try {
+      if (!movFile) { setStatus("Selecione um arquivo de Movimentação."); return; }
+      setLoadingMovPreview(true);
+      setStatus("Validando estrutura da Movimentação Assurant...");
+      const preview = await previewMovimentacao(movFile);
+      setMovPreview(preview);
+      updateHistoryCard("Movimentação Assurant", { name: movFile.name, status: "Validado", rows: preview.totalRows.toLocaleString("pt-BR"), progress: 15 });
+      setStatus(`Movimentação validada. ${preview.totalRows.toLocaleString("pt-BR")} linhas encontradas.`);
+    } catch (error) {
+      setStatus(`Erro ao validar Movimentação: ${error.message}`);
+    } finally {
+      setLoadingMovPreview(false);
+    }
+  }
+
+  async function handleUploadMovimentacao() {
+    try {
+      if (!movFile) { setStatus("Selecione um arquivo de Movimentação."); return; }
+      setLoadingMovUpload(true);
+      setProgress(0);
+      setStatus("Iniciando upload da Movimentação Assurant...");
+      updateHistoryCard("Movimentação Assurant", { name: movFile.name, status: "Enviando", progress: 5 });
+      const result = await uploadMovimentacao(
+        movFile, user.id,
+        ({ inserted, duplicates, total }) => {
+          const pct = total ? Math.round((inserted + duplicates) / total * 100) : 0;
+          setProgress(pct);
+          updateHistoryCard("Movimentação Assurant", { name: movFile.name, status: "Enviando", rows: total.toLocaleString("pt-BR"), progress: pct });
+          setStatus(`Movimentação: ${inserted.toLocaleString("pt-BR")} inseridos.`);
+        }
+      );
+      updateHistoryCard("Movimentação Assurant", { name: movFile.name, status: "Concluído", rows: result.total.toLocaleString("pt-BR"), progress: 100 });
+      setProgress(100);
+      setStatus(`Upload da Movimentação concluído! ${result.inserted.toLocaleString("pt-BR")} registros inseridos.`);
+    } catch (error) {
+      setStatus(`Erro no upload da Movimentação: ${error.message}`);
+      updateHistoryCard("Movimentação Assurant", { status: "Erro" });
+    } finally {
+      setLoadingMovUpload(false);
+    }
+  }
+
   // ── Render ────────────────────────────────────────────
   return (
     <SectionCard>
@@ -328,8 +379,9 @@ export default function UploadPage() {
           <Badge color="orange">Operacional</Badge>
         </div>
 
-        {/* Uploads existentes */}
         <div className="mt-4 grid gap-4 xl:grid-cols-2">
+
+          {/* Aging */}
           <UploadBox
             title="Base de Aging"
             description="Entrada de itens, OS, custos e disponibilidade."
@@ -344,6 +396,7 @@ export default function UploadPage() {
             loadingUpload={loadingAgingUpload}
           />
 
+          {/* Faturamento */}
           <UploadBox
             title="Base de Faturamento"
             description="Vendas, cliente, fornecedor, lote e rentabilidade."
@@ -358,6 +411,7 @@ export default function UploadPage() {
             loadingUpload={loadingFaturamentoUpload}
           />
 
+          {/* OFX */}
           <UploadBox
             title="Extrato Bancário (OFX)"
             description="Importe o extrato bancário para o fluxo de caixa realizado."
@@ -371,7 +425,7 @@ export default function UploadPage() {
             showPreview={false}
           />
 
-          {/* ── Assurant Triagem ── */}
+          {/* Triagem Assurant */}
           <UploadBox
             title="Triagem Assurant — Diária"
             description="Importe a planilha de triagem, recebimento e expedição do Warehouse."
@@ -399,6 +453,27 @@ export default function UploadPage() {
               </div>
             }
           />
+
+          {/* Movimentação Assurant */}
+          <UploadBox
+            title="Movimentação Assurant — Histórico"
+            description="Importe o histórico de etapas por voucher para análise de SLA e rastreabilidade."
+            icon={GitBranch}
+            accept=".csv,.txt,.xlsx,.xls"
+            file={movFile}
+            onChangeFile={(file) => { setMovFile(file); setMovPreview(null); }}
+            onPreview={handlePreviewMovimentacao}
+            onUpload={handleUploadMovimentacao}
+            preview={movPreview}
+            loadingPreview={loadingMovPreview}
+            loadingUpload={loadingMovUpload}
+            extra={
+              <div className="text-xs text-slate-500 bg-blue-50 ring-1 ring-blue-200 rounded-xl px-3 py-2">
+                📋 Formato esperado: Usuário · Etapa · Voucher · Serial/IMEI · Data (separado por tab)
+              </div>
+            }
+          />
+
         </div>
 
         {/* Status global */}
@@ -413,7 +488,7 @@ export default function UploadPage() {
         </div>
 
         {/* Cards de histórico */}
-        <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {historyCards.map((item) => (
             <div key={item.type} className="rounded-[24px] bg-[#FCFAFF] p-4 ring-1 ring-[#E9D5FF]">
               <div className="flex items-center justify-between">
