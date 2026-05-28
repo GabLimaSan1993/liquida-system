@@ -1,13 +1,14 @@
 import { useState, useEffect } from "react";
 import {
   Clock, Users, TrendingUp, Search, ChevronDown,
-  AlertTriangle, CheckCircle, ArrowRight, BarChart3
+  AlertTriangle, CheckCircle, BarChart3
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   LineChart, Line, CartesianGrid, Legend
 } from "recharts";
 import { supabase } from "../../lib/supabase";
+import AssurantWarehouseMap from "../../components/AssurantWarehouseMap.jsx";
 
 // ── Helpers ──────────────────────────────────────────────
 function fmtN(v) { return (v || 0).toLocaleString("pt-BR"); }
@@ -16,24 +17,31 @@ function fmtPct(v, total) {
   return ((v / total) * 100).toFixed(1).replace(".", ",") + "%";
 }
 
-// ── Paleta ───────────────────────────────────────────────
+function mesAnterior(mes) {
+  const [ano, m] = mes.split("-").map(Number);
+  return m === 1
+    ? `${ano - 1}-12`
+    : `${ano}-${String(m - 1).padStart(2, "0")}`;
+}
+
+// ── Paleta etapas ─────────────────────────────────────────
 const ETAPA_COLORS = {
-  "Recebimento":                           "#7F2D92",
-  "Triagem Funcional":                     "#9B3AAD",
-  "Triagem Cosmética":                     "#B347C8",
-  "Laudo":                                 "#F97316",
-  "Alocação":                              "#F59E0B",
-  "Oracle":                                "#5B1E74",
-  "Produto expedido":                      "#10b981",
-  "Reservado para reparo":                 "#ef4444",
-  "Retorno de Reparo":                     "#f87171",
-  "Reservado para pedido B2B":             "#3b82f6",
-  "Reservado para pedido B2C":             "#60a5fa",
-  "Produto vinculado com pedido":          "#06b6d4",
-  "Produto alocado em box":                "#0891b2",
-  "Triagem ALS":                           "#8b5cf6",
-  "Laudo ALS":                             "#7c3aed",
-  "Nota fiscal anexada":                   "#64748b",
+  "Recebimento":                              "#7F2D92",
+  "Triagem Funcional":                        "#9B3AAD",
+  "Triagem Cosmética":                        "#B347C8",
+  "Laudo":                                    "#F97316",
+  "Alocação":                                 "#F59E0B",
+  "Oracle":                                   "#5B1E74",
+  "Produto expedido":                         "#10b981",
+  "Reservado para reparo":                    "#ef4444",
+  "Retorno de Reparo":                        "#f87171",
+  "Reservado para pedido B2B":                "#3b82f6",
+  "Reservado para pedido B2C":                "#60a5fa",
+  "Produto vinculado com pedido":             "#06b6d4",
+  "Produto alocado em box":                   "#0891b2",
+  "Triagem ALS":                              "#8b5cf6",
+  "Laudo ALS":                                "#7c3aed",
+  "Nota fiscal anexada":                      "#64748b",
   "Movimentação de sub inventário realizado": "#94a3b8",
 };
 
@@ -58,10 +66,10 @@ function Card({ children, className = "" }) {
   );
 }
 
-function SectionTitle({ children, icon: Icon, color = "text-[#7F2D92]" }) {
+function SectionTitle({ children, icon: Icon }) {
   return (
-    <h3 className={`font-black text-slate-800 flex items-center gap-2 mb-4 ${color}`}>
-      <Icon className="h-4 w-4" />
+    <h3 className="font-black text-slate-800 flex items-center gap-2 mb-4">
+      <Icon className="h-4 w-4 text-[#7F2D92]" />
       {children}
     </h3>
   );
@@ -189,7 +197,6 @@ function MesSelector({ meses, mesSel, onChange }) {
   );
 }
 
-// ── Tooltip customizado ───────────────────────────────────
 function CustomTooltipBar({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   return (
@@ -220,24 +227,20 @@ function TabFunil({ mes }) {
         supabase.rpc("assurant_sla_ciclo_total",   { meses: mes }),
       ]);
 
-      // Montar mapa de volumes
       const volumeMap = {};
       (etapas || []).forEach(r => { volumeMap[r.etapa] = Number(r.total); });
 
-      // Total geral
       const total = Object.values(volumeMap).reduce((s, v) => s + v, 0);
 
-      // Funil ordenado
       const funil = ETAPA_ORDEM
         .filter(e => volumeMap[e])
         .map(e => ({ etapa: e, total: volumeMap[e] }));
 
-      // Outras etapas não no funil principal
       const outras = (etapas || [])
         .filter(r => !ETAPA_ORDEM.includes(r.etapa))
         .map(r => ({ etapa: r.etapa, total: Number(r.total) }));
 
-      setData({ funil, outras, volumeMap, total });
+      setData({ funil, outras, total });
       setCiclo(cicloData?.[0] || null);
       setLoading(false);
     }
@@ -252,30 +255,26 @@ function TabFunil({ mes }) {
 
   return (
     <div className="space-y-4">
-      {/* KPIs ciclo total */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiMini label="Total Movimentações" value={fmtN(total)}
           color="bg-purple-50 ring-purple-200 text-purple-700" />
-  {ciclo && ciclo.media_dias ? (
-  <>
-    <KpiMini label="Ciclo Médio (Rec→Exp)" value={`${ciclo.media_dias}d`}
-      sub={`${fmtN(ciclo.total)} vouchers completos`}
-      color="bg-blue-50 ring-blue-200 text-blue-700" />
-    <KpiMini label="Ciclo Mínimo" value={`${ciclo.minimo_dias}d`}
-      color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
-    <KpiMini label="Ciclo Máximo" value={`${ciclo.maximo_dias}d`}
-      color="bg-orange-50 ring-orange-200 text-orange-700" />
-  </>
-) : (
-  <KpiMini label="Ciclo Rec→Exp"
-    value="—"
-    sub="Selecione mais meses para ver o ciclo completo"
-    color="bg-slate-50 ring-slate-200 text-slate-500" />
-)}
-        
+        {ciclo && ciclo.media_dias ? (
+          <>
+            <KpiMini label="Ciclo Médio (Rec→Exp)" value={`${ciclo.media_dias}d`}
+              sub={`${fmtN(ciclo.total)} vouchers completos`}
+              color="bg-blue-50 ring-blue-200 text-blue-700" />
+            <KpiMini label="Ciclo Mínimo" value={`${ciclo.minimo_dias}d`}
+              color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
+            <KpiMini label="Ciclo Máximo" value={`${ciclo.maximo_dias}d`}
+              color="bg-orange-50 ring-orange-200 text-orange-700" />
+          </>
+        ) : (
+          <KpiMini label="Ciclo Rec→Exp" value="—"
+            sub="Selecione mais meses para ver o ciclo completo"
+            color="bg-slate-50 ring-slate-200 text-slate-500" />
+        )}
       </div>
 
-      {/* Funil visual */}
       <Card>
         <SectionTitle icon={TrendingUp}>Funil de Produção — Etapas Principais</SectionTitle>
         <div className="space-y-3">
@@ -283,7 +282,6 @@ function TabFunil({ mes }) {
             const pct     = (qtd / maxFunil) * 100;
             const pctTotal = fmtPct(qtd, total);
             const cor     = ETAPA_COLORS[etapa] || "#94a3b8";
-
             return (
               <div key={etapa} className="space-y-1.5">
                 <div className="flex items-center justify-between text-sm">
@@ -298,10 +296,8 @@ function TabFunil({ mes }) {
                   </div>
                 </div>
                 <div className="h-6 bg-slate-100 rounded-xl overflow-hidden relative">
-                  <div
-                    className="h-full rounded-xl flex items-center justify-end pr-3 transition-all duration-700"
-                    style={{ width: `${Math.max(pct, 2)}%`, backgroundColor: cor }}
-                  >
+                  <div className="h-full rounded-xl flex items-center justify-end pr-3 transition-all duration-700"
+                    style={{ width: `${Math.max(pct, 2)}%`, backgroundColor: cor }}>
                     {pct >= 15 && (
                       <span className="text-white text-xs font-bold">{fmtN(qtd)}</span>
                     )}
@@ -313,10 +309,9 @@ function TabFunil({ mes }) {
         </div>
       </Card>
 
-      {/* Outras etapas */}
       {outras.length > 0 && (
         <Card>
-          <SectionTitle icon={ArrowRight}>Etapas Complementares</SectionTitle>
+          <SectionTitle icon={TrendingUp}>Etapas Complementares</SectionTitle>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             {outras.map(({ etapa, total: qtd }) => (
               <div key={etapa} className="flex items-center justify-between text-sm px-3 py-2 rounded-xl bg-slate-50">
@@ -339,106 +334,10 @@ function TabFunil({ mes }) {
 }
 
 // ══════════════════════════════════════════════════════════
-// ABA 2 — TEMPO ENTRE ETAPAS
+// ABA 2 — TEMPO ENTRE ETAPAS (mapa visual)
 // ══════════════════════════════════════════════════════════
 function TabTempos({ mes }) {
-  const [data, setData]       = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function load() {
-      setLoading(true);
-      const { data: rows } = await supabase.rpc("assurant_sla_tempo_etapas", { meses: mes });
-      setData(rows || []);
-      setLoading(false);
-    }
-    load();
-  }, [mes]);
-
-  if (loading) return <Loader />;
-  if (!data?.length) return <p className="text-slate-400 text-sm">Sem dados.</p>;
-
-  // Filtrar transições mais relevantes (funil principal)
-  const principais = data.filter(r =>
-    ETAPA_ORDEM.includes(r.etapa) && ETAPA_ORDEM.includes(r.prox_etapa)
-  );
-
-  const outras = data.filter(r =>
-    !principais.includes(r)
-  ).slice(0, 10);
-
-  function corTempo(horas) {
-    if (horas <= 24)  return "text-emerald-600 bg-emerald-50 ring-emerald-200";
-    if (horas <= 72)  return "text-yellow-600 bg-yellow-50 ring-yellow-200";
-    if (horas <= 168) return "text-orange-600 bg-orange-50 ring-orange-200";
-    return "text-red-600 bg-red-50 ring-red-200";
-  }
-
-  function labelTempo(horas) {
-    if (horas < 24)   return `${horas}h`;
-    const dias = (horas / 24).toFixed(1);
-    return `${dias}d`;
-  }
-
-  return (
-    <div className="space-y-4">
-
-      {/* Legenda */}
-      <div className="flex items-center gap-3 flex-wrap text-xs">
-        <span className="font-semibold text-slate-500">Referência SLA:</span>
-        <span className="bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200 px-2 py-1 rounded-lg font-semibold">≤ 24h ✓</span>
-        <span className="bg-yellow-50 text-yellow-600 ring-1 ring-yellow-200 px-2 py-1 rounded-lg font-semibold">24-72h atenção</span>
-        <span className="bg-orange-50 text-orange-600 ring-1 ring-orange-200 px-2 py-1 rounded-lg font-semibold">3-7d alerta</span>
-        <span className="bg-red-50 text-red-600 ring-1 ring-red-200 px-2 py-1 rounded-lg font-semibold">&gt; 7d crítico</span>
-      </div>
-
-      {/* Transições principais */}
-      <Card>
-        <SectionTitle icon={Clock}>Tempo Médio — Funil Principal</SectionTitle>
-        <div className="space-y-3">
-          {principais.map((r, idx) => (
-            <div key={idx} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-purple-50 transition-all">
-              <div className="flex items-center gap-2 flex-1 min-w-0">
-                <div className="h-2.5 w-2.5 rounded-full shrink-0"
-                  style={{ backgroundColor: ETAPA_COLORS[r.etapa] || "#94a3b8" }} />
-                <span className="text-xs font-semibold text-slate-600 truncate">{r.etapa}</span>
-                <ArrowRight className="h-3 w-3 text-slate-300 shrink-0" />
-                <div className="h-2.5 w-2.5 rounded-full shrink-0"
-                  style={{ backgroundColor: ETAPA_COLORS[r.prox_etapa] || "#94a3b8" }} />
-                <span className="text-xs font-semibold text-slate-600 truncate">{r.prox_etapa}</span>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className={`text-xs font-bold px-2 py-1 rounded-lg ring-1 ${corTempo(Number(r.media_horas))}`}>
-                  {labelTempo(Number(r.media_horas))}
-                </span>
-                <span className="text-xs text-slate-400">{fmtN(r.total)} casos</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      {/* Outras transições */}
-      {outras.length > 0 && (
-        <Card>
-          <SectionTitle icon={Clock}>Outras Transições</SectionTitle>
-          <div className="space-y-2">
-            {outras.map((r, idx) => (
-              <div key={idx} className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 text-xs">
-                <span className="text-slate-500 truncate flex-1">
-                  {r.etapa} → {r.prox_etapa}
-                </span>
-                <span className={`font-bold px-2 py-0.5 rounded-lg ring-1 ${corTempo(Number(r.media_horas))}`}>
-                  {labelTempo(Number(r.media_horas))}
-                </span>
-                <span className="text-slate-400">{fmtN(r.total)}</span>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-    </div>
-  );
+  return <AssurantWarehouseMap meses={mes} />;
 }
 
 // ══════════════════════════════════════════════════════════
@@ -462,7 +361,6 @@ function TabUsuarios({ mes }) {
   if (loading) return <Loader />;
   if (!data?.length) return <p className="text-slate-400 text-sm">Sem dados.</p>;
 
-  // Agregar por usuário
   const porUsuario = {};
   const etapas     = new Set(["Todas"]);
 
@@ -476,7 +374,6 @@ function TabUsuarios({ mes }) {
 
   const totalGeral = Object.values(porUsuario).reduce((s, u) => s + u.total, 0);
 
-  // Filtrar por etapa
   const usuariosArr = Object.entries(porUsuario)
     .map(([nome, info]) => ({
       nome,
@@ -488,35 +385,28 @@ function TabUsuarios({ mes }) {
     .sort((a, b) => b.total - a.total)
     .slice(0, 15);
 
-  const maxUser = usuariosArr[0]?.total || 1;
-
-  // Dados para gráfico de barras top 8
+  const maxUser  = usuariosArr[0]?.total || 1;
   const chartData = usuariosArr.slice(0, 8).map(u => ({
-    name: u.nome.split(" ")[0], // primeiro nome
+    name:  u.nome.split(" ")[0],
     total: u.total,
   }));
 
   return (
     <div className="space-y-4">
-
-      {/* Filtro por etapa */}
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-xs font-semibold text-slate-500">Filtrar por etapa:</span>
         {[...etapas].slice(0, 10).map(e => (
-          <button key={e}
-            onClick={() => setEtapa(e)}
+          <button key={e} onClick={() => setEtapa(e)}
             className={`text-xs px-3 py-1.5 rounded-xl font-semibold transition-all ${
               etapaFiltro === e
                 ? "bg-[#7F2D92] text-white"
                 : "bg-slate-100 text-slate-600 hover:bg-purple-50"
-            }`}
-          >
+            }`}>
             {e}
           </button>
         ))}
       </div>
 
-      {/* Gráfico top 8 */}
       <Card>
         <SectionTitle icon={BarChart3}>Top 8 Usuários — {etapaFiltro}</SectionTitle>
         <ResponsiveContainer width="100%" height={240}>
@@ -530,13 +420,12 @@ function TabUsuarios({ mes }) {
         </ResponsiveContainer>
       </Card>
 
-      {/* Lista completa */}
       <Card>
         <SectionTitle icon={Users}>Ranking de Produtividade</SectionTitle>
         <div className="space-y-3">
           {usuariosArr.map(({ nome, total: qtd }, idx) => {
-            const pct = (qtd / maxUser) * 100;
-            const medal = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `${idx + 1}.`;
+            const pct    = (qtd / maxUser) * 100;
+            const medal  = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `${idx + 1}.`;
             return (
               <div key={nome} className="space-y-1.5">
                 <div className="flex items-center justify-between text-sm">
@@ -545,20 +434,16 @@ function TabUsuarios({ mes }) {
                     <span className="font-semibold text-slate-700 truncate max-w-[200px]">{nome}</span>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-xs text-slate-400">
-                      {fmtPct(qtd, totalGeral)}
-                    </span>
+                    <span className="text-xs text-slate-400">{fmtPct(qtd, totalGeral)}</span>
                     <span className="font-bold text-slate-800 w-16 text-right">{fmtN(qtd)}</span>
                   </div>
                 </div>
                 <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all duration-700"
+                  <div className="h-full rounded-full transition-all duration-700"
                     style={{
                       width: `${pct}%`,
                       backgroundColor: idx === 0 ? "#7F2D92" : idx === 1 ? "#9B3AAD" : idx === 2 ? "#B347C8" : "#C084FC",
-                    }}
-                  />
+                    }} />
                 </div>
               </div>
             );
@@ -573,9 +458,9 @@ function TabUsuarios({ mes }) {
 // ABA 4 — PRODUÇÃO DIÁRIA
 // ══════════════════════════════════════════════════════════
 function TabDiaria({ mes }) {
-  const [data, setData]         = useState(null);
-  const [loading, setLoading]   = useState(true);
-  const [etapasSel, setEtapas]  = useState(["Triagem Funcional", "Triagem Cosmética", "Laudo"]);
+  const [data, setData]        = useState(null);
+  const [loading, setLoading]  = useState(true);
+  const [etapasSel, setEtapas] = useState(["Triagem Funcional", "Triagem Cosmética", "Laudo"]);
 
   useEffect(() => {
     async function load() {
@@ -590,8 +475,7 @@ function TabDiaria({ mes }) {
   if (loading) return <Loader />;
   if (!data?.length) return <p className="text-slate-400 text-sm">Sem dados.</p>;
 
-  // Agregar por dia e etapa
-  const diasMap = {};
+  const diasMap    = {};
   const etapasDisp = new Set();
 
   data.forEach(r => {
@@ -602,11 +486,8 @@ function TabDiaria({ mes }) {
 
   const chartData = Object.entries(diasMap)
     .sort((a, b) => a[0].localeCompare(b[0]))
-    .slice(-30) // últimos 30 dias
-    .map(([dia, etapas]) => ({
-      dia: dia.slice(5), // MM-DD
-      ...etapas,
-    }));
+    .slice(-30)
+    .map(([dia, etapas]) => ({ dia: dia.slice(5), ...etapas }));
 
   const etapasFiltro = [...etapasDisp].filter(e => ETAPA_ORDEM.includes(e));
 
@@ -621,25 +502,20 @@ function TabDiaria({ mes }) {
 
   return (
     <div className="space-y-4">
-
-      {/* Filtro etapas */}
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-xs font-semibold text-slate-500">Etapas:</span>
         {etapasFiltro.map(e => (
-          <button key={e}
-            onClick={() => toggleEtapa(e)}
+          <button key={e} onClick={() => toggleEtapa(e)}
             className={`text-xs px-3 py-1.5 rounded-xl font-semibold transition-all flex items-center gap-1.5 ${
               etapasSel.includes(e) ? "text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200"
             }`}
-            style={etapasSel.includes(e) ? { backgroundColor: ETAPA_COLORS[e] || "#7F2D92" } : {}}
-          >
+            style={etapasSel.includes(e) ? { backgroundColor: ETAPA_COLORS[e] || "#7F2D92" } : {}}>
             <div className="h-2 w-2 rounded-full bg-current opacity-70" />
             {e}
           </button>
         ))}
       </div>
 
-      {/* Gráfico de linha diária */}
       <Card>
         <SectionTitle icon={TrendingUp}>Produção Diária — Últimos 30 dias</SectionTitle>
         <ResponsiveContainer width="100%" height={300}>
@@ -652,27 +528,18 @@ function TabDiaria({ mes }) {
               contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 12 }}
               formatter={(v, name) => [fmtN(v), name]}
             />
-            <Legend
-              formatter={(value) => (
-                <span style={{ fontSize: 11, color: "#475569" }}>{value}</span>
-              )}
-            />
+            <Legend formatter={(value) => (
+              <span style={{ fontSize: 11, color: "#475569" }}>{value}</span>
+            )} />
             {etapasSel.map(e => (
-              <Line
-                key={e}
-                type="monotone"
-                dataKey={e}
+              <Line key={e} type="monotone" dataKey={e}
                 stroke={ETAPA_COLORS[e] || "#94a3b8"}
-                strokeWidth={2}
-                dot={false}
-                activeDot={{ r: 4 }}
-              />
+                strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
             ))}
           </LineChart>
         </ResponsiveContainer>
       </Card>
 
-      {/* Resumo por dia — últimos 7 */}
       <Card>
         <SectionTitle icon={Clock}>Últimos 7 dias — Volume por Etapa</SectionTitle>
         <div className="overflow-x-auto">
@@ -690,10 +557,12 @@ function TabDiaria({ mes }) {
             <tbody className="divide-y divide-slate-100">
               {etapasFiltro.map(e => (
                 <tr key={e} className="hover:bg-slate-50">
-                  <td className="px-3 py-2 font-semibold text-slate-700 flex items-center gap-2">
-                    <div className="h-2 w-2 rounded-full shrink-0"
-                      style={{ backgroundColor: ETAPA_COLORS[e] || "#94a3b8" }} />
-                    {e}
+                  <td className="px-3 py-2 font-semibold text-slate-700">
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 w-2 rounded-full shrink-0"
+                        style={{ backgroundColor: ETAPA_COLORS[e] || "#94a3b8" }} />
+                      {e}
+                    </div>
                   </td>
                   {Object.keys(diasMap).sort().slice(-7).map(d => (
                     <td key={d} className="px-3 py-2 text-right font-semibold text-slate-700">
@@ -714,10 +583,10 @@ function TabDiaria({ mes }) {
 // ABA 5 — BUSCA POR VOUCHER
 // ══════════════════════════════════════════════════════════
 function TabBusca() {
-  const [voucher, setVoucher]   = useState("");
+  const [voucher, setVoucher]     = useState("");
   const [resultado, setResultado] = useState(null);
-  const [loading, setLoading]   = useState(false);
-  const [erro, setErro]         = useState("");
+  const [loading, setLoading]     = useState(false);
+  const [erro, setErro]           = useState("");
 
   async function buscar() {
     if (!voucher.trim()) return;
@@ -739,11 +608,10 @@ function TabBusca() {
     setLoading(false);
   }
 
-  // Calcular tempo entre etapas
   function calcTempos(rows) {
     return rows.map((r, idx) => {
       if (idx === 0) return { ...r, delta: null };
-      const ant  = new Date(rows[idx - 1].data_etapa);
+      const ant   = new Date(rows[idx - 1].data_etapa);
       const atual = new Date(r.data_etapa);
       const diffH = ((atual - ant) / 3600000).toFixed(1);
       const diffD = (diffH / 24).toFixed(1);
@@ -751,15 +619,12 @@ function TabBusca() {
     });
   }
 
-  const timeline = resultado ? calcTempos(resultado) : [];
-
-  // Ciclo total
-  const cicloTotal = timeline.length > 1
+  const timeline    = resultado ? calcTempos(resultado) : [];
+  const cicloTotal  = timeline.length > 1
     ? ((new Date(timeline[timeline.length - 1].data_etapa) - new Date(timeline[0].data_etapa)) / 3600000 / 24).toFixed(1)
     : null;
 
   function corDelta(horas) {
-    if (!horas) return "";
     const h = Number(horas);
     if (h <= 24)  return "text-emerald-600";
     if (h <= 72)  return "text-yellow-600";
@@ -769,7 +634,6 @@ function TabBusca() {
 
   return (
     <div className="space-y-4">
-      {/* Busca */}
       <Card>
         <SectionTitle icon={Search}>Rastrear Voucher</SectionTitle>
         <div className="flex gap-3">
@@ -802,48 +666,37 @@ function TabBusca() {
         )}
       </Card>
 
-      {/* Resultado */}
       {resultado && (
         <>
-          {/* KPIs do voucher */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <KpiMini label="Voucher"      value={voucher}
+            <KpiMini label="Voucher"     value={voucher}
               color="bg-purple-50 ring-purple-200 text-purple-700" />
-            <KpiMini label="Etapas"       value={resultado.length}
+            <KpiMini label="Etapas"      value={resultado.length}
               color="bg-blue-50 ring-blue-200 text-blue-700" />
-            <KpiMini label="Ciclo Total"  value={cicloTotal ? `${cicloTotal}d` : "—"}
+            <KpiMini label="Ciclo Total" value={cicloTotal ? `${cicloTotal}d` : "—"}
               sub="primeira → última etapa"
               color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
-            <KpiMini label="IMEI/Serial"  value={resultado[0]?.serial_imei || "—"}
+            <KpiMini label="IMEI/Serial" value={resultado[0]?.serial_imei || "—"}
               color="bg-slate-50 ring-slate-200 text-slate-600" />
           </div>
 
-          {/* Timeline */}
           <Card>
             <SectionTitle icon={Clock}>Histórico de Movimentação</SectionTitle>
             <div className="relative">
-              {/* Linha vertical */}
               <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-slate-200" />
-
               <div className="space-y-0">
                 {timeline.map((r, idx) => {
                   const isUltimo = idx === timeline.length - 1;
-                  const cor = ETAPA_COLORS[r.etapa] || "#94a3b8";
-                  const data = new Date(r.data_etapa);
-
+                  const cor      = ETAPA_COLORS[r.etapa] || "#94a3b8";
+                  const data     = new Date(r.data_etapa);
                   return (
                     <div key={idx} className="relative flex gap-4 pb-4">
-                      {/* Ponto na linha */}
                       <div className="relative z-10 flex items-start">
-                        <div
-                          className="h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 ring-2 ring-white"
-                          style={{ backgroundColor: cor }}
-                        >
+                        <div className="h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 ring-2 ring-white"
+                          style={{ backgroundColor: cor }}>
                           {idx + 1}
                         </div>
                       </div>
-
-                      {/* Conteúdo */}
                       <div className={`flex-1 bg-slate-50 rounded-xl p-3 ${isUltimo ? "ring-2 ring-purple-300" : ""}`}>
                         <div className="flex items-start justify-between gap-2">
                           <div>
@@ -859,14 +712,11 @@ function TabBusca() {
                             </div>
                           </div>
                         </div>
-
-                        {/* Delta tempo */}
                         {r.delta && (
                           <div className={`mt-2 text-xs font-semibold ${corDelta(r.delta.horas)}`}>
                             ⏱ {Number(r.delta.horas) < 24
                               ? `${r.delta.horas}h desde etapa anterior`
-                              : `${r.delta.dias}d desde etapa anterior`
-                            }
+                              : `${r.delta.dias}d desde etapa anterior`}
                           </div>
                         )}
                       </div>
@@ -876,7 +726,6 @@ function TabBusca() {
               </div>
             </div>
 
-            {/* Status final */}
             <div className={`mt-2 rounded-xl p-3 flex items-center gap-2 ${
               timeline[timeline.length - 1]?.etapa === "Produto expedido"
                 ? "bg-emerald-50 ring-1 ring-emerald-200"
@@ -887,7 +736,9 @@ function TabBusca() {
                 : <Clock className="h-4 w-4 text-purple-600 shrink-0" />
               }
               <span className="text-sm font-bold text-slate-700">
-                Status atual: <span className="text-[#7F2D92]">{timeline[timeline.length - 1]?.etapa}</span>
+                Status atual: <span className="text-[#7F2D92]">
+                  {timeline[timeline.length - 1]?.etapa}
+                </span>
               </span>
             </div>
           </Card>
@@ -906,26 +757,23 @@ export default function AssurantSLAPage() {
   const [mesSel, setMesSel] = useState([]);
 
   useEffect(() => {
-  async function loadMeses() {
-    const { data, error } = await supabase.rpc("assurant_mov_meses_disponiveis");
-    console.log("meses data:", data);
-    console.log("meses error:", error);
-    if (data) {
-      const lista = data.map(r => r.mes).filter(Boolean);
-      console.log("lista final:", lista);
-      setMeses(lista);
-      if (lista.length > 0) setMesSel([lista[0]]);
+    async function loadMeses() {
+      const { data } = await supabase.rpc("assurant_mov_meses_disponiveis");
+      if (data) {
+        const lista = data.map(r => r.mes).filter(Boolean);
+        setMeses(lista);
+        if (lista.length > 0) setMesSel([lista[0]]);
+      }
     }
-  }
-  loadMeses();
-}, []);
+    loadMeses();
+  }, []);
 
   const ABAS = [
     { key: "funil",    label: "Funil de Produção",  icon: TrendingUp },
-    { key: "tempos",   label: "Tempo entre Etapas", icon: Clock },
-    { key: "usuarios", label: "Produtividade",      icon: Users },
-    { key: "diaria",   label: "Produção Diária",    icon: BarChart3 },
-    { key: "busca",    label: "Buscar Voucher",      icon: Search },
+    { key: "tempos",   label: "Tempo entre Etapas", icon: Clock      },
+    { key: "usuarios", label: "Produtividade",      icon: Users      },
+    { key: "diaria",   label: "Produção Diária",    icon: BarChart3  },
+    { key: "busca",    label: "Buscar Voucher",      icon: Search     },
   ];
 
   return (
