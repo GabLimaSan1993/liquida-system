@@ -900,16 +900,19 @@ export default function AssurantSLAPage() {
   const [mesSel, setMesSel] = useState([]);
 
   useEffect(() => {
-    async function loadMeses() {
-      const { data } = await supabase.rpc("assurant_mov_meses_disponiveis");
-      if (data) {
-        const lista = data.map(r => r.mes).filter(Boolean);
-        setMeses(lista);
-        if (lista.length > 0) setMesSel([lista[0]]);
-      }
+  async function loadMeses() {
+    const { data, error } = await supabase.rpc("assurant_mov_meses_disponiveis");
+    console.log("meses data:", data);
+    console.log("meses error:", error);
+    if (data) {
+      const lista = data.map(r => r.mes).filter(Boolean);
+      console.log("lista final:", lista);
+      setMeses(lista);
+      if (lista.length > 0) setMesSel([lista[0]]);
     }
-    loadMeses();
-  }, []);
+  }
+  loadMeses();
+}, []);
 
   const ABAS = [
     { key: "funil",    label: "Funil de Produção",  icon: TrendingUp },
