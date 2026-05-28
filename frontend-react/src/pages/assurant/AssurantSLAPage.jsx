@@ -257,15 +257,23 @@ function TabFunil({ mes }) {
         <KpiMini label="Total Movimentações" value={fmtN(total)}
           color="bg-purple-50 ring-purple-200 text-purple-700" />
         {ciclo && (
-          <>
-            <KpiMini label="Ciclo Médio (Rec→Exp)" value={`${ciclo.media_dias}d`}
-              sub={`${fmtN(ciclo.total)} vouchers completos`}
-              color="bg-blue-50 ring-blue-200 text-blue-700" />
-            <KpiMini label="Ciclo Mínimo" value={`${ciclo.minimo_dias}d`}
-              color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
-            <KpiMini label="Ciclo Máximo" value={`${ciclo.maximo_dias}d`}
-              color="bg-orange-50 ring-orange-200 text-orange-700" />
-          </>
+          {ciclo && ciclo.media_dias && (
+  <>
+    <KpiMini label="Ciclo Médio (Rec→Exp)" value={`${ciclo.media_dias}d`}
+      sub={`${fmtN(ciclo.total)} vouchers completos`}
+      color="bg-blue-50 ring-blue-200 text-blue-700" />
+    <KpiMini label="Ciclo Mínimo" value={`${ciclo.minimo_dias}d`}
+      color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
+    <KpiMini label="Ciclo Máximo" value={`${ciclo.maximo_dias}d`}
+      color="bg-orange-50 ring-orange-200 text-orange-700" />
+  </>
+)}
+{(!ciclo || !ciclo.media_dias) && (
+  <KpiMini label="Ciclo Rec→Exp"
+    value="—"
+    sub="Selecione mais meses para ver o ciclo completo"
+    color="bg-slate-50 ring-slate-200 text-slate-500" />
+)}
         )}
       </div>
 
