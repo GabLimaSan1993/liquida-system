@@ -10,8 +10,6 @@ export async function importarPedidoB2B(file, userId) {
         const wb = XLSX.read(e.target.result, { type: "binary" });
         const ws = wb.Sheets[wb.SheetNames[0]];
 
-        // range: 1 pula a linha 1 (ALOCAÇÃO/ESTOQUE/WAREHOUSE)
-        // e usa a linha 2 (GRADE, MODELO, IMEI...) como cabeçalho real
         const rows = XLSX.utils.sheet_to_json(ws, {
           defval: null,
           range:  1,
@@ -19,11 +17,9 @@ export async function importarPedidoB2B(file, userId) {
 
         if (!rows.length) throw new Error("Planilha vazia ou formato inválido.");
 
-        // Extrair lote e cliente
         const lote    = rows[0]["RESERVA"] || rows[0]["LOTE"] || "SEM_LOTE";
         const cliente = rows[0]["Ganhador"] || "Cliente não identificado";
 
-        // Verificar se pedido já existe
         const { data: existing } = await supabase
           .from("b2b_pedidos")
           .select("id")
@@ -32,21 +28,14 @@ export async function importarPedidoB2B(file, userId) {
 
         if (existing) throw new Error(`Pedido "${lote}" já foi importado.`);
 
-        // Criar pedido (total_itens provisório, atualizado depois)
         const { data: pedido, error: errPedido } = await supabase
           .from("b2b_pedidos")
-          .insert({
-            lote,
-            cliente,
-            total_itens: rows.length,
-            criado_por:  userId,
-          })
+          .insert({ lote, cliente, total_itens: rows.length, criado_por: userId })
           .select()
           .single();
 
         if (errPedido) throw new Error(errPedido.message);
 
-        // Mapear itens
         const itens = rows.map(r => ({
           pedido_id:     pedido.id,
           imei:          String(r["IMEI"] || r["NUM_IMEI"] || "").trim(),
@@ -62,13 +51,11 @@ export async function importarPedidoB2B(file, userId) {
           status:        "pendente",
         })).filter(i => i.imei && i.imei.length > 5);
 
-        // Atualizar total com contagem real de IMEIs válidos
         await supabase
           .from("b2b_pedidos")
           .update({ total_itens: itens.length })
           .eq("id", pedido.id);
 
-        // Inserir itens em chunks de 500
         const CHUNK = 500;
         for (let i = 0; i < itens.length; i += CHUNK) {
           const { error } = await supabase
@@ -108,11 +95,21 @@ export async function listarItens(pedidoId) {
   return data || [];
 }
 
+// ── Buscar histórico de exportações ─────────────────────
+export async function listarExportacoes(pedidoId) {
+  const { data, error } = await supabase
+    .from("b2b_exportacoes")
+    .select("*")
+    .eq("pedido_id", pedidoId)
+    .order("exportado_em", { ascending: false });
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
 // ── Registrar bipagem ────────────────────────────────────
 export async function registrarBipagem(imeiDigitado, pedidoId, userId) {
   const imei = String(imeiDigitado).trim();
 
-  // Buscar item pelo IMEI no pedido atual
   const { data: item, error: errItem } = await supabase
     .from("b2b_itens")
     .select("*")
@@ -121,7 +118,6 @@ export async function registrarBipagem(imeiDigitado, pedidoId, userId) {
     .single();
 
   if (errItem || !item) {
-    // Verificar se IMEI está em outro pedido já bipado
     const { data: outroItem } = await supabase
       .from("b2b_itens")
       .select("pedido_id, status")
@@ -139,7 +135,6 @@ export async function registrarBipagem(imeiDigitado, pedidoId, userId) {
     return { ok: false, erro: "IMEI já bipado neste pedido.", item };
   }
 
-  // Registrar bipagem
   const { error: errUpdate } = await supabase
     .from("b2b_itens")
     .update({
@@ -152,30 +147,104 @@ export async function registrarBipagem(imeiDigitado, pedidoId, userId) {
 
   if (errUpdate) return { ok: false, erro: errUpdate.message };
 
-  // Atualizar contador do pedido
   await supabase.rpc("b2b_atualizar_contador", { p_pedido_id: pedidoId });
 
   return { ok: true, item };
 }
 
-// ── Exportar para faturamento ────────────────────────────
-export async function exportarFaturamento(pedidoId) {
-  const { data: pedido } = await supabase
-    .from("b2b_pedidos")
-    .select("*")
-    .eq("id", pedidoId)
-    .single();
+// ── Exportar para faturamento (com controle de delta) ────
+export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
 
-  const { data: itens } = await supabase
+  // 1. Buscar última exportação deste pedido
+  const { data: exportacoes } = await supabase
+    .from("b2b_exportacoes")
+    .select("*")
+    .eq("pedido_id", pedidoId)
+    .order("exportado_em", { ascending: false })
+    .limit(1);
+
+  const ultimaExportacao = exportacoes?.[0] || null;
+
+  // 2. Buscar IDs já exportados
+  let idsJaExportados = new Set();
+  if (ultimaExportacao) {
+    // Busca todos os itens já exportados em qualquer exportação deste pedido
+    const { data: jaExportados } = await supabase
+      .from("b2b_itens_exportados")
+      .select("item_id")
+      .in(
+        "exportacao_id",
+        exportacoes.length > 0
+          ? (await supabase
+              .from("b2b_exportacoes")
+              .select("id")
+              .eq("pedido_id", pedidoId)
+            ).data?.map(e => e.id) || []
+          : []
+      );
+    (jaExportados || []).forEach(e => idsJaExportados.add(e.item_id));
+  }
+
+  // 3. Buscar itens bipados do pedido
+  const { data: itensBipados } = await supabase
     .from("b2b_itens")
     .select("*")
     .eq("pedido_id", pedidoId)
     .eq("status", "bipado")
     .order("local_estoque");
 
-  if (!itens?.length) throw new Error("Nenhum item bipado para exportar.");
+  if (!itensBipados?.length) {
+    throw new Error("Nenhum item bipado para exportar.");
+  }
 
-  const rows = itens.map(i => ({
+  // 4. Filtrar apenas os itens novos (delta)
+  const itensNovos = itensBipados.filter(i => !idsJaExportados.has(i.id));
+
+  // 5. Se não há itens novos — bloquear e informar quem exportou por último
+  if (itensNovos.length === 0) {
+    return {
+      bloqueado: true,
+      ultimaExportacao,
+      msg: `Nenhum item novo para exportar. A última versão (${ultimaExportacao.total_itens} itens) já foi baixada por ${ultimaExportacao.nome_usuario} em ${new Date(ultimaExportacao.exportado_em).toLocaleString("pt-BR")}.`,
+    };
+  }
+
+  // 6. Buscar dados do pedido
+  const { data: pedido } = await supabase
+    .from("b2b_pedidos")
+    .select("*")
+    .eq("id", pedidoId)
+    .single();
+
+  // 7. Registrar a exportação
+  const { data: novaExportacao, error: errExp } = await supabase
+    .from("b2b_exportacoes")
+    .insert({
+      pedido_id:    pedidoId,
+      exportado_por: userId,
+      nome_usuario: nomeUsuario,
+      total_itens:  itensNovos.length,
+    })
+    .select()
+    .single();
+
+  if (errExp) throw new Error(errExp.message);
+
+  // 8. Registrar quais itens foram nesta exportação
+  const CHUNK = 500;
+  const linksItens = itensNovos.map(i => ({
+    exportacao_id: novaExportacao.id,
+    item_id:       i.id,
+  }));
+  for (let i = 0; i < linksItens.length; i += CHUNK) {
+    await supabase
+      .from("b2b_itens_exportados")
+      .insert(linksItens.slice(i, i + CHUNK));
+  }
+
+  // 9. Gerar Excel com apenas os itens novos
+  const numeroExportacao = (exportacoes?.length || 0) + 1;
+  const rows = itensNovos.map(i => ({
     "LOTE":      pedido.lote,
     "CLIENTE":   pedido.cliente,
     "IMEI":      i.imei,
@@ -191,5 +260,13 @@ export async function exportarFaturamento(pedidoId) {
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.json_to_sheet(rows);
   XLSX.utils.book_append_sheet(wb, ws, "Faturamento");
-  XLSX.writeFile(wb, `faturamento_${pedido.lote}.xlsx`);
+  const nomeArquivo = `faturamento_${pedido.lote}_v${numeroExportacao}.xlsx`;
+  XLSX.writeFile(wb, nomeArquivo);
+
+  return {
+    bloqueado:        false,
+    total:            itensNovos.length,
+    numeroExportacao,
+    nomeArquivo,
+  };
 }

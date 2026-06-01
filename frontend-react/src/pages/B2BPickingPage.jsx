@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import {
   Search, CheckCircle, AlertTriangle,
-  Download, Package, X, BarChart3
+  Download, Package, X, BarChart3, Clock
 } from "lucide-react";
 import {
   listarPedidosB2B, listarItens,
-  registrarBipagem, exportarFaturamento
+  registrarBipagem, exportarFaturamento,
+  listarExportacoes,
 } from "../services/b2bService.js";
 import { useAuth } from "../AuthContext.jsx";
 
@@ -56,10 +57,7 @@ function ProgressBar({ value, total }) {
       <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
         <div
           className="h-full rounded-full transition-all duration-500"
-          style={{
-            width: `${pct}%`,
-            background: pct === 100 ? "#1D9E75" : "#7F2D92",
-          }}
+          style={{ width: `${pct}%`, background: pct === 100 ? "#1D9E75" : "#7F2D92" }}
         />
       </div>
     </div>
@@ -67,7 +65,7 @@ function ProgressBar({ value, total }) {
 }
 
 // ══════════════════════════════════════════════════════════
-// ABA 1 — PICKING (bipar)
+// ABA 1 — PICKING
 // ══════════════════════════════════════════════════════════
 function TabPicking({ pedidos, onAtualizar }) {
   const { user }                = useAuth();
@@ -80,13 +78,8 @@ function TabPicking({ pedidos, onAtualizar }) {
   const [busca, setBusca]       = useState("");
   const inputRef                = useRef(null);
 
-  useEffect(() => {
-    if (pedidoSel) carregarItens();
-  }, [pedidoSel]);
-
-  useEffect(() => {
-    if (pedidoSel) inputRef.current?.focus();
-  }, [pedidoSel]);
+  useEffect(() => { if (pedidoSel) carregarItens(); }, [pedidoSel]);
+  useEffect(() => { if (pedidoSel) inputRef.current?.focus(); }, [pedidoSel]);
 
   async function carregarItens() {
     setLoading(true);
@@ -98,10 +91,8 @@ function TabPicking({ pedidos, onAtualizar }) {
   async function handleBipar(e) {
     e.preventDefault();
     if (!imeiInput.trim() || !pedidoSel) return;
-
     const res = await registrarBipagem(imeiInput.trim(), pedidoSel.id, user.id);
     setImei("");
-
     if (res.ok) {
       setFeedback({ tipo: "ok", msg: `✓ IMEI ${imeiInput.trim()} bipado com sucesso!`, item: res.item });
       setItens(prev => prev.map(i =>
@@ -114,7 +105,6 @@ function TabPicking({ pedidos, onAtualizar }) {
     } else {
       setFeedback({ tipo: "erro", msg: res.erro });
     }
-
     setTimeout(() => setFeedback(null), 3000);
     inputRef.current?.focus();
   }
@@ -132,19 +122,14 @@ function TabPicking({ pedidos, onAtualizar }) {
   const totalPendente = itens.filter(i => i.status === "pendente").length;
   const valorTotal    = itens.filter(i => i.status === "bipado").reduce((s, i) => s + (i.valor || 0), 0);
 
-  // Seleção de pedido
   if (!pedidoSel) {
     const pedidosAbertos = pedidos.filter(p => p.status === "aberto");
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <p className="text-sm text-slate-500">Selecione um pedido para iniciar o picking:</p>
-          <button onClick={onAtualizar}
-            className="text-xs text-slate-500 hover:text-purple-700 font-semibold">
-            ↻ Atualizar
-          </button>
+          <button onClick={onAtualizar} className="text-xs text-slate-500 hover:text-purple-700 font-semibold">↻ Atualizar</button>
         </div>
-
         {pedidosAbertos.length === 0 ? (
           <div className="text-center py-12 text-slate-400">
             <Package className="h-8 w-8 mx-auto mb-2 opacity-30" />
@@ -154,11 +139,8 @@ function TabPicking({ pedidos, onAtualizar }) {
         ) : (
           <div className="grid gap-3">
             {pedidosAbertos.map(p => (
-              <button
-                key={p.id}
-                onClick={() => setPedido(p)}
-                className="bg-white rounded-2xl p-4 ring-1 ring-slate-200 text-left hover:ring-purple-300 hover:bg-purple-50 transition-all"
-              >
+              <button key={p.id} onClick={() => setPedido(p)}
+                className="bg-white rounded-2xl p-4 ring-1 ring-slate-200 text-left hover:ring-purple-300 hover:bg-purple-50 transition-all">
                 <div className="flex items-start justify-between gap-3 mb-3">
                   <div>
                     <div className="font-bold text-slate-800 text-sm">{p.lote}</div>
@@ -180,13 +162,9 @@ function TabPicking({ pedidos, onAtualizar }) {
 
   return (
     <div className="space-y-4">
-
-      {/* Header pedido ativo */}
       <div className="flex items-center gap-3 flex-wrap">
-        <button
-          onClick={() => { setPedido(null); setItens([]); setFiltro("todos"); setBusca(""); }}
-          className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1"
-        >
+        <button onClick={() => { setPedido(null); setItens([]); setFiltro("todos"); setBusca(""); }}
+          className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1">
           <X className="h-3 w-3" /> Trocar pedido
         </button>
         <div className="flex-1">
@@ -196,7 +174,6 @@ function TabPicking({ pedidos, onAtualizar }) {
         <StatusBadge status={pedidoSel.status} />
       </div>
 
-      {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiMini label="Total do pedido" value={fmtN(pedidoSel.total_itens)}
           color="bg-purple-50 ring-purple-200 text-purple-700" />
@@ -209,12 +186,8 @@ function TabPicking({ pedidos, onAtualizar }) {
           color="bg-blue-50 ring-blue-200 text-blue-700" />
       </div>
 
-      {/* Barra de progresso */}
-      <Card>
-        <ProgressBar value={totalBipados} total={pedidoSel.total_itens || 0} />
-      </Card>
+      <Card><ProgressBar value={totalBipados} total={pedidoSel.total_itens || 0} /></Card>
 
-      {/* Input de bipagem */}
       <Card>
         <h3 className="font-black text-slate-800 flex items-center gap-2 mb-4 text-sm">
           <Search className="h-4 w-4 text-[#7F2D92]" />
@@ -230,16 +203,11 @@ function TabPicking({ pedidos, onAtualizar }) {
             className="flex-1 rounded-xl border border-slate-200 px-4 py-3 text-sm font-mono font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7F2D92]"
             autoComplete="off"
           />
-          <button
-            type="submit"
-            disabled={!imeiInput.trim()}
-            className="flex items-center gap-2 bg-[#7F2D92] text-white px-6 py-3 rounded-xl text-sm font-semibold hover:bg-[#5B1E74] transition disabled:opacity-50"
-          >
-            <CheckCircle className="h-4 w-4" />
-            Confirmar
+          <button type="submit" disabled={!imeiInput.trim()}
+            className="flex items-center gap-2 bg-[#7F2D92] text-white px-6 py-3 rounded-xl text-sm font-semibold hover:bg-[#5B1E74] transition disabled:opacity-50">
+            <CheckCircle className="h-4 w-4" /> Confirmar
           </button>
         </form>
-
         {feedback && (
           <div className={`mt-3 flex items-start gap-2 text-sm rounded-xl px-4 py-3 ring-1 ${
             feedback.tipo === "ok"
@@ -262,12 +230,10 @@ function TabPicking({ pedidos, onAtualizar }) {
         )}
       </Card>
 
-      {/* Lista de itens */}
       <Card>
         <div className="flex items-center gap-3 mb-4 flex-wrap">
           <h3 className="font-black text-slate-800 text-sm flex items-center gap-2">
-            <Package className="h-4 w-4 text-[#7F2D92]" />
-            Lista de itens
+            <Package className="h-4 w-4 text-[#7F2D92]" /> Lista de itens
           </h3>
           <div className="flex gap-2 ml-auto flex-wrap">
             {["todos", "pendente", "bipado"].map(f => (
@@ -283,13 +249,9 @@ function TabPicking({ pedidos, onAtualizar }) {
 
         <div className="relative mb-3">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-          <input
-            type="text"
-            value={busca}
-            onChange={e => setBusca(e.target.value)}
+          <input type="text" value={busca} onChange={e => setBusca(e.target.value)}
             placeholder="Buscar IMEI, modelo ou local..."
-            className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#7F2D92]"
-          />
+            className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#7F2D92]" />
         </div>
 
         {loading ? (
@@ -312,15 +274,12 @@ function TabPicking({ pedidos, onAtualizar }) {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {itensFiltrados.slice(0, 200).map(item => (
-                    <tr key={item.id}
-                      className={`hover:bg-slate-50 ${item.status === "bipado" ? "opacity-50" : ""}`}>
+                    <tr key={item.id} className={`hover:bg-slate-50 ${item.status === "bipado" ? "opacity-50" : ""}`}>
                       <td className="px-3 py-2 font-mono text-slate-600">{item.local_estoque || "—"}</td>
                       <td className="px-3 py-2 font-mono font-semibold text-slate-800">{item.imei}</td>
                       <td className="px-3 py-2 text-slate-600 max-w-[180px] truncate">{item.modelo}</td>
                       <td className="px-3 py-2">
-                        <span className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded-lg font-semibold">
-                          {item.grade}
-                        </span>
+                        <span className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded-lg font-semibold">{item.grade}</span>
                       </td>
                       <td className="px-3 py-2 text-right font-semibold text-slate-700">{fmtR(item.valor)}</td>
                       <td className="px-3 py-2 text-center"><StatusBadge status={item.status} /></td>
@@ -348,17 +307,55 @@ function TabPicking({ pedidos, onAtualizar }) {
 // ABA 2 — PEDIDOS E EXPORTAÇÃO
 // ══════════════════════════════════════════════════════════
 function TabPedidos({ pedidos, onAtualizar }) {
+  const { user, profile }         = useAuth();
   const [exportando, setExportando] = useState(null);
+  const [feedbackExp, setFeedbackExp] = useState({});
+  const [historicoAberto, setHistoricoAberto] = useState(null);
+  const [historico, setHistorico] = useState([]);
+  const [loadingHistorico, setLoadingHistorico] = useState(false);
 
   async function handleExportar(pedido) {
     setExportando(pedido.id);
+    setFeedbackExp(prev => ({ ...prev, [pedido.id]: null }));
     try {
-      await exportarFaturamento(pedido.id);
+      const nomeUsuario = profile?.nome || user?.email || "Usuário";
+      const res = await exportarFaturamento(pedido.id, user.id, nomeUsuario);
+
+      if (res.bloqueado) {
+        setFeedbackExp(prev => ({
+          ...prev,
+          [pedido.id]: { tipo: "bloqueado", msg: res.msg },
+        }));
+      } else {
+        setFeedbackExp(prev => ({
+          ...prev,
+          [pedido.id]: {
+            tipo: "ok",
+            msg: `✓ Exportação v${res.numeroExportacao} gerada com ${fmtN(res.total)} itens — ${res.nomeArquivo}`,
+          },
+        }));
+        onAtualizar?.();
+      }
     } catch (e) {
-      alert("Erro ao exportar: " + e.message);
+      setFeedbackExp(prev => ({
+        ...prev,
+        [pedido.id]: { tipo: "erro", msg: e.message },
+      }));
     } finally {
       setExportando(null);
     }
+  }
+
+  async function verHistorico(pedidoId) {
+    if (historicoAberto === pedidoId) {
+      setHistoricoAberto(null);
+      return;
+    }
+    setHistoricoAberto(pedidoId);
+    setLoadingHistorico(true);
+    const data = await listarExportacoes(pedidoId);
+    setHistorico(data);
+    setLoadingHistorico(false);
   }
 
   return (
@@ -368,8 +365,7 @@ function TabPedidos({ pedidos, onAtualizar }) {
           <BarChart3 className="h-4 w-4 text-[#7F2D92]" />
           Todos os Pedidos B2B
         </h3>
-        <button onClick={onAtualizar}
-          className="text-xs text-slate-500 hover:text-purple-700 font-semibold">
+        <button onClick={onAtualizar} className="text-xs text-slate-500 hover:text-purple-700 font-semibold">
           ↻ Atualizar
         </button>
       </div>
@@ -382,52 +378,114 @@ function TabPedidos({ pedidos, onAtualizar }) {
         </div>
       ) : (
         <div className="space-y-3">
-          {pedidos.map(p => (
-            <Card key={p.id}>
-              <div className="flex items-start justify-between gap-3 mb-3">
-                <div>
-                  <div className="font-bold text-slate-800 text-sm">{p.lote}</div>
-                  <div className="text-xs text-slate-500 mt-0.5">{p.cliente}</div>
-                  <div className="text-xs text-slate-400 mt-0.5">
-                    Importado em {new Date(p.criado_em).toLocaleDateString("pt-BR")}
+          {pedidos.map(p => {
+            const fb = feedbackExp[p.id];
+            return (
+              <Card key={p.id}>
+                {/* Cabeçalho */}
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div>
+                    <div className="font-bold text-slate-800 text-sm">{p.lote}</div>
+                    <div className="text-xs text-slate-500 mt-0.5">{p.cliente}</div>
+                    <div className="text-xs text-slate-400 mt-0.5">
+                      Importado em {new Date(p.criado_em).toLocaleDateString("pt-BR")}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                    <StatusBadge status={p.status} />
+                    <button
+                      onClick={() => verHistorico(p.id)}
+                      className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-slate-50 text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100 transition"
+                    >
+                      <Clock className="h-3 w-3" />
+                      Histórico
+                    </button>
+                    <button
+                      onClick={() => handleExportar(p)}
+                      disabled={exportando === p.id || !p.total_bipados}
+                      className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100 transition disabled:opacity-40"
+                    >
+                      {exportando === p.id
+                        ? <div className="h-3 w-3 border-2 border-emerald-300 border-t-emerald-700 rounded-full animate-spin" />
+                        : <Download className="h-3 w-3" />
+                      }
+                      Exportar
+                    </button>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <StatusBadge status={p.status} />
-                  <button
-                    onClick={() => handleExportar(p)}
-                    disabled={exportando === p.id || !p.total_bipados}
-                    className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100 transition disabled:opacity-40"
-                  >
-                    {exportando === p.id
-                      ? <div className="h-3 w-3 border-2 border-emerald-300 border-t-emerald-700 rounded-full animate-spin" />
-                      : <Download className="h-3 w-3" />
+
+                {/* Progresso */}
+                <ProgressBar value={p.total_bipados || 0} total={p.total_itens || 0} />
+
+                {/* Contadores */}
+                <div className="grid grid-cols-3 gap-3 mt-3">
+                  <div className="bg-slate-50 rounded-xl p-3 text-center">
+                    <div className="text-lg font-black text-slate-800">{fmtN(p.total_itens)}</div>
+                    <div className="text-xs text-slate-400">Total</div>
+                  </div>
+                  <div className="bg-emerald-50 rounded-xl p-3 text-center">
+                    <div className="text-lg font-black text-emerald-700">{fmtN(p.total_bipados || 0)}</div>
+                    <div className="text-xs text-emerald-500">Bipados</div>
+                  </div>
+                  <div className="bg-orange-50 rounded-xl p-3 text-center">
+                    <div className="text-lg font-black text-orange-700">
+                      {fmtN((p.total_itens || 0) - (p.total_bipados || 0))}
+                    </div>
+                    <div className="text-xs text-orange-500">Pendentes</div>
+                  </div>
+                </div>
+
+                {/* Feedback exportação */}
+                {fb && (
+                  <div className={`mt-3 flex items-start gap-2 text-xs rounded-xl px-4 py-3 ring-1 ${
+                    fb.tipo === "ok"
+                      ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                      : fb.tipo === "bloqueado"
+                      ? "bg-amber-50 text-amber-700 ring-amber-200"
+                      : "bg-red-50 text-red-700 ring-red-200"
+                  }`}>
+                    {fb.tipo === "ok"
+                      ? <CheckCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                      : fb.tipo === "bloqueado"
+                      ? <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                      : <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
                     }
-                    Exportar
-                  </button>
-                </div>
-              </div>
-
-              <ProgressBar value={p.total_bipados || 0} total={p.total_itens || 0} />
-
-              <div className="grid grid-cols-3 gap-3 mt-3">
-                <div className="bg-slate-50 rounded-xl p-3 text-center">
-                  <div className="text-lg font-black text-slate-800">{fmtN(p.total_itens)}</div>
-                  <div className="text-xs text-slate-400">Total</div>
-                </div>
-                <div className="bg-emerald-50 rounded-xl p-3 text-center">
-                  <div className="text-lg font-black text-emerald-700">{fmtN(p.total_bipados || 0)}</div>
-                  <div className="text-xs text-emerald-500">Bipados</div>
-                </div>
-                <div className="bg-orange-50 rounded-xl p-3 text-center">
-                  <div className="text-lg font-black text-orange-700">
-                    {fmtN((p.total_itens || 0) - (p.total_bipados || 0))}
+                    <p className="font-semibold leading-relaxed">{fb.msg}</p>
                   </div>
-                  <div className="text-xs text-orange-500">Pendentes</div>
-                </div>
-              </div>
-            </Card>
-          ))}
+                )}
+
+                {/* Histórico de exportações */}
+                {historicoAberto === p.id && (
+                  <div className="mt-3 border-t border-slate-100 pt-3">
+                    <p className="text-xs font-bold text-slate-500 mb-2">Histórico de exportações</p>
+                    {loadingHistorico ? (
+                      <div className="flex items-center justify-center h-10">
+                        <div className="h-4 w-4 border-2 border-purple-200 border-t-[#7F2D92] rounded-full animate-spin" />
+                      </div>
+                    ) : historico.length === 0 ? (
+                      <p className="text-xs text-slate-400">Nenhuma exportação realizada.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {historico.map((exp, idx) => (
+                          <div key={exp.id}
+                            className="flex items-center justify-between text-xs bg-slate-50 rounded-xl px-3 py-2">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-[#7F2D92]">v{historico.length - idx}</span>
+                              <span className="text-slate-600">{exp.nome_usuario}</span>
+                            </div>
+                            <div className="flex items-center gap-3 text-slate-400">
+                              <span className="font-semibold text-slate-600">{fmtN(exp.total_itens)} itens</span>
+                              <span>{new Date(exp.exportado_em).toLocaleString("pt-BR")}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </Card>
+            );
+          })}
         </div>
       )}
     </div>
@@ -458,8 +516,6 @@ export default function B2BPickingPage() {
 
   return (
     <div className="space-y-5">
-
-      {/* Cabeçalho */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <span className="text-2xl">📦</span>
@@ -484,20 +540,14 @@ export default function B2BPickingPage() {
         </div>
       </div>
 
-      {/* Abas */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1">
         {ABAS.map(a => {
           const Icon = a.icon;
           return (
-            <button
-              key={a.key}
-              onClick={() => setAba(a.key)}
+            <button key={a.key} onClick={() => setAba(a.key)}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all whitespace-nowrap ${
-                aba === a.key
-                  ? "bg-[#7F2D92] text-white shadow-md"
-                  : "text-slate-500 hover:bg-slate-100"
-              }`}
-            >
+                aba === a.key ? "bg-[#7F2D92] text-white shadow-md" : "text-slate-500 hover:bg-slate-100"
+              }`}>
               <Icon className="h-4 w-4 shrink-0" />
               {a.label}
             </button>
@@ -505,20 +555,13 @@ export default function B2BPickingPage() {
         })}
       </div>
 
-      {/* Aviso de importação */}
       <div className="bg-blue-50 ring-1 ring-blue-200 rounded-2xl px-4 py-3 flex items-center gap-2 text-xs text-blue-700">
         <span>ℹ</span>
         <span>Para importar um novo pedido B2B, acesse a tela de <strong>Uploads</strong> e use o bloco <strong>Pedido B2B — Picking</strong>.</span>
       </div>
 
-      {/* Conteúdo */}
-      {aba === "picking" && (
-        <TabPicking pedidos={pedidos} onAtualizar={carregarPedidos} />
-      )}
-      {aba === "pedidos" && (
-        <TabPedidos pedidos={pedidos} onAtualizar={carregarPedidos} />
-      )}
-
+      {aba === "picking" && <TabPicking pedidos={pedidos} onAtualizar={carregarPedidos} />}
+      {aba === "pedidos" && <TabPedidos pedidos={pedidos} onAtualizar={carregarPedidos} />}
     </div>
   );
 }
