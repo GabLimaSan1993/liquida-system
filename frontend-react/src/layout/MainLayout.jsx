@@ -25,6 +25,7 @@ const PAGE_META = {
   "/assurant/dashboard":           { title: "Assurant Warehouse",        subtitle: "Dashboard · SLA, volumes e resultado financeiro" },
   "/assurant/sla":                 { title: "SLA & Rastreabilidade",     subtitle: "Assurant Warehouse · Funil, tempos, produtividade e busca por voucher" },
   "/assurant/layout":              { title: "Layout do Warehouse",       subtitle: "Assurant · Mapa das estações e tempos de SLA" },
+  "/b2b/picking":                  { title: "Picking B2B",               subtitle: "Assurant Warehouse · Separação e faturamento de pedidos B2B" },
 };
 
 export default function MainLayout() {
@@ -79,7 +80,6 @@ export default function MainLayout() {
 
         <main className="flex-1 pt-16 lg:pt-0 p-4 lg:p-6 min-h-screen w-full">
           <div className="space-y-6">
-
             <div className="hidden lg:flex items-center gap-4 border-b border-purple-100 pb-4">
               <button
                 onClick={() => setDesktopOpen((o) => !o)}
@@ -99,7 +99,6 @@ export default function MainLayout() {
                 )}
               </div>
             </div>
-
             <Outlet />
           </div>
         </main>

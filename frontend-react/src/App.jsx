@@ -21,10 +21,11 @@ import ContasPagarPage from "./pages/ContasPagarPage.jsx";
 import ContasReceberPage from "./pages/ContasReceberPage.jsx";
 import CargaHistoricaPage from "./pages/CargaHistoricaPage.jsx";
 
-// Assurant Warehouse
 import AssurantDashboardPage from "./pages/assurant/AssurantDashboardPage.jsx";
 import AssurantSLAPage from "./pages/assurant/AssurantSLAPage.jsx";
 import AssurantLayoutPage from "./pages/assurant/AssurantLayoutPage.jsx";
+
+import B2BPickingPage from "./pages/B2BPickingPage.jsx";
 
 function ProtectedRoute({ tela, children }) {
   const { user, loading, hasAccess } = useAuth();
@@ -73,39 +74,32 @@ export default function App() {
       }>
         <Route path="/" element={<DefaultRedirect />} />
 
-        {/* Financeiro / Operacional */}
-        <Route path="/upload" element={<ProtectedRoute tela="/upload"><UploadPage /></ProtectedRoute>} />
-        <Route path="/analise-entrada" element={<ProtectedRoute tela="/analise-entrada"><AnalysisEntryPage /></ProtectedRoute>} />
-        <Route path="/faturamento" element={<ProtectedRoute tela="/faturamento"><FaturamentoPage /></ProtectedRoute>} />
-        <Route path="/abertura-os" element={<ProtectedRoute tela="/abertura-os"><AberturaOsPage /></ProtectedRoute>} />
+        <Route path="/upload"                    element={<ProtectedRoute tela="/upload"><UploadPage /></ProtectedRoute>} />
+        <Route path="/analise-entrada"           element={<ProtectedRoute tela="/analise-entrada"><AnalysisEntryPage /></ProtectedRoute>} />
+        <Route path="/faturamento"               element={<ProtectedRoute tela="/faturamento"><FaturamentoPage /></ProtectedRoute>} />
+        <Route path="/abertura-os"               element={<ProtectedRoute tela="/abertura-os"><AberturaOsPage /></ProtectedRoute>} />
         <Route path="/financeiro/fluxo-realizado" element={<ProtectedRoute tela="/financeiro/fluxo-realizado"><FluxoCaixaRealizadoPage /></ProtectedRoute>} />
-        <Route path="/financeiro/contas-pagar" element={<ProtectedRoute tela="/financeiro/contas-pagar"><ContasPagarPage /></ProtectedRoute>} />
+        <Route path="/financeiro/contas-pagar"   element={<ProtectedRoute tela="/financeiro/contas-pagar"><ContasPagarPage /></ProtectedRoute>} />
         <Route path="/financeiro/contas-receber" element={<ProtectedRoute tela="/financeiro/contas-receber"><ContasReceberPage /></ProtectedRoute>} />
         <Route path="/financeiro/carga-historica" element={<ProtectedRoute tela="/financeiro/carga-historica"><CargaHistoricaPage /></ProtectedRoute>} />
 
-        {/* Linha Branca — Master */}
-        <Route path="/linha-branca/triagem" element={<ProtectedRoute tela="/linha-branca/triagem"><LinhaBrancaTriagemPage /></ProtectedRoute>} />
-        <Route path="/linha-branca/reparo-mecanico" element={<ProtectedRoute tela="/linha-branca/reparo-mecanico"><ReparoLinhaBrancaPage areaExecucao="Reparo Mecânico" /></ProtectedRoute>} />
-        <Route path="/linha-branca/reparo-eletrico" element={<ProtectedRoute tela="/linha-branca/reparo-eletrico"><ReparoLinhaBrancaPage areaExecucao="Reparo Elétrico" /></ProtectedRoute>} />
-        <Route path="/linha-branca/reparo-estetico" element={<ProtectedRoute tela="/linha-branca/reparo-estetico"><ReparoLinhaBrancaPage areaExecucao="Reparo Estético" /></ProtectedRoute>} />
-
-        {/* Linha Branca — Refrigeração */}
-        <Route path="/linha-branca/reparos" element={<ProtectedRoute tela="/linha-branca/reparos"><ReparosRefrigeracaoPage /></ProtectedRoute>} />
-
-        {/* Linha Branca — Outras */}
-        <Route path="/linha-branca/triagem-reparos" element={<ProtectedRoute tela="/linha-branca/triagem-reparos"><TriagemReparosPage /></ProtectedRoute>} />
-
-        {/* Compartilhadas */}
-        <Route path="/linha-branca/bancada-testes" element={<ProtectedRoute tela="/linha-branca/bancada-testes"><BancadaTestesPage /></ProtectedRoute>} />
-        <Route path="/linha-branca/limpeza" element={<ProtectedRoute tela="/linha-branca/limpeza"><LimpezaPage /></ProtectedRoute>} />
-        <Route path="/linha-branca/qualidade" element={<ProtectedRoute tela="/linha-branca/qualidade"><QualidadePage /></ProtectedRoute>} />
+        <Route path="/linha-branca/triagem"          element={<ProtectedRoute tela="/linha-branca/triagem"><LinhaBrancaTriagemPage /></ProtectedRoute>} />
+        <Route path="/linha-branca/reparo-mecanico"  element={<ProtectedRoute tela="/linha-branca/reparo-mecanico"><ReparoLinhaBrancaPage areaExecucao="Reparo Mecânico" /></ProtectedRoute>} />
+        <Route path="/linha-branca/reparo-eletrico"  element={<ProtectedRoute tela="/linha-branca/reparo-eletrico"><ReparoLinhaBrancaPage areaExecucao="Reparo Elétrico" /></ProtectedRoute>} />
+        <Route path="/linha-branca/reparo-estetico"  element={<ProtectedRoute tela="/linha-branca/reparo-estetico"><ReparoLinhaBrancaPage areaExecucao="Reparo Estético" /></ProtectedRoute>} />
+        <Route path="/linha-branca/reparos"          element={<ProtectedRoute tela="/linha-branca/reparos"><ReparosRefrigeracaoPage /></ProtectedRoute>} />
+        <Route path="/linha-branca/triagem-reparos"  element={<ProtectedRoute tela="/linha-branca/triagem-reparos"><TriagemReparosPage /></ProtectedRoute>} />
+        <Route path="/linha-branca/bancada-testes"   element={<ProtectedRoute tela="/linha-branca/bancada-testes"><BancadaTestesPage /></ProtectedRoute>} />
+        <Route path="/linha-branca/limpeza"          element={<ProtectedRoute tela="/linha-branca/limpeza"><LimpezaPage /></ProtectedRoute>} />
+        <Route path="/linha-branca/qualidade"        element={<ProtectedRoute tela="/linha-branca/qualidade"><QualidadePage /></ProtectedRoute>} />
 
         <Route path="/gerenciar-usuarios" element={<ProtectedRoute tela="/gerenciar-usuarios"><GerenciarUsuariosPage /></ProtectedRoute>} />
 
-        {/* Assurant Warehouse */}
         <Route path="/assurant/dashboard" element={<ProtectedRoute tela="/assurant/dashboard"><AssurantDashboardPage /></ProtectedRoute>} />
-        <Route path="/assurant/sla" element={<ProtectedRoute tela="/assurant/sla"><AssurantSLAPage /></ProtectedRoute>} />
-        <Route path="/assurant/layout" element={<ProtectedRoute tela="/assurant/layout"><AssurantLayoutPage /></ProtectedRoute>} />
+        <Route path="/assurant/sla"       element={<ProtectedRoute tela="/assurant/sla"><AssurantSLAPage /></ProtectedRoute>} />
+        <Route path="/assurant/layout"    element={<ProtectedRoute tela="/assurant/layout"><AssurantLayoutPage /></ProtectedRoute>} />
+
+        <Route path="/b2b/picking" element={<ProtectedRoute tela="/b2b/picking"><B2BPickingPage /></ProtectedRoute>} />
       </Route>
     </Routes>
   );

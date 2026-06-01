@@ -6,7 +6,7 @@ import {
   Camera, ShieldCheck, ChevronDown, ChevronRight, Layers,
   Truck, TrendingUp, Users, LogOut, X, ShoppingCart,
   Landmark, BarChart2, Lock, TrendingDown, Database,
-  Package, Clock, LayoutDashboard,
+  Package, Clock, LayoutDashboard, ScanLine,
 } from "lucide-react";
 import { useAuth } from "../AuthContext.jsx";
 import { signOut } from "../services/authService.js";
@@ -201,10 +201,11 @@ function SidebarContent({ profile, onClose, handleLogout }) {
             </CollapseGroup>
 
             {/* Assurant Warehouse */}
-            <CollapseGroup icon={Package} label="Assurant Warehouse" paths={["/assurant"]}>
+            <CollapseGroup icon={Package} label="Assurant Warehouse" paths={["/assurant", "/b2b"]}>
               <NavItem to="/assurant/dashboard" icon={BarChart3}       label="Dashboard"             indent onClick={onClose} />
               <NavItem to="/assurant/sla"       icon={Clock}           label="SLA & Rastreabilidade" indent onClick={onClose} />
-              <NavItem to="/assurant/layout"    icon={LayoutDashboard} label="Layout Warehouse"       indent onClick={onClose} />
+              <NavItem to="/assurant/layout"    icon={LayoutDashboard} label="Layout Warehouse"      indent onClick={onClose} />
+              <NavItem to="/b2b/picking"        icon={ScanLine}        label="Picking B2B"           indent onClick={onClose} />
               <NavItemDisabled icon={DollarSign} label="DRE Gerencial" indent />
             </CollapseGroup>
           </>
