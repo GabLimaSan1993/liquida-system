@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FileSpreadsheet, Upload, Landmark, Package, GitBranch } from "lucide-react";
+import { FileSpreadsheet, Upload, Landmark, Package, GitBranch, ScanLine } from "lucide-react";
 import {
   previewFile,
   uploadAgingFile,
@@ -14,6 +14,7 @@ import {
   previewMovimentacao,
   uploadMovimentacao,
 } from "../services/assurantMovimentacaoService.js";
+import { importarPedidoB2B } from "../services/b2bService.js";
 import { useAuth } from "../AuthContext.jsx";
 
 function SectionCard({ children, className = "" }) {
@@ -114,12 +115,21 @@ function UploadBox({
       {preview && (
         <div className="mt-4 rounded-2xl bg-white p-4 ring-1 ring-[#E9D5FF]">
           <div className="text-sm font-semibold text-[#6B1F87]">
-            Linhas válidas encontradas: {preview.totalRows.toLocaleString("pt-BR")}
+            {preview.totalRows != null
+              ? `Linhas válidas encontradas: ${preview.totalRows.toLocaleString("pt-BR")}`
+              : preview.mensagem || "Importação concluída"}
           </div>
           {preview.previewRows?.length > 0 && (
             <pre className="mt-3 max-h-72 overflow-auto rounded-2xl bg-slate-950 p-4 text-xs text-slate-100">
               {JSON.stringify(preview.previewRows, null, 2)}
             </pre>
+          )}
+          {preview.lote && (
+            <div className="mt-3 space-y-1 text-xs text-slate-600">
+              <p><span className="font-semibold">Lote:</span> {preview.lote}</p>
+              <p><span className="font-semibold">Cliente:</span> {preview.cliente}</p>
+              <p><span className="font-semibold">Itens:</span> {preview.total?.toLocaleString("pt-BR")}</p>
+            </div>
           )}
         </div>
       )}
@@ -131,32 +141,37 @@ export default function UploadPage() {
   const { profile, user } = useAuth();
 
   // ── Estados existentes ────────────────────────────────
-  const [agingFile, setAgingFile]                   = useState(null);
-  const [faturamentoFile, setFaturamentoFile]       = useState(null);
-  const [ofxFile, setOfxFile]                       = useState(null);
-  const [agingPreview, setAgingPreview]             = useState(null);
-  const [faturamentoPreview, setFaturamentoPreview] = useState(null);
-  const [loadingAgingPreview, setLoadingAgingPreview]             = useState(false);
+  const [agingFile, setAgingFile]                               = useState(null);
+  const [faturamentoFile, setFaturamentoFile]                   = useState(null);
+  const [ofxFile, setOfxFile]                                   = useState(null);
+  const [agingPreview, setAgingPreview]                         = useState(null);
+  const [faturamentoPreview, setFaturamentoPreview]             = useState(null);
+  const [loadingAgingPreview, setLoadingAgingPreview]           = useState(false);
   const [loadingFaturamentoPreview, setLoadingFaturamentoPreview] = useState(false);
-  const [loadingAgingUpload, setLoadingAgingUpload]               = useState(false);
-  const [loadingFaturamentoUpload, setLoadingFaturamentoUpload]   = useState(false);
-  const [loadingOfxUpload, setLoadingOfxUpload]                   = useState(false);
+  const [loadingAgingUpload, setLoadingAgingUpload]             = useState(false);
+  const [loadingFaturamentoUpload, setLoadingFaturamentoUpload] = useState(false);
+  const [loadingOfxUpload, setLoadingOfxUpload]                 = useState(false);
 
   // ── Estados Triagem Assurant ──────────────────────────
-  const [triagemFile, setTriagemFile]               = useState(null);
-  const [triagemPreview, setTriagemPreview]         = useState(null);
-  const [loadingTriagemPreview, setLoadingTriagemPreview] = useState(false);
-  const [loadingTriagemUpload, setLoadingTriagemUpload]   = useState(false);
-  const [mesRefTriagem, setMesRefTriagem]           = useState(() => {
+  const [triagemFile, setTriagemFile]                           = useState(null);
+  const [triagemPreview, setTriagemPreview]                     = useState(null);
+  const [loadingTriagemPreview, setLoadingTriagemPreview]       = useState(false);
+  const [loadingTriagemUpload, setLoadingTriagemUpload]         = useState(false);
+  const [mesRefTriagem, setMesRefTriagem]                       = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   });
 
   // ── Estados Movimentação Assurant ─────────────────────
-  const [movFile, setMovFile]                       = useState(null);
-  const [movPreview, setMovPreview]                 = useState(null);
-  const [loadingMovPreview, setLoadingMovPreview]   = useState(false);
-  const [loadingMovUpload, setLoadingMovUpload]     = useState(false);
+  const [movFile, setMovFile]                                   = useState(null);
+  const [movPreview, setMovPreview]                             = useState(null);
+  const [loadingMovPreview, setLoadingMovPreview]               = useState(false);
+  const [loadingMovUpload, setLoadingMovUpload]                 = useState(false);
+
+  // ── Estados Picking B2B ───────────────────────────────
+  const [b2bFile, setB2bFile]                                   = useState(null);
+  const [b2bPreview, setB2bPreview]                             = useState(null);
+  const [loadingB2bUpload, setLoadingB2bUpload]                 = useState(false);
 
   // ── Status global ─────────────────────────────────────
   const [status, setStatus]     = useState("");
@@ -168,6 +183,7 @@ export default function UploadPage() {
     { type: "Extrato OFX",            name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
     { type: "Triagem Assurant",       name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
     { type: "Movimentação Assurant",  name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+    { type: "Pedido B2B",             name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
   ]);
 
   function updateHistoryCard(type, payload) {
@@ -370,6 +386,39 @@ export default function UploadPage() {
     }
   }
 
+  // ── Handler Pedido B2B ────────────────────────────────
+  async function handleUploadB2B() {
+    try {
+      if (!b2bFile) { setStatus("Selecione uma planilha de Pedido B2B."); return; }
+      setLoadingB2bUpload(true);
+      setProgress(0);
+      setStatus("Importando pedido B2B...");
+      updateHistoryCard("Pedido B2B", { name: b2bFile.name, status: "Enviando", progress: 10 });
+
+      const result = await importarPedidoB2B(b2bFile, user.id);
+
+      setB2bPreview({
+        lote:     result.lote,
+        cliente:  result.cliente,
+        total:    result.total,
+        mensagem: "Pedido importado com sucesso!",
+      });
+      updateHistoryCard("Pedido B2B", {
+        name:     b2bFile.name,
+        status:   "Concluído",
+        rows:     result.total.toLocaleString("pt-BR"),
+        progress: 100,
+      });
+      setProgress(100);
+      setStatus(`Pedido B2B importado! ${result.total.toLocaleString("pt-BR")} itens carregados — Lote: ${result.lote}`);
+    } catch (error) {
+      setStatus(`Erro ao importar Pedido B2B: ${error.message}`);
+      updateHistoryCard("Pedido B2B", { status: "Erro" });
+    } finally {
+      setLoadingB2bUpload(false);
+    }
+  }
+
   // ── Render ────────────────────────────────────────────
   return (
     <SectionCard>
@@ -469,7 +518,27 @@ export default function UploadPage() {
             loadingUpload={loadingMovUpload}
             extra={
               <div className="text-xs text-slate-500 bg-blue-50 ring-1 ring-blue-200 rounded-xl px-3 py-2">
-                📋 Formato esperado: Usuário · Etapa · Voucher · Serial/IMEI · Data (separado por tab)
+                📋 Formato esperado: Usuário · Etapa · Voucher · Serial/IMEI · Data (separado por ponto e vírgula)
+              </div>
+            }
+          />
+
+          {/* Pedido B2B */}
+          <UploadBox
+            title="Pedido B2B — Picking"
+            description="Importe a planilha de picking B2B recebida por e-mail da Assurant para iniciar a separação."
+            icon={ScanLine}
+            accept=".xlsx,.xls"
+            file={b2bFile}
+            onChangeFile={(file) => { setB2bFile(file); setB2bPreview(null); }}
+            onUpload={handleUploadB2B}
+            preview={b2bPreview}
+            loadingPreview={false}
+            loadingUpload={loadingB2bUpload}
+            showPreview={false}
+            extra={
+              <div className="text-xs text-slate-500 bg-purple-50 ring-1 ring-purple-200 rounded-xl px-3 py-2">
+                📋 Formato: planilha PICKING_*.xlsx recebida por e-mail · Após importar, acesse Picking B2B para separação
               </div>
             }
           />
