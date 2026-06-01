@@ -1,4 +1,3 @@
-import Papa from "papaparse";
 import * as XLSX from "xlsx";
 import { supabase } from "../lib/supabase";
 
@@ -8,13 +7,19 @@ export async function importarPedidoB2B(file, userId) {
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
-        const wb   = XLSX.read(e.target.result, { type: "binary" });
-        const ws   = wb.Sheets[wb.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(ws, { defval: null });
+        const wb = XLSX.read(e.target.result, { type: "binary" });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+
+        // range: 1 pula a linha 1 (ALOCAÇÃO/ESTOQUE/WAREHOUSE)
+        // e usa a linha 2 (GRADE, MODELO, IMEI...) como cabeçalho real
+        const rows = XLSX.utils.sheet_to_json(ws, {
+          defval: null,
+          range:  1,
+        });
 
         if (!rows.length) throw new Error("Planilha vazia ou formato inválido.");
 
-        // Extrair lote e cliente da primeira linha
+        // Extrair lote e cliente
         const lote    = rows[0]["RESERVA"] || rows[0]["LOTE"] || "SEM_LOTE";
         const cliente = rows[0]["Ganhador"] || "Cliente não identificado";
 
@@ -27,14 +32,14 @@ export async function importarPedidoB2B(file, userId) {
 
         if (existing) throw new Error(`Pedido "${lote}" já foi importado.`);
 
-        // Criar pedido
+        // Criar pedido (total_itens provisório, atualizado depois)
         const { data: pedido, error: errPedido } = await supabase
           .from("b2b_pedidos")
           .insert({
             lote,
             cliente,
             total_itens: rows.length,
-            criado_por: userId,
+            criado_por:  userId,
           })
           .select()
           .single();
@@ -43,21 +48,27 @@ export async function importarPedidoB2B(file, userId) {
 
         // Mapear itens
         const itens = rows.map(r => ({
-          pedido_id:    pedido.id,
-          imei:         String(r["IMEI"] || r["NUM_IMEI"] || "").trim(),
-          voucher:      String(r["NUM_IMEI"] || "").trim(),
-          modelo:       r["MODELO"] || r["CNN"] || null,
-          grade:        r["GRADE"]  || null,
-          grade2:       r["GRADE2"] || null,
-          desc_item:    r["DESC_ITEM"] || null,
-          cod_item:     r["COD_ITEM"]  || null,
-          local_estoque:r["LOCAL"]     || null,
-          aging:        r["AGING"]     ? parseInt(r["AGING"]) : null,
-          valor:        r["Alocação $"]? parseFloat(r["Alocação $"]) : null,
-          status:       "pendente",
+          pedido_id:     pedido.id,
+          imei:          String(r["IMEI"] || r["NUM_IMEI"] || "").trim(),
+          voucher:       String(r["NUM_IMEI"] || "").trim(),
+          modelo:        r["MODELO"]     || r["CNN"]   || null,
+          grade:         r["GRADE"]      || null,
+          grade2:        r["GRADE2"]     || null,
+          desc_item:     r["DESC_ITEM"]  || null,
+          cod_item:      r["COD_ITEM"]   || null,
+          local_estoque: r["LOCAL"]      || null,
+          aging:         r["AGING"]      ? parseInt(r["AGING"])        : null,
+          valor:         r["Alocação $"] ? parseFloat(r["Alocação $"]) : null,
+          status:        "pendente",
         })).filter(i => i.imei && i.imei.length > 5);
 
-        // Inserir em chunks de 500
+        // Atualizar total com contagem real de IMEIs válidos
+        await supabase
+          .from("b2b_pedidos")
+          .update({ total_itens: itens.length })
+          .eq("id", pedido.id);
+
+        // Inserir itens em chunks de 500
         const CHUNK = 500;
         for (let i = 0; i < itens.length; i += CHUNK) {
           const { error } = await supabase
@@ -101,7 +112,7 @@ export async function listarItens(pedidoId) {
 export async function registrarBipagem(imeiDigitado, pedidoId, userId) {
   const imei = String(imeiDigitado).trim();
 
-  // Buscar item pelo IMEI no pedido
+  // Buscar item pelo IMEI no pedido atual
   const { data: item, error: errItem } = await supabase
     .from("b2b_itens")
     .select("*")
@@ -110,12 +121,12 @@ export async function registrarBipagem(imeiDigitado, pedidoId, userId) {
     .single();
 
   if (errItem || !item) {
-    // Tentar buscar em outros pedidos (IMEI reservado?)
+    // Verificar se IMEI está em outro pedido já bipado
     const { data: outroItem } = await supabase
       .from("b2b_itens")
       .select("pedido_id, status")
       .eq("imei", imei)
-      .neq("status", "pendente")
+      .eq("status", "bipado")
       .single();
 
     if (outroItem) {
@@ -128,14 +139,14 @@ export async function registrarBipagem(imeiDigitado, pedidoId, userId) {
     return { ok: false, erro: "IMEI já bipado neste pedido.", item };
   }
 
-  // Atualizar item
+  // Registrar bipagem
   const { error: errUpdate } = await supabase
     .from("b2b_itens")
     .update({
-      status:     "bipado",
+      status:      "bipado",
       imei_bipado: imei,
-      bipado_em:  new Date().toISOString(),
-      bipado_por: userId,
+      bipado_em:   new Date().toISOString(),
+      bipado_por:  userId,
     })
     .eq("id", item.id);
 
@@ -162,17 +173,19 @@ export async function exportarFaturamento(pedidoId) {
     .eq("status", "bipado")
     .order("local_estoque");
 
+  if (!itens?.length) throw new Error("Nenhum item bipado para exportar.");
+
   const rows = itens.map(i => ({
-    "LOTE":        pedido.lote,
-    "CLIENTE":     pedido.cliente,
-    "IMEI":        i.imei,
-    "MODELO":      i.modelo,
-    "GRADE":       i.grade,
-    "DESC_ITEM":   i.desc_item,
-    "COD_ITEM":    i.cod_item,
-    "LOCAL":       i.local_estoque,
-    "VALOR":       i.valor ? i.valor.toFixed(2).replace(".", ",") : "",
-    "BIPADO_EM":   i.bipado_em ? new Date(i.bipado_em).toLocaleString("pt-BR") : "",
+    "LOTE":      pedido.lote,
+    "CLIENTE":   pedido.cliente,
+    "IMEI":      i.imei,
+    "MODELO":    i.modelo,
+    "GRADE":     i.grade,
+    "DESC_ITEM": i.desc_item,
+    "COD_ITEM":  i.cod_item,
+    "LOCAL":     i.local_estoque,
+    "VALOR":     i.valor ? i.valor.toFixed(2).replace(".", ",") : "",
+    "BIPADO_EM": i.bipado_em ? new Date(i.bipado_em).toLocaleString("pt-BR") : "",
   }));
 
   const wb = XLSX.utils.book_new();
