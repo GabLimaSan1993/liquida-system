@@ -1,8 +1,10 @@
-import { supabase } from "../lib/supabase";
-import jsPDF from "jspdf";
+import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import { supabase } from "../lib/supabase";
 
-// ── Buscar ou criar caixa aberta do pedido ───────────────
+const CAPACIDADE_CAIXA = 30;
+
+// ── Buscar caixa aberta do pedido ────────────────────────
 export async function buscarCaixaAberta(pedidoId) {
   const { data } = await supabase
     .from("b2b_caixas")
@@ -62,7 +64,6 @@ export async function listarItensCaixa(caixaId) {
 // ── Bipar IMEI na embalagem ──────────────────────────────
 export async function embalarImei(imeiDigitado, pedidoId, caixaId, userId) {
   const imei = String(imeiDigitado).trim();
-  const CAPACIDADE = 50;
 
   // Verificar se IMEI existe no pedido e foi bipado no picking
   const { data: item, error: errItem } = await supabase
@@ -81,19 +82,18 @@ export async function embalarImei(imeiDigitado, pedidoId, caixaId, userId) {
   }
 
   if (item.caixa_id) {
-    // Buscar número da caixa
     const { data: caixaExist } = await supabase
       .from("b2b_caixas")
       .select("numero")
       .eq("id", item.caixa_id)
       .single();
     return {
-      ok: false,
+      ok:   false,
       erro: `IMEI já embalado na Caixa ${caixaExist?.numero || "—"}.`,
     };
   }
 
-  // Verificar capacidade da caixa atual
+  // Verificar capacidade da caixa
   const { data: caixaAtual } = await supabase
     .from("b2b_caixas")
     .select("*")
@@ -104,16 +104,20 @@ export async function embalarImei(imeiDigitado, pedidoId, caixaId, userId) {
     return { ok: false, erro: "Caixa não encontrada." };
   }
 
-  if (caixaAtual.total_itens >= CAPACIDADE) {
-    return { ok: false, erro: "Caixa já está cheia (50 unidades). Feche esta caixa para continuar.", caixaCheia: true };
+  if (caixaAtual.total_itens >= CAPACIDADE_CAIXA) {
+    return {
+      ok:         false,
+      erro:       `Caixa já está cheia (${CAPACIDADE_CAIXA} unidades). Feche esta caixa para continuar.`,
+      caixaCheia: true,
+    };
   }
 
   // Alocar item na caixa
   const { error: errUpdate } = await supabase
     .from("b2b_itens")
     .update({
-      caixa_id:    caixaId,
-      embalado_em: new Date().toISOString(),
+      caixa_id:     caixaId,
+      embalado_em:  new Date().toISOString(),
       embalado_por: userId,
     })
     .eq("id", item.id);
@@ -127,8 +131,8 @@ export async function embalarImei(imeiDigitado, pedidoId, caixaId, userId) {
     .update({ total_itens: novoTotal })
     .eq("id", caixaId);
 
-  // Verificar se caixa ficou cheia após este item
-  const caixaFechou = novoTotal >= CAPACIDADE;
+  // Fechar automaticamente se atingiu capacidade
+  const caixaFechou = novoTotal >= CAPACIDADE_CAIXA;
   if (caixaFechou) {
     await supabase
       .from("b2b_caixas")
@@ -140,21 +144,16 @@ export async function embalarImei(imeiDigitado, pedidoId, caixaId, userId) {
       .eq("id", caixaId);
   }
 
-  return {
-    ok: true,
-    item,
-    totalCaixa: novoTotal,
-    caixaFechou,
-  };
+  return { ok: true, item, totalCaixa: novoTotal, caixaFechou };
 }
 
-// ── Fechar caixa manualmente ─────────────────────────────
+// ── Fechar caixa manualmente (permite quantidade parcial) ─
 export async function fecharCaixa(caixaId, userId) {
   const { error } = await supabase
     .from("b2b_caixas")
     .update({
-      status:     "fechada",
-      fechado_em: new Date().toISOString(),
+      status:      "fechada",
+      fechado_em:  new Date().toISOString(),
       fechado_por: userId,
     })
     .eq("id", caixaId);
@@ -173,7 +172,7 @@ export async function gerarRomaneio(caixaId, pedido) {
 
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
-  // Cabeçalho
+  // Cabeçalho roxo
   doc.setFillColor(127, 45, 146);
   doc.rect(0, 0, 210, 32, "F");
 
@@ -184,10 +183,10 @@ export async function gerarRomaneio(caixaId, pedido) {
 
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
-  doc.text(`Liquida Preço — Assurant Warehouse`, 14, 21);
+  doc.text("Liquida Preço — Assurant Warehouse", 14, 21);
   doc.text(`Emitido em: ${new Date().toLocaleString("pt-BR")}`, 14, 27);
 
-  // Informações da caixa
+  // Bloco de informações
   doc.setTextColor(0, 0, 0);
   doc.setFillColor(245, 240, 250);
   doc.rect(0, 34, 210, 28, "F");
@@ -203,7 +202,10 @@ export async function gerarRomaneio(caixaId, pedido) {
   doc.text(`Total de itens: ${itens.length}`, 120, 43);
   doc.text(`Status: ${caixa.status === "fechada" ? "Fechada" : "Aberta"}`, 120, 50);
   if (caixa.fechado_em) {
-    doc.text(`Fechada em: ${new Date(caixa.fechado_em).toLocaleString("pt-BR")}`, 120, 56);
+    doc.text(
+      `Fechada em: ${new Date(caixa.fechado_em).toLocaleString("pt-BR")}`,
+      120, 56
+    );
   }
 
   // Tabela de itens
@@ -213,38 +215,35 @@ export async function gerarRomaneio(caixaId, pedido) {
     body: itens.map((item, idx) => [
       idx + 1,
       item.imei,
-      item.modelo || "—",
-      item.grade  || "—",
+      item.modelo   || "—",
+      item.grade    || "—",
       item.cod_item || "—",
-      item.valor ? Number(item.valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 }) : "—",
+      item.valor
+        ? Number(item.valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 })
+        : "—",
     ]),
-    styles: {
-      fontSize: 7.5,
-      cellPadding: 2.5,
-    },
+    styles:     { fontSize: 7.5, cellPadding: 2.5 },
     headStyles: {
       fillColor: [127, 45, 146],
       textColor: [255, 255, 255],
       fontStyle: "bold",
-      fontSize: 8,
+      fontSize:  8,
     },
-    alternateRowStyles: {
-      fillColor: [248, 244, 252],
-    },
+    alternateRowStyles: { fillColor: [248, 244, 252] },
     columnStyles: {
       0: { cellWidth: 8,  halign: "center" },
-      1: { cellWidth: 42, font: "courier" },
+      1: { cellWidth: 42, font: "courier"  },
       2: { cellWidth: 60 },
       3: { cellWidth: 20, halign: "center" },
       4: { cellWidth: 28, halign: "center" },
-      5: { cellWidth: 24, halign: "right" },
+      5: { cellWidth: 24, halign: "right"  },
     },
     margin: { left: 14, right: 14 },
   });
 
-  // Rodapé
+  // Rodapé com totais
   const totalValor = itens.reduce((s, i) => s + (i.valor || 0), 0);
-  const finalY = doc.lastAutoTable.finalY + 5;
+  const finalY     = (doc.lastAutoTable?.finalY || 200) + 5;
 
   doc.setFillColor(245, 240, 250);
   doc.rect(14, finalY, 182, 10, "F");
@@ -253,15 +252,14 @@ export async function gerarRomaneio(caixaId, pedido) {
   doc.text(`Total de itens: ${itens.length}`, 18, finalY + 6.5);
   doc.text(
     `Valor total: R$ ${totalValor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
-    196,
-    finalY + 6.5,
+    196, finalY + 6.5,
     { align: "right" }
   );
 
   doc.save(`romaneio_caixa_${caixa.numero}_${pedido.lote}.pdf`);
 }
 
-// ── Gerar Etiqueta PDF ───────────────────────────────────
+// ── Gerar Etiqueta PDF — layout igual à foto ─────────────
 export async function gerarEtiqueta(caixaId, pedido, totalCaixasPedido) {
   const { data: caixa } = await supabase
     .from("b2b_caixas")
@@ -269,79 +267,66 @@ export async function gerarEtiqueta(caixaId, pedido, totalCaixasPedido) {
     .eq("id", caixaId)
     .single();
 
-  // Etiqueta no formato A5 landscape (148x210mm) — ideal para imprimir em A4 e dobrar
-  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a5" });
+  // 100x70mm — landscape: formato [altura, largura]
+  const doc = new jsPDF({
+    orientation: "landscape",
+    unit:        "mm",
+    format:      [70, 100],
+  });
 
-  // Fundo roxo superior
-  doc.setFillColor(127, 45, 146);
-  doc.rect(0, 0, 210, 40, "F");
+  const W = 100;
+  const H = 70;
 
-  // Logo / título
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "normal");
-  doc.text("LIQUIDA PREÇO — ASSURANT WAREHOUSE", 105, 12, { align: "center" });
+  // Fundo branco
+  doc.setFillColor(255, 255, 255);
+  doc.rect(0, 0, W, H, "F");
 
-  doc.setFontSize(28);
-  doc.setFont("helvetica", "bold");
-  doc.text(`CAIXA ${caixa.numero}`, 105, 32, { align: "center" });
+  // Borda
+  doc.setDrawColor(180, 180, 180);
+  doc.setLineWidth(0.4);
+  doc.rect(2, 2, W - 4, H - 4, "S");
 
-  // Corpo
-  doc.setTextColor(0, 0, 0);
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "bold");
+  // Lote — limpa o nome igual à foto
+  const loteFormatado = pedido.lote
+    .replace(/ - \d+ PRODUTOS.*$/i, "")
+    .replace(/_LOTE_\d+$/i, "")
+    .trim();
 
-  const col1x = 14;
-  const col2x = 110;
-  let y = 52;
-
-  // Linha: Pedido
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(100, 100, 100);
-  doc.text("PEDIDO / LOTE", col1x, y);
-  doc.text("CLIENTE", col2x, y);
-
-  y += 6;
+  // Linha 1 — Lote
+  doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(0, 0, 0);
-  doc.setFontSize(10);
-  const loteTexto = pedido.lote.length > 38 ? pedido.lote.slice(0, 35) + "..." : pedido.lote;
-  doc.text(loteTexto, col1x, y);
-  const clienteTexto = pedido.cliente.length > 30 ? pedido.cliente.slice(0, 27) + "..." : pedido.cliente;
-  doc.text(clienteTexto, col2x, y);
+  doc.text(loteFormatado, W / 2, 13, { align: "center" });
 
-  y += 14;
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(100, 100, 100);
-  doc.setFontSize(11);
-  doc.text("QUANTIDADE DE ITENS", col1x, y);
-  doc.text("TOTAL DE CAIXAS DO PEDIDO", col2x, y);
+  // Divisor
+  doc.setDrawColor(180, 180, 180);
+  doc.setLineWidth(0.2);
+  doc.line(5, 17, W - 5, 17);
 
-  y += 6;
+  // Linha 2 — CAIXA X (grande, igual à foto)
+  doc.setFontSize(20);
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(0, 0, 0);
-  doc.setFontSize(22);
-  doc.text(`${caixa.total_itens} unidades`, col1x, y);
-  doc.text(`${totalCaixasPedido} caixas`, col2x, y);
+  doc.text(`CAIXA ${caixa.numero}`, W / 2, 33, { align: "center" });
 
-  y += 14;
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(100, 100, 100);
-  doc.setFontSize(11);
-  doc.text("DATA DE EMBALAGEM", col1x, y);
+  // Divisor
+  doc.line(5, 38, W - 5, 38);
 
-  y += 6;
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(0, 0, 0);
+  // Linha 3 — Quantidade
   doc.setFontSize(13);
+  doc.setFont("helvetica", "bold");
+  doc.text(`${caixa.total_itens} UNIDADES`, W / 2, 50, { align: "center" });
+
+  // Divisor
+  doc.line(5, 55, W - 5, 55);
+
+  // Linha 4 — Data
   const dataEmb = caixa.fechado_em
     ? new Date(caixa.fechado_em).toLocaleDateString("pt-BR")
     : new Date().toLocaleDateString("pt-BR");
-  doc.text(dataEmb, col1x, y);
 
-  // Borda inferior colorida
-  doc.setFillColor(249, 115, 22);
-  doc.rect(0, 133, 210, 5, "F");
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "normal");
+  doc.text(dataEmb, W / 2, 64, { align: "center" });
 
   doc.save(`etiqueta_caixa_${caixa.numero}_${pedido.lote}.pdf`);
 }

@@ -303,7 +303,7 @@ function TabEmbalagem({ pedidos, onAtualizar }) {
   const [caixaDetalhes, setCaixaDetalhes] = useState(null);
   const [itensCaixaDet, setItensCaixaDet] = useState([]);
   const inputRef                    = useRef(null);
-  const CAPACIDADE                  = 50;
+  const CAPACIDADE                  = 30;
 
   useEffect(() => {
     if (pedidoSel) carregarCaixas();
