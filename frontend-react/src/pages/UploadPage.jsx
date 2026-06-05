@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { FileSpreadsheet, Upload, Landmark, Package, GitBranch, ScanLine } from "lucide-react";
 import {
   previewFile,
@@ -15,7 +15,9 @@ import {
   uploadMovimentacao,
 } from "../services/assurantMovimentacaoService.js";
 import { importarPedidoB2B } from "../services/b2bService.js";
-import { useAuth } from "../AuthContext.jsx";
+import { importarNFs }        from "../services/b2bNfService.js";
+import { supabase }           from "../lib/supabase.js";
+import { useAuth }            from "../AuthContext.jsx";
 
 function SectionCard({ children, className = "" }) {
   return (
@@ -168,23 +170,43 @@ export default function UploadPage() {
   const [loadingMovPreview, setLoadingMovPreview]               = useState(false);
   const [loadingMovUpload, setLoadingMovUpload]                 = useState(false);
 
-  // ── Estados Picking B2B ───────────────────────────────
+  // ── Estados Pedido B2B ────────────────────────────────
   const [b2bFile, setB2bFile]                                   = useState(null);
   const [b2bPreview, setB2bPreview]                             = useState(null);
   const [loadingB2bUpload, setLoadingB2bUpload]                 = useState(false);
+
+  // ── Estados NF B2B ────────────────────────────────────
+  const [nfFile, setNfFile]                                     = useState(null);
+  const [nfPedidoId, setNfPedidoId]                             = useState("");
+  const [nfPreview, setNfPreview]                               = useState(null);
+  const [loadingNfUpload, setLoadingNfUpload]                   = useState(false);
+  const [pedidosB2B, setPedidosB2B]                             = useState([]);
 
   // ── Status global ─────────────────────────────────────
   const [status, setStatus]     = useState("");
   const [progress, setProgress] = useState(0);
 
   const [historyCards, setHistoryCards] = useState([
-    { type: "Aging",                  name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
-    { type: "Faturamento",            name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
-    { type: "Extrato OFX",            name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
-    { type: "Triagem Assurant",       name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
-    { type: "Movimentação Assurant",  name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
-    { type: "Pedido B2B",             name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+    { type: "Aging",                 name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+    { type: "Faturamento",           name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+    { type: "Extrato OFX",           name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+    { type: "Triagem Assurant",      name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+    { type: "Movimentação Assurant", name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+    { type: "Pedido B2B",            name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+    { type: "NF B2B",                name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
   ]);
+
+  // ── Carregar pedidos B2B ──────────────────────────────
+  useEffect(() => {
+    async function carregarPedidos() {
+      const { data } = await supabase
+        .from("b2b_pedidos")
+        .select("id, lote")
+        .order("criado_em", { ascending: false });
+      setPedidosB2B(data || []);
+    }
+    carregarPedidos();
+  }, []);
 
   function updateHistoryCard(type, payload) {
     setHistoryCards((current) =>
@@ -297,7 +319,6 @@ export default function UploadPage() {
     }
   }
 
-  // ── Handler Triagem Assurant ──────────────────────────
   async function handlePreviewTriagem() {
     try {
       if (!triagemFile) { setStatus("Selecione um arquivo de Triagem."); return; }
@@ -342,7 +363,6 @@ export default function UploadPage() {
     }
   }
 
-  // ── Handler Movimentação Assurant ─────────────────────
   async function handlePreviewMovimentacao() {
     try {
       if (!movFile) { setStatus("Selecione um arquivo de Movimentação."); return; }
@@ -386,7 +406,6 @@ export default function UploadPage() {
     }
   }
 
-  // ── Handler Pedido B2B ────────────────────────────────
   async function handleUploadB2B() {
     try {
       if (!b2bFile) { setStatus("Selecione uma planilha de Pedido B2B."); return; }
@@ -410,12 +429,52 @@ export default function UploadPage() {
         progress: 100,
       });
       setProgress(100);
-      setStatus(`Pedido B2B importado! ${result.total.toLocaleString("pt-BR")} itens carregados — Lote: ${result.lote}`);
+      setStatus(`Pedido B2B importado! ${result.total.toLocaleString("pt-BR")} itens — Lote: ${result.lote}`);
+
+      // Recarregar lista de pedidos para o seletor de NF
+      const { data } = await supabase
+        .from("b2b_pedidos")
+        .select("id, lote")
+        .order("criado_em", { ascending: false });
+      setPedidosB2B(data || []);
     } catch (error) {
       setStatus(`Erro ao importar Pedido B2B: ${error.message}`);
       updateHistoryCard("Pedido B2B", { status: "Erro" });
     } finally {
       setLoadingB2bUpload(false);
+    }
+  }
+
+  async function handleUploadNF() {
+    try {
+      if (!nfFile)     { setStatus("Selecione a planilha de NF."); return; }
+      if (!nfPedidoId) { setStatus("Selecione o pedido correspondente."); return; }
+      setLoadingNfUpload(true);
+      setProgress(0);
+      setStatus("Importando NFs...");
+      updateHistoryCard("NF B2B", { name: nfFile.name, status: "Enviando", progress: 10 });
+
+      const result = await importarNFs(nfFile, nfPedidoId, user.id);
+
+      setNfPreview({
+        mensagem:       "NFs importadas com sucesso!",
+        atualizados:    result.atualizados,
+        naoEncontrados: result.naoEncontrados,
+        nfs:            result.nfs,
+      });
+      updateHistoryCard("NF B2B", {
+        name:     nfFile.name,
+        status:   "Concluído",
+        rows:     result.atualizados,
+        progress: 100,
+      });
+      setProgress(100);
+      setStatus(`NFs importadas! ${result.atualizados} IMEIs vinculados em ${result.nfs.length} NF(s).`);
+    } catch (e) {
+      setStatus(`Erro ao importar NFs: ${e.message}`);
+      updateHistoryCard("NF B2B", { status: "Erro" });
+    } finally {
+      setLoadingNfUpload(false);
     }
   }
 
@@ -542,6 +601,94 @@ export default function UploadPage() {
               </div>
             }
           />
+
+          {/* NF B2B */}
+          <div className="rounded-[24px] border border-dashed border-[#D8B4FE] bg-[#FCFAFF] p-5">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="text-lg font-bold text-[#6B1F87]">NF B2B — Vínculo de Notas Fiscais</div>
+                <div className="mt-1 text-sm text-slate-500">
+                  Importe a planilha com a coluna Nº NF preenchida para vincular as notas aos romaneios.
+                </div>
+              </div>
+              <div className="rounded-2xl bg-[linear-gradient(135deg,#F97316_0%,#F59E0B_100%)] p-3 text-white shadow-lg shrink-0 ml-3">
+                <FileSpreadsheet className="h-5 w-5" />
+              </div>
+            </div>
+
+            <div className="mt-4 text-xs text-slate-500 bg-blue-50 ring-1 ring-blue-200 rounded-xl px-3 py-2">
+              📋 Mesma planilha de picking com a coluna <strong>Nº NF</strong> preenchida pelo time de faturamento
+            </div>
+
+            {/* Seletor de pedido */}
+            <div className="mt-4">
+              <label className="block text-xs font-bold text-slate-600 mb-1">
+                Pedido correspondente
+              </label>
+              <select
+                value={nfPedidoId}
+                onChange={e => setNfPedidoId(e.target.value)}
+                disabled={loadingNfUpload}
+                className="w-full rounded-xl border border-[#D8B4FE] px-3 py-2 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-400 disabled:opacity-50 bg-white"
+              >
+                <option value="">Selecione o pedido...</option>
+                {pedidosB2B.map(p => (
+                  <option key={p.id} value={p.id}>{p.lote}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="mt-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-[#E9D5FF]">
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={e => { setNfFile(e.target.files?.[0] || null); setNfPreview(null); }}
+                className="block w-full text-sm text-slate-600"
+              />
+              <div className="mt-3 text-sm font-medium">
+                {nfFile ? nfFile.name : "Nenhum arquivo selecionado"}
+              </div>
+              <div className="mt-1 text-xs text-slate-500">
+                {nfFile ? "Arquivo pronto para envio" : "Selecione um arquivo .xlsx"}
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <Button
+                onClick={handleUploadNF}
+                disabled={!nfFile || !nfPedidoId || loadingNfUpload}
+              >
+                {loadingNfUpload ? "Importando..." : "Importar NFs"}
+              </Button>
+            </div>
+
+            {nfPreview && (
+              <div className="mt-4 rounded-2xl bg-white p-4 ring-1 ring-[#E9D5FF] space-y-3">
+                <div className="text-sm font-bold text-emerald-700">✓ {nfPreview.mensagem}</div>
+                <div className="text-xs text-slate-600 space-y-1">
+                  <p>IMEIs vinculados: <span className="font-bold">{nfPreview.atualizados}</span></p>
+                  {nfPreview.naoEncontrados > 0 && (
+                    <p>IMEIs não encontrados: <span className="font-bold text-orange-600">{nfPreview.naoEncontrados}</span></p>
+                  )}
+                </div>
+                {nfPreview.nfs?.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-bold text-slate-500">Resumo por NF:</p>
+                    {nfPreview.nfs.map(nf => (
+                      <div key={nf.numero_nf}
+                        className="flex items-center justify-between text-xs bg-slate-50 rounded-xl px-3 py-2">
+                        <span className="font-mono font-bold text-[#7F2D92]">NF {nf.numero_nf}</span>
+                        <div className="flex gap-4 text-slate-500">
+                          <span><span className="font-bold text-slate-700">{nf.total_itens}</span> aparelhos</span>
+                          <span><span className="font-bold text-slate-700">{nf.total_caixas}</span> caixas</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
         </div>
 
