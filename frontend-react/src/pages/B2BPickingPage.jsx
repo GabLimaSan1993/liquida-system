@@ -12,7 +12,7 @@ import {
 import {
   buscarCaixaAberta, criarCaixa, listarCaixas,
   listarItensCaixa, embalarImei, fecharCaixa,
-  gerarRomaneio, gerarEtiqueta,
+  gerarRomaneio, gerarEtiqueta, gerarRomaneioPedido,
 } from "../services/b2bEmbalagemService.js";
 import { useAuth } from "../AuthContext.jsx";
 
@@ -63,10 +63,8 @@ function ProgressBar({ value, total, color }) {
         <span className="font-bold">{pct}%</span>
       </div>
       <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-        <div
-          className="h-full rounded-full transition-all duration-500"
-          style={{ width: `${pct}%`, background: color || (pct === 100 ? "#1D9E75" : "#7F2D92") }}
-        />
+        <div className="h-full rounded-full transition-all duration-500"
+          style={{ width: `${pct}%`, background: color || (pct === 100 ? "#1D9E75" : "#7F2D92") }} />
       </div>
     </div>
   );
@@ -273,9 +271,7 @@ function TabPicking({ pedidos, onAtualizar }) {
               </table>
             </div>
             {itensFiltrados.length > 200 && (
-              <p className="text-xs text-center text-slate-400 mt-2">
-                Mostrando 200 de {fmtN(itensFiltrados.length)} itens.
-              </p>
+              <p className="text-xs text-center text-slate-400 mt-2">Mostrando 200 de {fmtN(itensFiltrados.length)} itens.</p>
             )}
             {itensFiltrados.length === 0 && (
               <p className="text-center text-slate-400 text-sm py-8">Nenhum item encontrado.</p>
@@ -300,15 +296,13 @@ function TabEmbalagem({ pedidos, onAtualizar }) {
   const [feedback, setFeedback]     = useState(null);
   const [loading, setLoading]       = useState(false);
   const [gerando, setGerando]       = useState(null);
-  const [caixaDetalhes, setCaixaDetalhes] = useState(null);
-  const [itensCaixaDet, setItensCaixaDet] = useState([]);
+  const [gerandoRomaneio, setGerandoRomaneio] = useState(false);
+  const [caixaDetalhes, setCaixaDetalhes]     = useState(null);
+  const [itensCaixaDet, setItensCaixaDet]     = useState([]);
   const inputRef                    = useRef(null);
   const CAPACIDADE                  = 30;
 
-  useEffect(() => {
-    if (pedidoSel) carregarCaixas();
-  }, [pedidoSel]);
-
+  useEffect(() => { if (pedidoSel) carregarCaixas(); }, [pedidoSel]);
   useEffect(() => {
     if (caixaAtiva) {
       carregarItensCaixa();
@@ -365,10 +359,8 @@ function TabEmbalagem({ pedidos, onAtualizar }) {
   async function handleBipar(e) {
     e.preventDefault();
     if (!imeiInput.trim() || !caixaAtiva || !pedidoSel) return;
-
     const res = await embalarImei(imeiInput.trim(), pedidoSel.id, caixaAtiva.id, user.id);
     setImei("");
-
     if (res.ok) {
       const novoItem = { ...res.item, caixa_id: caixaAtiva.id, embalado_em: new Date().toISOString() };
       setItensCaixa(prev => [...prev, novoItem]);
@@ -376,9 +368,8 @@ function TabEmbalagem({ pedidos, onAtualizar }) {
       setCaixas(prev => prev.map(c =>
         c.id === caixaAtiva.id ? { ...c, total_itens: res.totalCaixa } : c
       ));
-
       if (res.caixaFechou) {
-        setFeedback({ tipo: "fechou", msg: `✓ Caixa ${caixaAtiva.numero} completa com ${CAPACIDADE} unidades! Caixa fechada automaticamente.` });
+        setFeedback({ tipo: "fechou", msg: `✓ Caixa ${caixaAtiva.numero} completa com ${CAPACIDADE} unidades! Fechada automaticamente.` });
         setCaixaAtiva(prev => ({ ...prev, status: "fechada" }));
         setCaixas(prev => prev.map(c =>
           c.id === caixaAtiva.id ? { ...c, status: "fechada", total_itens: CAPACIDADE } : c
@@ -389,31 +380,29 @@ function TabEmbalagem({ pedidos, onAtualizar }) {
     } else {
       setFeedback({ tipo: "erro", msg: res.erro });
     }
-
     setTimeout(() => setFeedback(null), 3000);
     inputRef.current?.focus();
   }
 
   async function handleRomaneio(caixa) {
     setGerando(caixa.id + "_rom");
-    try {
-      await gerarRomaneio(caixa.id, pedidoSel);
-    } catch (e) {
-      alert("Erro ao gerar romaneio: " + e.message);
-    } finally {
-      setGerando(null);
-    }
+    try { await gerarRomaneio(caixa.id, pedidoSel); }
+    catch (e) { alert("Erro ao gerar romaneio: " + e.message); }
+    finally { setGerando(null); }
   }
 
   async function handleEtiqueta(caixa) {
     setGerando(caixa.id + "_etq");
-    try {
-      await gerarEtiqueta(caixa.id, pedidoSel, caixas.length);
-    } catch (e) {
-      alert("Erro ao gerar etiqueta: " + e.message);
-    } finally {
-      setGerando(null);
-    }
+    try { await gerarEtiqueta(caixa.id, pedidoSel, caixas.length); }
+    catch (e) { alert("Erro ao gerar etiqueta: " + e.message); }
+    finally { setGerando(null); }
+  }
+
+  async function handleRomaneioPedido() {
+    setGerandoRomaneio(true);
+    try { await gerarRomaneioPedido(pedidoSel); }
+    catch (e) { alert("Erro ao gerar romaneio: " + e.message); }
+    finally { setGerandoRomaneio(false); }
   }
 
   async function verDetalhesCaixa(caixa) {
@@ -460,7 +449,7 @@ function TabEmbalagem({ pedidos, onAtualizar }) {
   return (
     <div className="space-y-4">
 
-      {/* Header */}
+      {/* Header com botão Romaneio do Pedido */}
       <div className="flex items-center gap-3 flex-wrap">
         <button onClick={() => { setPedido(null); setCaixaAtiva(null); setCaixas([]); setItensCaixa([]); }}
           className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1">
@@ -470,23 +459,32 @@ function TabEmbalagem({ pedidos, onAtualizar }) {
           <h3 className="font-black text-slate-800 text-sm">{pedidoSel.lote}</h3>
           <p className="text-xs text-slate-500">{pedidoSel.cliente}</p>
         </div>
+        <button
+          onClick={handleRomaneioPedido}
+          disabled={gerandoRomaneio || caixas.length === 0}
+          className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-purple-50 text-purple-700 ring-1 ring-purple-200 hover:bg-purple-100 transition disabled:opacity-40"
+        >
+          {gerandoRomaneio
+            ? <div className="h-3 w-3 border-2 border-purple-300 border-t-purple-700 rounded-full animate-spin" />
+            : <FileText className="h-3 w-3" />
+          }
+          Romaneio do Pedido
+        </button>
       </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiMini label="Bipados (disponíveis)" value={fmtN(totalBipados)}
-          color="bg-purple-50 ring-purple-200 text-purple-700" />
+        <KpiMini label="Bipados (disponíveis)" value={fmtN(totalBipados)} color="bg-purple-50 ring-purple-200 text-purple-700" />
         <KpiMini label="Embalados" value={fmtN(totalEmbalados)}
           sub={`${Math.round((totalEmbalados / (totalBipados || 1)) * 100)}%`}
           color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
-        <KpiMini label="A embalar" value={fmtN(totalBipados - totalEmbalados)}
-          color="bg-orange-50 ring-orange-200 text-orange-700" />
+        <KpiMini label="A embalar" value={fmtN(totalBipados - totalEmbalados)} color="bg-orange-50 ring-orange-200 text-orange-700" />
         <KpiMini label="Caixas" value={fmtN(caixas.length)}
           sub={`${caixas.filter(c => c.status === "fechada").length} fechadas`}
           color="bg-blue-50 ring-blue-200 text-blue-700" />
       </div>
 
-      {/* Progresso embalagem */}
+      {/* Progresso */}
       <Card>
         <p className="text-xs font-semibold text-slate-500 mb-2">Progresso da embalagem</p>
         <ProgressBar value={totalEmbalados} total={totalBipados} color="#F97316" />
@@ -498,18 +496,13 @@ function TabEmbalagem({ pedidos, onAtualizar }) {
           <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
             <div>
               <h3 className="font-black text-slate-800 text-sm flex items-center gap-2">
-                <Box className="h-4 w-4 text-[#7F2D92]" />
-                Caixa {caixaAtiva.numero} — Em uso
+                <Box className="h-4 w-4 text-[#7F2D92]" /> Caixa {caixaAtiva.numero} — Em uso
               </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                {caixaAtiva.total_itens || 0}/{CAPACIDADE} unidades
-              </p>
+              <p className="text-xs text-slate-500 mt-0.5">{caixaAtiva.total_itens || 0}/{CAPACIDADE} unidades</p>
             </div>
             <div className="flex items-center gap-2">
               <div className="text-right">
-                <div className="text-2xl font-black text-[#7F2D92]">
-                  {caixaAtiva.total_itens || 0}/{CAPACIDADE}
-                </div>
+                <div className="text-2xl font-black text-[#7F2D92]">{caixaAtiva.total_itens || 0}/{CAPACIDADE}</div>
                 <div className="text-xs text-slate-400">unidades</div>
               </div>
               <button onClick={handleFecharCaixa} disabled={loading || !caixaAtiva.total_itens}
@@ -519,7 +512,6 @@ function TabEmbalagem({ pedidos, onAtualizar }) {
             </div>
           </div>
 
-          {/* Barra da caixa */}
           <div className="mb-4">
             <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
               <div className="h-full rounded-full transition-all duration-300"
@@ -530,7 +522,6 @@ function TabEmbalagem({ pedidos, onAtualizar }) {
             </div>
           </div>
 
-          {/* Input bipagem */}
           <form onSubmit={handleBipar} className="flex gap-3">
             <input ref={inputRef} type="text" value={imeiInput}
               onChange={e => setImei(e.target.value)}
@@ -557,7 +548,6 @@ function TabEmbalagem({ pedidos, onAtualizar }) {
             </div>
           )}
 
-          {/* Lista itens na caixa */}
           {itensCaixa.length > 0 && (
             <div className="mt-4 overflow-x-auto">
               <p className="text-xs font-bold text-slate-500 mb-2">Itens nesta caixa ({itensCaixa.length})</p>
@@ -612,16 +602,13 @@ function TabEmbalagem({ pedidos, onAtualizar }) {
       {caixas.length > 0 && (
         <Card>
           <h3 className="font-black text-slate-800 text-sm flex items-center gap-2 mb-4">
-            <Box className="h-4 w-4 text-[#7F2D92]" />
-            Todas as caixas ({caixas.length})
+            <Box className="h-4 w-4 text-[#7F2D92]" /> Todas as caixas ({caixas.length})
           </h3>
           <div className="space-y-3">
             {caixas.map(caixa => (
               <div key={caixa.id}>
                 <div className={`flex items-center justify-between gap-3 p-3 rounded-xl ring-1 ${
-                  caixa.status === "aberta"
-                    ? "bg-purple-50 ring-purple-200"
-                    : "bg-slate-50 ring-slate-200"
+                  caixa.status === "aberta" ? "bg-purple-50 ring-purple-200" : "bg-slate-50 ring-slate-200"
                 }`}>
                   <div className="flex items-center gap-3">
                     <div className={`h-8 w-8 rounded-xl flex items-center justify-center font-black text-sm shrink-0 ${
@@ -637,12 +624,10 @@ function TabEmbalagem({ pedidos, onAtualizar }) {
 
                   <div className="flex items-center gap-2 flex-wrap justify-end">
                     <StatusBadge status={caixa.status} />
-
                     <button onClick={() => verDetalhesCaixa(caixa)}
                       className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50 transition">
                       {caixaDetalhes?.id === caixa.id ? "Ocultar" : "Ver itens"}
                     </button>
-
                     <button onClick={() => handleRomaneio(caixa)}
                       disabled={gerando === caixa.id + "_rom" || !caixa.total_itens}
                       className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-purple-50 text-purple-700 ring-1 ring-purple-200 hover:bg-purple-100 transition disabled:opacity-40">
@@ -652,7 +637,6 @@ function TabEmbalagem({ pedidos, onAtualizar }) {
                       }
                       Romaneio
                     </button>
-
                     <button onClick={() => handleEtiqueta(caixa)}
                       disabled={gerando === caixa.id + "_etq" || !caixa.total_itens}
                       className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-orange-50 text-orange-700 ring-1 ring-orange-200 hover:bg-orange-100 transition disabled:opacity-40">
@@ -665,7 +649,6 @@ function TabEmbalagem({ pedidos, onAtualizar }) {
                   </div>
                 </div>
 
-                {/* Detalhes da caixa */}
                 {caixaDetalhes?.id === caixa.id && (
                   <div className="mt-2 overflow-x-auto rounded-xl border border-slate-100">
                     <table className="min-w-full text-xs">
@@ -709,11 +692,11 @@ function TabEmbalagem({ pedidos, onAtualizar }) {
 // ABA PEDIDOS
 // ══════════════════════════════════════════════════════════
 function TabPedidos({ pedidos, onAtualizar }) {
-  const { user, profile }           = useAuth();
-  const [exportando, setExportando] = useState(null);
+  const { user, profile }             = useAuth();
+  const [exportando, setExportando]   = useState(null);
   const [feedbackExp, setFeedbackExp] = useState({});
   const [historicoAberto, setHistoricoAberto] = useState(null);
-  const [historico, setHistorico]   = useState([]);
+  const [historico, setHistorico]     = useState([]);
   const [loadingHistorico, setLoadingHistorico] = useState(false);
 
   async function handleExportar(pedido) {
@@ -878,8 +861,8 @@ export default function B2BPickingPage() {
   }
 
   const ABAS = [
-    { key: "picking",   label: "Picking",   icon: Search   },
-    { key: "embalagem", label: "Embalagem", icon: Box      },
+    { key: "picking",   label: "Picking",   icon: Search    },
+    { key: "embalagem", label: "Embalagem", icon: Box       },
     { key: "pedidos",   label: "Pedidos",   icon: BarChart3 },
   ];
 
@@ -893,9 +876,7 @@ export default function B2BPickingPage() {
           <span className="text-2xl">📦</span>
           <div>
             <h2 className="text-lg font-black text-slate-800">Picking B2B</h2>
-            <p className="text-xs text-slate-500">
-              Separação, embalagem e faturamento · Assurant Warehouse
-            </p>
+            <p className="text-xs text-slate-500">Separação, embalagem e faturamento · Assurant Warehouse</p>
           </div>
         </div>
         <div className="flex items-center gap-3 flex-wrap">

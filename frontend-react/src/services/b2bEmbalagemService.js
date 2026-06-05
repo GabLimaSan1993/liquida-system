@@ -4,7 +4,6 @@ import { supabase } from "../lib/supabase";
 
 const CAPACIDADE_CAIXA = 30;
 
-// ── Buscar caixa aberta do pedido ────────────────────────
 export async function buscarCaixaAberta(pedidoId) {
   const { data } = await supabase
     .from("b2b_caixas")
@@ -17,29 +16,19 @@ export async function buscarCaixaAberta(pedidoId) {
   return data || null;
 }
 
-// ── Criar nova caixa ─────────────────────────────────────
 export async function criarCaixa(pedidoId, userId) {
   const { data: numData } = await supabase
     .rpc("b2b_proximo_numero_caixa", { p_pedido_id: pedidoId });
-
   const numero = numData || 1;
-
   const { data, error } = await supabase
     .from("b2b_caixas")
-    .insert({
-      pedido_id:  pedidoId,
-      numero,
-      status:     "aberta",
-      criado_por: userId,
-    })
+    .insert({ pedido_id: pedidoId, numero, status: "aberta", criado_por: userId })
     .select()
     .single();
-
   if (error) throw new Error(error.message);
   return data;
 }
 
-// ── Listar caixas de um pedido ───────────────────────────
 export async function listarCaixas(pedidoId) {
   const { data, error } = await supabase
     .from("b2b_caixas")
@@ -50,7 +39,6 @@ export async function listarCaixas(pedidoId) {
   return data || [];
 }
 
-// ── Listar itens de uma caixa ────────────────────────────
 export async function listarItensCaixa(caixaId) {
   const { data, error } = await supabase
     .from("b2b_itens")
@@ -61,7 +49,6 @@ export async function listarItensCaixa(caixaId) {
   return data || [];
 }
 
-// ── Bipar IMEI na embalagem ──────────────────────────────
 export async function embalarImei(imeiDigitado, pedidoId, caixaId, userId) {
   const imei = String(imeiDigitado).trim();
 
@@ -72,104 +59,63 @@ export async function embalarImei(imeiDigitado, pedidoId, caixaId, userId) {
     .eq("imei", imei)
     .single();
 
-  if (errItem || !item) {
+  if (errItem || !item)
     return { ok: false, erro: "IMEI não encontrado neste pedido." };
-  }
 
-  if (item.status !== "bipado") {
+  if (item.status !== "bipado")
     return { ok: false, erro: "IMEI não foi bipado no picking — não pode ser embalado." };
-  }
 
   if (item.caixa_id) {
     const { data: caixaExist } = await supabase
-      .from("b2b_caixas")
-      .select("numero")
-      .eq("id", item.caixa_id)
-      .single();
-    return {
-      ok:   false,
-      erro: `IMEI já embalado na Caixa ${caixaExist?.numero || "—"}.`,
-    };
+      .from("b2b_caixas").select("numero").eq("id", item.caixa_id).single();
+    return { ok: false, erro: `IMEI já embalado na Caixa ${caixaExist?.numero || "—"}.` };
   }
 
   const { data: caixaAtual } = await supabase
-    .from("b2b_caixas")
-    .select("*")
-    .eq("id", caixaId)
-    .single();
+    .from("b2b_caixas").select("*").eq("id", caixaId).single();
 
-  if (!caixaAtual) {
-    return { ok: false, erro: "Caixa não encontrada." };
-  }
+  if (!caixaAtual) return { ok: false, erro: "Caixa não encontrada." };
 
-  if (caixaAtual.total_itens >= CAPACIDADE_CAIXA) {
-    return {
-      ok:         false,
-      erro:       `Caixa já está cheia (${CAPACIDADE_CAIXA} unidades). Feche esta caixa para continuar.`,
-      caixaCheia: true,
-    };
-  }
+  if (caixaAtual.total_itens >= CAPACIDADE_CAIXA)
+    return { ok: false, erro: `Caixa já está cheia (${CAPACIDADE_CAIXA} unidades).`, caixaCheia: true };
 
   const { error: errUpdate } = await supabase
     .from("b2b_itens")
-    .update({
-      caixa_id:     caixaId,
-      embalado_em:  new Date().toISOString(),
-      embalado_por: userId,
-    })
+    .update({ caixa_id: caixaId, embalado_em: new Date().toISOString(), embalado_por: userId })
     .eq("id", item.id);
 
   if (errUpdate) return { ok: false, erro: errUpdate.message };
 
   const novoTotal = (caixaAtual.total_itens || 0) + 1;
-  await supabase
-    .from("b2b_caixas")
-    .update({ total_itens: novoTotal })
-    .eq("id", caixaId);
+  await supabase.from("b2b_caixas").update({ total_itens: novoTotal }).eq("id", caixaId);
 
   const caixaFechou = novoTotal >= CAPACIDADE_CAIXA;
   if (caixaFechou) {
-    await supabase
-      .from("b2b_caixas")
-      .update({
-        status:      "fechada",
-        fechado_em:  new Date().toISOString(),
-        fechado_por: userId,
-      })
-      .eq("id", caixaId);
+    await supabase.from("b2b_caixas").update({
+      status: "fechada", fechado_em: new Date().toISOString(), fechado_por: userId,
+    }).eq("id", caixaId);
   }
 
   return { ok: true, item, totalCaixa: novoTotal, caixaFechou };
 }
 
-// ── Fechar caixa manualmente (permite quantidade parcial) ─
 export async function fecharCaixa(caixaId, userId) {
   const { error } = await supabase
     .from("b2b_caixas")
-    .update({
-      status:      "fechada",
-      fechado_em:  new Date().toISOString(),
-      fechado_por: userId,
-    })
+    .update({ status: "fechada", fechado_em: new Date().toISOString(), fechado_por: userId })
     .eq("id", caixaId);
   if (error) throw new Error(error.message);
 }
 
-// ── Gerar Romaneio PDF (com NFs) ─────────────────────────
+// ── Romaneio por Caixa ───────────────────────────────────
 export async function gerarRomaneio(caixaId, pedido) {
   const itens = await listarItensCaixa(caixaId);
 
   const { data: caixa } = await supabase
-    .from("b2b_caixas")
-    .select("*")
-    .eq("id", caixaId)
-    .single();
+    .from("b2b_caixas").select("*").eq("id", caixaId).single();
 
   const { data: itensComNF } = await supabase
-    .from("b2b_itens")
-    .select("nf")
-    .eq("caixa_id", caixaId)
-    .not("nf", "is", null);
+    .from("b2b_itens").select("nf").eq("caixa_id", caixaId).not("nf", "is", null);
 
   const nfContagem = {};
   (itensComNF || []).forEach(i => {
@@ -178,10 +124,8 @@ export async function gerarRomaneio(caixaId, pedido) {
   });
 
   const { data: itensPedidoNF } = await supabase
-    .from("b2b_itens")
-    .select("nf, caixa_id")
-    .eq("pedido_id", pedido.id)
-    .not("nf", "is", null);
+    .from("b2b_itens").select("nf, caixa_id")
+    .eq("pedido_id", pedido.id).not("nf", "is", null);
 
   const nfTotalItens  = {};
   const nfCaixasTotal = {};
@@ -194,7 +138,6 @@ export async function gerarRomaneio(caixaId, pedido) {
 
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
-  // Cabeçalho roxo
   doc.setFillColor(127, 45, 146);
   doc.rect(0, 0, 210, 32, "F");
   doc.setTextColor(255, 255, 255);
@@ -206,7 +149,6 @@ export async function gerarRomaneio(caixaId, pedido) {
   doc.text("Liquida Preço — Assurant Warehouse", 14, 21);
   doc.text(`Emitido em: ${new Date().toLocaleString("pt-BR")}`, 14, 27);
 
-  // Bloco info caixa
   doc.setTextColor(0, 0, 0);
   doc.setFillColor(245, 240, 250);
   doc.rect(0, 34, 210, 28, "F");
@@ -220,15 +162,11 @@ export async function gerarRomaneio(caixaId, pedido) {
   doc.text(`Total de itens nesta caixa: ${itens.length}`, 120, 43);
   doc.text(`Status: ${caixa.status === "fechada" ? "Fechada" : "Aberta"}`, 120, 50);
   if (caixa.fechado_em) {
-    doc.text(
-      `Fechada em: ${new Date(caixa.fechado_em).toLocaleString("pt-BR")}`,
-      120, 56
-    );
+    doc.text(`Fechada em: ${new Date(caixa.fechado_em).toLocaleString("pt-BR")}`, 120, 56);
   }
 
   let currentY = 66;
 
-  // Bloco NFs
   if (Object.keys(nfContagem).length > 0) {
     doc.setFontSize(9);
     doc.setFont("helvetica", "bold");
@@ -240,18 +178,10 @@ export async function gerarRomaneio(caixaId, pedido) {
       startY: currentY,
       head: [["Nº NF", "Aparelhos nesta caixa", "Total aparelhos na NF", "Total caixas na NF"]],
       body: Object.entries(nfContagem).map(([nf, qtd]) => [
-        nf,
-        qtd,
-        nfTotalItens[nf]        || qtd,
-        nfCaixasTotal[nf]?.size || 1,
+        nf, qtd, nfTotalItens[nf] || qtd, nfCaixasTotal[nf]?.size || 1,
       ]),
       styles:     { fontSize: 8, cellPadding: 2.5 },
-      headStyles: {
-        fillColor: [91, 30, 116],
-        textColor: [255, 255, 255],
-        fontStyle: "bold",
-        fontSize:  8,
-      },
+      headStyles: { fillColor: [91, 30, 116], textColor: [255, 255, 255], fontStyle: "bold", fontSize: 8 },
       columnStyles: {
         0: { cellWidth: 35, halign: "center" },
         1: { cellWidth: 50, halign: "center" },
@@ -264,7 +194,6 @@ export async function gerarRomaneio(caixaId, pedido) {
     currentY = (doc.lastAutoTable?.finalY || currentY) + 8;
   }
 
-  // Tabela de itens
   doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(0, 0, 0);
@@ -275,23 +204,12 @@ export async function gerarRomaneio(caixaId, pedido) {
     startY: currentY,
     head: [["#", "IMEI", "Modelo", "Grade", "SKU", "NF", "Valor (R$)"]],
     body: itens.map((item, idx) => [
-      idx + 1,
-      item.imei,
-      item.modelo   || "—",
-      item.grade    || "—",
-      item.cod_item || "—",
-      item.nf       || "—",
-      item.valor
-        ? Number(item.valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 })
-        : "—",
+      idx + 1, item.imei, item.modelo || "—", item.grade || "—",
+      item.cod_item || "—", item.nf || "—",
+      item.valor ? Number(item.valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 }) : "—",
     ]),
     styles:     { fontSize: 7.5, cellPadding: 2.5 },
-    headStyles: {
-      fillColor: [127, 45, 146],
-      textColor: [255, 255, 255],
-      fontStyle: "bold",
-      fontSize:  8,
-    },
+    headStyles: { fillColor: [127, 45, 146], textColor: [255, 255, 255], fontStyle: "bold", fontSize: 8 },
     alternateRowStyles: { fillColor: [248, 244, 252] },
     columnStyles: {
       0: { cellWidth: 8,  halign: "center" },
@@ -305,10 +223,8 @@ export async function gerarRomaneio(caixaId, pedido) {
     margin: { left: 14, right: 14 },
   });
 
-  // Rodapé
   const totalValor = itens.reduce((s, i) => s + (i.valor || 0), 0);
   const finalY     = (doc.lastAutoTable?.finalY || 250) + 5;
-
   doc.setFillColor(245, 240, 250);
   doc.rect(14, finalY, 182, 10, "F");
   doc.setFontSize(9);
@@ -317,33 +233,137 @@ export async function gerarRomaneio(caixaId, pedido) {
   doc.text(`Total de itens: ${itens.length}`, 18, finalY + 6.5);
   doc.text(
     `Valor total: R$ ${totalValor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
-    196, finalY + 6.5,
-    { align: "right" }
+    196, finalY + 6.5, { align: "right" }
   );
 
   doc.save(`romaneio_caixa_${caixa.numero}_${pedido.lote}.pdf`);
 }
 
-// ── Gerar Etiqueta PDF ───────────────────────────────────
+// ── Romaneio do Pedido Completo (layout foto) ────────────
+export async function gerarRomaneioPedido(pedido) {
+  const { data: caixas } = await supabase
+    .from("b2b_caixas").select("*")
+    .eq("pedido_id", pedido.id).order("numero", { ascending: true });
+
+  const { data: itensNF } = await supabase
+    .from("b2b_itens").select("nf, caixa_id")
+    .eq("pedido_id", pedido.id).not("nf", "is", null);
+
+  const nfTotalItens  = {};
+  const nfCaixasTotal = {};
+  (itensNF || []).forEach(i => {
+    if (!i.nf) return;
+    nfTotalItens[i.nf] = (nfTotalItens[i.nf] || 0) + 1;
+    if (!nfCaixasTotal[i.nf]) nfCaixasTotal[i.nf] = new Set();
+    if (i.caixa_id) nfCaixasTotal[i.nf].add(i.caixa_id);
+  });
+
+  const { data: itensEmbalados } = await supabase
+    .from("b2b_itens").select("id")
+    .eq("pedido_id", pedido.id).not("caixa_id", "is", null);
+
+  const totalItens   = itensEmbalados?.length || 0;
+  const totalVolumes = caixas?.length || 0;
+  const nfs          = Object.keys(nfTotalItens).sort();
+
+  const doc   = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const margL = 30;
+  const margR = 180;
+  const colW  = margR - margL;
+  const col1W = 50;
+  const col2X = margL + col1W;
+  const col2W = colW - col1W;
+  const rowH  = 14;
+
+  let y = 40;
+
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.5);
+
+  // Header — logo + título
+  const headerH = 22;
+  doc.rect(margL, y, col1W, headerH);
+  doc.setFillColor(30, 30, 30);
+  doc.rect(margL + 1, y + 1, col1W - 2, headerH - 2, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.text("liquida", margL + col1W / 2 - 3, y + 9, { align: "center" });
+  doc.setFontSize(7);
+  doc.text("preço", margL + col1W / 2 + 5, y + 9, { align: "center" });
+
+  doc.rect(col2X, y, col2W, headerH);
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "bold");
+  doc.text("ROMANEIO DE EXPEDIÇÃO", col2X + col2W / 2, y + 9, { align: "center" });
+
+  const loteFormatado = pedido.lote
+    .replace(/ - \d+ PRODUTOS.*$/i, "")
+    .replace(/_LOTE_\d+$/i, "")
+    .trim();
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "bold");
+  doc.text(loteFormatado, col2X + col2W / 2, y + 17, { align: "center" });
+
+  y += headerH;
+
+  function drawRow(label, value, h = rowH) {
+    doc.rect(margL, y, col1W, h);
+    doc.rect(col2X, y, col2W, h);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0, 0, 0);
+    doc.text(label, margL + col1W / 2, y + h / 2 + 2, { align: "center" });
+    doc.setFont("helvetica", "normal");
+    doc.text(String(value), col2X + col2W / 2, y + h / 2 + 2, { align: "center" });
+    y += h;
+  }
+
+  function drawFullRow(text, h = rowH, fontSize = 9, fontStyle = "bold") {
+    doc.rect(margL, y, colW, h);
+    doc.setFontSize(fontSize);
+    doc.setFont("helvetica", fontStyle);
+    doc.setTextColor(0, 0, 0);
+    doc.text(text, margL + colW / 2, y + h / 2 + 2, { align: "center" });
+    y += h;
+  }
+
+  const dataHoje = new Date().toLocaleDateString("pt-BR", {
+    day: "2-digit", month: "2-digit", year: "2-digit",
+  });
+
+  drawRow("DATA :", dataHoje);
+  drawRow("CLIENTE :", pedido.cliente);
+  drawFullRow("NOTA FISCAL");
+
+  if (nfs.length === 0) {
+    drawFullRow("Sem NFs vinculadas", rowH, 8, "normal");
+  } else {
+    nfs.forEach(nf => drawFullRow(nf, rowH, 10, "bold"));
+  }
+
+  y += 4;
+  drawRow("QUANTIDADE :", totalItens);
+  drawRow("VOLUMES :", totalVolumes);
+  drawRow("ASS :", "");
+  drawRow("RG/CPF :", "");
+
+  doc.save(`romaneio_${pedido.lote}.pdf`);
+}
+
+// ── Etiqueta PDF ─────────────────────────────────────────
 export async function gerarEtiqueta(caixaId, pedido, totalCaixasPedido) {
   const { data: caixa } = await supabase
-    .from("b2b_caixas")
-    .select("*")
-    .eq("id", caixaId)
-    .single();
+    .from("b2b_caixas").select("*").eq("id", caixaId).single();
 
-  const doc = new jsPDF({
-    orientation: "landscape",
-    unit:        "mm",
-    format:      [70, 100],
-  });
+  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: [70, 100] });
 
   const W = 100;
   const H = 70;
 
   doc.setFillColor(255, 255, 255);
   doc.rect(0, 0, W, H, "F");
-
   doc.setDrawColor(180, 180, 180);
   doc.setLineWidth(0.4);
   doc.rect(2, 2, W - 4, H - 4, "S");
