@@ -1,5 +1,5 @@
-import  jsPDF  from "jspdf";
-import autoTable from "jspdf-autotable";
+import jsPDF from "jspdf";
+import "jspdf-autotable";
 import { supabase } from "../lib/supabase";
 
 const CAPACIDADE_CAIXA = 30;
@@ -65,7 +65,6 @@ export async function listarItensCaixa(caixaId) {
 export async function embalarImei(imeiDigitado, pedidoId, caixaId, userId) {
   const imei = String(imeiDigitado).trim();
 
-  // Verificar se IMEI existe no pedido e foi bipado no picking
   const { data: item, error: errItem } = await supabase
     .from("b2b_itens")
     .select("*")
@@ -93,7 +92,6 @@ export async function embalarImei(imeiDigitado, pedidoId, caixaId, userId) {
     };
   }
 
-  // Verificar capacidade da caixa
   const { data: caixaAtual } = await supabase
     .from("b2b_caixas")
     .select("*")
@@ -112,7 +110,6 @@ export async function embalarImei(imeiDigitado, pedidoId, caixaId, userId) {
     };
   }
 
-  // Alocar item na caixa
   const { error: errUpdate } = await supabase
     .from("b2b_itens")
     .update({
@@ -124,14 +121,12 @@ export async function embalarImei(imeiDigitado, pedidoId, caixaId, userId) {
 
   if (errUpdate) return { ok: false, erro: errUpdate.message };
 
-  // Atualizar contador da caixa
   const novoTotal = (caixaAtual.total_itens || 0) + 1;
   await supabase
     .from("b2b_caixas")
     .update({ total_itens: novoTotal })
     .eq("id", caixaId);
 
-  // Fechar automaticamente se atingiu capacidade
   const caixaFechou = novoTotal >= CAPACIDADE_CAIXA;
   if (caixaFechou) {
     await supabase
@@ -170,21 +165,18 @@ export async function gerarRomaneio(caixaId, pedido) {
     .eq("id", caixaId)
     .single();
 
-  // Buscar NFs desta caixa
   const { data: itensComNF } = await supabase
     .from("b2b_itens")
     .select("nf")
     .eq("caixa_id", caixaId)
     .not("nf", "is", null);
 
-  // Contar aparelhos por NF nesta caixa
   const nfContagem = {};
   (itensComNF || []).forEach(i => {
     if (!i.nf) return;
     nfContagem[i.nf] = (nfContagem[i.nf] || 0) + 1;
   });
 
-  // Buscar total de itens e caixas por NF no pedido inteiro
   const { data: itensPedidoNF } = await supabase
     .from("b2b_itens")
     .select("nf, caixa_id")
@@ -202,29 +194,25 @@ export async function gerarRomaneio(caixaId, pedido) {
 
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
-  // ── Cabeçalho roxo ──────────────────────────────────────
+  // Cabeçalho roxo
   doc.setFillColor(127, 45, 146);
   doc.rect(0, 0, 210, 32, "F");
-
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(16);
   doc.setFont("helvetica", "bold");
   doc.text("ROMANEIO DE CAIXA", 14, 13);
-
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
   doc.text("Liquida Preço — Assurant Warehouse", 14, 21);
   doc.text(`Emitido em: ${new Date().toLocaleString("pt-BR")}`, 14, 27);
 
-  // ── Bloco info caixa ────────────────────────────────────
+  // Bloco info caixa
   doc.setTextColor(0, 0, 0);
   doc.setFillColor(245, 240, 250);
   doc.rect(0, 34, 210, 28, "F");
-
   doc.setFontSize(10);
   doc.setFont("helvetica", "bold");
   doc.text(`CAIXA Nº ${caixa.numero}`, 14, 43);
-
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
   doc.text(`Pedido: ${pedido.lote}`, 14, 50);
@@ -240,7 +228,7 @@ export async function gerarRomaneio(caixaId, pedido) {
 
   let currentY = 66;
 
-  // ── Bloco NFs (se houver) ───────────────────────────────
+  // Bloco NFs
   if (Object.keys(nfContagem).length > 0) {
     doc.setFontSize(9);
     doc.setFont("helvetica", "bold");
@@ -248,7 +236,7 @@ export async function gerarRomaneio(caixaId, pedido) {
     doc.text("NOTAS FISCAIS DESTA CAIXA", 14, currentY);
     currentY += 4;
 
-    autoTable(doc, {
+    doc.autoTable({
       startY: currentY,
       head: [["Nº NF", "Aparelhos nesta caixa", "Total aparelhos na NF", "Total caixas na NF"]],
       body: Object.entries(nfContagem).map(([nf, qtd]) => [
@@ -265,7 +253,7 @@ export async function gerarRomaneio(caixaId, pedido) {
         fontSize:  8,
       },
       columnStyles: {
-        0: { cellWidth: 35, halign: "center", font: "courier" },
+        0: { cellWidth: 35, halign: "center" },
         1: { cellWidth: 50, halign: "center" },
         2: { cellWidth: 55, halign: "center" },
         3: { cellWidth: 46, halign: "center" },
@@ -276,14 +264,14 @@ export async function gerarRomaneio(caixaId, pedido) {
     currentY = (doc.lastAutoTable?.finalY || currentY) + 8;
   }
 
-  // ── Tabela de itens ─────────────────────────────────────
+  // Tabela de itens
   doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(0, 0, 0);
   doc.text("ITENS DA CAIXA", 14, currentY);
   currentY += 4;
 
-  autoTable(doc, {
+  doc.autoTable({
     startY: currentY,
     head: [["#", "IMEI", "Modelo", "Grade", "SKU", "NF", "Valor (R$)"]],
     body: itens.map((item, idx) => [
@@ -307,7 +295,7 @@ export async function gerarRomaneio(caixaId, pedido) {
     alternateRowStyles: { fillColor: [248, 244, 252] },
     columnStyles: {
       0: { cellWidth: 8,  halign: "center" },
-      1: { cellWidth: 38, font: "courier"  },
+      1: { cellWidth: 38 },
       2: { cellWidth: 52 },
       3: { cellWidth: 20, halign: "center" },
       4: { cellWidth: 26, halign: "center" },
@@ -317,7 +305,7 @@ export async function gerarRomaneio(caixaId, pedido) {
     margin: { left: 14, right: 14 },
   });
 
-  // ── Rodapé ──────────────────────────────────────────────
+  // Rodapé
   const totalValor = itens.reduce((s, i) => s + (i.valor || 0), 0);
   const finalY     = (doc.lastAutoTable?.finalY || 250) + 5;
 
@@ -344,7 +332,6 @@ export async function gerarEtiqueta(caixaId, pedido, totalCaixasPedido) {
     .eq("id", caixaId)
     .single();
 
-  // 100x70mm landscape — formato [altura, largura]
   const doc = new jsPDF({
     orientation: "landscape",
     unit:        "mm",
@@ -354,49 +341,39 @@ export async function gerarEtiqueta(caixaId, pedido, totalCaixasPedido) {
   const W = 100;
   const H = 70;
 
-  // Fundo branco
   doc.setFillColor(255, 255, 255);
   doc.rect(0, 0, W, H, "F");
 
-  // Borda
   doc.setDrawColor(180, 180, 180);
   doc.setLineWidth(0.4);
   doc.rect(2, 2, W - 4, H - 4, "S");
 
-  // Lote formatado — remove sufixos desnecessários
   const loteFormatado = pedido.lote
     .replace(/ - \d+ PRODUTOS.*$/i, "")
     .replace(/_LOTE_\d+$/i, "")
     .trim();
 
-  // Linha 1 — Lote
   doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(0, 0, 0);
   doc.text(loteFormatado, W / 2, 13, { align: "center" });
 
-  // Divisor
   doc.setDrawColor(180, 180, 180);
   doc.setLineWidth(0.2);
   doc.line(5, 17, W - 5, 17);
 
-  // Linha 2 — CAIXA X
   doc.setFontSize(20);
   doc.setFont("helvetica", "bold");
   doc.text(`CAIXA ${caixa.numero}`, W / 2, 33, { align: "center" });
 
-  // Divisor
   doc.line(5, 38, W - 5, 38);
 
-  // Linha 3 — Quantidade
   doc.setFontSize(13);
   doc.setFont("helvetica", "bold");
   doc.text(`${caixa.total_itens} UNIDADES`, W / 2, 50, { align: "center" });
 
-  // Divisor
   doc.line(5, 55, W - 5, 55);
 
-  // Linha 4 — Data
   const dataEmb = caixa.fechado_em
     ? new Date(caixa.fechado_em).toLocaleDateString("pt-BR")
     : new Date().toLocaleDateString("pt-BR");
