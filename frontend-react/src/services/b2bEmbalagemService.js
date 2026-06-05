@@ -138,6 +138,7 @@ export async function gerarRomaneio(caixaId, pedido) {
 
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
+  // Cabeçalho roxo
   doc.setFillColor(127, 45, 146);
   doc.rect(0, 0, 210, 32, "F");
   doc.setTextColor(255, 255, 255);
@@ -149,6 +150,7 @@ export async function gerarRomaneio(caixaId, pedido) {
   doc.text("Liquida Preço — Assurant Warehouse", 14, 21);
   doc.text(`Emitido em: ${new Date().toLocaleString("pt-BR")}`, 14, 27);
 
+  // Bloco info caixa
   doc.setTextColor(0, 0, 0);
   doc.setFillColor(245, 240, 250);
   doc.rect(0, 34, 210, 28, "F");
@@ -167,6 +169,7 @@ export async function gerarRomaneio(caixaId, pedido) {
 
   let currentY = 66;
 
+  // Bloco NFs
   if (Object.keys(nfContagem).length > 0) {
     doc.setFontSize(9);
     doc.setFont("helvetica", "bold");
@@ -194,6 +197,7 @@ export async function gerarRomaneio(caixaId, pedido) {
     currentY = (doc.lastAutoTable?.finalY || currentY) + 8;
   }
 
+  // Tabela de itens — sem coluna de valor
   doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(0, 0, 0);
@@ -202,11 +206,14 @@ export async function gerarRomaneio(caixaId, pedido) {
 
   doc.autoTable({
     startY: currentY,
-    head: [["#", "IMEI", "Modelo", "Grade", "SKU", "NF", "Valor (R$)"]],
+    head: [["#", "IMEI", "Modelo", "Grade", "SKU", "NF"]],
     body: itens.map((item, idx) => [
-      idx + 1, item.imei, item.modelo || "—", item.grade || "—",
-      item.cod_item || "—", item.nf || "—",
-      item.valor ? Number(item.valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 }) : "—",
+      idx + 1,
+      item.imei,
+      item.modelo   || "—",
+      item.grade    || "—",
+      item.cod_item || "—",
+      item.nf       || "—",
     ]),
     styles:     { fontSize: 7.5, cellPadding: 2.5 },
     headStyles: { fillColor: [127, 45, 146], textColor: [255, 255, 255], fontStyle: "bold", fontSize: 8 },
@@ -214,27 +221,22 @@ export async function gerarRomaneio(caixaId, pedido) {
     columnStyles: {
       0: { cellWidth: 8,  halign: "center" },
       1: { cellWidth: 38 },
-      2: { cellWidth: 52 },
-      3: { cellWidth: 20, halign: "center" },
-      4: { cellWidth: 26, halign: "center" },
-      5: { cellWidth: 22, halign: "center" },
-      6: { cellWidth: 20, halign: "right"  },
+      2: { cellWidth: 62 },
+      3: { cellWidth: 22, halign: "center" },
+      4: { cellWidth: 28, halign: "center" },
+      5: { cellWidth: 28, halign: "center" },
     },
     margin: { left: 14, right: 14 },
   });
 
-  const totalValor = itens.reduce((s, i) => s + (i.valor || 0), 0);
-  const finalY     = (doc.lastAutoTable?.finalY || 250) + 5;
+  // Rodapé — só total de itens, sem valor
+  const finalY = (doc.lastAutoTable?.finalY || 250) + 5;
   doc.setFillColor(245, 240, 250);
   doc.rect(14, finalY, 182, 10, "F");
   doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(0, 0, 0);
   doc.text(`Total de itens: ${itens.length}`, 18, finalY + 6.5);
-  doc.text(
-    `Valor total: R$ ${totalValor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
-    196, finalY + 6.5, { align: "right" }
-  );
 
   doc.save(`romaneio_caixa_${caixa.numero}_${pedido.lote}.pdf`);
 }
