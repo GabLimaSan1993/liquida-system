@@ -250,7 +250,7 @@ function TabPicking({ pedidos, onAtualizar }) {
                     <th className="px-3 py-2 text-left font-bold text-slate-500">IMEI</th>
                     <th className="px-3 py-2 text-left font-bold text-slate-500">Modelo</th>
                     <th className="px-3 py-2 text-left font-bold text-slate-500">Grade</th>
-                    <th className="px-3 py-2 text-right font-bold text-slate-500">Valor</th>
+                    <th className="px-3 py-2 text-left font-bold text-slate-500">Voucher</th>
                     <th className="px-3 py-2 text-center font-bold text-slate-500">Status</th>
                   </tr>
                 </thead>
@@ -263,7 +263,7 @@ function TabPicking({ pedidos, onAtualizar }) {
                       <td className="px-3 py-2">
                         <span className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded-lg font-semibold">{item.grade}</span>
                       </td>
-                      <td className="px-3 py-2 text-right font-semibold text-slate-700">{fmtR(item.valor)}</td>
+                      <td className="px-3 py-2 font-mono text-slate-600">{item.voucher || "—"}</td>
                       <td className="px-3 py-2 text-center"><StatusBadge status={item.status} /></td>
                     </tr>
                   ))}
