@@ -36,20 +36,39 @@ export async function importarPedidoB2B(file, userId) {
 
         if (errPedido) throw new Error(errPedido.message);
 
-        const itens = rows.map(r => ({
-          pedido_id:     pedido.id,
-          imei:          String(r["IMEI"] || r["NUM_IMEI"] || "").trim(),
-          voucher:       String(r["NUM_IMEI"] || "").trim(),
-          modelo:        r["MODELO"]     || r["CNN"]   || null,
-          grade:         r["GRADE"]      || null,
-          grade2:        r["GRADE2"]     || null,
-          desc_item:     r["DESC_ITEM"]  || null,
-          cod_item:      r["COD_ITEM"]   || null,
-          local_estoque: r["LOCAL"]      || null,
-          aging:         r["AGING"]      ? parseInt(r["AGING"])        : null,
-          valor:         r["Alocação $"] ? parseFloat(r["Alocação $"]) : null,
-          status:        "pendente",
-        })).filter(i => i.imei && i.imei.length > 5);
+        // Buscar locais reais da assurant_triagem pelo IMEI
+        const imeisLista = rows
+          .map(r => String(r["IMEI"] || r["NUM_IMEI"] || "").trim())
+          .filter(i => i.length > 5);
+
+        const { data: triagem } = await supabase
+          .from("assurant_triagem")
+          .select("imei, local")
+          .in("imei", imeisLista);
+
+        const localMap = {};
+        (triagem || []).forEach(t => {
+          if (t.imei && t.local) localMap[t.imei] = t.local;
+        });
+
+        // Mapear itens — usa local da triagem se disponível
+        const itens = rows.map(r => {
+          const imei = String(r["IMEI"] || r["NUM_IMEI"] || "").trim();
+          return {
+            pedido_id:     pedido.id,
+            imei,
+            voucher:       String(r["NUM_IMEI"] || "").trim(),
+            modelo:        r["MODELO"]     || r["CNN"]   || null,
+            grade:         r["GRADE"]      || null,
+            grade2:        r["GRADE2"]     || null,
+            desc_item:     r["DESC_ITEM"]  || null,
+            cod_item:      r["COD_ITEM"]   || null,
+            local_estoque: localMap[imei]  || r["LOCAL"] || null,
+            aging:         r["AGING"]      ? parseInt(r["AGING"])        : null,
+            valor:         r["Alocação $"] ? parseFloat(r["Alocação $"]) : null,
+            status:        "pendente",
+          };
+        }).filter(i => i.imei && i.imei.length > 5);
 
         await supabase
           .from("b2b_pedidos")
@@ -155,33 +174,22 @@ export async function registrarBipagem(imeiDigitado, pedidoId, userId) {
 // ── Exportar para faturamento (com controle de delta) ────
 export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
 
-  // 1. Buscar última exportação deste pedido
+  // 1. Buscar todas as exportações deste pedido
   const { data: exportacoes } = await supabase
     .from("b2b_exportacoes")
     .select("*")
     .eq("pedido_id", pedidoId)
-    .order("exportado_em", { ascending: false })
-    .limit(1);
+    .order("exportado_em", { ascending: false });
 
   const ultimaExportacao = exportacoes?.[0] || null;
 
-  // 2. Buscar IDs já exportados
+  // 2. Buscar IDs já exportados em qualquer exportação anterior
   let idsJaExportados = new Set();
-  if (ultimaExportacao) {
-    // Busca todos os itens já exportados em qualquer exportação deste pedido
+  if (exportacoes?.length > 0) {
     const { data: jaExportados } = await supabase
       .from("b2b_itens_exportados")
       .select("item_id")
-      .in(
-        "exportacao_id",
-        exportacoes.length > 0
-          ? (await supabase
-              .from("b2b_exportacoes")
-              .select("id")
-              .eq("pedido_id", pedidoId)
-            ).data?.map(e => e.id) || []
-          : []
-      );
+      .in("exportacao_id", exportacoes.map(e => e.id));
     (jaExportados || []).forEach(e => idsJaExportados.add(e.item_id));
   }
 
@@ -200,7 +208,7 @@ export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
   // 4. Filtrar apenas os itens novos (delta)
   const itensNovos = itensBipados.filter(i => !idsJaExportados.has(i.id));
 
-  // 5. Se não há itens novos — bloquear e informar quem exportou por último
+  // 5. Se não há itens novos — bloquear
   if (itensNovos.length === 0) {
     return {
       bloqueado: true,
@@ -220,10 +228,10 @@ export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
   const { data: novaExportacao, error: errExp } = await supabase
     .from("b2b_exportacoes")
     .insert({
-      pedido_id:    pedidoId,
+      pedido_id:     pedidoId,
       exportado_por: userId,
-      nome_usuario: nomeUsuario,
-      total_itens:  itensNovos.length,
+      nome_usuario:  nomeUsuario,
+      total_itens:   itensNovos.length,
     })
     .select()
     .single();
@@ -247,6 +255,7 @@ export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
   const rows = itensNovos.map(i => ({
     "LOTE":      pedido.lote,
     "CLIENTE":   pedido.cliente,
+    "VOUCHER":   i.voucher,
     "IMEI":      i.imei,
     "MODELO":    i.modelo,
     "GRADE":     i.grade,
