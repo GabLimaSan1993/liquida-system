@@ -36,28 +36,30 @@ export async function importarPedidoB2B(file, userId) {
 
         if (errPedido) throw new Error(errPedido.message);
 
-        // Buscar locais reais da assurant_triagem pelo IMEI
+        // Buscar locais E vouchers reais da assurant_triagem pelo IMEI
         const imeisLista = rows
           .map(r => String(r["IMEI"] || r["NUM_IMEI"] || "").trim())
           .filter(i => i.length > 5);
 
         const { data: triagem } = await supabase
           .from("assurant_triagem")
-          .select("imei, local")
+          .select("imei, local, voucher")
           .in("imei", imeisLista);
 
-        const localMap = {};
+        const localMap   = {};
+        const voucherMap = {};
         (triagem || []).forEach(t => {
-          if (t.imei && t.local) localMap[t.imei] = t.local;
+          if (t.imei && t.local)   localMap[t.imei]   = t.local;
+          if (t.imei && t.voucher) voucherMap[t.imei] = t.voucher;
         });
 
-        // Mapear itens — usa local da triagem se disponível
+        // Mapear itens
         const itens = rows.map(r => {
           const imei = String(r["IMEI"] || r["NUM_IMEI"] || "").trim();
           return {
             pedido_id:     pedido.id,
             imei,
-            voucher:       String(r["NUM_IMEI"] || "").trim(),
+            voucher:       voucherMap[imei] || String(r["NUM_IMEI"] || "").trim(),
             modelo:        r["MODELO"]     || r["CNN"]   || null,
             grade:         r["GRADE"]      || null,
             grade2:        r["GRADE2"]     || null,
