@@ -1,18 +1,15 @@
 import { useEffect, useState } from "react";
-import { Users, Plus, Save, X, Shield } from "lucide-react";
+import { Plus, X, Shield } from "lucide-react";
 import { fetchAllProfiles, createUser, updateUserPermissions } from "../services/authService";
 
 const TELAS = [
-  // ── Geral ──────────────────────────────────────────────
   { id: "/upload",                        label: "Uploads",                          grupo: "Geral" },
   { id: "/analise-entrada",               label: "Análise de Entrada",               grupo: "Geral" },
   { id: "/faturamento",                   label: "Faturamento",                      grupo: "Geral" },
   { id: "/abertura-os",                   label: "Abertura de OS",                   grupo: "Geral" },
-  // ── Financeiro ─────────────────────────────────────────
   { id: "/financeiro/fluxo-realizado",    label: "Financeiro — Fluxo Realizado",     grupo: "Financeiro" },
   { id: "/financeiro/contas-pagar",       label: "Financeiro — Contas a Pagar",      grupo: "Financeiro" },
   { id: "/financeiro/contas-receber",     label: "Financeiro — Contas a Receber",    grupo: "Financeiro" },
-  // ── Linha Branca ───────────────────────────────────────
   { id: "/linha-branca/triagem",          label: "Linha Branca — Triagem",           grupo: "Linha Branca" },
   { id: "/linha-branca/reparo-mecanico",  label: "Linha Branca — Reparo Mecânico",   grupo: "Linha Branca" },
   { id: "/linha-branca/reparo-eletrico",  label: "Linha Branca — Reparo Elétrico",   grupo: "Linha Branca" },
@@ -20,25 +17,22 @@ const TELAS = [
   { id: "/linha-branca/bancada-testes",   label: "Linha Branca — Bancada de Testes", grupo: "Linha Branca" },
   { id: "/linha-branca/limpeza",          label: "Linha Branca — Limpeza",           grupo: "Linha Branca" },
   { id: "/linha-branca/qualidade",        label: "Linha Branca — Qualidade",         grupo: "Linha Branca" },
-  // ── Assurant ───────────────────────────────────────────
   { id: "/assurant/dashboard",            label: "Assurant — Dashboard",             grupo: "Assurant" },
   { id: "/assurant/sla",                  label: "Assurant — SLA & Rastreabilidade", grupo: "Assurant" },
-  { id: "/assurant/layout",              label: "Assurant — Layout Warehouse",      grupo: "Assurant" },
+  { id: "/assurant/layout",               label: "Assurant — Layout Warehouse",      grupo: "Assurant" },
   { id: "/b2b/picking",                   label: "Assurant — Picking B2B",           grupo: "Assurant" },
 ];
 
 const AREAS_TECNICAS = [
-  { value: "",           label: "Nenhuma (não é técnico)"  },
-  { value: "assurant",   label: "Operador Assurant"        },
-  { value: "refrigeracao", label: "Refrigeração"           },
-  { value: "climatizacao", label: "Climatização"           },
-  { value: "lavadoras",    label: "Lavadoras"              },
-  { value: "diversos",     label: "Diversos"               },
+  { value: "",              label: "Nenhuma (não é técnico)"  },
+  { value: "assurant",      label: "Operador Assurant"        },
+  { value: "refrigeracao",  label: "Refrigeração"             },
+  { value: "climatizacao",  label: "Climatização"             },
+  { value: "lavadoras",     label: "Lavadoras"                },
+  { value: "diversos",      label: "Diversos"                 },
 ];
 
-// Telas padrão para Operador Assurant
 const TELAS_ASSURANT_PADRAO = ["/upload", "/b2b/picking"];
-
 const GRUPOS = [...new Set(TELAS.map(t => t.grupo))];
 
 function SectionCard({ children }) {
@@ -102,7 +96,7 @@ function TelasSeletor({ telas, onChange }) {
   return (
     <div className="space-y-4">
       {GRUPOS.map(grupo => {
-        const telasDgrupo = TELAS.filter(t => t.grupo === grupo);
+        const telasDgrupo   = TELAS.filter(t => t.grupo === grupo);
         const todosMarcados = telasDgrupo.every(t => telas.includes(t.id));
         return (
           <div key={grupo}>
@@ -116,7 +110,8 @@ function TelasSeletor({ telas, onChange }) {
               }`}>
                 {todosMarcados && (
                   <svg className="h-2.5 w-2.5" viewBox="0 0 10 10" fill="none">
-                    <path d="M1.5 5L4 7.5L8.5 2.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M1.5 5L4 7.5L8.5 2.5" stroke="white" strokeWidth="1.5"
+                      strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 )}
               </div>
@@ -149,18 +144,17 @@ function TelasSeletor({ telas, onChange }) {
 }
 
 function ModalNovoUsuario({ onSave, onCancel }) {
-  const [nome, setNome]             = useState("");
-  const [email, setEmail]           = useState("");
-  const [senha, setSenha]           = useState("");
-  const [isMaster, setIsMaster]     = useState(false);
-  const [telas, setTelas]           = useState([]);
+  const [nome, setNome]               = useState("");
+  const [email, setEmail]             = useState("");
+  const [senha, setSenha]             = useState("");
+  const [isMaster, setIsMaster]       = useState(false);
+  const [telas, setTelas]             = useState([]);
   const [areaTecnica, setAreaTecnica] = useState("");
-  const [saving, setSaving]         = useState(false);
-  const [error, setError]           = useState("");
+  const [saving, setSaving]           = useState(false);
+  const [error, setError]             = useState("");
 
   function handleAreaChange(value) {
     setAreaTecnica(value);
-    // Pré-seleciona telas padrão para Operador Assurant
     if (value === "assurant") {
       setTelas(TELAS_ASSURANT_PADRAO);
     } else {
@@ -169,15 +163,23 @@ function ModalNovoUsuario({ onSave, onCancel }) {
   }
 
   async function handleSave() {
-    if (!nome || !email || !senha) {
-      setError("Preencha nome, e-mail e senha.");
-      return;
-    }
+    setError("");
+    if (!nome.trim())  { setError("Preencha o nome do usuário."); return; }
+    if (!email.trim()) { setError("Preencha o e-mail."); return; }
+    if (!senha.trim()) { setError("Preencha a senha."); return; }
+    if (senha.length < 6) { setError("A senha deve ter pelo menos 6 caracteres."); return; }
+
     try {
       setSaving(true);
-      await onSave(email, senha, nome, isMaster, telas, areaTecnica);
+      await onSave(email.trim(), senha, nome.trim(), isMaster, telas, areaTecnica);
     } catch (err) {
-      setError(err.message);
+      setError(
+        typeof err === "string"
+          ? err
+          : err?.message
+          ? err.message
+          : "Erro ao criar usuário. Tente novamente."
+      );
     } finally {
       setSaving(false);
     }
@@ -199,19 +201,42 @@ function ModalNovoUsuario({ onSave, onCancel }) {
         <div className="space-y-4">
           <label>
             <span className="text-sm font-semibold text-slate-600">Nome completo *</span>
-            <input value={nome} onChange={e => setNome(e.target.value)} className={inputClass()} placeholder="Nome do usuário" />
+            <input
+              value={nome}
+              onChange={e => setNome(e.target.value)}
+              className={inputClass()}
+              placeholder="Nome do usuário"
+            />
           </label>
+
           <label>
             <span className="text-sm font-semibold text-slate-600">E-mail *</span>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} className={inputClass()} placeholder="email@exemplo.com" />
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              className={inputClass()}
+              placeholder="email@exemplo.com"
+            />
           </label>
+
           <label>
             <span className="text-sm font-semibold text-slate-600">Senha *</span>
-            <input type="password" value={senha} onChange={e => setSenha(e.target.value)} className={inputClass()} placeholder="Mínimo 6 caracteres" />
+            <input
+              type="password"
+              value={senha}
+              onChange={e => setSenha(e.target.value)}
+              className={inputClass()}
+              placeholder="Mínimo 6 caracteres"
+            />
           </label>
 
           <label className="flex items-center gap-3 cursor-pointer rounded-2xl border border-[#E9D5FF] px-4 py-3">
-            <input type="checkbox" checked={isMaster} onChange={e => setIsMaster(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={isMaster}
+              onChange={e => setIsMaster(e.target.checked)}
+            />
             <div>
               <div className="text-sm font-semibold text-slate-700">Usuário master</div>
               <div className="text-xs text-slate-400">Acesso total ao sistema</div>
@@ -222,7 +247,11 @@ function ModalNovoUsuario({ onSave, onCancel }) {
             <>
               <div>
                 <span className="text-sm font-semibold text-slate-600">Perfil / Área</span>
-                <select value={areaTecnica} onChange={e => handleAreaChange(e.target.value)} className={inputClass()}>
+                <select
+                  value={areaTecnica}
+                  onChange={e => handleAreaChange(e.target.value)}
+                  className={inputClass()}
+                >
                   {AREAS_TECNICAS.map(a => (
                     <option key={a.value} value={a.value}>{a.label}</option>
                   ))}
@@ -269,10 +298,11 @@ function ModalNovoUsuario({ onSave, onCancel }) {
 }
 
 function ModalPermissoes({ usuario, onSave, onCancel }) {
-  const [telas, setTelas]           = useState(usuario.telas_permitidas || []);
-  const [isMaster, setIsMaster]     = useState(usuario.is_master || false);
+  const [telas, setTelas]             = useState(usuario.telas_permitidas || []);
+  const [isMaster, setIsMaster]       = useState(usuario.is_master || false);
   const [areaTecnica, setAreaTecnica] = useState(usuario.area_tecnica || "");
-  const [saving, setSaving]         = useState(false);
+  const [saving, setSaving]           = useState(false);
+  const [error, setError]             = useState("");
 
   function handleAreaChange(value) {
     setAreaTecnica(value);
@@ -284,7 +314,16 @@ function ModalPermissoes({ usuario, onSave, onCancel }) {
   async function handleSave() {
     try {
       setSaving(true);
+      setError("");
       await onSave(usuario.id, telas, isMaster, areaTecnica);
+    } catch (err) {
+      setError(
+        typeof err === "string"
+          ? err
+          : err?.message
+          ? err.message
+          : "Erro ao salvar permissões."
+      );
     } finally {
       setSaving(false);
     }
@@ -305,7 +344,11 @@ function ModalPermissoes({ usuario, onSave, onCancel }) {
 
         <div className="space-y-4">
           <label className="flex items-center gap-3 cursor-pointer rounded-2xl border border-[#E9D5FF] px-4 py-3">
-            <input type="checkbox" checked={isMaster} onChange={e => setIsMaster(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={isMaster}
+              onChange={e => setIsMaster(e.target.checked)}
+            />
             <div>
               <div className="text-sm font-semibold text-slate-700">Usuário master</div>
               <div className="text-xs text-slate-400">Acesso total ao sistema</div>
@@ -316,7 +359,11 @@ function ModalPermissoes({ usuario, onSave, onCancel }) {
             <>
               <div>
                 <span className="text-sm font-semibold text-slate-600">Perfil / Área</span>
-                <select value={areaTecnica} onChange={e => handleAreaChange(e.target.value)} className={inputClass()}>
+                <select
+                  value={areaTecnica}
+                  onChange={e => handleAreaChange(e.target.value)}
+                  className={inputClass()}
+                >
                   {AREAS_TECNICAS.map(a => (
                     <option key={a.value} value={a.value}>{a.label}</option>
                   ))}
@@ -328,6 +375,12 @@ function ModalPermissoes({ usuario, onSave, onCancel }) {
                 <TelasSeletor telas={telas} onChange={setTelas} />
               </div>
             </>
+          )}
+
+          {error && (
+            <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-600 ring-1 ring-red-200">
+              {error}
+            </div>
           )}
 
           <div className="flex gap-3 pt-2">
@@ -426,7 +479,11 @@ export default function GerenciarUsuariosPage() {
         <ModalNovoUsuario onSave={handleCreateUser} onCancel={() => setShowNovo(false)} />
       )}
       {editando && (
-        <ModalPermissoes usuario={editando} onSave={handleUpdatePermissions} onCancel={() => setEditando(null)} />
+        <ModalPermissoes
+          usuario={editando}
+          onSave={handleUpdatePermissions}
+          onCancel={() => setEditando(null)}
+        />
       )}
 
       <div className="space-y-6">
@@ -458,31 +515,24 @@ export default function GerenciarUsuariosPage() {
             <p className="text-sm text-slate-400">Nenhum usuário cadastrado.</p>
           ) : (
             <div className="space-y-6">
-
-              {/* Masters */}
               {gruposUsuarios.master.length > 0 && (
                 <div>
                   <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Master</p>
                   <div className="space-y-3">{gruposUsuarios.master.map(renderUsuario)}</div>
                 </div>
               )}
-
-              {/* Operadores Assurant */}
               {gruposUsuarios.assurant.length > 0 && (
                 <div>
                   <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Operadores Assurant</p>
                   <div className="space-y-3">{gruposUsuarios.assurant.map(renderUsuario)}</div>
                 </div>
               )}
-
-              {/* Outros */}
               {gruposUsuarios.outros.length > 0 && (
                 <div>
                   <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Outros Usuários</p>
                   <div className="space-y-3">{gruposUsuarios.outros.map(renderUsuario)}</div>
                 </div>
               )}
-
             </div>
           )}
         </SectionCard>
