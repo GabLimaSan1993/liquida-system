@@ -101,11 +101,8 @@ function UploadBox({
 
       <div className="mt-4 flex flex-wrap gap-2">
         {showPreview && (
-          <Button
-            onClick={onPreview}
-            variant="outline"
-            disabled={!file || loadingPreview || loadingUpload}
-          >
+          <Button onClick={onPreview} variant="outline"
+            disabled={!file || loadingPreview || loadingUpload}>
             {loadingPreview ? "Validando..." : "Validar estrutura"}
           </Button>
         )}
@@ -141,6 +138,8 @@ function UploadBox({
 
 export default function UploadPage() {
   const { profile, user } = useAuth();
+  const isMaster   = profile?.is_master;
+  const isAssurant = profile?.area_tecnica === "assurant" && !isMaster;
 
   // ── Estados existentes ────────────────────────────────
   const [agingFile, setAgingFile]                               = useState(null);
@@ -187,9 +186,11 @@ export default function UploadPage() {
   const [progress, setProgress] = useState(0);
 
   const [historyCards, setHistoryCards] = useState([
-    { type: "Aging",                 name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
-    { type: "Faturamento",           name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
-    { type: "Extrato OFX",           name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+    ...(isMaster ? [
+      { type: "Aging",       name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+      { type: "Faturamento", name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+      { type: "Extrato OFX", name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+    ] : []),
     { type: "Triagem Assurant",      name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
     { type: "Movimentação Assurant", name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
     { type: "Pedido B2B",            name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
@@ -209,12 +210,12 @@ export default function UploadPage() {
   }, []);
 
   function updateHistoryCard(type, payload) {
-    setHistoryCards((current) =>
-      current.map((card) => (card.type === type ? { ...card, ...payload } : card))
+    setHistoryCards(current =>
+      current.map(card => card.type === type ? { ...card, ...payload } : card)
     );
   }
 
-  // ── Handlers existentes ───────────────────────────────
+  // ── Handlers master ───────────────────────────────────
   async function handlePreviewAging() {
     try {
       if (!agingFile) { setStatus("Selecione um arquivo de Aging."); return; }
@@ -228,22 +229,6 @@ export default function UploadPage() {
       setStatus(`Erro ao validar Aging: ${error.message}`);
     } finally {
       setLoadingAgingPreview(false);
-    }
-  }
-
-  async function handlePreviewFaturamento() {
-    try {
-      if (!faturamentoFile) { setStatus("Selecione um arquivo de Faturamento."); return; }
-      setLoadingFaturamentoPreview(true);
-      setStatus("Validando estrutura do Faturamento...");
-      const preview = await previewFile(faturamentoFile, "faturamento");
-      setFaturamentoPreview(preview);
-      updateHistoryCard("Faturamento", { name: faturamentoFile.name, status: "Validado", rows: preview.totalRows.toLocaleString("pt-BR"), progress: 15 });
-      setStatus(`Faturamento validado. ${preview.totalRows.toLocaleString("pt-BR")} linhas válidas.`);
-    } catch (error) {
-      setStatus(`Erro ao validar Faturamento: ${error.message}`);
-    } finally {
-      setLoadingFaturamentoPreview(false);
     }
   }
 
@@ -268,6 +253,22 @@ export default function UploadPage() {
       updateHistoryCard("Aging", { status: "Erro" });
     } finally {
       setLoadingAgingUpload(false);
+    }
+  }
+
+  async function handlePreviewFaturamento() {
+    try {
+      if (!faturamentoFile) { setStatus("Selecione um arquivo de Faturamento."); return; }
+      setLoadingFaturamentoPreview(true);
+      setStatus("Validando estrutura do Faturamento...");
+      const preview = await previewFile(faturamentoFile, "faturamento");
+      setFaturamentoPreview(preview);
+      updateHistoryCard("Faturamento", { name: faturamentoFile.name, status: "Validado", rows: preview.totalRows.toLocaleString("pt-BR"), progress: 15 });
+      setStatus(`Faturamento validado. ${preview.totalRows.toLocaleString("pt-BR")} linhas válidas.`);
+    } catch (error) {
+      setStatus(`Erro ao validar Faturamento: ${error.message}`);
+    } finally {
+      setLoadingFaturamentoPreview(false);
     }
   }
 
@@ -319,6 +320,7 @@ export default function UploadPage() {
     }
   }
 
+  // ── Handlers Assurant ─────────────────────────────────
   async function handlePreviewTriagem() {
     try {
       if (!triagemFile) { setStatus("Selecione um arquivo de Triagem."); return; }
@@ -413,29 +415,17 @@ export default function UploadPage() {
       setProgress(0);
       setStatus("Importando pedido B2B...");
       updateHistoryCard("Pedido B2B", { name: b2bFile.name, status: "Enviando", progress: 10 });
-
       const result = await importarPedidoB2B(b2bFile, user.id);
-
       setB2bPreview({
         lote:     result.lote,
         cliente:  result.cliente,
         total:    result.total,
         mensagem: "Pedido importado com sucesso!",
       });
-      updateHistoryCard("Pedido B2B", {
-        name:     b2bFile.name,
-        status:   "Concluído",
-        rows:     result.total.toLocaleString("pt-BR"),
-        progress: 100,
-      });
+      updateHistoryCard("Pedido B2B", { name: b2bFile.name, status: "Concluído", rows: result.total.toLocaleString("pt-BR"), progress: 100 });
       setProgress(100);
       setStatus(`Pedido B2B importado! ${result.total.toLocaleString("pt-BR")} itens — Lote: ${result.lote}`);
-
-      // Recarregar lista de pedidos para o seletor de NF
-      const { data } = await supabase
-        .from("b2b_pedidos")
-        .select("id, lote")
-        .order("criado_em", { ascending: false });
+      const { data } = await supabase.from("b2b_pedidos").select("id, lote").order("criado_em", { ascending: false });
       setPedidosB2B(data || []);
     } catch (error) {
       setStatus(`Erro ao importar Pedido B2B: ${error.message}`);
@@ -453,21 +443,14 @@ export default function UploadPage() {
       setProgress(0);
       setStatus("Importando NFs...");
       updateHistoryCard("NF B2B", { name: nfFile.name, status: "Enviando", progress: 10 });
-
       const result = await importarNFs(nfFile, nfPedidoId, user.id);
-
       setNfPreview({
         mensagem:       "NFs importadas com sucesso!",
         atualizados:    result.atualizados,
         naoEncontrados: result.naoEncontrados,
         nfs:            result.nfs,
       });
-      updateHistoryCard("NF B2B", {
-        name:     nfFile.name,
-        status:   "Concluído",
-        rows:     result.atualizados,
-        progress: 100,
-      });
+      updateHistoryCard("NF B2B", { name: nfFile.name, status: "Concluído", rows: result.atualizados, progress: 100 });
       setProgress(100);
       setStatus(`NFs importadas! ${result.atualizados} IMEIs vinculados em ${result.nfs.length} NF(s).`);
     } catch (e) {
@@ -489,58 +472,60 @@ export default function UploadPage() {
 
         <div className="mt-4 grid gap-4 xl:grid-cols-2">
 
-          {/* Aging */}
-          <UploadBox
-            title="Base de Aging"
-            description="Entrada de itens, OS, custos e disponibilidade."
-            icon={Upload}
-            accept=".csv,.xlsx,.xls"
-            file={agingFile}
-            onChangeFile={(file) => { setAgingFile(file); setAgingPreview(null); }}
-            onPreview={handlePreviewAging}
-            onUpload={handleUploadAging}
-            preview={agingPreview}
-            loadingPreview={loadingAgingPreview}
-            loadingUpload={loadingAgingUpload}
-          />
+          {/* ── Blocos só para Master ── */}
+          {isMaster && (
+            <>
+              <UploadBox
+                title="Base de Aging"
+                description="Entrada de itens, OS, custos e disponibilidade."
+                icon={Upload}
+                accept=".csv,.xlsx,.xls"
+                file={agingFile}
+                onChangeFile={file => { setAgingFile(file); setAgingPreview(null); }}
+                onPreview={handlePreviewAging}
+                onUpload={handleUploadAging}
+                preview={agingPreview}
+                loadingPreview={loadingAgingPreview}
+                loadingUpload={loadingAgingUpload}
+              />
 
-          {/* Faturamento */}
-          <UploadBox
-            title="Base de Faturamento"
-            description="Vendas, cliente, fornecedor, lote e rentabilidade."
-            icon={FileSpreadsheet}
-            accept=".csv,.xlsx,.xls"
-            file={faturamentoFile}
-            onChangeFile={(file) => { setFaturamentoFile(file); setFaturamentoPreview(null); }}
-            onPreview={handlePreviewFaturamento}
-            onUpload={handleUploadFaturamento}
-            preview={faturamentoPreview}
-            loadingPreview={loadingFaturamentoPreview}
-            loadingUpload={loadingFaturamentoUpload}
-          />
+              <UploadBox
+                title="Base de Faturamento"
+                description="Vendas, cliente, fornecedor, lote e rentabilidade."
+                icon={FileSpreadsheet}
+                accept=".csv,.xlsx,.xls"
+                file={faturamentoFile}
+                onChangeFile={file => { setFaturamentoFile(file); setFaturamentoPreview(null); }}
+                onPreview={handlePreviewFaturamento}
+                onUpload={handleUploadFaturamento}
+                preview={faturamentoPreview}
+                loadingPreview={loadingFaturamentoPreview}
+                loadingUpload={loadingFaturamentoUpload}
+              />
 
-          {/* OFX */}
-          <UploadBox
-            title="Extrato Bancário (OFX)"
-            description="Importe o extrato bancário para o fluxo de caixa realizado."
-            icon={Landmark}
-            accept=".ofx,.OFX"
-            file={ofxFile}
-            onChangeFile={(file) => setOfxFile(file)}
-            onUpload={handleUploadOfx}
-            loadingPreview={false}
-            loadingUpload={loadingOfxUpload}
-            showPreview={false}
-          />
+              <UploadBox
+                title="Extrato Bancário (OFX)"
+                description="Importe o extrato bancário para o fluxo de caixa realizado."
+                icon={Landmark}
+                accept=".ofx,.OFX"
+                file={ofxFile}
+                onChangeFile={file => setOfxFile(file)}
+                onUpload={handleUploadOfx}
+                loadingPreview={false}
+                loadingUpload={loadingOfxUpload}
+                showPreview={false}
+              />
+            </>
+          )}
 
-          {/* Triagem Assurant */}
+          {/* ── Blocos Assurant (master + operador assurant) ── */}
           <UploadBox
             title="Triagem Assurant — Diária"
             description="Importe a planilha de triagem, recebimento e expedição do Warehouse."
             icon={Package}
             accept=".csv,.xlsx,.xls"
             file={triagemFile}
-            onChangeFile={(file) => { setTriagemFile(file); setTriagemPreview(null); }}
+            onChangeFile={file => { setTriagemFile(file); setTriagemPreview(null); }}
             onPreview={handlePreviewTriagem}
             onUpload={handleUploadTriagem}
             preview={triagemPreview}
@@ -548,13 +533,11 @@ export default function UploadPage() {
             loadingUpload={loadingTriagemUpload}
             extra={
               <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">
-                  Mês de referência
-                </label>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Mês de referência</label>
                 <input
                   type="month"
                   value={mesRefTriagem}
-                  onChange={(e) => setMesRefTriagem(e.target.value)}
+                  onChange={e => setMesRefTriagem(e.target.value)}
                   disabled={loadingTriagemUpload || loadingTriagemPreview}
                   className="rounded-xl border border-[#D8B4FE] px-3 py-2 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-400 disabled:opacity-50 bg-white"
                 />
@@ -562,14 +545,13 @@ export default function UploadPage() {
             }
           />
 
-          {/* Movimentação Assurant */}
           <UploadBox
             title="Movimentação Assurant — Histórico"
             description="Importe o histórico de etapas por voucher para análise de SLA e rastreabilidade."
             icon={GitBranch}
             accept=".csv,.txt,.xlsx,.xls"
             file={movFile}
-            onChangeFile={(file) => { setMovFile(file); setMovPreview(null); }}
+            onChangeFile={file => { setMovFile(file); setMovPreview(null); }}
             onPreview={handlePreviewMovimentacao}
             onUpload={handleUploadMovimentacao}
             preview={movPreview}
@@ -582,14 +564,13 @@ export default function UploadPage() {
             }
           />
 
-          {/* Pedido B2B */}
           <UploadBox
             title="Pedido B2B — Picking"
             description="Importe a planilha de picking B2B recebida por e-mail da Assurant para iniciar a separação."
             icon={ScanLine}
             accept=".xlsx,.xls"
             file={b2bFile}
-            onChangeFile={(file) => { setB2bFile(file); setB2bPreview(null); }}
+            onChangeFile={file => { setB2bFile(file); setB2bPreview(null); }}
             onUpload={handleUploadB2B}
             preview={b2bPreview}
             loadingPreview={false}
@@ -620,11 +601,8 @@ export default function UploadPage() {
               📋 Mesma planilha de picking com a coluna <strong>Nº NF</strong> preenchida pelo time de faturamento
             </div>
 
-            {/* Seletor de pedido */}
             <div className="mt-4">
-              <label className="block text-xs font-bold text-slate-600 mb-1">
-                Pedido correspondente
-              </label>
+              <label className="block text-xs font-bold text-slate-600 mb-1">Pedido correspondente</label>
               <select
                 value={nfPedidoId}
                 onChange={e => setNfPedidoId(e.target.value)}
@@ -654,10 +632,7 @@ export default function UploadPage() {
             </div>
 
             <div className="mt-4">
-              <Button
-                onClick={handleUploadNF}
-                disabled={!nfFile || !nfPedidoId || loadingNfUpload}
-              >
+              <Button onClick={handleUploadNF} disabled={!nfFile || !nfPedidoId || loadingNfUpload}>
                 {loadingNfUpload ? "Importando..." : "Importar NFs"}
               </Button>
             </div>
@@ -705,7 +680,7 @@ export default function UploadPage() {
 
         {/* Cards de histórico */}
         <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {historyCards.map((item) => (
+          {historyCards.map(item => (
             <div key={item.type} className="rounded-[24px] bg-[#FCFAFF] p-4 ring-1 ring-[#E9D5FF]">
               <div className="flex items-center justify-between">
                 <span className="inline-flex rounded-full border border-[#D8B4FE] px-3 py-1 text-xs font-semibold text-[#6B1F87]">

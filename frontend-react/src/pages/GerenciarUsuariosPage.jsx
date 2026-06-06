@@ -3,29 +3,43 @@ import { Users, Plus, Save, X, Shield } from "lucide-react";
 import { fetchAllProfiles, createUser, updateUserPermissions } from "../services/authService";
 
 const TELAS = [
-  { id: "/upload", label: "Uploads" },
-  { id: "/analise-entrada", label: "Análise de Entrada" },
-  { id: "/faturamento", label: "Faturamento" },
-  { id: "/abertura-os", label: "Abertura de OS" },
-  { id: "/financeiro/fluxo-realizado", label: "Financeiro — Fluxo Realizado" },
-  { id: "/financeiro/contas-pagar", label: "Financeiro — Contas a Pagar" },
-  { id: "/financeiro/contas-receber", label: "Financeiro — Contas a Receber" },
-  { id: "/linha-branca/triagem", label: "Linha Branca — Triagem" },
-  { id: "/linha-branca/reparo-mecanico", label: "Linha Branca — Reparo Mecânico" },
-  { id: "/linha-branca/reparo-eletrico", label: "Linha Branca — Reparo Elétrico" },
-  { id: "/linha-branca/reparo-estetico", label: "Linha Branca — Reparo Estético" },
-  { id: "/linha-branca/bancada-testes", label: "Linha Branca — Bancada de Testes" },
-  { id: "/linha-branca/limpeza", label: "Linha Branca — Limpeza" },
-  { id: "/linha-branca/qualidade", label: "Linha Branca — Qualidade" },
+  // ── Geral ──────────────────────────────────────────────
+  { id: "/upload",                        label: "Uploads",                          grupo: "Geral" },
+  { id: "/analise-entrada",               label: "Análise de Entrada",               grupo: "Geral" },
+  { id: "/faturamento",                   label: "Faturamento",                      grupo: "Geral" },
+  { id: "/abertura-os",                   label: "Abertura de OS",                   grupo: "Geral" },
+  // ── Financeiro ─────────────────────────────────────────
+  { id: "/financeiro/fluxo-realizado",    label: "Financeiro — Fluxo Realizado",     grupo: "Financeiro" },
+  { id: "/financeiro/contas-pagar",       label: "Financeiro — Contas a Pagar",      grupo: "Financeiro" },
+  { id: "/financeiro/contas-receber",     label: "Financeiro — Contas a Receber",    grupo: "Financeiro" },
+  // ── Linha Branca ───────────────────────────────────────
+  { id: "/linha-branca/triagem",          label: "Linha Branca — Triagem",           grupo: "Linha Branca" },
+  { id: "/linha-branca/reparo-mecanico",  label: "Linha Branca — Reparo Mecânico",   grupo: "Linha Branca" },
+  { id: "/linha-branca/reparo-eletrico",  label: "Linha Branca — Reparo Elétrico",   grupo: "Linha Branca" },
+  { id: "/linha-branca/reparo-estetico",  label: "Linha Branca — Reparo Estético",   grupo: "Linha Branca" },
+  { id: "/linha-branca/bancada-testes",   label: "Linha Branca — Bancada de Testes", grupo: "Linha Branca" },
+  { id: "/linha-branca/limpeza",          label: "Linha Branca — Limpeza",           grupo: "Linha Branca" },
+  { id: "/linha-branca/qualidade",        label: "Linha Branca — Qualidade",         grupo: "Linha Branca" },
+  // ── Assurant ───────────────────────────────────────────
+  { id: "/assurant/dashboard",            label: "Assurant — Dashboard",             grupo: "Assurant" },
+  { id: "/assurant/sla",                  label: "Assurant — SLA & Rastreabilidade", grupo: "Assurant" },
+  { id: "/assurant/layout",              label: "Assurant — Layout Warehouse",      grupo: "Assurant" },
+  { id: "/b2b/picking",                   label: "Assurant — Picking B2B",           grupo: "Assurant" },
 ];
 
 const AREAS_TECNICAS = [
-  { value: "", label: "Nenhuma (não é técnico)" },
-  { value: "refrigeracao", label: "Refrigeração" },
-  { value: "climatizacao", label: "Climatização" },
-  { value: "lavadoras", label: "Lavadoras" },
-  { value: "diversos", label: "Diversos" },
+  { value: "",           label: "Nenhuma (não é técnico)"  },
+  { value: "assurant",   label: "Operador Assurant"        },
+  { value: "refrigeracao", label: "Refrigeração"           },
+  { value: "climatizacao", label: "Climatização"           },
+  { value: "lavadoras",    label: "Lavadoras"              },
+  { value: "diversos",     label: "Diversos"               },
 ];
+
+// Telas padrão para Operador Assurant
+const TELAS_ASSURANT_PADRAO = ["/upload", "/b2b/picking"];
+
+const GRUPOS = [...new Set(TELAS.map(t => t.grupo))];
 
 function SectionCard({ children }) {
   return (
@@ -49,16 +63,18 @@ function Button({ children, primary = false, ...props }) {
 
 function AreaBadge({ area }) {
   const styles = {
+    assurant:     "bg-purple-100 text-purple-700",
     refrigeracao: "bg-blue-100 text-blue-700",
     climatizacao: "bg-cyan-100 text-cyan-700",
-    lavadoras: "bg-green-100 text-green-700",
-    diversos: "bg-orange-100 text-orange-700",
+    lavadoras:    "bg-green-100 text-green-700",
+    diversos:     "bg-orange-100 text-orange-700",
   };
   const labels = {
+    assurant:     "Operador Assurant",
     refrigeracao: "Refrigeração",
     climatizacao: "Climatização",
-    lavadoras: "Lavadoras",
-    diversos: "Diversos",
+    lavadoras:    "Lavadoras",
+    diversos:     "Diversos",
   };
   if (!area) return null;
   return (
@@ -68,20 +84,88 @@ function AreaBadge({ area }) {
   );
 }
 
-function ModalNovoUsuario({ onSave, onCancel }) {
-  const [nome, setNome] = useState("");
-  const [email, setEmail] = useState("");
-  const [senha, setSenha] = useState("");
-  const [isMaster, setIsMaster] = useState(false);
-  const [telas, setTelas] = useState([]);
-  const [areaTecnica, setAreaTecnica] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-
+function TelasSeletor({ telas, onChange }) {
   function toggleTela(id) {
-    setTelas((cur) =>
-      cur.includes(id) ? cur.filter((t) => t !== id) : [...cur, id]
-    );
+    onChange(telas.includes(id) ? telas.filter(t => t !== id) : [...telas, id]);
+  }
+
+  function toggleGrupo(grupo) {
+    const ids = TELAS.filter(t => t.grupo === grupo).map(t => t.id);
+    const todosMarcados = ids.every(id => telas.includes(id));
+    if (todosMarcados) {
+      onChange(telas.filter(t => !ids.includes(t)));
+    } else {
+      onChange([...new Set([...telas, ...ids])]);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {GRUPOS.map(grupo => {
+        const telasDgrupo = TELAS.filter(t => t.grupo === grupo);
+        const todosMarcados = telasDgrupo.every(t => telas.includes(t.id));
+        return (
+          <div key={grupo}>
+            <button
+              type="button"
+              onClick={() => toggleGrupo(grupo)}
+              className="flex items-center gap-2 mb-2 text-xs font-bold text-slate-500 uppercase tracking-wider hover:text-purple-700 transition"
+            >
+              <div className={`h-4 w-4 rounded border-2 flex items-center justify-center shrink-0 ${
+                todosMarcados ? "border-[#7F2D92] bg-[#7F2D92]" : "border-slate-300"
+              }`}>
+                {todosMarcados && (
+                  <svg className="h-2.5 w-2.5" viewBox="0 0 10 10" fill="none">
+                    <path d="M1.5 5L4 7.5L8.5 2.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                )}
+              </div>
+              {grupo}
+            </button>
+            <div className="space-y-1.5 ml-2">
+              {telasDgrupo.map(tela => (
+                <label
+                  key={tela.id}
+                  className={`flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-2.5 text-sm transition ${
+                    telas.includes(tela.id)
+                      ? "border-[#F59E0B] bg-amber-50 text-amber-800"
+                      : "border-[#E9D5FF] text-slate-600 hover:bg-[#FCFAFF]"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={telas.includes(tela.id)}
+                    onChange={() => toggleTela(tela.id)}
+                  />
+                  <span className="font-medium">{tela.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ModalNovoUsuario({ onSave, onCancel }) {
+  const [nome, setNome]             = useState("");
+  const [email, setEmail]           = useState("");
+  const [senha, setSenha]           = useState("");
+  const [isMaster, setIsMaster]     = useState(false);
+  const [telas, setTelas]           = useState([]);
+  const [areaTecnica, setAreaTecnica] = useState("");
+  const [saving, setSaving]         = useState(false);
+  const [error, setError]           = useState("");
+
+  function handleAreaChange(value) {
+    setAreaTecnica(value);
+    // Pré-seleciona telas padrão para Operador Assurant
+    if (value === "assurant") {
+      setTelas(TELAS_ASSURANT_PADRAO);
+    } else {
+      setTelas([]);
+    }
   }
 
   async function handleSave() {
@@ -115,23 +199,19 @@ function ModalNovoUsuario({ onSave, onCancel }) {
         <div className="space-y-4">
           <label>
             <span className="text-sm font-semibold text-slate-600">Nome completo *</span>
-            <input value={nome} onChange={(e) => setNome(e.target.value)} className={inputClass()} placeholder="Nome do usuário" />
+            <input value={nome} onChange={e => setNome(e.target.value)} className={inputClass()} placeholder="Nome do usuário" />
           </label>
           <label>
             <span className="text-sm font-semibold text-slate-600">E-mail *</span>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass()} placeholder="email@exemplo.com" />
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} className={inputClass()} placeholder="email@exemplo.com" />
           </label>
           <label>
             <span className="text-sm font-semibold text-slate-600">Senha *</span>
-            <input type="password" value={senha} onChange={(e) => setSenha(e.target.value)} className={inputClass()} placeholder="Mínimo 6 caracteres" />
+            <input type="password" value={senha} onChange={e => setSenha(e.target.value)} className={inputClass()} placeholder="Mínimo 6 caracteres" />
           </label>
 
           <label className="flex items-center gap-3 cursor-pointer rounded-2xl border border-[#E9D5FF] px-4 py-3">
-            <input
-              type="checkbox"
-              checked={isMaster}
-              onChange={(e) => setIsMaster(e.target.checked)}
-            />
+            <input type="checkbox" checked={isMaster} onChange={e => setIsMaster(e.target.checked)} />
             <div>
               <div className="text-sm font-semibold text-slate-700">Usuário master</div>
               <div className="text-xs text-slate-400">Acesso total ao sistema</div>
@@ -141,35 +221,22 @@ function ModalNovoUsuario({ onSave, onCancel }) {
           {!isMaster && (
             <>
               <div>
-                <span className="text-sm font-semibold text-slate-600">Área técnica</span>
-                <select value={areaTecnica} onChange={(e) => setAreaTecnica(e.target.value)} className={inputClass()}>
-                  {AREAS_TECNICAS.map((a) => (
+                <span className="text-sm font-semibold text-slate-600">Perfil / Área</span>
+                <select value={areaTecnica} onChange={e => handleAreaChange(e.target.value)} className={inputClass()}>
+                  {AREAS_TECNICAS.map(a => (
                     <option key={a.value} value={a.value}>{a.label}</option>
                   ))}
                 </select>
+                {areaTecnica === "assurant" && (
+                  <p className="mt-1 text-xs text-purple-600 font-semibold">
+                    ✓ Telas padrão Assurant pré-selecionadas — ajuste se necessário
+                  </p>
+                )}
               </div>
 
               <div>
                 <div className="text-sm font-semibold text-slate-600 mb-2">Telas permitidas</div>
-                <div className="space-y-2">
-                  {TELAS.map((tela) => (
-                    <label
-                      key={tela.id}
-                      className={`flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-3 text-sm transition ${
-                        telas.includes(tela.id)
-                          ? "border-[#F59E0B] bg-amber-50 text-amber-800"
-                          : "border-[#E9D5FF] text-slate-600 hover:bg-[#FCFAFF]"
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={telas.includes(tela.id)}
-                        onChange={() => toggleTela(tela.id)}
-                      />
-                      <span className="font-medium">{tela.label}</span>
-                    </label>
-                  ))}
-                </div>
+                <TelasSeletor telas={telas} onChange={setTelas} />
               </div>
             </>
           )}
@@ -202,15 +269,16 @@ function ModalNovoUsuario({ onSave, onCancel }) {
 }
 
 function ModalPermissoes({ usuario, onSave, onCancel }) {
-  const [telas, setTelas] = useState(usuario.telas_permitidas || []);
-  const [isMaster, setIsMaster] = useState(usuario.is_master || false);
+  const [telas, setTelas]           = useState(usuario.telas_permitidas || []);
+  const [isMaster, setIsMaster]     = useState(usuario.is_master || false);
   const [areaTecnica, setAreaTecnica] = useState(usuario.area_tecnica || "");
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving]         = useState(false);
 
-  function toggleTela(id) {
-    setTelas((cur) =>
-      cur.includes(id) ? cur.filter((t) => t !== id) : [...cur, id]
-    );
+  function handleAreaChange(value) {
+    setAreaTecnica(value);
+    if (value === "assurant" && telas.length === 0) {
+      setTelas(TELAS_ASSURANT_PADRAO);
+    }
   }
 
   async function handleSave() {
@@ -237,11 +305,7 @@ function ModalPermissoes({ usuario, onSave, onCancel }) {
 
         <div className="space-y-4">
           <label className="flex items-center gap-3 cursor-pointer rounded-2xl border border-[#E9D5FF] px-4 py-3">
-            <input
-              type="checkbox"
-              checked={isMaster}
-              onChange={(e) => setIsMaster(e.target.checked)}
-            />
+            <input type="checkbox" checked={isMaster} onChange={e => setIsMaster(e.target.checked)} />
             <div>
               <div className="text-sm font-semibold text-slate-700">Usuário master</div>
               <div className="text-xs text-slate-400">Acesso total ao sistema</div>
@@ -251,9 +315,9 @@ function ModalPermissoes({ usuario, onSave, onCancel }) {
           {!isMaster && (
             <>
               <div>
-                <span className="text-sm font-semibold text-slate-600">Área técnica</span>
-                <select value={areaTecnica} onChange={(e) => setAreaTecnica(e.target.value)} className={inputClass()}>
-                  {AREAS_TECNICAS.map((a) => (
+                <span className="text-sm font-semibold text-slate-600">Perfil / Área</span>
+                <select value={areaTecnica} onChange={e => handleAreaChange(e.target.value)} className={inputClass()}>
+                  {AREAS_TECNICAS.map(a => (
                     <option key={a.value} value={a.value}>{a.label}</option>
                   ))}
                 </select>
@@ -261,25 +325,7 @@ function ModalPermissoes({ usuario, onSave, onCancel }) {
 
               <div>
                 <div className="text-sm font-semibold text-slate-600 mb-2">Telas permitidas</div>
-                <div className="space-y-2">
-                  {TELAS.map((tela) => (
-                    <label
-                      key={tela.id}
-                      className={`flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-3 text-sm transition ${
-                        telas.includes(tela.id)
-                          ? "border-[#F59E0B] bg-amber-50 text-amber-800"
-                          : "border-[#E9D5FF] text-slate-600 hover:bg-[#FCFAFF]"
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={telas.includes(tela.id)}
-                        onChange={() => toggleTela(tela.id)}
-                      />
-                      <span className="font-medium">{tela.label}</span>
-                    </label>
-                  ))}
-                </div>
+                <TelasSeletor telas={telas} onChange={setTelas} />
               </div>
             </>
           )}
@@ -307,10 +353,10 @@ function ModalPermissoes({ usuario, onSave, onCancel }) {
 
 export default function GerenciarUsuariosPage() {
   const [usuarios, setUsuarios] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading]   = useState(false);
   const [showNovo, setShowNovo] = useState(false);
   const [editando, setEditando] = useState(null);
-  const [status, setStatus] = useState("");
+  const [status, setStatus]     = useState("");
 
   async function loadUsuarios() {
     try {
@@ -340,20 +386,47 @@ export default function GerenciarUsuariosPage() {
     await loadUsuarios();
   }
 
+  const gruposUsuarios = {
+    master:   usuarios.filter(u => u.is_master),
+    assurant: usuarios.filter(u => !u.is_master && u.area_tecnica === "assurant"),
+    outros:   usuarios.filter(u => !u.is_master && u.area_tecnica !== "assurant"),
+  };
+
+  function renderUsuario(u) {
+    return (
+      <div key={u.id}
+        className="flex items-center justify-between rounded-2xl bg-[#FCFAFF] px-5 py-4 ring-1 ring-[#E9D5FF]">
+        <div>
+          <div className="font-bold text-[#6B1F87]">{u.nome}</div>
+          <div className="text-xs text-slate-400">{u.email}</div>
+          <div className="mt-1 flex items-center gap-2 flex-wrap">
+            {u.is_master ? (
+              <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-semibold text-purple-700">
+                Master
+              </span>
+            ) : (
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                {u.telas_permitidas?.length || 0} tela(s)
+              </span>
+            )}
+            <AreaBadge area={u.area_tecnica} />
+          </div>
+        </div>
+        <Button onClick={() => setEditando(u)}>
+          <Shield className="h-4 w-4" />
+          Permissões
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <>
       {showNovo && (
-        <ModalNovoUsuario
-          onSave={handleCreateUser}
-          onCancel={() => setShowNovo(false)}
-        />
+        <ModalNovoUsuario onSave={handleCreateUser} onCancel={() => setShowNovo(false)} />
       )}
       {editando && (
-        <ModalPermissoes
-          usuario={editando}
-          onSave={handleUpdatePermissions}
-          onCancel={() => setEditando(null)}
-        />
+        <ModalPermissoes usuario={editando} onSave={handleUpdatePermissions} onCancel={() => setEditando(null)} />
       )}
 
       <div className="space-y-6">
@@ -384,34 +457,32 @@ export default function GerenciarUsuariosPage() {
           ) : usuarios.length === 0 ? (
             <p className="text-sm text-slate-400">Nenhum usuário cadastrado.</p>
           ) : (
-            <div className="space-y-3">
-              {usuarios.map((u) => (
-                <div
-                  key={u.id}
-                  className="flex items-center justify-between rounded-2xl bg-[#FCFAFF] px-5 py-4 ring-1 ring-[#E9D5FF]"
-                >
-                  <div>
-                    <div className="font-bold text-[#6B1F87]">{u.nome}</div>
-                    <div className="text-xs text-slate-400">{u.email}</div>
-                    <div className="mt-1 flex items-center gap-2">
-                      {u.is_master ? (
-                        <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-semibold text-purple-700">
-                          Master
-                        </span>
-                      ) : (
-                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
-                          {u.telas_permitidas?.length || 0} tela(s)
-                        </span>
-                      )}
-                      <AreaBadge area={u.area_tecnica} />
-                    </div>
-                  </div>
-                  <Button onClick={() => setEditando(u)}>
-                    <Shield className="h-4 w-4" />
-                    Permissões
-                  </Button>
+            <div className="space-y-6">
+
+              {/* Masters */}
+              {gruposUsuarios.master.length > 0 && (
+                <div>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Master</p>
+                  <div className="space-y-3">{gruposUsuarios.master.map(renderUsuario)}</div>
                 </div>
-              ))}
+              )}
+
+              {/* Operadores Assurant */}
+              {gruposUsuarios.assurant.length > 0 && (
+                <div>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Operadores Assurant</p>
+                  <div className="space-y-3">{gruposUsuarios.assurant.map(renderUsuario)}</div>
+                </div>
+              )}
+
+              {/* Outros */}
+              {gruposUsuarios.outros.length > 0 && (
+                <div>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Outros Usuários</p>
+                  <div className="space-y-3">{gruposUsuarios.outros.map(renderUsuario)}</div>
+                </div>
+              )}
+
             </div>
           )}
         </SectionCard>
