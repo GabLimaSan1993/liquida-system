@@ -173,6 +173,34 @@ export async function registrarBipagem(imeiDigitado, pedidoId, userId) {
   return { ok: true, item };
 }
 
+// ── Marcar como Não Localizado ───────────────────────────
+export async function marcarNaoLocalizado(itemId, userId) {
+  const { error } = await supabase
+    .from("b2b_itens")
+    .update({
+      status:             "nao_localizado",
+      nao_localizado_em:  new Date().toISOString(),
+      nao_localizado_por: userId,
+    })
+    .eq("id", itemId);
+  if (error) throw new Error(error.message);
+}
+
+// ── Reverter Não Localizado → Pendente ───────────────────
+export async function reverterNaoLocalizado(itemId, novoLocal) {
+  const { error } = await supabase
+    .from("b2b_itens")
+    .update({
+      status:               "pendente",
+      local_estoque:        novoLocal,
+      nao_localizado_em:    null,
+      nao_localizado_por:   null,
+      nao_localizado_local: novoLocal,
+    })
+    .eq("id", itemId);
+  if (error) throw new Error(error.message);
+}
+
 // ── Exportar para faturamento (com controle de delta) ────
 export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
 

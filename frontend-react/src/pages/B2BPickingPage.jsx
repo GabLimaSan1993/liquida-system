@@ -2,12 +2,13 @@ import { useState, useEffect, useRef } from "react";
 import {
   Search, CheckCircle, AlertTriangle, Download,
   Package, X, BarChart3, Clock, Box, FileText,
-  Tag, Plus, Lock,
+  Tag, Plus, Lock, MapPin, RotateCcw,
 } from "lucide-react";
 import {
   listarPedidosB2B, listarItens,
   registrarBipagem, exportarFaturamento,
-  listarExportacoes,
+  listarExportacoes, marcarNaoLocalizado,
+  reverterNaoLocalizado,
 } from "../services/b2bService.js";
 import {
   buscarCaixaAberta, criarCaixa, listarCaixas,
@@ -39,12 +40,13 @@ function KpiMini({ label, value, sub, color = "bg-purple-50 ring-purple-200 text
 
 function StatusBadge({ status }) {
   const map = {
-    aberto:    { label: "Em aberto", cls: "bg-blue-50 text-blue-700 ring-blue-200" },
-    concluido: { label: "Concluído", cls: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
-    pendente:  { label: "Pendente",  cls: "bg-slate-50 text-slate-500 ring-slate-200" },
-    bipado:    { label: "Bipado",    cls: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
-    aberta:    { label: "Aberta",    cls: "bg-blue-50 text-blue-700 ring-blue-200" },
-    fechada:   { label: "Fechada",   cls: "bg-slate-50 text-slate-600 ring-slate-200" },
+    aberto:         { label: "Em aberto",      cls: "bg-blue-50 text-blue-700 ring-blue-200" },
+    concluido:      { label: "Concluído",       cls: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
+    pendente:       { label: "Pendente",        cls: "bg-slate-50 text-slate-500 ring-slate-200" },
+    bipado:         { label: "Bipado",          cls: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
+    nao_localizado: { label: "Não Localizado",  cls: "bg-amber-50 text-amber-700 ring-amber-200" },
+    aberta:         { label: "Aberta",          cls: "bg-blue-50 text-blue-700 ring-blue-200" },
+    fechada:        { label: "Fechada",         cls: "bg-slate-50 text-slate-600 ring-slate-200" },
   };
   const s = map[status] || { label: status, cls: "bg-slate-50 text-slate-500 ring-slate-200" };
   return (
@@ -70,19 +72,151 @@ function ProgressBar({ value, total, color }) {
   );
 }
 
+// ── Modal confirmação Não Localizado ──────────────────────
+function ModalNaoLocalizado({ item, onConfirmar, onCancelar }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="w-full max-w-md rounded-[28px] bg-white p-8 shadow-2xl">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="h-10 w-10 rounded-2xl bg-amber-100 flex items-center justify-center shrink-0">
+            <MapPin className="h-5 w-5 text-amber-600" />
+          </div>
+          <div>
+            <h2 className="text-lg font-black text-slate-800">Não Localizado</h2>
+            <p className="text-xs text-slate-500">Confirme que o aparelho não foi encontrado</p>
+          </div>
+        </div>
+
+        <div className="bg-amber-50 ring-1 ring-amber-200 rounded-2xl p-4 mb-6 space-y-1">
+          <p className="text-xs font-bold text-amber-700">Aparelho</p>
+          <p className="text-sm font-semibold text-slate-800">{item.modelo}</p>
+          <p className="text-xs text-slate-500 font-mono">{item.imei}</p>
+          <p className="text-xs text-slate-500">Local: <span className="font-semibold font-mono">{item.local_estoque || "—"}</span></p>
+        </div>
+
+        <p className="text-sm text-slate-600 mb-6">
+          O aparelho será marcado como <span className="font-bold text-amber-700">Não Localizado</span> e removido da lista de pendentes. O responsável será notificado para análise.
+        </p>
+
+        <div className="flex gap-3">
+          <button onClick={onConfirmar}
+            className="flex-1 rounded-2xl bg-amber-500 py-3 text-sm font-bold text-white hover:bg-amber-600 transition">
+            Confirmar — Não Localizado
+          </button>
+          <button onClick={onCancelar}
+            className="flex-1 rounded-2xl bg-slate-100 py-3 text-sm font-bold text-slate-600 hover:bg-slate-200 transition">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Modal reverter Não Localizado ─────────────────────────
+function ModalReverter({ item, onConfirmar, onCancelar }) {
+  const [rua,   setRua]   = useState("");
+  const [bloco, setBloco] = useState("");
+  const [andar, setAndar] = useState("");
+  const [ap,    setAp]    = useState("");
+  const [erro,  setErro]  = useState("");
+
+  function handleConfirmar() {
+    if (!rua.trim() || !bloco.trim() || !andar.trim() || !ap.trim()) {
+      setErro("Preencha todos os campos de localização.");
+      return;
+    }
+    const novoLocal = `RUA ${rua.trim()}/BL${bloco.trim()}/AD${andar.trim()}/${ap.trim().toUpperCase()}`;
+    onConfirmar(novoLocal);
+  }
+
+  const inputCls = "w-full rounded-xl border border-[#E9D5FF] px-3 py-2.5 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7F2D92] bg-white uppercase";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="w-full max-w-md rounded-[28px] bg-white p-8 shadow-2xl">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="h-10 w-10 rounded-2xl bg-purple-100 flex items-center justify-center shrink-0">
+            <RotateCcw className="h-5 w-5 text-purple-600" />
+          </div>
+          <div>
+            <h2 className="text-lg font-black text-slate-800">Reverter para Pendente</h2>
+            <p className="text-xs text-slate-500">Informe a nova localização do aparelho</p>
+          </div>
+        </div>
+
+        <div className="bg-slate-50 ring-1 ring-slate-200 rounded-2xl p-4 mb-5 space-y-1">
+          <p className="text-xs font-bold text-slate-500">Aparelho</p>
+          <p className="text-sm font-semibold text-slate-800">{item.modelo}</p>
+          <p className="text-xs text-slate-500 font-mono">{item.imei}</p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-600 mb-1">Rua *</label>
+            <input value={rua} onChange={e => setRua(e.target.value)}
+              className={inputCls} placeholder="Ex: 1" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-600 mb-1">Bloco *</label>
+            <input value={bloco} onChange={e => setBloco(e.target.value)}
+              className={inputCls} placeholder="Ex: 03" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-600 mb-1">Andar *</label>
+            <input value={andar} onChange={e => setAndar(e.target.value)}
+              className={inputCls} placeholder="Ex: 02" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-600 mb-1">AP *</label>
+            <input value={ap} onChange={e => setAp(e.target.value)}
+              className={inputCls} placeholder="Ex: B03" />
+          </div>
+        </div>
+
+        {(rua || bloco || andar || ap) && (
+          <div className="bg-purple-50 ring-1 ring-purple-200 rounded-xl px-4 py-2 mb-4 text-xs font-mono text-purple-700 font-bold">
+            Novo local: RUA {rua || "?"}/BL{bloco || "?"}/AD{andar || "?"}/{ap?.toUpperCase() || "?"}
+          </div>
+        )}
+
+        {erro && (
+          <div className="bg-red-50 ring-1 ring-red-200 rounded-xl px-4 py-2 mb-4 text-xs font-semibold text-red-600">
+            {erro}
+          </div>
+        )}
+
+        <div className="flex gap-3">
+          <button onClick={handleConfirmar}
+            className="flex-1 rounded-2xl bg-[#7F2D92] py-3 text-sm font-bold text-white hover:bg-[#5B1E74] transition">
+            Confirmar nova localização
+          </button>
+          <button onClick={onCancelar}
+            className="flex-1 rounded-2xl bg-slate-100 py-3 text-sm font-bold text-slate-600 hover:bg-slate-200 transition">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ══════════════════════════════════════════════════════════
 // ABA PICKING
 // ══════════════════════════════════════════════════════════
 function TabPicking({ pedidos, onAtualizar }) {
-  const { user }                = useAuth();
-  const [pedidoSel, setPedido]  = useState(null);
-  const [itens, setItens]       = useState([]);
-  const [loading, setLoading]   = useState(false);
-  const [imeiInput, setImei]    = useState("");
-  const [feedback, setFeedback] = useState(null);
-  const [filtro, setFiltro]     = useState("todos");
-  const [busca, setBusca]       = useState("");
-  const inputRef                = useRef(null);
+  const { user }                          = useAuth();
+  const [pedidoSel, setPedido]            = useState(null);
+  const [itens, setItens]                 = useState([]);
+  const [loading, setLoading]             = useState(false);
+  const [imeiInput, setImei]              = useState("");
+  const [feedback, setFeedback]           = useState(null);
+  const [filtro, setFiltro]               = useState("pendente");
+  const [busca, setBusca]                 = useState("");
+  const [ruasSel, setRuasSel]             = useState([]);
+  const [modalNaoLoc, setModalNaoLoc]     = useState(null);
+  const [modalReverter, setModalReverter] = useState(null);
+  const inputRef                          = useRef(null);
 
   useEffect(() => { if (pedidoSel) carregarItens(); }, [pedidoSel]);
   useEffect(() => { if (pedidoSel) inputRef.current?.focus(); }, [pedidoSel]);
@@ -115,18 +249,87 @@ function TabPicking({ pedidos, onAtualizar }) {
     inputRef.current?.focus();
   }
 
+  async function handleNaoLocalizado(item) {
+    setModalNaoLoc(item);
+  }
+
+  async function confirmarNaoLocalizado() {
+    if (!modalNaoLoc) return;
+    try {
+      await marcarNaoLocalizado(modalNaoLoc.id, user.id);
+      setItens(prev => prev.map(i =>
+        i.id === modalNaoLoc.id
+          ? { ...i, status: "nao_localizado", nao_localizado_em: new Date().toISOString() }
+          : i
+      ));
+      setFeedback({ tipo: "aviso", msg: `⚠ IMEI ${modalNaoLoc.imei} marcado como Não Localizado.` });
+      setTimeout(() => setFeedback(null), 3000);
+    } catch (e) {
+      setFeedback({ tipo: "erro", msg: e.message });
+    } finally {
+      setModalNaoLoc(null);
+      inputRef.current?.focus();
+    }
+  }
+
+  async function confirmarReverter(novoLocal) {
+    if (!modalReverter) return;
+    try {
+      await reverterNaoLocalizado(modalReverter.id, novoLocal);
+      setItens(prev => prev.map(i =>
+        i.id === modalReverter.id
+          ? { ...i, status: "pendente", local_estoque: novoLocal, nao_localizado_em: null }
+          : i
+      ));
+      setFeedback({ tipo: "ok", msg: `✓ IMEI ${modalReverter.imei} revertido para Pendente.` });
+      setTimeout(() => setFeedback(null), 3000);
+    } catch (e) {
+      setFeedback({ tipo: "erro", msg: e.message });
+    } finally {
+      setModalReverter(null);
+      inputRef.current?.focus();
+    }
+  }
+
+  // Extrair ruas disponíveis
+  const ruasDisponiveis = [...new Set(
+    itens
+      .filter(i => i.local_estoque)
+      .map(i => {
+        const match = i.local_estoque.match(/^RUA\s+(\d+)/i);
+        return match ? `RUA ${match[1]}` : null;
+      })
+      .filter(Boolean)
+  )].sort((a, b) => {
+    const na = parseInt(a.replace("RUA ", ""));
+    const nb = parseInt(b.replace("RUA ", ""));
+    return na - nb;
+  });
+
+  function toggleRua(rua) {
+    setRuasSel(prev =>
+      prev.includes(rua) ? prev.filter(r => r !== rua) : [...prev, rua]
+    );
+  }
+
   const itensFiltrados = itens.filter(i => {
     const matchFiltro = filtro === "todos" || i.status === filtro;
     const matchBusca  = !busca ||
       i.imei.includes(busca) ||
       i.modelo?.toLowerCase().includes(busca.toLowerCase()) ||
-      i.local_estoque?.toLowerCase().includes(busca.toLowerCase());
-    return matchFiltro && matchBusca;
+      i.local_estoque?.toLowerCase().includes(busca.toLowerCase()) ||
+      i.voucher?.toLowerCase().includes(busca.toLowerCase());
+    const matchRua = ruasSel.length === 0 || ruasSel.some(r => {
+      const num = r.replace("RUA ", "");
+      return i.local_estoque?.match(new RegExp(`^RUA\\s+${num}\\b`, "i"));
+    });
+    return matchFiltro && matchBusca && matchRua;
   });
 
-  const totalBipados  = itens.filter(i => i.status === "bipado").length;
-  const totalPendente = itens.filter(i => i.status === "pendente").length;
-  const valorTotal    = itens.filter(i => i.status === "bipado").reduce((s, i) => s + (i.valor || 0), 0);
+  const totalBipados     = itens.filter(i => i.status === "bipado").length;
+  const totalPendente    = itens.filter(i => i.status === "pendente").length;
+  const totalNaoLoc      = itens.filter(i => i.status === "nao_localizado").length;
+  const valorTotal       = itens.filter(i => i.status === "bipado").reduce((s, i) => s + (i.valor || 0), 0);
 
   if (!pedidoSel) {
     return (
@@ -162,124 +365,218 @@ function TabPicking({ pedidos, onAtualizar }) {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3 flex-wrap">
-        <button onClick={() => { setPedido(null); setItens([]); }}
-          className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1">
-          <X className="h-3 w-3" /> Trocar pedido
-        </button>
-        <div className="flex-1">
-          <h3 className="font-black text-slate-800 text-sm">{pedidoSel.lote}</h3>
-          <p className="text-xs text-slate-500">{pedidoSel.cliente}</p>
-        </div>
-        <StatusBadge status={pedidoSel.status} />
-      </div>
+    <>
+      {modalNaoLoc && (
+        <ModalNaoLocalizado
+          item={modalNaoLoc}
+          onConfirmar={confirmarNaoLocalizado}
+          onCancelar={() => { setModalNaoLoc(null); inputRef.current?.focus(); }}
+        />
+      )}
+      {modalReverter && (
+        <ModalReverter
+          item={modalReverter}
+          onConfirmar={confirmarReverter}
+          onCancelar={() => { setModalReverter(null); inputRef.current?.focus(); }}
+        />
+      )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiMini label="Total" value={fmtN(pedidoSel.total_itens)} color="bg-purple-50 ring-purple-200 text-purple-700" />
-        <KpiMini label="Bipados" value={fmtN(totalBipados)}
-          sub={`${Math.round((totalBipados / (pedidoSel.total_itens || 1)) * 100)}%`}
-          color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
-        <KpiMini label="Pendentes" value={fmtN(totalPendente)} color="bg-orange-50 ring-orange-200 text-orange-700" />
-        <KpiMini label="Valor bipado" value={fmtR(valorTotal)} color="bg-blue-50 ring-blue-200 text-blue-700" />
-      </div>
-
-      <Card><ProgressBar value={totalBipados} total={pedidoSel.total_itens || 0} /></Card>
-
-      <Card>
-        <h3 className="font-black text-slate-800 flex items-center gap-2 mb-4 text-sm">
-          <Search className="h-4 w-4 text-[#7F2D92]" /> Bipar IMEI
-        </h3>
-        <form onSubmit={handleBipar} className="flex gap-3">
-          <input ref={inputRef} type="text" value={imeiInput}
-            onChange={e => setImei(e.target.value)}
-            placeholder="Bipe ou digite o IMEI..."
-            className="flex-1 rounded-xl border border-slate-200 px-4 py-3 text-sm font-mono font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7F2D92]"
-            autoComplete="off" />
-          <button type="submit" disabled={!imeiInput.trim()}
-            className="flex items-center gap-2 bg-[#7F2D92] text-white px-6 py-3 rounded-xl text-sm font-semibold hover:bg-[#5B1E74] transition disabled:opacity-50">
-            <CheckCircle className="h-4 w-4" /> Confirmar
+      <div className="space-y-4">
+        <div className="flex items-center gap-3 flex-wrap">
+          <button onClick={() => { setPedido(null); setItens([]); setRuasSel([]); }}
+            className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1">
+            <X className="h-3 w-3" /> Trocar pedido
           </button>
-        </form>
-        {feedback && (
-          <div className={`mt-3 flex items-start gap-2 text-sm rounded-xl px-4 py-3 ring-1 ${
-            feedback.tipo === "ok" ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-red-50 text-red-700 ring-red-200"
-          }`}>
-            {feedback.tipo === "ok" ? <CheckCircle className="h-4 w-4 shrink-0 mt-0.5" /> : <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />}
-            <div>
-              <p className="font-semibold">{feedback.msg}</p>
-              {feedback.item && <p className="text-xs mt-0.5 opacity-80">{feedback.item.modelo} · {feedback.item.grade} · {feedback.item.local_estoque}</p>}
-            </div>
+          <div className="flex-1">
+            <h3 className="font-black text-slate-800 text-sm">{pedidoSel.lote}</h3>
+            <p className="text-xs text-slate-500">{pedidoSel.cliente}</p>
           </div>
-        )}
-      </Card>
+          <StatusBadge status={pedidoSel.status} />
+        </div>
 
-      <Card>
-        <div className="flex items-center gap-3 mb-4 flex-wrap">
-          <h3 className="font-black text-slate-800 text-sm flex items-center gap-2">
-            <Package className="h-4 w-4 text-[#7F2D92]" /> Lista de itens
-          </h3>
-          <div className="flex gap-2 ml-auto">
-            {["todos", "pendente", "bipado"].map(f => (
-              <button key={f} onClick={() => setFiltro(f)}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <KpiMini label="Total" value={fmtN(pedidoSel.total_itens)} color="bg-purple-50 ring-purple-200 text-purple-700" />
+          <KpiMini label="Bipados" value={fmtN(totalBipados)}
+            sub={`${Math.round((totalBipados / (pedidoSel.total_itens || 1)) * 100)}%`}
+            color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
+          <KpiMini label="Pendentes" value={fmtN(totalPendente)} color="bg-orange-50 ring-orange-200 text-orange-700" />
+          {totalNaoLoc > 0
+            ? <KpiMini label="Não Localizados" value={fmtN(totalNaoLoc)} color="bg-amber-50 ring-amber-200 text-amber-700" />
+            : <KpiMini label="Valor bipado" value={fmtR(valorTotal)} color="bg-blue-50 ring-blue-200 text-blue-700" />
+          }
+        </div>
+
+        <Card><ProgressBar value={totalBipados} total={pedidoSel.total_itens || 0} /></Card>
+
+        {/* Filtro de ruas */}
+        {ruasDisponiveis.length > 0 && (
+          <Card>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-bold text-slate-500 flex items-center gap-1">
+                <MapPin className="h-3 w-3" /> Filtrar por rua:
+              </span>
+              <button
+                onClick={() => setRuasSel([])}
                 className={`text-xs px-3 py-1.5 rounded-xl font-semibold transition-all ${
-                  filtro === f ? "bg-[#7F2D92] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                }`}>
-                {f === "todos" ? "Todos" : f === "pendente" ? "Pendentes" : "Bipados"}
+                  ruasSel.length === 0 ? "bg-[#7F2D92] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                Todas
               </button>
-            ))}
-          </div>
-        </div>
-        <div className="relative mb-3">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-          <input type="text" value={busca} onChange={e => setBusca(e.target.value)}
-            placeholder="Buscar IMEI, modelo ou local..."
-            className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#7F2D92]" />
-        </div>
-        {loading ? (
-          <div className="flex items-center justify-center h-32">
-            <div className="h-8 w-8 border-4 border-purple-200 border-t-[#7F2D92] rounded-full animate-spin" />
-          </div>
-        ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-xs">
-                <thead>
-                  <tr className="bg-slate-50">
-                    <th className="px-3 py-2 text-left font-bold text-slate-500">Local</th>
-                    <th className="px-3 py-2 text-left font-bold text-slate-500">IMEI</th>
-                    <th className="px-3 py-2 text-left font-bold text-slate-500">Modelo</th>
-                    <th className="px-3 py-2 text-left font-bold text-slate-500">Grade</th>
-                    <th className="px-3 py-2 text-left font-bold text-slate-500">Voucher</th>
-                    <th className="px-3 py-2 text-center font-bold text-slate-500">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {itensFiltrados.slice(0, 200).map(item => (
-                    <tr key={item.id} className={`hover:bg-slate-50 ${item.status === "bipado" ? "opacity-50" : ""}`}>
-                      <td className="px-3 py-2 font-mono text-slate-600">{item.local_estoque || "—"}</td>
-                      <td className="px-3 py-2 font-mono font-semibold text-slate-800">{item.imei}</td>
-                      <td className="px-3 py-2 text-slate-600 max-w-[180px] truncate">{item.modelo}</td>
-                      <td className="px-3 py-2">
-                        <span className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded-lg font-semibold">{item.grade}</span>
-                      </td>
-                      <td className="px-3 py-2 font-mono text-slate-600">{item.voucher || "—"}</td>
-                      <td className="px-3 py-2 text-center"><StatusBadge status={item.status} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              {ruasDisponiveis.map(rua => (
+                <button key={rua} onClick={() => toggleRua(rua)}
+                  className={`text-xs px-3 py-1.5 rounded-xl font-semibold transition-all ${
+                    ruasSel.includes(rua)
+                      ? "bg-[#7F2D92] text-white"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}>
+                  {rua}
+                </button>
+              ))}
+              {ruasSel.length > 0 && (
+                <span className="text-xs text-purple-600 font-semibold ml-1">
+                  {itensFiltrados.filter(i => i.status === "pendente").length} pendentes nas ruas selecionadas
+                </span>
+              )}
             </div>
-            {itensFiltrados.length > 200 && (
-              <p className="text-xs text-center text-slate-400 mt-2">Mostrando 200 de {fmtN(itensFiltrados.length)} itens.</p>
-            )}
-            {itensFiltrados.length === 0 && (
-              <p className="text-center text-slate-400 text-sm py-8">Nenhum item encontrado.</p>
-            )}
-          </>
+          </Card>
         )}
-      </Card>
-    </div>
+
+        {/* Input de bipagem */}
+        <Card>
+          <h3 className="font-black text-slate-800 flex items-center gap-2 mb-4 text-sm">
+            <Search className="h-4 w-4 text-[#7F2D92]" /> Bipar IMEI
+          </h3>
+          <form onSubmit={handleBipar} className="flex gap-3">
+            <input ref={inputRef} type="text" value={imeiInput}
+              onChange={e => setImei(e.target.value)}
+              placeholder="Bipe ou digite o IMEI..."
+              className="flex-1 rounded-xl border border-slate-200 px-4 py-3 text-sm font-mono font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7F2D92]"
+              autoComplete="off" />
+            <button type="submit" disabled={!imeiInput.trim()}
+              className="flex items-center gap-2 bg-[#7F2D92] text-white px-6 py-3 rounded-xl text-sm font-semibold hover:bg-[#5B1E74] transition disabled:opacity-50">
+              <CheckCircle className="h-4 w-4" /> Confirmar
+            </button>
+          </form>
+          {feedback && (
+            <div className={`mt-3 flex items-start gap-2 text-sm rounded-xl px-4 py-3 ring-1 ${
+              feedback.tipo === "ok"     ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+              : feedback.tipo === "aviso" ? "bg-amber-50 text-amber-700 ring-amber-200"
+              : "bg-red-50 text-red-700 ring-red-200"
+            }`}>
+              {feedback.tipo === "ok"
+                ? <CheckCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                : <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+              }
+              <div>
+                <p className="font-semibold">{feedback.msg}</p>
+                {feedback.item && <p className="text-xs mt-0.5 opacity-80">{feedback.item.modelo} · {feedback.item.grade} · {feedback.item.local_estoque}</p>}
+              </div>
+            </div>
+          )}
+        </Card>
+
+        {/* Lista de itens */}
+        <Card>
+          <div className="flex items-center gap-3 mb-4 flex-wrap">
+            <h3 className="font-black text-slate-800 text-sm flex items-center gap-2">
+              <Package className="h-4 w-4 text-[#7F2D92]" /> Lista de itens
+            </h3>
+            <div className="flex gap-2 ml-auto flex-wrap">
+              {[
+                { key: "todos",          label: "Todos"           },
+                { key: "pendente",       label: "Pendentes"       },
+                { key: "bipado",         label: "Bipados"         },
+                { key: "nao_localizado", label: "Não Localizados" },
+              ].map(f => (
+                <button key={f.key} onClick={() => setFiltro(f.key)}
+                  className={`text-xs px-3 py-1.5 rounded-xl font-semibold transition-all ${
+                    filtro === f.key ? "bg-[#7F2D92] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}>
+                  {f.label}
+                  {f.key === "nao_localizado" && totalNaoLoc > 0 && (
+                    <span className="ml-1.5 bg-amber-400 text-white rounded-full px-1.5 py-0.5 text-xs">
+                      {totalNaoLoc}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="relative mb-3">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+            <input type="text" value={busca} onChange={e => setBusca(e.target.value)}
+              placeholder="Buscar IMEI, modelo, voucher ou local..."
+              className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#7F2D92]" />
+          </div>
+
+          {loading ? (
+            <div className="flex items-center justify-center h-32">
+              <div className="h-8 w-8 border-4 border-purple-200 border-t-[#7F2D92] rounded-full animate-spin" />
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-xs">
+                  <thead>
+                    <tr className="bg-slate-50">
+                      <th className="px-3 py-2 text-left font-bold text-slate-500">Local</th>
+                      <th className="px-3 py-2 text-left font-bold text-slate-500">IMEI</th>
+                      <th className="px-3 py-2 text-left font-bold text-slate-500">Modelo</th>
+                      <th className="px-3 py-2 text-left font-bold text-slate-500">Grade</th>
+                      <th className="px-3 py-2 text-left font-bold text-slate-500">Voucher</th>
+                      <th className="px-3 py-2 text-center font-bold text-slate-500">Status</th>
+                      <th className="px-3 py-2 text-center font-bold text-slate-500">Ação</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {itensFiltrados.slice(0, 200).map(item => (
+                      <tr key={item.id} className={`hover:bg-slate-50 ${item.status === "bipado" ? "opacity-50" : ""}`}>
+                        <td className="px-3 py-2 font-mono text-slate-600">{item.local_estoque || "—"}</td>
+                        <td className="px-3 py-2 font-mono font-semibold text-slate-800">{item.imei}</td>
+                        <td className="px-3 py-2 text-slate-600 max-w-[180px] truncate">{item.modelo}</td>
+                        <td className="px-3 py-2">
+                          <span className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded-lg font-semibold">{item.grade}</span>
+                        </td>
+                        <td className="px-3 py-2 font-mono text-slate-600">{item.voucher || "—"}</td>
+                        <td className="px-3 py-2 text-center"><StatusBadge status={item.status} /></td>
+                        <td className="px-3 py-2 text-center">
+                          {item.status === "pendente" && (
+                            <button
+                              onClick={() => handleNaoLocalizado(item)}
+                              className="text-xs font-semibold px-2 py-1 rounded-lg bg-amber-50 text-amber-700 ring-1 ring-amber-200 hover:bg-amber-100 transition whitespace-nowrap"
+                            >
+                              Não localizado
+                            </button>
+                          )}
+                          {item.status === "nao_localizado" && (
+                            <button
+                              onClick={() => setModalReverter(item)}
+                              className="text-xs font-semibold px-2 py-1 rounded-lg bg-purple-50 text-purple-700 ring-1 ring-purple-200 hover:bg-purple-100 transition flex items-center gap-1 mx-auto"
+                            >
+                              <RotateCcw className="h-3 w-3" /> Reverter
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {itensFiltrados.length > 200 && (
+                <p className="text-xs text-center text-slate-400 mt-2">
+                  Mostrando 200 de {fmtN(itensFiltrados.length)} itens.
+                </p>
+              )}
+              {itensFiltrados.length === 0 && (
+                <p className="text-center text-slate-400 text-sm py-8">Nenhum item encontrado.</p>
+              )}
+            </>
+          )}
+        </Card>
+      </div>
+    </>
   );
 }
 
@@ -448,8 +745,6 @@ function TabEmbalagem({ pedidos, onAtualizar }) {
 
   return (
     <div className="space-y-4">
-
-      {/* Header com botão Romaneio do Pedido */}
       <div className="flex items-center gap-3 flex-wrap">
         <button onClick={() => { setPedido(null); setCaixaAtiva(null); setCaixas([]); setItensCaixa([]); }}
           className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1">
@@ -459,11 +754,8 @@ function TabEmbalagem({ pedidos, onAtualizar }) {
           <h3 className="font-black text-slate-800 text-sm">{pedidoSel.lote}</h3>
           <p className="text-xs text-slate-500">{pedidoSel.cliente}</p>
         </div>
-        <button
-          onClick={handleRomaneioPedido}
-          disabled={gerandoRomaneio || caixas.length === 0}
-          className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-purple-50 text-purple-700 ring-1 ring-purple-200 hover:bg-purple-100 transition disabled:opacity-40"
-        >
+        <button onClick={handleRomaneioPedido} disabled={gerandoRomaneio || caixas.length === 0}
+          className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-purple-50 text-purple-700 ring-1 ring-purple-200 hover:bg-purple-100 transition disabled:opacity-40">
           {gerandoRomaneio
             ? <div className="h-3 w-3 border-2 border-purple-300 border-t-purple-700 rounded-full animate-spin" />
             : <FileText className="h-3 w-3" />
@@ -472,7 +764,6 @@ function TabEmbalagem({ pedidos, onAtualizar }) {
         </button>
       </div>
 
-      {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiMini label="Bipados (disponíveis)" value={fmtN(totalBipados)} color="bg-purple-50 ring-purple-200 text-purple-700" />
         <KpiMini label="Embalados" value={fmtN(totalEmbalados)}
@@ -484,13 +775,11 @@ function TabEmbalagem({ pedidos, onAtualizar }) {
           color="bg-blue-50 ring-blue-200 text-blue-700" />
       </div>
 
-      {/* Progresso */}
       <Card>
         <p className="text-xs font-semibold text-slate-500 mb-2">Progresso da embalagem</p>
         <ProgressBar value={totalEmbalados} total={totalBipados} color="#F97316" />
       </Card>
 
-      {/* Caixa ativa */}
       {caixaAtiva && caixaAtiva.status === "aberta" ? (
         <Card>
           <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
@@ -598,7 +887,6 @@ function TabEmbalagem({ pedidos, onAtualizar }) {
         </Card>
       )}
 
-      {/* Lista de todas as caixas */}
       {caixas.length > 0 && (
         <Card>
           <h3 className="font-black text-slate-800 text-sm flex items-center gap-2 mb-4">
@@ -621,7 +909,6 @@ function TabEmbalagem({ pedidos, onAtualizar }) {
                       <div className="text-xs text-slate-500">{caixa.total_itens || 0}/{CAPACIDADE} unidades</div>
                     </div>
                   </div>
-
                   <div className="flex items-center gap-2 flex-wrap justify-end">
                     <StatusBadge status={caixa.status} />
                     <button onClick={() => verDetalhesCaixa(caixa)}
