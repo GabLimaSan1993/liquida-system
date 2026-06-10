@@ -46,12 +46,12 @@ export async function importarPedidoB2B(file, userId) {
                            rows.find(r => r["RESERVA"] || r["LOTE"])?.[("LOTE")];
 
         const loteArquivo = file.name
-          .replace(/^PICKING[\s_|]+/i, "")  // remove "PICKING_", "PICKING | ", "PICKING| " etc
+          .replace(/^PICKING[\s_|]+/i, "")
           .replace(/\.xlsx?$/i, "")
-          .replace(/\s*\(\d+\)\s*$/, "")    // remove (2), (3) etc
-          .replace(/__\d+_$/g, "")          // remove __2_, __3_ etc
-          .replace(/\s+/g, "_")             // espaços viram underscore
-          .replace(/_+/g, "_")              // underscores duplos viram um
+          .replace(/\s*\(\d+\)\s*$/, "")
+          .replace(/__\d+_$/g, "")
+          .replace(/\s+/g, "_")
+          .replace(/_+/g, "_")
           .replace(/^_|_$/g, "")
           .trim();
 
@@ -99,6 +99,11 @@ export async function importarPedidoB2B(file, userId) {
         // ── Mapear itens ──────────────────────────────────────
         const itens = rows.map(r => {
           const imei = String(r["IMEI"] || r["NUM_IMEI"] || "").trim();
+
+          // Busca coluna de valor de forma robusta (ignora encoding do ã)
+          const valorKey = Object.keys(r).find(k => k.includes("loca") && k.includes("$"));
+          const valor    = valorKey && r[valorKey] ? parseFloat(r[valorKey]) : null;
+
           return {
             pedido_id:     pedido.id,
             imei,
@@ -109,8 +114,8 @@ export async function importarPedidoB2B(file, userId) {
             desc_item:     r["DESC_ITEM"]  || null,
             cod_item:      r["COD_ITEM"]   || null,
             local_estoque: localMap[imei]  || r["LOCAL"] || null,
-            aging:         r["AGING"]      ? parseInt(r["AGING"])        : null,
-            valor:         r["Alocação $"] ? parseFloat(r["Alocação $"]) : null,
+            aging:         r["AGING"]      ? parseInt(r["AGING"]) : null,
+            valor,
             status:        "pendente",
           };
         }).filter(i => i.imei && i.imei.length > 5);
