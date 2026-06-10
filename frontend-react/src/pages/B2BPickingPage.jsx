@@ -1150,7 +1150,7 @@ export default function B2BPickingPage() {
   const ABAS = [
     { key: "picking",   label: "Picking",   icon: Search    },
     { key: "embalagem", label: "Embalagem", icon: Box       },
-    { key: "pedidos",   label: "Pedidos",   icon: BarChart3 },
+    { key: "pedidos",   label: "Faturamento",   icon: BarChart3 },
   ];
 
   const pedidosAbertos    = pedidos.filter(p => p.status === "aberto").length;
