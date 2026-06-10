@@ -37,7 +37,6 @@ export async function importarPedidoB2B(file, userId) {
         // Pega headers reais da linha 2 (índice 1)
         const allRows    = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
         const rawHeaders = allRows[1] || [];
-        console.log("=== HEADERS REAIS ===", JSON.stringify(rawHeaders));
 
         // Encontra índice da coluna de valor
         const valorIdx = rawHeaders.findIndex(h => {
@@ -45,7 +44,6 @@ export async function importarPedidoB2B(file, userId) {
           const norm = String(h).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
           return norm.includes("alocacao") && String(h).includes("$");
         });
-        console.log("=== VALOR IDX ===", valorIdx, "| header:", rawHeaders[valorIdx]);
 
         const rows = XLSX.utils.sheet_to_json(ws, {
           defval: null,
@@ -116,7 +114,7 @@ export async function importarPedidoB2B(file, userId) {
           // Valor pelo índice da coluna nos dados brutos
           let valor = null;
           if (valorIdx >= 0) {
-            const rawRow = allRows[rowIdx + 2]; // +2 pois allRows[0]=grupo, allRows[1]=headers
+            const rawRow = allRows[rowIdx + 2];
             const rawVal = rawRow?.[valorIdx];
             if (rawVal != null && !isNaN(parseFloat(rawVal))) {
               valor = parseFloat(rawVal);
@@ -127,10 +125,6 @@ export async function importarPedidoB2B(file, userId) {
           if (valor === null) {
             const k = Object.keys(r).find(k => k.includes("$"));
             if (k && r[k] != null) valor = parseFloat(r[k]);
-          }
-
-          if (rowIdx === 0) {
-            console.log("=== PRIMEIRO ITEM VALOR ===", valor, "| rawRow[valorIdx]:", allRows[2]?.[valorIdx]);
           }
 
           return {
