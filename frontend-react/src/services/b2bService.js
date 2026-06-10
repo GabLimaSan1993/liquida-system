@@ -25,6 +25,11 @@ async function resolverCliente(ganhador) {
   return data2?.nome || ganhador;
 }
 
+// ── Helper para normalizar chave (remove acentos) ────────
+function normKey(k) {
+  return k.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
 // ── Parser da planilha de picking ────────────────────────
 export async function importarPedidoB2B(file, userId) {
   return new Promise((resolve, reject) => {
@@ -100,9 +105,11 @@ export async function importarPedidoB2B(file, userId) {
         const itens = rows.map(r => {
           const imei = String(r["IMEI"] || r["NUM_IMEI"] || "").trim();
 
-          // Busca coluna de valor de forma robusta (ignora encoding do ã)
-          const valorKey = Object.keys(r).find(k => k.includes("loca") && k.includes("$"));
-          const valor    = valorKey && r[valorKey] ? parseFloat(r[valorKey]) : null;
+          // Busca coluna de valor normalizando acentos
+          const valorKey = Object.keys(r).find(k =>
+            normKey(k).includes("alocacao") && k.includes("$")
+          );
+          const valor = valorKey && r[valorKey] ? parseFloat(r[valorKey]) : null;
 
           return {
             pedido_id:     pedido.id,
