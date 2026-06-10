@@ -5,7 +5,6 @@ import { supabase } from "../lib/supabase";
 async function resolverCliente(ganhador) {
   if (!ganhador) return "Cliente não identificado";
 
-  // Busca por nome_cnpj (match parcial nos primeiros 30 chars)
   const termo = ganhador.substring(0, 30).trim();
   const { data } = await supabase
     .from("b2b_clientes")
@@ -16,7 +15,6 @@ async function resolverCliente(ganhador) {
 
   if (data?.nome) return data.nome;
 
-  // Fallback: busca pelo nome curto
   const { data: data2 } = await supabase
     .from("b2b_clientes")
     .select("nome, nome_cnpj")
@@ -44,14 +42,19 @@ export async function importarPedidoB2B(file, userId) {
         if (!rows.length) throw new Error("Planilha vazia ou formato inválido.");
 
         // ── Lote: prioriza coluna, fallback para nome do arquivo ──
-        const loteColuna  = rows.find(r => r["RESERVA"] || r["LOTE"])?.[("RESERVA")] ||
-                            rows.find(r => r["RESERVA"] || r["LOTE"])?.[("LOTE")];
+        const loteColuna = rows.find(r => r["RESERVA"] || r["LOTE"])?.[("RESERVA")] ||
+                           rows.find(r => r["RESERVA"] || r["LOTE"])?.[("LOTE")];
+
         const loteArquivo = file.name
-          .replace(/^PICKING_/i, "")
+          .replace(/^PICKING[\s_|]+/i, "")  // remove "PICKING_", "PICKING | ", "PICKING| " etc
           .replace(/\.xlsx?$/i, "")
-          .replace(/_+/g, "_")
+          .replace(/\s*\(\d+\)\s*$/, "")    // remove (2), (3) etc
+          .replace(/__\d+_$/g, "")          // remove __2_, __3_ etc
+          .replace(/\s+/g, "_")             // espaços viram underscore
+          .replace(/_+/g, "_")              // underscores duplos viram um
           .replace(/^_|_$/g, "")
           .trim();
+
         const lote = loteColuna || loteArquivo || "SEM_LOTE";
 
         // ── Cliente: busca na base pelo Ganhador ──────────────
