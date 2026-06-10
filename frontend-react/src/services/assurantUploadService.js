@@ -1,5 +1,4 @@
 import Papa from "papaparse";
-import * as XLSX from "xlsx";
 import { supabase } from "../lib/supabase";
 
 function parseDate(val) {
@@ -50,7 +49,7 @@ function parseRow(row, userId, mesReferencia) {
   };
 }
 
-// ── Preview — lê só as primeiras 10 linhas ───────────────
+// ── Preview — lê só as primeiras linhas ──────────────────
 export async function previewTriagemAssurant(file) {
   return new Promise((resolve, reject) => {
     const previewRows = [];
@@ -58,9 +57,10 @@ export async function previewTriagemAssurant(file) {
     let headers = null;
 
     Papa.parse(file, {
-      header: true,
+      header:         true,
       skipEmptyLines: true,
-      encoding: "UTF-8",
+      encoding:       "ISO-8859-1",
+      delimiter:      ";",
       step: (result, parser) => {
         if (!headers) headers = Object.keys(result.data);
 
@@ -89,7 +89,7 @@ export async function previewTriagemAssurant(file) {
         }
       },
       complete: () => resolve({ totalRows, previewRows }),
-      error: (err) => reject(new Error(err.message)),
+      error:    (err) => reject(new Error(err.message)),
     });
   });
 }
@@ -134,9 +134,10 @@ export async function uploadTriagemAssurant(file, userId, mesReferencia, onProgr
     }
 
     Papa.parse(file, {
-      header: true,
+      header:         true,
       skipEmptyLines: true,
-      encoding: "UTF-8",
+      encoding:       "ISO-8859-1",
+      delimiter:      ";",
       step: (result) => {
         if (hasError) return;
 
