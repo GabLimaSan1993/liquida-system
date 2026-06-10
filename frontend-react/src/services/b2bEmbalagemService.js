@@ -138,7 +138,6 @@ export async function gerarRomaneio(caixaId, pedido) {
 
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
-  // Cabeçalho roxo
   doc.setFillColor(127, 45, 146);
   doc.rect(0, 0, 210, 32, "F");
   doc.setTextColor(255, 255, 255);
@@ -150,7 +149,6 @@ export async function gerarRomaneio(caixaId, pedido) {
   doc.text("Liquida Preço — Assurant Warehouse", 14, 21);
   doc.text(`Emitido em: ${new Date().toLocaleString("pt-BR")}`, 14, 27);
 
-  // Bloco info caixa
   doc.setTextColor(0, 0, 0);
   doc.setFillColor(245, 240, 250);
   doc.rect(0, 34, 210, 28, "F");
@@ -358,7 +356,7 @@ export async function gerarEtiqueta(caixaId, pedido, totalCaixasPedido) {
   JsBarcode(canvas, codigoBarras, {
     format:       "CODE128",
     width:        2,
-    height:       50,
+    height:       60,
     displayValue: false,
     margin:       0,
   });
@@ -374,56 +372,54 @@ export async function gerarEtiqueta(caixaId, pedido, totalCaixasPedido) {
   const W = 105;
   const H = 50;
 
-  // Fundo branco
   doc.setFillColor(255, 255, 255);
   doc.rect(0, 0, W, H, "F");
-
-  // Borda
   doc.setDrawColor(180, 180, 180);
   doc.setLineWidth(0.4);
-  doc.rect(2, 2, W - 4, H - 4, "S");
+  doc.rect(1.5, 1.5, W - 3, H - 3, "S");
 
   // Lote formatado
   const loteFormatado = pedido.lote
     .replace(/ - \d+ PRODUTOS.*$/i, "")
     .replace(/_LOTE_\d+$/i, "")
+    .replace(/_/g, " ")
     .trim();
 
   // Linha 1 — Lote
-  doc.setFontSize(8);
+  doc.setFontSize(11);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(0, 0, 0);
   doc.text(loteFormatado, W / 2, 9, { align: "center" });
 
   // Divisor
   doc.setDrawColor(180, 180, 180);
-  doc.setLineWidth(0.2);
-  doc.line(5, 12, W - 5, 12);
+  doc.setLineWidth(0.3);
+  doc.line(4, 12, W - 4, 12);
 
   // Linha 2 — CAIXA X
-  doc.setFontSize(18);
+  doc.setFontSize(22);
   doc.setFont("helvetica", "bold");
-  doc.text(`CAIXA ${caixa.numero}`, W / 2, 22, { align: "center" });
+  doc.text(`CAIXA ${caixa.numero}`, W / 2, 23, { align: "center" });
 
   // Linha 3 — Quantidade
-  doc.setFontSize(11);
+  doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
-  doc.text(`${caixa.total_itens} UNIDADES`, W / 2, 30, { align: "center" });
+  doc.text(`${caixa.total_itens} UNIDADES`, W / 2, 32, { align: "center" });
 
   // Divisor
-  doc.line(5, 33, W - 5, 33);
+  doc.line(4, 35, W - 4, 35);
 
   // Código de barras
-  const barcodeW = 80;
+  const barcodeW = 85;
   const barcodeH = 10;
   const barcodeX = (W - barcodeW) / 2;
-  doc.addImage(barcodeDataUrl, "PNG", barcodeX, 34, barcodeW, barcodeH);
+  doc.addImage(barcodeDataUrl, "PNG", barcodeX, 36, barcodeW, barcodeH);
 
   // Texto do código de barras
-  doc.setFontSize(5.5);
+  doc.setFontSize(6);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(80, 80, 80);
-  doc.text(codigoBarras, W / 2, 46, { align: "center" });
+  doc.text(codigoBarras, W / 2, 48, { align: "center" });
 
   doc.save(`etiqueta_caixa_${caixa.numero}_${pedido.lote}.pdf`);
 }
