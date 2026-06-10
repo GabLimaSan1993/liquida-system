@@ -64,7 +64,6 @@ export async function previewTriagemAssurant(file) {
       step: (result, parser) => {
         if (!headers) headers = Object.keys(result.data);
 
-        // Validar colunas na primeira linha
         if (totalRows === 0) {
           const colsObrigatorias = ["Voucher", "IMEI", "Tipo_de_Rede", "Data_Recebimento"];
           const faltando = colsObrigatorias.filter(c => !headers.includes(c));
@@ -98,13 +97,12 @@ export async function previewTriagemAssurant(file) {
 // ── Upload com streaming — processa em chunks de 500 ─────
 export async function uploadTriagemAssurant(file, userId, mesReferencia, onProgress) {
   return new Promise((resolve, reject) => {
-    let chunk   = [];
+    let chunk      = [];
     let inserted   = 0;
     let duplicates = 0;
     let total      = 0;
     let hasError   = false;
 
-    // Fila de inserções para não sobrecarregar o Supabase
     const insertQueue = [];
     let processing = false;
 
@@ -117,7 +115,7 @@ export async function uploadTriagemAssurant(file, userId, mesReferencia, onProgr
         try {
           const { data, error } = await supabase
             .from("assurant_triagem")
-            .upsert(batch, { onConflict: "voucher", ignoreDuplicates: true })
+            .upsert(batch, { onConflict: "voucher", ignoreDuplicates: false })
             .select("id");
 
           if (error) throw new Error(error.message);
@@ -152,12 +150,10 @@ export async function uploadTriagemAssurant(file, userId, mesReferencia, onProgr
         }
       },
       complete: async () => {
-        // Inserir o último chunk que sobrou
         if (chunk.length > 0) {
           insertQueue.push([...chunk]);
         }
 
-        // Aguardar fila zerar
         while (insertQueue.length > 0 || processing) {
           await new Promise(r => setTimeout(r, 200));
         }
