@@ -25,11 +25,6 @@ async function resolverCliente(ganhador) {
   return data2?.nome || ganhador;
 }
 
-// ── Helper para normalizar chave (remove acentos) ────────
-function normKey(k) {
-  return k.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-}
-
 // ── Parser da planilha de picking ────────────────────────
 export async function importarPedidoB2B(file, userId) {
   return new Promise((resolve, reject) => {
@@ -39,6 +34,19 @@ export async function importarPedidoB2B(file, userId) {
         const wb = XLSX.read(e.target.result, { type: "binary" });
         const ws = wb.Sheets[wb.SheetNames[0]];
 
+        // Pega headers reais da linha 2 (índice 1)
+        const allRows    = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+        const rawHeaders = allRows[1] || [];
+        console.log("=== HEADERS REAIS ===", JSON.stringify(rawHeaders));
+
+        // Encontra índice da coluna de valor
+        const valorIdx = rawHeaders.findIndex(h => {
+          if (!h) return false;
+          const norm = String(h).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+          return norm.includes("alocacao") && String(h).includes("$");
+        });
+        console.log("=== VALOR IDX ===", valorIdx, "| header:", rawHeaders[valorIdx]);
+
         const rows = XLSX.utils.sheet_to_json(ws, {
           defval: null,
           range:  1,
@@ -46,7 +54,7 @@ export async function importarPedidoB2B(file, userId) {
 
         if (!rows.length) throw new Error("Planilha vazia ou formato inválido.");
 
-        // ── Lote: prioriza coluna, fallback para nome do arquivo ──
+        // ── Lote ──────────────────────────────────────────────
         const loteColuna = rows.find(r => r["RESERVA"] || r["LOTE"])?.[("RESERVA")] ||
                            rows.find(r => r["RESERVA"] || r["LOTE"])?.[("LOTE")];
 
@@ -62,7 +70,7 @@ export async function importarPedidoB2B(file, userId) {
 
         const lote = loteColuna || loteArquivo || "SEM_LOTE";
 
-        // ── Cliente: busca na base pelo Ganhador ──────────────
+        // ── Cliente ───────────────────────────────────────────
         const ganhador = rows[0]["Ganhador"] || "";
         const cliente  = await resolverCliente(ganhador);
 
@@ -102,24 +110,28 @@ export async function importarPedidoB2B(file, userId) {
         });
 
         // ── Mapear itens ──────────────────────────────────────
-        const itens = rows.map(r => {
+        const itens = rows.map((r, rowIdx) => {
           const imei = String(r["IMEI"] || r["NUM_IMEI"] || "").trim();
 
-          // Busca valor com múltiplas tentativas
-          const valor = (() => {
-            // Tentativa 1: nome exato com acento
-            if (r["Alocação $"] != null) return parseFloat(r["Alocação $"]);
-            // Tentativa 2: normalizado sem acento
-            const k1 = Object.keys(r).find(k => normKey(k).includes("alocacao") && k.includes("$"));
-            if (k1 && r[k1] != null) return parseFloat(r[k1]);
-            // Tentativa 3: qualquer coluna com $
-            const k2 = Object.keys(r).find(k => k.includes("$"));
-            if (k2 && r[k2] != null) return parseFloat(r[k2]);
-            // Tentativa 4: posição fixa (3ª coluna, índice 2)
-            const val = Object.values(r)[2];
-            if (val != null && !isNaN(parseFloat(val))) return parseFloat(val);
-            return null;
-          })();
+          // Valor pelo índice da coluna nos dados brutos
+          let valor = null;
+          if (valorIdx >= 0) {
+            const rawRow = allRows[rowIdx + 2]; // +2 pois allRows[0]=grupo, allRows[1]=headers
+            const rawVal = rawRow?.[valorIdx];
+            if (rawVal != null && !isNaN(parseFloat(rawVal))) {
+              valor = parseFloat(rawVal);
+            }
+          }
+
+          // Fallback: busca pelo nome da chave
+          if (valor === null) {
+            const k = Object.keys(r).find(k => k.includes("$"));
+            if (k && r[k] != null) valor = parseFloat(r[k]);
+          }
+
+          if (rowIdx === 0) {
+            console.log("=== PRIMEIRO ITEM VALOR ===", valor, "| rawRow[valorIdx]:", allRows[2]?.[valorIdx]);
+          }
 
           return {
             pedido_id:     pedido.id,
