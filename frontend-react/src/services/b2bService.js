@@ -105,11 +105,21 @@ export async function importarPedidoB2B(file, userId) {
         const itens = rows.map(r => {
           const imei = String(r["IMEI"] || r["NUM_IMEI"] || "").trim();
 
-          // Busca coluna de valor normalizando acentos
-          const valorKey = Object.keys(r).find(k =>
-            normKey(k).includes("alocacao") && k.includes("$")
-          );
-          const valor = valorKey && r[valorKey] ? parseFloat(r[valorKey]) : null;
+          // Busca valor com múltiplas tentativas
+          const valor = (() => {
+            // Tentativa 1: nome exato com acento
+            if (r["Alocação $"] != null) return parseFloat(r["Alocação $"]);
+            // Tentativa 2: normalizado sem acento
+            const k1 = Object.keys(r).find(k => normKey(k).includes("alocacao") && k.includes("$"));
+            if (k1 && r[k1] != null) return parseFloat(r[k1]);
+            // Tentativa 3: qualquer coluna com $
+            const k2 = Object.keys(r).find(k => k.includes("$"));
+            if (k2 && r[k2] != null) return parseFloat(r[k2]);
+            // Tentativa 4: posição fixa (3ª coluna, índice 2)
+            const val = Object.values(r)[2];
+            if (val != null && !isNaN(parseFloat(val))) return parseFloat(val);
+            return null;
+          })();
 
           return {
             pedido_id:     pedido.id,
