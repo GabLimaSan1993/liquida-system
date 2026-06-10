@@ -169,7 +169,6 @@ export async function gerarRomaneio(caixaId, pedido) {
 
   let currentY = 66;
 
-  // Bloco NFs
   if (Object.keys(nfContagem).length > 0) {
     doc.setFontSize(9);
     doc.setFont("helvetica", "bold");
@@ -197,7 +196,6 @@ export async function gerarRomaneio(caixaId, pedido) {
     currentY = (doc.lastAutoTable?.finalY || currentY) + 8;
   }
 
-  // Tabela de itens — sem coluna de valor
   doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(0, 0, 0);
@@ -208,12 +206,8 @@ export async function gerarRomaneio(caixaId, pedido) {
     startY: currentY,
     head: [["#", "IMEI", "Modelo", "Grade", "SKU", "NF"]],
     body: itens.map((item, idx) => [
-      idx + 1,
-      item.imei,
-      item.modelo   || "—",
-      item.grade    || "—",
-      item.cod_item || "—",
-      item.nf       || "—",
+      idx + 1, item.imei, item.modelo || "—", item.grade || "—",
+      item.cod_item || "—", item.nf || "—",
     ]),
     styles:     { fontSize: 7.5, cellPadding: 2.5 },
     headStyles: { fillColor: [127, 45, 146], textColor: [255, 255, 255], fontStyle: "bold", fontSize: 8 },
@@ -229,7 +223,6 @@ export async function gerarRomaneio(caixaId, pedido) {
     margin: { left: 14, right: 14 },
   });
 
-  // Rodapé — só total de itens, sem valor
   const finalY = (doc.lastAutoTable?.finalY || 250) + 5;
   doc.setFillColor(245, 240, 250);
   doc.rect(14, finalY, 182, 10, "F");
@@ -241,7 +234,7 @@ export async function gerarRomaneio(caixaId, pedido) {
   doc.save(`romaneio_caixa_${caixa.numero}_${pedido.lote}.pdf`);
 }
 
-// ── Romaneio do Pedido Completo (layout foto) ────────────
+// ── Romaneio do Pedido Completo ──────────────────────────
 export async function gerarRomaneioPedido(pedido) {
   const { data: caixas } = await supabase
     .from("b2b_caixas").select("*")
@@ -282,7 +275,6 @@ export async function gerarRomaneioPedido(pedido) {
   doc.setDrawColor(0, 0, 0);
   doc.setLineWidth(0.5);
 
-  // Header — logo + título
   const headerH = 22;
   doc.rect(margL, y, col1W, headerH);
   doc.setFillColor(30, 30, 30);
@@ -359,50 +351,79 @@ export async function gerarEtiqueta(caixaId, pedido, totalCaixasPedido) {
   const { data: caixa } = await supabase
     .from("b2b_caixas").select("*").eq("id", caixaId).single();
 
-  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: [70, 100] });
+  // Gerar código de barras via JsBarcode
+  const JsBarcode = (await import("jsbarcode")).default;
+  const codigoBarras = `${pedido.lote}-CX${caixa.numero}-${caixa.total_itens}UN`;
+  const canvas = document.createElement("canvas");
+  JsBarcode(canvas, codigoBarras, {
+    format:       "CODE128",
+    width:        2,
+    height:       50,
+    displayValue: false,
+    margin:       0,
+  });
+  const barcodeDataUrl = canvas.toDataURL("image/png");
 
-  const W = 100;
-  const H = 70;
+  // 105x50mm landscape
+  const doc = new jsPDF({
+    orientation: "landscape",
+    unit:        "mm",
+    format:      [50, 105],
+  });
 
+  const W = 105;
+  const H = 50;
+
+  // Fundo branco
   doc.setFillColor(255, 255, 255);
   doc.rect(0, 0, W, H, "F");
+
+  // Borda
   doc.setDrawColor(180, 180, 180);
   doc.setLineWidth(0.4);
   doc.rect(2, 2, W - 4, H - 4, "S");
 
+  // Lote formatado
   const loteFormatado = pedido.lote
     .replace(/ - \d+ PRODUTOS.*$/i, "")
     .replace(/_LOTE_\d+$/i, "")
     .trim();
 
-  doc.setFontSize(9);
+  // Linha 1 — Lote
+  doc.setFontSize(8);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(0, 0, 0);
-  doc.text(loteFormatado, W / 2, 13, { align: "center" });
+  doc.text(loteFormatado, W / 2, 9, { align: "center" });
 
+  // Divisor
   doc.setDrawColor(180, 180, 180);
   doc.setLineWidth(0.2);
-  doc.line(5, 17, W - 5, 17);
+  doc.line(5, 12, W - 5, 12);
 
-  doc.setFontSize(20);
+  // Linha 2 — CAIXA X
+  doc.setFontSize(18);
   doc.setFont("helvetica", "bold");
-  doc.text(`CAIXA ${caixa.numero}`, W / 2, 33, { align: "center" });
+  doc.text(`CAIXA ${caixa.numero}`, W / 2, 22, { align: "center" });
 
-  doc.line(5, 38, W - 5, 38);
-
-  doc.setFontSize(13);
-  doc.setFont("helvetica", "bold");
-  doc.text(`${caixa.total_itens} UNIDADES`, W / 2, 50, { align: "center" });
-
-  doc.line(5, 55, W - 5, 55);
-
-  const dataEmb = caixa.fechado_em
-    ? new Date(caixa.fechado_em).toLocaleDateString("pt-BR")
-    : new Date().toLocaleDateString("pt-BR");
-
+  // Linha 3 — Quantidade
   doc.setFontSize(11);
+  doc.setFont("helvetica", "bold");
+  doc.text(`${caixa.total_itens} UNIDADES`, W / 2, 30, { align: "center" });
+
+  // Divisor
+  doc.line(5, 33, W - 5, 33);
+
+  // Código de barras
+  const barcodeW = 80;
+  const barcodeH = 10;
+  const barcodeX = (W - barcodeW) / 2;
+  doc.addImage(barcodeDataUrl, "PNG", barcodeX, 34, barcodeW, barcodeH);
+
+  // Texto do código de barras
+  doc.setFontSize(5.5);
   doc.setFont("helvetica", "normal");
-  doc.text(dataEmb, W / 2, 64, { align: "center" });
+  doc.setTextColor(80, 80, 80);
+  doc.text(codigoBarras, W / 2, 46, { align: "center" });
 
   doc.save(`etiqueta_caixa_${caixa.numero}_${pedido.lote}.pdf`);
 }
