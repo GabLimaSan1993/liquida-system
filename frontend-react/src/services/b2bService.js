@@ -1,6 +1,32 @@
 import * as XLSX from "xlsx";
 import { supabase } from "../lib/supabase";
 
+// ── Buscar cliente da base pelo nome do Ganhador ─────────
+async function resolverCliente(ganhador) {
+  if (!ganhador) return "Cliente não identificado";
+
+  // Busca por nome_cnpj (match parcial nos primeiros 30 chars)
+  const termo = ganhador.substring(0, 30).trim();
+  const { data } = await supabase
+    .from("b2b_clientes")
+    .select("nome, nome_cnpj")
+    .ilike("nome_cnpj", `%${termo}%`)
+    .limit(1)
+    .single();
+
+  if (data?.nome) return data.nome;
+
+  // Fallback: busca pelo nome curto
+  const { data: data2 } = await supabase
+    .from("b2b_clientes")
+    .select("nome, nome_cnpj")
+    .ilike("nome", `%${ganhador.split(" ")[0]}%`)
+    .limit(1)
+    .single();
+
+  return data2?.nome || ganhador;
+}
+
 // ── Parser da planilha de picking ────────────────────────
 export async function importarPedidoB2B(file, userId) {
   return new Promise((resolve, reject) => {
@@ -17,9 +43,22 @@ export async function importarPedidoB2B(file, userId) {
 
         if (!rows.length) throw new Error("Planilha vazia ou formato inválido.");
 
-        const lote    = rows[0]["RESERVA"] || rows[0]["LOTE"] || "SEM_LOTE";
-        const cliente = rows[0]["Ganhador"] || "Cliente não identificado";
+        // ── Lote: prioriza coluna, fallback para nome do arquivo ──
+        const loteColuna  = rows.find(r => r["RESERVA"] || r["LOTE"])?.[("RESERVA")] ||
+                            rows.find(r => r["RESERVA"] || r["LOTE"])?.[("LOTE")];
+        const loteArquivo = file.name
+          .replace(/^PICKING_/i, "")
+          .replace(/\.xlsx?$/i, "")
+          .replace(/_+/g, "_")
+          .replace(/^_|_$/g, "")
+          .trim();
+        const lote = loteColuna || loteArquivo || "SEM_LOTE";
 
+        // ── Cliente: busca na base pelo Ganhador ──────────────
+        const ganhador = rows[0]["Ganhador"] || "";
+        const cliente  = await resolverCliente(ganhador);
+
+        // ── Verificar duplicata ───────────────────────────────
         const { data: existing } = await supabase
           .from("b2b_pedidos")
           .select("id")
@@ -28,6 +67,7 @@ export async function importarPedidoB2B(file, userId) {
 
         if (existing) throw new Error(`Pedido "${lote}" já foi importado.`);
 
+        // ── Criar pedido ──────────────────────────────────────
         const { data: pedido, error: errPedido } = await supabase
           .from("b2b_pedidos")
           .insert({ lote, cliente, total_itens: rows.length, criado_por: userId })
@@ -36,7 +76,7 @@ export async function importarPedidoB2B(file, userId) {
 
         if (errPedido) throw new Error(errPedido.message);
 
-        // Buscar locais E vouchers reais da assurant_triagem pelo IMEI
+        // ── Buscar locais E vouchers reais da assurant_triagem ─
         const imeisLista = rows
           .map(r => String(r["IMEI"] || r["NUM_IMEI"] || "").trim())
           .filter(i => i.length > 5);
@@ -53,7 +93,7 @@ export async function importarPedidoB2B(file, userId) {
           if (t.imei && t.voucher) voucherMap[t.imei] = t.voucher;
         });
 
-        // Mapear itens
+        // ── Mapear itens ──────────────────────────────────────
         const itens = rows.map(r => {
           const imei = String(r["IMEI"] || r["NUM_IMEI"] || "").trim();
           return {
@@ -204,7 +244,6 @@ export async function reverterNaoLocalizado(itemId, novoLocal) {
 // ── Exportar para faturamento (com controle de delta) ────
 export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
 
-  // 1. Buscar todas as exportações deste pedido
   const { data: exportacoes } = await supabase
     .from("b2b_exportacoes")
     .select("*")
@@ -213,7 +252,6 @@ export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
 
   const ultimaExportacao = exportacoes?.[0] || null;
 
-  // 2. Buscar IDs já exportados em qualquer exportação anterior
   let idsJaExportados = new Set();
   if (exportacoes?.length > 0) {
     const { data: jaExportados } = await supabase
@@ -223,7 +261,6 @@ export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
     (jaExportados || []).forEach(e => idsJaExportados.add(e.item_id));
   }
 
-  // 3. Buscar itens bipados do pedido
   const { data: itensBipados } = await supabase
     .from("b2b_itens")
     .select("*")
@@ -235,10 +272,8 @@ export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
     throw new Error("Nenhum item bipado para exportar.");
   }
 
-  // 4. Filtrar apenas os itens novos (delta)
   const itensNovos = itensBipados.filter(i => !idsJaExportados.has(i.id));
 
-  // 5. Se não há itens novos — bloquear
   if (itensNovos.length === 0) {
     return {
       bloqueado: true,
@@ -247,14 +282,12 @@ export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
     };
   }
 
-  // 6. Buscar dados do pedido
   const { data: pedido } = await supabase
     .from("b2b_pedidos")
     .select("*")
     .eq("id", pedidoId)
     .single();
 
-  // 7. Registrar a exportação
   const { data: novaExportacao, error: errExp } = await supabase
     .from("b2b_exportacoes")
     .insert({
@@ -268,7 +301,6 @@ export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
 
   if (errExp) throw new Error(errExp.message);
 
-  // 8. Registrar quais itens foram nesta exportação
   const CHUNK = 500;
   const linksItens = itensNovos.map(i => ({
     exportacao_id: novaExportacao.id,
@@ -280,7 +312,6 @@ export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
       .insert(linksItens.slice(i, i + CHUNK));
   }
 
-  // 9. Gerar Excel com apenas os itens novos
   const numeroExportacao = (exportacoes?.length || 0) + 1;
   const rows = itensNovos.map(i => ({
     "LOTE":      pedido.lote,
