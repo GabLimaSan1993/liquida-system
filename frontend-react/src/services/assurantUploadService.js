@@ -113,12 +113,19 @@ export async function uploadTriagemAssurant(file, userId, mesReferencia, onProgr
       while (insertQueue.length > 0) {
         const batch = insertQueue.shift();
         try {
+          console.log("=== CHAMANDO RPC upsert_triagem, batch size:", batch.length);
+          console.log("=== PRIMEIRO ITEM:", JSON.stringify(batch[0]));
+
           const { error } = await supabase.rpc("upsert_triagem", {
             rows: batch,
           });
 
-          if (error) throw new Error(error.message);
+          if (error) {
+            console.error("=== ERRO RPC:", error);
+            throw new Error(error.message);
+          }
 
+          console.log("=== RPC OK");
           inserted   += batch.length;
           duplicates  = 0;
           onProgress?.({ inserted, duplicates, total });
