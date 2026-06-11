@@ -49,7 +49,7 @@ function parseRow(row, userId, mesReferencia) {
   };
 }
 
-// ── Preview — lê só as primeiras linhas ──────────────────
+// ── Preview ───────────────────────────────────────────────
 export async function previewTriagemAssurant(file) {
   return new Promise((resolve, reject) => {
     const previewRows = [];
@@ -94,7 +94,7 @@ export async function previewTriagemAssurant(file) {
   });
 }
 
-// ── Upload com streaming — processa em chunks de 500 ─────
+// ── Upload com streaming ──────────────────────────────────
 export async function uploadTriagemAssurant(file, userId, mesReferencia, onProgress) {
   return new Promise((resolve, reject) => {
     let chunk      = [];
@@ -113,15 +113,18 @@ export async function uploadTriagemAssurant(file, userId, mesReferencia, onProgr
       while (insertQueue.length > 0) {
         const batch = insertQueue.shift();
         try {
-          const { data, error } = await supabase
+          // Separar em dois passos: insert novos + update existentes
+          const { error } = await supabase
             .from("assurant_triagem")
-            .upsert(batch, { onConflict: "voucher", ignoreDuplicates: false })
-            .select("id");
+            .upsert(batch, {
+              onConflict:       "voucher",
+              ignoreDuplicates: false,
+            });
 
           if (error) throw new Error(error.message);
 
-          inserted   += data?.length || 0;
-          duplicates += batch.length - (data?.length || 0);
+          inserted   += batch.length;
+          duplicates  = 0;
           onProgress?.({ inserted, duplicates, total });
         } catch (e) {
           hasError = true;
