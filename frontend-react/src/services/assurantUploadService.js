@@ -94,7 +94,7 @@ export async function previewTriagemAssurant(file) {
   });
 }
 
-// ── Upload com streaming ──────────────────────────────────
+// ── Upload com streaming — usa RPC para garantir upsert ──
 export async function uploadTriagemAssurant(file, userId, mesReferencia, onProgress) {
   return new Promise((resolve, reject) => {
     let chunk      = [];
@@ -113,13 +113,9 @@ export async function uploadTriagemAssurant(file, userId, mesReferencia, onProgr
       while (insertQueue.length > 0) {
         const batch = insertQueue.shift();
         try {
-          // Separar em dois passos: insert novos + update existentes
-          const { error } = await supabase
-            .from("assurant_triagem")
-            .upsert(batch, {
-              onConflict:       "voucher",
-              ignoreDuplicates: false,
-            });
+          const { error } = await supabase.rpc("upsert_triagem", {
+            rows: batch,
+          });
 
           if (error) throw new Error(error.message);
 
