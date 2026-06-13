@@ -25,6 +25,11 @@ async function resolverCliente(ganhador) {
   return data2?.nome || ganhador;
 }
 
+// ── Helper para normalizar chave (remove acentos) ────────
+function normKey(k) {
+  return k.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
 // ── Parser da planilha de picking ────────────────────────
 export async function importarPedidoB2B(file, userId) {
   return new Promise((resolve, reject) => {
@@ -34,11 +39,9 @@ export async function importarPedidoB2B(file, userId) {
         const wb = XLSX.read(e.target.result, { type: "binary" });
         const ws = wb.Sheets[wb.SheetNames[0]];
 
-        // Pega headers reais da linha 2 (índice 1)
         const allRows    = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
         const rawHeaders = allRows[1] || [];
 
-        // Encontra índice da coluna de valor
         const valorIdx = rawHeaders.findIndex(h => {
           if (!h) return false;
           const norm = String(h).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -111,7 +114,6 @@ export async function importarPedidoB2B(file, userId) {
         const itens = rows.map((r, rowIdx) => {
           const imei = String(r["IMEI"] || r["NUM_IMEI"] || "").trim();
 
-          // Valor pelo índice da coluna nos dados brutos
           let valor = null;
           if (valorIdx >= 0) {
             const rawRow = allRows[rowIdx + 2];
@@ -121,7 +123,6 @@ export async function importarPedidoB2B(file, userId) {
             }
           }
 
-          // Fallback: busca pelo nome da chave
           if (valor === null) {
             const k = Object.keys(r).find(k => k.includes("$"));
             if (k && r[k] != null) valor = parseFloat(r[k]);
@@ -370,4 +371,30 @@ export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
     numeroExportacao,
     nomeArquivo,
   };
+}
+
+// ── Buscar resumo de valor por pedido ────────────────────
+export async function buscarResumoValorPedido(pedidoId) {
+  const { data } = await supabase
+    .from("b2b_itens")
+    .select("status, valor, nf")
+    .eq("pedido_id", pedidoId);
+
+  const itens = data || [];
+  const totalValor    = itens.reduce((s, i) => s + (i.valor || 0), 0);
+  const valorBipado   = itens.filter(i => i.status === "bipado").reduce((s, i) => s + (i.valor || 0), 0);
+  const valorFaturado = itens.filter(i => i.nf).reduce((s, i) => s + (i.valor || 0), 0);
+  const qtdFaturada   = itens.filter(i => i.nf).length;
+
+  return { totalValor, valorBipado, valorFaturado, qtdFaturada };
+}
+
+// ── Buscar NFs de um pedido ──────────────────────────────
+export async function listarNFsPedido(pedidoId) {
+  const { data } = await supabase
+    .from("b2b_nfs")
+    .select("*")
+    .eq("pedido_id", pedidoId)
+    .order("importado_em", { ascending: true });
+  return data || [];
 }
