@@ -12,6 +12,15 @@ function parseDate(val) {
 }
 
 function parseRow(row, userId, mesReferencia) {
+  // Log temporário para debug
+  if (!parseRow._logged) {
+    console.log("=== KEYS DO ROW:", Object.keys(row));
+    console.log("=== STATUS_ATUAL:", row["Status_atual"]);
+    console.log("=== VOUCHER:", row["Voucher"]);
+    console.log("=== ROW COMPLETO:", JSON.stringify(row));
+    parseRow._logged = true;
+  }
+
   return {
     voucher:                     row["Voucher"]                      || null,
     imei:                        String(row["IMEI"] || "")           || null,
