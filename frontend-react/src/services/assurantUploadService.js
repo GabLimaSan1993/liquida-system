@@ -12,15 +12,6 @@ function parseDate(val) {
 }
 
 function parseRow(row, userId, mesReferencia) {
-  // Log temporário para debug
-  if (!parseRow._logged) {
-    console.log("=== KEYS DO ROW:", Object.keys(row));
-    console.log("=== STATUS_ATUAL:", row["Status_atual"]);
-    console.log("=== VOUCHER:", row["Voucher"]);
-    console.log("=== ROW COMPLETO:", JSON.stringify(row));
-    parseRow._logged = true;
-  }
-
   return {
     voucher:                     row["Voucher"]                      || null,
     imei:                        String(row["IMEI"] || "")           || null,
@@ -103,9 +94,8 @@ export async function previewTriagemAssurant(file) {
   });
 }
 
-// ── Upload — lê tudo primeiro, depois processa em batches ─
+// ── Upload — lê tudo, processa em batches com log de erro ─
 export async function uploadTriagemAssurant(file, userId, mesReferencia, onProgress) {
-  // Passo 1: lê o CSV completo de uma vez
   const allRows = await new Promise((resolve, reject) => {
     Papa.parse(file, {
       header:         true,
@@ -117,17 +107,26 @@ export async function uploadTriagemAssurant(file, userId, mesReferencia, onProgr
     });
   });
 
+  console.log("=== TOTAL ROWS LIDOS:", allRows.length);
+  console.log("=== PRIMEIRO ROW RAW:", JSON.stringify(allRows[0]));
+
   const total = allRows.length;
   let inserted = 0;
 
-  // Passo 2: processa em batches de 500
-  const CHUNK = 500;
+  const CHUNK = 100;
   for (let i = 0; i < allRows.length; i += CHUNK) {
     const batch = allRows.slice(i, i + CHUNK).map(r => parseRow(r, userId, mesReferencia));
 
+    if (i === 0) {
+      console.log("=== PRIMEIRO BATCH ITEM MAPEADO:", JSON.stringify(batch[0]));
+    }
+
     const { error } = await supabase.rpc("upsert_triagem", { rows: batch });
 
-    if (error) throw new Error(error.message);
+    if (error) {
+      console.error("=== ERRO RPC batch", i, "ao", i + CHUNK, ":", JSON.stringify(error));
+      throw new Error(`Erro no batch ${i}-${i + CHUNK}: ${error.message}`);
+    }
 
     inserted += batch.length;
     onProgress?.({ inserted, duplicates: 0, total });
