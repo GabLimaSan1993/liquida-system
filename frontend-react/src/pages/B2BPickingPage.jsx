@@ -2,13 +2,15 @@ import { useState, useEffect, useRef } from "react";
 import {
   Search, CheckCircle, AlertTriangle, Download,
   Package, X, BarChart3, Clock, Box, FileText,
-  Tag, Plus, Lock, MapPin, RotateCcw,
+  Tag, Plus, Lock, MapPin, RotateCcw, TrendingUp,
+  ChevronDown, ChevronUp,
 } from "lucide-react";
 import {
   listarPedidosB2B, listarItens,
   registrarBipagem, exportarFaturamento,
   listarExportacoes, marcarNaoLocalizado,
-  reverterNaoLocalizado,
+  reverterNaoLocalizado, buscarResumoValorPedido,
+  listarNFsPedido,
 } from "../services/b2bService.js";
 import {
   buscarCaixaAberta, criarCaixa, listarCaixas,
@@ -18,7 +20,7 @@ import {
 import { useAuth } from "../AuthContext.jsx";
 
 function fmtN(v) { return (v || 0).toLocaleString("pt-BR"); }
-function fmtR(v) { return v ? `R$ ${Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "—"; }
+function fmtR(v) { return v != null ? `R$ ${Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "—"; }
 
 function Card({ children, className = "" }) {
   return (
@@ -86,18 +88,15 @@ function ModalNaoLocalizado({ item, onConfirmar, onCancelar }) {
             <p className="text-xs text-slate-500">Confirme que o aparelho não foi encontrado</p>
           </div>
         </div>
-
         <div className="bg-amber-50 ring-1 ring-amber-200 rounded-2xl p-4 mb-6 space-y-1">
           <p className="text-xs font-bold text-amber-700">Aparelho</p>
           <p className="text-sm font-semibold text-slate-800">{item.modelo}</p>
           <p className="text-xs text-slate-500 font-mono">{item.imei}</p>
           <p className="text-xs text-slate-500">Local: <span className="font-semibold font-mono">{item.local_estoque || "—"}</span></p>
         </div>
-
         <p className="text-sm text-slate-600 mb-6">
-          O aparelho será marcado como <span className="font-bold text-amber-700">Não Localizado</span> e removido da lista de pendentes. O responsável será notificado para análise.
+          O aparelho será marcado como <span className="font-bold text-amber-700">Não Localizado</span> e removido da lista de pendentes.
         </p>
-
         <div className="flex gap-3">
           <button onClick={onConfirmar}
             className="flex-1 rounded-2xl bg-amber-500 py-3 text-sm font-bold text-white hover:bg-amber-600 transition">
@@ -115,19 +114,18 @@ function ModalNaoLocalizado({ item, onConfirmar, onCancelar }) {
 
 // ── Modal reverter Não Localizado ─────────────────────────
 function ModalReverter({ item, onConfirmar, onCancelar }) {
-  const [rua,   setRua]   = useState("");
+  const [rua, setRua]     = useState("");
   const [bloco, setBloco] = useState("");
   const [andar, setAndar] = useState("");
-  const [ap,    setAp]    = useState("");
-  const [erro,  setErro]  = useState("");
+  const [ap, setAp]       = useState("");
+  const [erro, setErro]   = useState("");
 
   function handleConfirmar() {
     if (!rua.trim() || !bloco.trim() || !andar.trim() || !ap.trim()) {
       setErro("Preencha todos os campos de localização.");
       return;
     }
-    const novoLocal = `RUA ${rua.trim()}/BL${bloco.trim()}/AD${andar.trim()}/${ap.trim().toUpperCase()}`;
-    onConfirmar(novoLocal);
+    onConfirmar(`RUA ${rua.trim()}/BL${bloco.trim()}/AD${andar.trim()}/${ap.trim().toUpperCase()}`);
   }
 
   const inputCls = "w-full rounded-xl border border-[#E9D5FF] px-3 py-2.5 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7F2D92] bg-white uppercase";
@@ -144,48 +142,37 @@ function ModalReverter({ item, onConfirmar, onCancelar }) {
             <p className="text-xs text-slate-500">Informe a nova localização do aparelho</p>
           </div>
         </div>
-
         <div className="bg-slate-50 ring-1 ring-slate-200 rounded-2xl p-4 mb-5 space-y-1">
           <p className="text-xs font-bold text-slate-500">Aparelho</p>
           <p className="text-sm font-semibold text-slate-800">{item.modelo}</p>
           <p className="text-xs text-slate-500 font-mono">{item.imei}</p>
         </div>
-
         <div className="grid grid-cols-2 gap-3 mb-4">
           <div>
             <label className="block text-xs font-bold text-slate-600 mb-1">Rua *</label>
-            <input value={rua} onChange={e => setRua(e.target.value)}
-              className={inputCls} placeholder="Ex: 1" />
+            <input value={rua} onChange={e => setRua(e.target.value)} className={inputCls} placeholder="Ex: 1" />
           </div>
           <div>
             <label className="block text-xs font-bold text-slate-600 mb-1">Bloco *</label>
-            <input value={bloco} onChange={e => setBloco(e.target.value)}
-              className={inputCls} placeholder="Ex: 03" />
+            <input value={bloco} onChange={e => setBloco(e.target.value)} className={inputCls} placeholder="Ex: 03" />
           </div>
           <div>
             <label className="block text-xs font-bold text-slate-600 mb-1">Andar *</label>
-            <input value={andar} onChange={e => setAndar(e.target.value)}
-              className={inputCls} placeholder="Ex: 02" />
+            <input value={andar} onChange={e => setAndar(e.target.value)} className={inputCls} placeholder="Ex: 02" />
           </div>
           <div>
             <label className="block text-xs font-bold text-slate-600 mb-1">AP *</label>
-            <input value={ap} onChange={e => setAp(e.target.value)}
-              className={inputCls} placeholder="Ex: B03" />
+            <input value={ap} onChange={e => setAp(e.target.value)} className={inputCls} placeholder="Ex: B03" />
           </div>
         </div>
-
         {(rua || bloco || andar || ap) && (
           <div className="bg-purple-50 ring-1 ring-purple-200 rounded-xl px-4 py-2 mb-4 text-xs font-mono text-purple-700 font-bold">
             Novo local: RUA {rua || "?"}/BL{bloco || "?"}/AD{andar || "?"}/{ap?.toUpperCase() || "?"}
           </div>
         )}
-
         {erro && (
-          <div className="bg-red-50 ring-1 ring-red-200 rounded-xl px-4 py-2 mb-4 text-xs font-semibold text-red-600">
-            {erro}
-          </div>
+          <div className="bg-red-50 ring-1 ring-red-200 rounded-xl px-4 py-2 mb-4 text-xs font-semibold text-red-600">{erro}</div>
         )}
-
         <div className="flex gap-3">
           <button onClick={handleConfirmar}
             className="flex-1 rounded-2xl bg-[#7F2D92] py-3 text-sm font-bold text-white hover:bg-[#5B1E74] transition">
@@ -236,9 +223,7 @@ function TabPicking({ pedidos, onAtualizar }) {
     if (res.ok) {
       setFeedback({ tipo: "ok", msg: `✓ IMEI ${imeiInput.trim()} bipado!`, item: res.item });
       setItens(prev => prev.map(i =>
-        i.imei === imeiInput.trim()
-          ? { ...i, status: "bipado", bipado_em: new Date().toISOString() }
-          : i
+        i.imei === imeiInput.trim() ? { ...i, status: "bipado", bipado_em: new Date().toISOString() } : i
       ));
       setPedido(prev => ({ ...prev, total_bipados: (prev.total_bipados || 0) + 1 }));
       onAtualizar?.();
@@ -249,18 +234,12 @@ function TabPicking({ pedidos, onAtualizar }) {
     inputRef.current?.focus();
   }
 
-  async function handleNaoLocalizado(item) {
-    setModalNaoLoc(item);
-  }
-
   async function confirmarNaoLocalizado() {
     if (!modalNaoLoc) return;
     try {
       await marcarNaoLocalizado(modalNaoLoc.id, user.id);
       setItens(prev => prev.map(i =>
-        i.id === modalNaoLoc.id
-          ? { ...i, status: "nao_localizado", nao_localizado_em: new Date().toISOString() }
-          : i
+        i.id === modalNaoLoc.id ? { ...i, status: "nao_localizado", nao_localizado_em: new Date().toISOString() } : i
       ));
       setFeedback({ tipo: "aviso", msg: `⚠ IMEI ${modalNaoLoc.imei} marcado como Não Localizado.` });
       setTimeout(() => setFeedback(null), 3000);
@@ -277,9 +256,7 @@ function TabPicking({ pedidos, onAtualizar }) {
     try {
       await reverterNaoLocalizado(modalReverter.id, novoLocal);
       setItens(prev => prev.map(i =>
-        i.id === modalReverter.id
-          ? { ...i, status: "pendente", local_estoque: novoLocal, nao_localizado_em: null }
-          : i
+        i.id === modalReverter.id ? { ...i, status: "pendente", local_estoque: novoLocal, nao_localizado_em: null } : i
       ));
       setFeedback({ tipo: "ok", msg: `✓ IMEI ${modalReverter.imei} revertido para Pendente.` });
       setTimeout(() => setFeedback(null), 3000);
@@ -291,45 +268,27 @@ function TabPicking({ pedidos, onAtualizar }) {
     }
   }
 
-  // Extrair ruas disponíveis
   const ruasDisponiveis = [...new Set(
-    itens
-      .filter(i => i.local_estoque)
-      .map(i => {
-        const match = i.local_estoque.match(/^RUA\s+(\d+)/i);
-        return match ? `RUA ${match[1]}` : null;
-      })
+    itens.filter(i => i.local_estoque)
+      .map(i => { const m = i.local_estoque.match(/^RUA\s+(\d+)/i); return m ? `RUA ${m[1]}` : null; })
       .filter(Boolean)
-  )].sort((a, b) => {
-    const na = parseInt(a.replace("RUA ", ""));
-    const nb = parseInt(b.replace("RUA ", ""));
-    return na - nb;
-  });
+  )].sort((a, b) => parseInt(a.replace("RUA ", "")) - parseInt(b.replace("RUA ", "")));
 
   function toggleRua(rua) {
-    setRuasSel(prev =>
-      prev.includes(rua) ? prev.filter(r => r !== rua) : [...prev, rua]
-    );
+    setRuasSel(prev => prev.includes(rua) ? prev.filter(r => r !== rua) : [...prev, rua]);
   }
 
   const itensFiltrados = itens.filter(i => {
     const matchFiltro = filtro === "todos" || i.status === filtro;
-    const matchBusca  = !busca ||
-      i.imei.includes(busca) ||
-      i.modelo?.toLowerCase().includes(busca.toLowerCase()) ||
-      i.local_estoque?.toLowerCase().includes(busca.toLowerCase()) ||
-      i.voucher?.toLowerCase().includes(busca.toLowerCase());
-    const matchRua = ruasSel.length === 0 || ruasSel.some(r => {
-      const num = r.replace("RUA ", "");
-      return i.local_estoque?.match(new RegExp(`^RUA\\s+${num}\\b`, "i"));
-    });
+    const matchBusca  = !busca || i.imei.includes(busca) || i.modelo?.toLowerCase().includes(busca.toLowerCase()) || i.local_estoque?.toLowerCase().includes(busca.toLowerCase()) || i.voucher?.toLowerCase().includes(busca.toLowerCase());
+    const matchRua    = ruasSel.length === 0 || ruasSel.some(r => i.local_estoque?.match(new RegExp(`^RUA\\s+${r.replace("RUA ", "")}\\b`, "i")));
     return matchFiltro && matchBusca && matchRua;
   });
 
-  const totalBipados     = itens.filter(i => i.status === "bipado").length;
-  const totalPendente    = itens.filter(i => i.status === "pendente").length;
-  const totalNaoLoc      = itens.filter(i => i.status === "nao_localizado").length;
-  const valorTotal       = itens.filter(i => i.status === "bipado").reduce((s, i) => s + (i.valor || 0), 0);
+  const totalBipados  = itens.filter(i => i.status === "bipado").length;
+  const totalPendente = itens.filter(i => i.status === "pendente").length;
+  const totalNaoLoc   = itens.filter(i => i.status === "nao_localizado").length;
+  const valorTotal    = itens.filter(i => i.status === "bipado").reduce((s, i) => s + (i.valor || 0), 0);
 
   if (!pedidoSel) {
     return (
@@ -366,20 +325,8 @@ function TabPicking({ pedidos, onAtualizar }) {
 
   return (
     <>
-      {modalNaoLoc && (
-        <ModalNaoLocalizado
-          item={modalNaoLoc}
-          onConfirmar={confirmarNaoLocalizado}
-          onCancelar={() => { setModalNaoLoc(null); inputRef.current?.focus(); }}
-        />
-      )}
-      {modalReverter && (
-        <ModalReverter
-          item={modalReverter}
-          onConfirmar={confirmarReverter}
-          onCancelar={() => { setModalReverter(null); inputRef.current?.focus(); }}
-        />
-      )}
+      {modalNaoLoc && <ModalNaoLocalizado item={modalNaoLoc} onConfirmar={confirmarNaoLocalizado} onCancelar={() => { setModalNaoLoc(null); inputRef.current?.focus(); }} />}
+      {modalReverter && <ModalReverter item={modalReverter} onConfirmar={confirmarReverter} onCancelar={() => { setModalReverter(null); inputRef.current?.focus(); }} />}
 
       <div className="space-y-4">
         <div className="flex items-center gap-3 flex-wrap">
@@ -396,9 +343,7 @@ function TabPicking({ pedidos, onAtualizar }) {
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <KpiMini label="Total" value={fmtN(pedidoSel.total_itens)} color="bg-purple-50 ring-purple-200 text-purple-700" />
-          <KpiMini label="Bipados" value={fmtN(totalBipados)}
-            sub={`${Math.round((totalBipados / (pedidoSel.total_itens || 1)) * 100)}%`}
-            color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
+          <KpiMini label="Bipados" value={fmtN(totalBipados)} sub={`${Math.round((totalBipados / (pedidoSel.total_itens || 1)) * 100)}%`} color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
           <KpiMini label="Pendentes" value={fmtN(totalPendente)} color="bg-orange-50 ring-orange-200 text-orange-700" />
           {totalNaoLoc > 0
             ? <KpiMini label="Não Localizados" value={fmtN(totalNaoLoc)} color="bg-amber-50 ring-amber-200 text-amber-700" />
@@ -408,28 +353,19 @@ function TabPicking({ pedidos, onAtualizar }) {
 
         <Card><ProgressBar value={totalBipados} total={pedidoSel.total_itens || 0} /></Card>
 
-        {/* Filtro de ruas */}
         {ruasDisponiveis.length > 0 && (
           <Card>
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-bold text-slate-500 flex items-center gap-1">
                 <MapPin className="h-3 w-3" /> Filtrar por rua:
               </span>
-              <button
-                onClick={() => setRuasSel([])}
-                className={`text-xs px-3 py-1.5 rounded-xl font-semibold transition-all ${
-                  ruasSel.length === 0 ? "bg-[#7F2D92] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                }`}
-              >
+              <button onClick={() => setRuasSel([])}
+                className={`text-xs px-3 py-1.5 rounded-xl font-semibold transition-all ${ruasSel.length === 0 ? "bg-[#7F2D92] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
                 Todas
               </button>
               {ruasDisponiveis.map(rua => (
                 <button key={rua} onClick={() => toggleRua(rua)}
-                  className={`text-xs px-3 py-1.5 rounded-xl font-semibold transition-all ${
-                    ruasSel.includes(rua)
-                      ? "bg-[#7F2D92] text-white"
-                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                  }`}>
+                  className={`text-xs px-3 py-1.5 rounded-xl font-semibold transition-all ${ruasSel.includes(rua) ? "bg-[#7F2D92] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
                   {rua}
                 </button>
               ))}
@@ -442,14 +378,12 @@ function TabPicking({ pedidos, onAtualizar }) {
           </Card>
         )}
 
-        {/* Input de bipagem */}
         <Card>
           <h3 className="font-black text-slate-800 flex items-center gap-2 mb-4 text-sm">
             <Search className="h-4 w-4 text-[#7F2D92]" /> Bipar IMEI
           </h3>
           <form onSubmit={handleBipar} className="flex gap-3">
-            <input ref={inputRef} type="text" value={imeiInput}
-              onChange={e => setImei(e.target.value)}
+            <input ref={inputRef} type="text" value={imeiInput} onChange={e => setImei(e.target.value)}
               placeholder="Bipe ou digite o IMEI..."
               className="flex-1 rounded-xl border border-slate-200 px-4 py-3 text-sm font-mono font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7F2D92]"
               autoComplete="off" />
@@ -460,14 +394,11 @@ function TabPicking({ pedidos, onAtualizar }) {
           </form>
           {feedback && (
             <div className={`mt-3 flex items-start gap-2 text-sm rounded-xl px-4 py-3 ring-1 ${
-              feedback.tipo === "ok"     ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+              feedback.tipo === "ok" ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
               : feedback.tipo === "aviso" ? "bg-amber-50 text-amber-700 ring-amber-200"
               : "bg-red-50 text-red-700 ring-red-200"
             }`}>
-              {feedback.tipo === "ok"
-                ? <CheckCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                : <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-              }
+              {feedback.tipo === "ok" ? <CheckCircle className="h-4 w-4 shrink-0 mt-0.5" /> : <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />}
               <div>
                 <p className="font-semibold">{feedback.msg}</p>
                 {feedback.item && <p className="text-xs mt-0.5 opacity-80">{feedback.item.modelo} · {feedback.item.grade} · {feedback.item.local_estoque}</p>}
@@ -476,7 +407,6 @@ function TabPicking({ pedidos, onAtualizar }) {
           )}
         </Card>
 
-        {/* Lista de itens */}
         <Card>
           <div className="flex items-center gap-3 mb-4 flex-wrap">
             <h3 className="font-black text-slate-800 text-sm flex items-center gap-2">
@@ -484,20 +414,16 @@ function TabPicking({ pedidos, onAtualizar }) {
             </h3>
             <div className="flex gap-2 ml-auto flex-wrap">
               {[
-                { key: "todos",          label: "Todos"           },
-                { key: "pendente",       label: "Pendentes"       },
-                { key: "bipado",         label: "Bipados"         },
+                { key: "todos", label: "Todos" },
+                { key: "pendente", label: "Pendentes" },
+                { key: "bipado", label: "Bipados" },
                 { key: "nao_localizado", label: "Não Localizados" },
               ].map(f => (
                 <button key={f.key} onClick={() => setFiltro(f.key)}
-                  className={`text-xs px-3 py-1.5 rounded-xl font-semibold transition-all ${
-                    filtro === f.key ? "bg-[#7F2D92] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                  }`}>
+                  className={`text-xs px-3 py-1.5 rounded-xl font-semibold transition-all ${filtro === f.key ? "bg-[#7F2D92] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
                   {f.label}
                   {f.key === "nao_localizado" && totalNaoLoc > 0 && (
-                    <span className="ml-1.5 bg-amber-400 text-white rounded-full px-1.5 py-0.5 text-xs">
-                      {totalNaoLoc}
-                    </span>
+                    <span className="ml-1.5 bg-amber-400 text-white rounded-full px-1.5 py-0.5 text-xs">{totalNaoLoc}</span>
                   )}
                 </button>
               ))}
@@ -543,18 +469,14 @@ function TabPicking({ pedidos, onAtualizar }) {
                         <td className="px-3 py-2 text-center"><StatusBadge status={item.status} /></td>
                         <td className="px-3 py-2 text-center">
                           {item.status === "pendente" && (
-                            <button
-                              onClick={() => handleNaoLocalizado(item)}
-                              className="text-xs font-semibold px-2 py-1 rounded-lg bg-amber-50 text-amber-700 ring-1 ring-amber-200 hover:bg-amber-100 transition whitespace-nowrap"
-                            >
+                            <button onClick={() => setModalNaoLoc(item)}
+                              className="text-xs font-semibold px-2 py-1 rounded-lg bg-amber-50 text-amber-700 ring-1 ring-amber-200 hover:bg-amber-100 transition whitespace-nowrap">
                               Não localizado
                             </button>
                           )}
                           {item.status === "nao_localizado" && (
-                            <button
-                              onClick={() => setModalReverter(item)}
-                              className="text-xs font-semibold px-2 py-1 rounded-lg bg-purple-50 text-purple-700 ring-1 ring-purple-200 hover:bg-purple-100 transition flex items-center gap-1 mx-auto"
-                            >
+                            <button onClick={() => setModalReverter(item)}
+                              className="text-xs font-semibold px-2 py-1 rounded-lg bg-purple-50 text-purple-700 ring-1 ring-purple-200 hover:bg-purple-100 transition flex items-center gap-1 mx-auto">
                               <RotateCcw className="h-3 w-3" /> Reverter
                             </button>
                           )}
@@ -565,9 +487,7 @@ function TabPicking({ pedidos, onAtualizar }) {
                 </table>
               </div>
               {itensFiltrados.length > 200 && (
-                <p className="text-xs text-center text-slate-400 mt-2">
-                  Mostrando 200 de {fmtN(itensFiltrados.length)} itens.
-                </p>
+                <p className="text-xs text-center text-slate-400 mt-2">Mostrando 200 de {fmtN(itensFiltrados.length)} itens.</p>
               )}
               {itensFiltrados.length === 0 && (
                 <p className="text-center text-slate-400 text-sm py-8">Nenhum item encontrado.</p>
@@ -601,10 +521,7 @@ function TabEmbalagem({ pedidos, onAtualizar }) {
 
   useEffect(() => { if (pedidoSel) carregarCaixas(); }, [pedidoSel]);
   useEffect(() => {
-    if (caixaAtiva) {
-      carregarItensCaixa();
-      setTimeout(() => inputRef.current?.focus(), 100);
-    }
+    if (caixaAtiva) { carregarItensCaixa(); setTimeout(() => inputRef.current?.focus(), 100); }
   }, [caixaAtiva]);
 
   async function carregarCaixas() {
@@ -626,14 +543,9 @@ function TabEmbalagem({ pedidos, onAtualizar }) {
     setLoading(true);
     try {
       const nova = await criarCaixa(pedidoSel.id, user.id);
-      setCaixaAtiva(nova);
-      setCaixas(prev => [...prev, nova]);
-      setItensCaixa([]);
-    } catch (e) {
-      setFeedback({ tipo: "erro", msg: e.message });
-    } finally {
-      setLoading(false);
-    }
+      setCaixaAtiva(nova); setCaixas(prev => [...prev, nova]); setItensCaixa([]);
+    } catch (e) { setFeedback({ tipo: "erro", msg: e.message }); }
+    finally { setLoading(false); }
   }
 
   async function handleFecharCaixa() {
@@ -641,16 +553,10 @@ function TabEmbalagem({ pedidos, onAtualizar }) {
     setLoading(true);
     try {
       await fecharCaixa(caixaAtiva.id, user.id);
-      setCaixas(prev => prev.map(c =>
-        c.id === caixaAtiva.id ? { ...c, status: "fechada", fechado_em: new Date().toISOString() } : c
-      ));
-      setCaixaAtiva(null);
-      setItensCaixa([]);
-    } catch (e) {
-      setFeedback({ tipo: "erro", msg: e.message });
-    } finally {
-      setLoading(false);
-    }
+      setCaixas(prev => prev.map(c => c.id === caixaAtiva.id ? { ...c, status: "fechada", fechado_em: new Date().toISOString() } : c));
+      setCaixaAtiva(null); setItensCaixa([]);
+    } catch (e) { setFeedback({ tipo: "erro", msg: e.message }); }
+    finally { setLoading(false); }
   }
 
   async function handleBipar(e) {
@@ -659,54 +565,40 @@ function TabEmbalagem({ pedidos, onAtualizar }) {
     const res = await embalarImei(imeiInput.trim(), pedidoSel.id, caixaAtiva.id, user.id);
     setImei("");
     if (res.ok) {
-      const novoItem = { ...res.item, caixa_id: caixaAtiva.id, embalado_em: new Date().toISOString() };
-      setItensCaixa(prev => [...prev, novoItem]);
+      setItensCaixa(prev => [...prev, { ...res.item, caixa_id: caixaAtiva.id, embalado_em: new Date().toISOString() }]);
       setCaixaAtiva(prev => ({ ...prev, total_itens: res.totalCaixa }));
-      setCaixas(prev => prev.map(c =>
-        c.id === caixaAtiva.id ? { ...c, total_itens: res.totalCaixa } : c
-      ));
+      setCaixas(prev => prev.map(c => c.id === caixaAtiva.id ? { ...c, total_itens: res.totalCaixa } : c));
       if (res.caixaFechou) {
-        setFeedback({ tipo: "fechou", msg: `✓ Caixa ${caixaAtiva.numero} completa com ${CAPACIDADE} unidades! Fechada automaticamente.` });
+        setFeedback({ tipo: "fechou", msg: `✓ Caixa ${caixaAtiva.numero} completa! Fechada automaticamente.` });
         setCaixaAtiva(prev => ({ ...prev, status: "fechada" }));
-        setCaixas(prev => prev.map(c =>
-          c.id === caixaAtiva.id ? { ...c, status: "fechada", total_itens: CAPACIDADE } : c
-        ));
+        setCaixas(prev => prev.map(c => c.id === caixaAtiva.id ? { ...c, status: "fechada", total_itens: CAPACIDADE } : c));
       } else {
         setFeedback({ tipo: "ok", msg: `✓ ${imeiInput.trim()} embalado — Caixa ${caixaAtiva.numero}: ${res.totalCaixa}/${CAPACIDADE}` });
       }
-    } else {
-      setFeedback({ tipo: "erro", msg: res.erro });
-    }
+    } else { setFeedback({ tipo: "erro", msg: res.erro }); }
     setTimeout(() => setFeedback(null), 3000);
     inputRef.current?.focus();
   }
 
   async function handleRomaneio(caixa) {
     setGerando(caixa.id + "_rom");
-    try { await gerarRomaneio(caixa.id, pedidoSel); }
-    catch (e) { alert("Erro ao gerar romaneio: " + e.message); }
-    finally { setGerando(null); }
+    try { await gerarRomaneio(caixa.id, pedidoSel); } catch (e) { alert("Erro: " + e.message); } finally { setGerando(null); }
   }
 
   async function handleEtiqueta(caixa) {
     setGerando(caixa.id + "_etq");
-    try { await gerarEtiqueta(caixa.id, pedidoSel, caixas.length); }
-    catch (e) { alert("Erro ao gerar etiqueta: " + e.message); }
-    finally { setGerando(null); }
+    try { await gerarEtiqueta(caixa.id, pedidoSel, caixas.length); } catch (e) { alert("Erro: " + e.message); } finally { setGerando(null); }
   }
 
   async function handleRomaneioPedido() {
     setGerandoRomaneio(true);
-    try { await gerarRomaneioPedido(pedidoSel); }
-    catch (e) { alert("Erro ao gerar romaneio: " + e.message); }
-    finally { setGerandoRomaneio(false); }
+    try { await gerarRomaneioPedido(pedidoSel); } catch (e) { alert("Erro: " + e.message); } finally { setGerandoRomaneio(false); }
   }
 
   async function verDetalhesCaixa(caixa) {
     if (caixaDetalhes?.id === caixa.id) { setCaixaDetalhes(null); return; }
     setCaixaDetalhes(caixa);
-    const data = await listarItensCaixa(caixa.id);
-    setItensCaixaDet(data);
+    setItensCaixaDet(await listarItensCaixa(caixa.id));
   }
 
   const totalEmbalados = caixas.reduce((s, c) => s + (c.total_itens || 0), 0);
@@ -756,23 +648,16 @@ function TabEmbalagem({ pedidos, onAtualizar }) {
         </div>
         <button onClick={handleRomaneioPedido} disabled={gerandoRomaneio || caixas.length === 0}
           className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-purple-50 text-purple-700 ring-1 ring-purple-200 hover:bg-purple-100 transition disabled:opacity-40">
-          {gerandoRomaneio
-            ? <div className="h-3 w-3 border-2 border-purple-300 border-t-purple-700 rounded-full animate-spin" />
-            : <FileText className="h-3 w-3" />
-          }
+          {gerandoRomaneio ? <div className="h-3 w-3 border-2 border-purple-300 border-t-purple-700 rounded-full animate-spin" /> : <FileText className="h-3 w-3" />}
           Romaneio do Pedido
         </button>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiMini label="Bipados (disponíveis)" value={fmtN(totalBipados)} color="bg-purple-50 ring-purple-200 text-purple-700" />
-        <KpiMini label="Embalados" value={fmtN(totalEmbalados)}
-          sub={`${Math.round((totalEmbalados / (totalBipados || 1)) * 100)}%`}
-          color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
+        <KpiMini label="Embalados" value={fmtN(totalEmbalados)} sub={`${Math.round((totalEmbalados / (totalBipados || 1)) * 100)}%`} color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
         <KpiMini label="A embalar" value={fmtN(totalBipados - totalEmbalados)} color="bg-orange-50 ring-orange-200 text-orange-700" />
-        <KpiMini label="Caixas" value={fmtN(caixas.length)}
-          sub={`${caixas.filter(c => c.status === "fechada").length} fechadas`}
-          color="bg-blue-50 ring-blue-200 text-blue-700" />
+        <KpiMini label="Caixas" value={fmtN(caixas.length)} sub={`${caixas.filter(c => c.status === "fechada").length} fechadas`} color="bg-blue-50 ring-blue-200 text-blue-700" />
       </div>
 
       <Card>
@@ -800,20 +685,14 @@ function TabEmbalagem({ pedidos, onAtualizar }) {
               </button>
             </div>
           </div>
-
           <div className="mb-4">
             <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
               <div className="h-full rounded-full transition-all duration-300"
-                style={{
-                  width: `${Math.round(((caixaAtiva.total_itens || 0) / CAPACIDADE) * 100)}%`,
-                  background: (caixaAtiva.total_itens || 0) >= CAPACIDADE ? "#1D9E75" : "#7F2D92",
-                }} />
+                style={{ width: `${Math.round(((caixaAtiva.total_itens || 0) / CAPACIDADE) * 100)}%`, background: (caixaAtiva.total_itens || 0) >= CAPACIDADE ? "#1D9E75" : "#7F2D92" }} />
             </div>
           </div>
-
           <form onSubmit={handleBipar} className="flex gap-3">
-            <input ref={inputRef} type="text" value={imeiInput}
-              onChange={e => setImei(e.target.value)}
+            <input ref={inputRef} type="text" value={imeiInput} onChange={e => setImei(e.target.value)}
               placeholder="Bipe o IMEI para embalar..."
               className="flex-1 rounded-xl border border-slate-200 px-4 py-3 text-sm font-mono font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7F2D92]"
               autoComplete="off" />
@@ -822,43 +701,30 @@ function TabEmbalagem({ pedidos, onAtualizar }) {
               <CheckCircle className="h-4 w-4" /> Confirmar
             </button>
           </form>
-
           {feedback && (
-            <div className={`mt-3 flex items-start gap-2 text-sm rounded-xl px-4 py-3 ring-1 ${
-              feedback.tipo === "ok" || feedback.tipo === "fechou"
-                ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
-                : "bg-red-50 text-red-700 ring-red-200"
-            }`}>
-              {feedback.tipo !== "erro"
-                ? <CheckCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                : <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-              }
+            <div className={`mt-3 flex items-start gap-2 text-sm rounded-xl px-4 py-3 ring-1 ${feedback.tipo === "ok" || feedback.tipo === "fechou" ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-red-50 text-red-700 ring-red-200"}`}>
+              {feedback.tipo !== "erro" ? <CheckCircle className="h-4 w-4 shrink-0 mt-0.5" /> : <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />}
               <p className="font-semibold">{feedback.msg}</p>
             </div>
           )}
-
           {itensCaixa.length > 0 && (
             <div className="mt-4 overflow-x-auto">
               <p className="text-xs font-bold text-slate-500 mb-2">Itens nesta caixa ({itensCaixa.length})</p>
               <table className="min-w-full text-xs">
-                <thead>
-                  <tr className="bg-slate-50">
-                    <th className="px-3 py-2 text-left font-bold text-slate-500">#</th>
-                    <th className="px-3 py-2 text-left font-bold text-slate-500">IMEI</th>
-                    <th className="px-3 py-2 text-left font-bold text-slate-500">Modelo</th>
-                    <th className="px-3 py-2 text-left font-bold text-slate-500">Grade</th>
-                    <th className="px-3 py-2 text-left font-bold text-slate-500">SKU</th>
-                  </tr>
-                </thead>
+                <thead><tr className="bg-slate-50">
+                  <th className="px-3 py-2 text-left font-bold text-slate-500">#</th>
+                  <th className="px-3 py-2 text-left font-bold text-slate-500">IMEI</th>
+                  <th className="px-3 py-2 text-left font-bold text-slate-500">Modelo</th>
+                  <th className="px-3 py-2 text-left font-bold text-slate-500">Grade</th>
+                  <th className="px-3 py-2 text-left font-bold text-slate-500">SKU</th>
+                </tr></thead>
                 <tbody className="divide-y divide-slate-100">
                   {itensCaixa.map((item, idx) => (
                     <tr key={item.id} className="hover:bg-slate-50">
                       <td className="px-3 py-2 text-slate-400 font-semibold">{idx + 1}</td>
                       <td className="px-3 py-2 font-mono font-semibold text-slate-800">{item.imei}</td>
                       <td className="px-3 py-2 text-slate-600 max-w-[160px] truncate">{item.modelo}</td>
-                      <td className="px-3 py-2">
-                        <span className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded-lg font-semibold">{item.grade}</span>
-                      </td>
+                      <td className="px-3 py-2"><span className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded-lg font-semibold">{item.grade}</span></td>
                       <td className="px-3 py-2 text-slate-500 font-mono">{item.cod_item || "—"}</td>
                     </tr>
                   ))}
@@ -873,15 +739,12 @@ function TabEmbalagem({ pedidos, onAtualizar }) {
             <div>
               <p className="font-bold text-slate-700 text-sm">Nenhuma caixa aberta</p>
               <p className="text-xs text-slate-400 mt-0.5">
-                {caixas.filter(c => c.status === "fechada").length > 0
-                  ? "Todas as caixas foram fechadas. Abra uma nova para continuar."
-                  : "Abra a primeira caixa para iniciar a embalagem."}
+                {caixas.filter(c => c.status === "fechada").length > 0 ? "Todas as caixas foram fechadas. Abra uma nova para continuar." : "Abra a primeira caixa para iniciar a embalagem."}
               </p>
             </div>
             <button onClick={handleNovaCaixa} disabled={loading}
               className="flex items-center gap-2 bg-[#7F2D92] text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-[#5B1E74] transition disabled:opacity-50">
-              <Plus className="h-4 w-4" />
-              {loading ? "Criando..." : "Nova caixa"}
+              <Plus className="h-4 w-4" /> {loading ? "Criando..." : "Nova caixa"}
             </button>
           </div>
         </Card>
@@ -895,13 +758,9 @@ function TabEmbalagem({ pedidos, onAtualizar }) {
           <div className="space-y-3">
             {caixas.map(caixa => (
               <div key={caixa.id}>
-                <div className={`flex items-center justify-between gap-3 p-3 rounded-xl ring-1 ${
-                  caixa.status === "aberta" ? "bg-purple-50 ring-purple-200" : "bg-slate-50 ring-slate-200"
-                }`}>
+                <div className={`flex items-center justify-between gap-3 p-3 rounded-xl ring-1 ${caixa.status === "aberta" ? "bg-purple-50 ring-purple-200" : "bg-slate-50 ring-slate-200"}`}>
                   <div className="flex items-center gap-3">
-                    <div className={`h-8 w-8 rounded-xl flex items-center justify-center font-black text-sm shrink-0 ${
-                      caixa.status === "aberta" ? "bg-[#7F2D92] text-white" : "bg-slate-300 text-white"
-                    }`}>
+                    <div className={`h-8 w-8 rounded-xl flex items-center justify-center font-black text-sm shrink-0 ${caixa.status === "aberta" ? "bg-[#7F2D92] text-white" : "bg-slate-300 text-white"}`}>
                       {caixa.numero}
                     </div>
                     <div>
@@ -915,49 +774,36 @@ function TabEmbalagem({ pedidos, onAtualizar }) {
                       className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50 transition">
                       {caixaDetalhes?.id === caixa.id ? "Ocultar" : "Ver itens"}
                     </button>
-                    <button onClick={() => handleRomaneio(caixa)}
-                      disabled={gerando === caixa.id + "_rom" || !caixa.total_itens}
+                    <button onClick={() => handleRomaneio(caixa)} disabled={gerando === caixa.id + "_rom" || !caixa.total_itens}
                       className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-purple-50 text-purple-700 ring-1 ring-purple-200 hover:bg-purple-100 transition disabled:opacity-40">
-                      {gerando === caixa.id + "_rom"
-                        ? <div className="h-3 w-3 border-2 border-purple-300 border-t-purple-700 rounded-full animate-spin" />
-                        : <FileText className="h-3 w-3" />
-                      }
+                      {gerando === caixa.id + "_rom" ? <div className="h-3 w-3 border-2 border-purple-300 border-t-purple-700 rounded-full animate-spin" /> : <FileText className="h-3 w-3" />}
                       Romaneio
                     </button>
-                    <button onClick={() => handleEtiqueta(caixa)}
-                      disabled={gerando === caixa.id + "_etq" || !caixa.total_itens}
+                    <button onClick={() => handleEtiqueta(caixa)} disabled={gerando === caixa.id + "_etq" || !caixa.total_itens}
                       className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-orange-50 text-orange-700 ring-1 ring-orange-200 hover:bg-orange-100 transition disabled:opacity-40">
-                      {gerando === caixa.id + "_etq"
-                        ? <div className="h-3 w-3 border-2 border-orange-300 border-t-orange-700 rounded-full animate-spin" />
-                        : <Tag className="h-3 w-3" />
-                      }
+                      {gerando === caixa.id + "_etq" ? <div className="h-3 w-3 border-2 border-orange-300 border-t-orange-700 rounded-full animate-spin" /> : <Tag className="h-3 w-3" />}
                       Etiqueta
                     </button>
                   </div>
                 </div>
-
                 {caixaDetalhes?.id === caixa.id && (
                   <div className="mt-2 overflow-x-auto rounded-xl border border-slate-100">
                     <table className="min-w-full text-xs">
-                      <thead>
-                        <tr className="bg-slate-50">
-                          <th className="px-3 py-2 text-left font-bold text-slate-500">#</th>
-                          <th className="px-3 py-2 text-left font-bold text-slate-500">IMEI</th>
-                          <th className="px-3 py-2 text-left font-bold text-slate-500">Modelo</th>
-                          <th className="px-3 py-2 text-left font-bold text-slate-500">Grade</th>
-                          <th className="px-3 py-2 text-left font-bold text-slate-500">SKU</th>
-                          <th className="px-3 py-2 text-right font-bold text-slate-500">Valor</th>
-                        </tr>
-                      </thead>
+                      <thead><tr className="bg-slate-50">
+                        <th className="px-3 py-2 text-left font-bold text-slate-500">#</th>
+                        <th className="px-3 py-2 text-left font-bold text-slate-500">IMEI</th>
+                        <th className="px-3 py-2 text-left font-bold text-slate-500">Modelo</th>
+                        <th className="px-3 py-2 text-left font-bold text-slate-500">Grade</th>
+                        <th className="px-3 py-2 text-left font-bold text-slate-500">SKU</th>
+                        <th className="px-3 py-2 text-right font-bold text-slate-500">Valor</th>
+                      </tr></thead>
                       <tbody className="divide-y divide-slate-100">
                         {itensCaixaDet.map((item, idx) => (
                           <tr key={item.id} className="hover:bg-slate-50">
                             <td className="px-3 py-2 text-slate-400">{idx + 1}</td>
                             <td className="px-3 py-2 font-mono font-semibold text-slate-800">{item.imei}</td>
                             <td className="px-3 py-2 text-slate-600 max-w-[160px] truncate">{item.modelo}</td>
-                            <td className="px-3 py-2">
-                              <span className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded-lg font-semibold">{item.grade}</span>
-                            </td>
+                            <td className="px-3 py-2"><span className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded-lg font-semibold">{item.grade}</span></td>
                             <td className="px-3 py-2 text-slate-500 font-mono">{item.cod_item || "—"}</td>
                             <td className="px-3 py-2 text-right font-semibold text-slate-700">{fmtR(item.valor)}</td>
                           </tr>
@@ -976,15 +822,33 @@ function TabEmbalagem({ pedidos, onAtualizar }) {
 }
 
 // ══════════════════════════════════════════════════════════
-// ABA PEDIDOS
+// ABA FATURAMENTO (antiga TabPedidos) — novo layout
 // ══════════════════════════════════════════════════════════
 function TabPedidos({ pedidos, onAtualizar }) {
   const { user, profile }             = useAuth();
   const [exportando, setExportando]   = useState(null);
   const [feedbackExp, setFeedbackExp] = useState({});
-  const [historicoAberto, setHistoricoAberto] = useState(null);
-  const [historico, setHistorico]     = useState([]);
-  const [loadingHistorico, setLoadingHistorico] = useState(false);
+  const [resumos, setResumos]         = useState({});
+  const [nfs, setNfs]                 = useState({});
+  const [painelAberto, setPainelAberto] = useState({});
+  const [loadingResumo, setLoadingResumo] = useState({});
+
+  useEffect(() => {
+    // Carrega resumos de valor para todos os pedidos
+    pedidos.forEach(p => carregarResumo(p.id));
+  }, [pedidos]);
+
+  async function carregarResumo(pedidoId) {
+    if (resumos[pedidoId]) return;
+    setLoadingResumo(prev => ({ ...prev, [pedidoId]: true }));
+    const [resumo, nfsPedido] = await Promise.all([
+      buscarResumoValorPedido(pedidoId),
+      listarNFsPedido(pedidoId),
+    ]);
+    setResumos(prev => ({ ...prev, [pedidoId]: resumo }));
+    setNfs(prev => ({ ...prev, [pedidoId]: nfsPedido }));
+    setLoadingResumo(prev => ({ ...prev, [pedidoId]: false }));
+  }
 
   async function handleExportar(pedido) {
     setExportando(pedido.id);
@@ -999,6 +863,9 @@ function TabPedidos({ pedidos, onAtualizar }) {
           ...prev,
           [pedido.id]: { tipo: "ok", msg: `✓ Exportação v${res.numeroExportacao} — ${fmtN(res.total)} itens — ${res.nomeArquivo}` },
         }));
+        // Recarrega resumo após exportação
+        setResumos(prev => ({ ...prev, [pedido.id]: null }));
+        carregarResumo(pedido.id);
         onAtualizar?.();
       }
     } catch (e) {
@@ -1008,24 +875,68 @@ function TabPedidos({ pedidos, onAtualizar }) {
     }
   }
 
-  async function verHistorico(pedidoId) {
-    if (historicoAberto === pedidoId) { setHistoricoAberto(null); return; }
-    setHistoricoAberto(pedidoId);
-    setLoadingHistorico(true);
-    const data = await listarExportacoes(pedidoId);
-    setHistorico(data);
-    setLoadingHistorico(false);
+  function togglePainel(pedidoId) {
+    setPainelAberto(prev => ({ ...prev, [pedidoId]: !prev[pedidoId] }));
   }
+
+  // KPIs globais
+  const totalValorGlobal    = Object.values(resumos).reduce((s, r) => s + (r?.totalValor || 0), 0);
+  const totalFaturadoGlobal = Object.values(resumos).reduce((s, r) => s + (r?.valorFaturado || 0), 0);
+  const totalAguardando     = totalValorGlobal - totalFaturadoGlobal;
+  const pctFaturado         = totalValorGlobal > 0 ? Math.round((totalFaturadoGlobal / totalValorGlobal) * 100) : 0;
+
+  // Status do pedido baseado em exportações e NFs
+  function getStatusFat(p, resumo, nfsPedido) {
+    const temNF    = nfsPedido?.length > 0;
+    const bipados  = p.total_bipados || 0;
+    const total    = p.total_itens || 0;
+    if (temNF) return "faturado";
+    if (bipados >= total && total > 0) return "em_faturamento";
+    if (bipados > 0) return "em_separacao";
+    return "ag_separacao";
+  }
+
+  const STATUS_FAT = {
+    faturado:       { label: "Faturado",        cls: "bg-emerald-100 text-emerald-700 ring-emerald-200" },
+    em_faturamento: { label: "Em Faturamento",  cls: "bg-purple-100 text-purple-700 ring-purple-200"   },
+    em_separacao:   { label: "Em Separação",    cls: "bg-yellow-100 text-yellow-700 ring-yellow-200"   },
+    ag_separacao:   { label: "Ag. Separação",   cls: "bg-slate-100 text-slate-600 ring-slate-200"      },
+  };
 
   return (
     <div className="space-y-4">
+
+      {/* Header */}
       <div className="flex items-center justify-between">
         <h3 className="font-black text-slate-800 flex items-center gap-2 text-sm">
-          <BarChart3 className="h-4 w-4 text-[#7F2D92]" /> Todos os Pedidos B2B
+          <BarChart3 className="h-4 w-4 text-[#7F2D92]" /> Faturamento B2B
         </h3>
         <button onClick={onAtualizar} className="text-xs text-slate-500 hover:text-purple-700 font-semibold">↻ Atualizar</button>
       </div>
 
+      {/* KPIs globais */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <KpiMini
+          label="Aguardando faturamento"
+          value={fmtR(totalAguardando)}
+          sub={`${fmtN(pedidos.filter(p => (p.total_bipados || 0) < p.total_itens).length)} pedidos`}
+          color="bg-orange-50 ring-orange-200 text-orange-700"
+        />
+        <KpiMini
+          label="Faturado"
+          value={fmtR(totalFaturadoGlobal)}
+          sub={`${fmtN(Object.values(resumos).reduce((s, r) => s + (r?.qtdFaturada || 0), 0))} itens`}
+          color="bg-emerald-50 ring-emerald-200 text-emerald-700"
+        />
+        <KpiMini
+          label="% Faturado"
+          value={`${pctFaturado}%`}
+          sub="do valor total"
+          color="bg-purple-50 ring-purple-200 text-purple-700"
+        />
+      </div>
+
+      {/* Lista de pedidos */}
       {pedidos.length === 0 ? (
         <div className="text-center py-12 text-slate-400">
           <Package className="h-8 w-8 mx-auto mb-2 opacity-30" />
@@ -1034,94 +945,120 @@ function TabPedidos({ pedidos, onAtualizar }) {
       ) : (
         <div className="space-y-3">
           {pedidos.map(p => {
-            const fb = feedbackExp[p.id];
+            const resumo    = resumos[p.id];
+            const nfsPedido = nfs[p.id] || [];
+            const loading   = loadingResumo[p.id];
+            const fb        = feedbackExp[p.id];
+            const statusFat = getStatusFat(p, resumo, nfsPedido);
+            const cfgStatus = STATUS_FAT[statusFat];
+
+            const valorFaturado   = resumo?.valorFaturado || 0;
+            const valorAguardando = (resumo?.totalValor || 0) - valorFaturado;
+            const qtdFaturada     = resumo?.qtdFaturada || 0;
+            const qtdAguardando   = (p.total_bipados || 0) - qtdFaturada;
+
+            const borderColor = statusFat === "faturado" ? "ring-emerald-200"
+              : statusFat === "em_faturamento" ? "ring-purple-200"
+              : statusFat === "em_separacao"   ? "ring-yellow-200"
+              : "ring-slate-200";
+
             return (
-              <Card key={p.id}>
-                <div className="flex items-start justify-between gap-3 mb-3">
-                  <div>
-                    <div className="font-bold text-slate-800 text-sm">{p.lote}</div>
+              <Card key={p.id} className={`ring-1 ${borderColor}`}>
+                {/* Cabeçalho do card */}
+                <div className="flex items-start justify-between gap-3 mb-4 flex-wrap">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-slate-800 text-sm truncate">{p.lote}</div>
                     <div className="text-xs text-slate-500 mt-0.5">{p.cliente}</div>
                     <div className="text-xs text-slate-400 mt-0.5">
-                      Importado em {new Date(p.criado_em).toLocaleDateString("pt-BR")}
+                      {p.total_itens} produtos · Importado em {new Date(p.criado_em).toLocaleDateString("pt-BR")}
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-                    <StatusBadge status={p.status} />
-                    <button onClick={() => verHistorico(p.id)}
-                      className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-slate-50 text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100 transition">
-                      <Clock className="h-3 w-3" /> Histórico
-                    </button>
-                    <button onClick={() => handleExportar(p)}
-                      disabled={exportando === p.id || !p.total_bipados}
-                      className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100 transition disabled:opacity-40">
-                      {exportando === p.id
-                        ? <div className="h-3 w-3 border-2 border-emerald-300 border-t-emerald-700 rounded-full animate-spin" />
-                        : <Download className="h-3 w-3" />
-                      }
-                      Exportar
-                    </button>
+                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-lg ring-1 ${cfgStatus.cls}`}>
+                      {cfgStatus.label}
+                    </span>
+                    {resumo && (
+                      <span className="text-sm font-black text-slate-800">{fmtR(resumo.totalValor)}</span>
+                    )}
                   </div>
                 </div>
 
-                <ProgressBar value={p.total_bipados || 0} total={p.total_itens || 0} />
+                {/* Progresso picking */}
+                <div className="mb-4">
+                  <p className="text-xs font-semibold text-slate-400 mb-1">Separação</p>
+                  <ProgressBar value={p.total_bipados || 0} total={p.total_itens || 0} />
+                </div>
 
-                <div className="grid grid-cols-3 gap-3 mt-3">
-                  <div className="bg-slate-50 rounded-xl p-3 text-center">
-                    <div className="text-lg font-black text-slate-800">{fmtN(p.total_itens)}</div>
-                    <div className="text-xs text-slate-400">Total</div>
+                {/* Breakdown faturado vs aguardando */}
+                {loading ? (
+                  <div className="flex items-center justify-center h-12">
+                    <div className="h-4 w-4 border-2 border-purple-200 border-t-[#7F2D92] rounded-full animate-spin" />
                   </div>
-                  <div className="bg-emerald-50 rounded-xl p-3 text-center">
-                    <div className="text-lg font-black text-emerald-700">{fmtN(p.total_bipados || 0)}</div>
-                    <div className="text-xs text-emerald-500">Bipados</div>
-                  </div>
-                  <div className="bg-orange-50 rounded-xl p-3 text-center">
-                    <div className="text-lg font-black text-orange-700">
-                      {fmtN((p.total_itens || 0) - (p.total_bipados || 0))}
+                ) : resumo ? (
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    <div className="bg-emerald-50 ring-1 ring-emerald-100 rounded-xl p-3">
+                      <p className="text-xs text-emerald-600 font-semibold mb-1">✓ Faturado</p>
+                      <p className="text-sm font-black text-emerald-700">{fmtR(valorFaturado)}</p>
+                      <p className="text-xs text-emerald-500 mt-0.5">{fmtN(qtdFaturada)} itens</p>
                     </div>
-                    <div className="text-xs text-orange-500">Pendentes</div>
+                    <div className="bg-orange-50 ring-1 ring-orange-100 rounded-xl p-3">
+                      <p className="text-xs text-orange-600 font-semibold mb-1">⏳ Aguardando</p>
+                      <p className="text-sm font-black text-orange-700">{fmtR(valorAguardando)}</p>
+                      <p className="text-xs text-orange-500 mt-0.5">{fmtN(qtdAguardando)} itens</p>
+                    </div>
                   </div>
+                ) : null}
+
+                {/* NFs do pedido */}
+                {nfsPedido.length > 0 && (
+                  <div className="mb-4">
+                    <button onClick={() => togglePainel(p.id)}
+                      className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-purple-700 transition mb-2">
+                      <FileText className="h-3 w-3" />
+                      Notas Fiscais ({nfsPedido.length})
+                      {painelAberto[p.id] ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                    </button>
+                    {painelAberto[p.id] && (
+                      <div className="space-y-2 bg-slate-50 rounded-xl p-3">
+                        {nfsPedido.map(nf => (
+                          <div key={nf.id} className="flex items-center justify-between text-xs bg-white rounded-xl px-3 py-2 ring-1 ring-slate-200">
+                            <div className="flex items-center gap-2">
+                              <FileText className="h-3.5 w-3.5 text-purple-500" />
+                              <span className="font-bold text-slate-700">NF {nf.numero_nf}</span>
+                              <span className="text-slate-400">· {fmtN(nf.total_itens)} itens · {fmtN(nf.total_caixas)} caixas</span>
+                            </div>
+                            <span className="text-xs font-semibold px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 flex items-center gap-1">
+                              <CheckCircle className="h-3 w-3" /> Importada
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Botões */}
+                <div className="flex gap-2 flex-wrap">
+                  <button onClick={() => handleExportar(p)}
+                    disabled={exportando === p.id || !p.total_bipados}
+                    className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100 transition disabled:opacity-40">
+                    {exportando === p.id
+                      ? <div className="h-3 w-3 border-2 border-emerald-300 border-t-emerald-700 rounded-full animate-spin" />
+                      : <Download className="h-3 w-3" />
+                    }
+                    Exportar faturamento
+                  </button>
                 </div>
 
+                {/* Feedback */}
                 {fb && (
                   <div className={`mt-3 flex items-start gap-2 text-xs rounded-xl px-4 py-3 ring-1 ${
                     fb.tipo === "ok" ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
                     : fb.tipo === "bloqueado" ? "bg-amber-50 text-amber-700 ring-amber-200"
                     : "bg-red-50 text-red-700 ring-red-200"
                   }`}>
-                    {fb.tipo === "ok"
-                      ? <CheckCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                      : <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                    }
+                    {fb.tipo === "ok" ? <CheckCircle className="h-4 w-4 shrink-0 mt-0.5" /> : <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />}
                     <p className="font-semibold leading-relaxed">{fb.msg}</p>
-                  </div>
-                )}
-
-                {historicoAberto === p.id && (
-                  <div className="mt-3 border-t border-slate-100 pt-3">
-                    <p className="text-xs font-bold text-slate-500 mb-2">Histórico de exportações</p>
-                    {loadingHistorico ? (
-                      <div className="flex items-center justify-center h-10">
-                        <div className="h-4 w-4 border-2 border-purple-200 border-t-[#7F2D92] rounded-full animate-spin" />
-                      </div>
-                    ) : historico.length === 0 ? (
-                      <p className="text-xs text-slate-400">Nenhuma exportação realizada.</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {historico.map((exp, idx) => (
-                          <div key={exp.id}
-                            className="flex items-center justify-between text-xs bg-slate-50 rounded-xl px-3 py-2">
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-[#7F2D92]">v{historico.length - idx}</span>
-                              <span className="text-slate-600">{exp.nome_usuario}</span>
-                            </div>
-                            <div className="flex items-center gap-3 text-slate-400">
-                              <span className="font-semibold text-slate-600">{fmtN(exp.total_itens)} itens</span>
-                              <span>{new Date(exp.exportado_em).toLocaleString("pt-BR")}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 )}
               </Card>
@@ -1148,9 +1085,9 @@ export default function B2BPickingPage() {
   }
 
   const ABAS = [
-    { key: "picking",   label: "Picking",   icon: Search    },
-    { key: "embalagem", label: "Embalagem", icon: Box       },
-    { key: "pedidos",   label: "Faturamento",   icon: BarChart3 },
+    { key: "picking",   label: "Picking",     icon: Search    },
+    { key: "embalagem", label: "Embalagem",   icon: Box       },
+    { key: "pedidos",   label: "Faturamento", icon: BarChart3 },
   ];
 
   const pedidosAbertos    = pedidos.filter(p => p.status === "aberto").length;
