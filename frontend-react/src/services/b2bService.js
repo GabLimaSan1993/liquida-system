@@ -273,7 +273,7 @@ export async function reverterNaoLocalizado(itemId, novoLocal) {
   if (error) throw new Error(error.message);
 }
 
-// ── Exportar para faturamento (com controle de delta) ────
+// ── Exportar para faturamento (formato americano) ────────
 export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
 
   const { data: exportacoes } = await supabase
@@ -355,7 +355,8 @@ export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
     "DESC_ITEM": i.desc_item,
     "COD_ITEM":  i.cod_item,
     "LOCAL":     i.local_estoque,
-    "VALOR":     i.valor ? i.valor.toFixed(2).replace(".", ",") : "",
+    // Formato americano: ponto decimal, vírgula milhar
+    "VALOR":     i.valor ? i.valor.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "",
     "BIPADO_EM": i.bipado_em ? new Date(i.bipado_em).toLocaleString("pt-BR") : "",
   }));
 
@@ -371,6 +372,41 @@ export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
     numeroExportacao,
     nomeArquivo,
   };
+}
+
+// ── Importar NF de um pedido ─────────────────────────────
+export async function importarNFPedido(pedidoId, numeroNf, totalItens, totalCaixas, userId) {
+  const valorTotal = await supabase
+    .from("b2b_itens")
+    .select("valor")
+    .eq("pedido_id", pedidoId)
+    .eq("status", "bipado");
+
+  const valor = (valorTotal.data || []).reduce((s, i) => s + (i.valor || 0), 0);
+
+  const { data, error } = await supabase
+    .from("b2b_nfs")
+    .insert({
+      pedido_id:        pedidoId,
+      numero_nf:        numeroNf,
+      total_itens:      totalItens,
+      total_caixas:     totalCaixas,
+      valor_total:      valor,
+      data_faturamento: new Date().toISOString(),
+      importado_por:    userId,
+    })
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+
+  // Atualiza status do pedido para concluido
+  await supabase
+    .from("b2b_pedidos")
+    .update({ status: "concluido" })
+    .eq("id", pedidoId);
+
+  return data;
 }
 
 // ── Buscar resumo de valor por pedido ────────────────────
@@ -397,4 +433,53 @@ export async function listarNFsPedido(pedidoId) {
     .eq("pedido_id", pedidoId)
     .order("importado_em", { ascending: true });
   return data || [];
+}
+
+// ── Buscar pedidos concluídos com analytics ──────────────
+export async function listarPedidosConcluidos() {
+  const { data: pedidos, error } = await supabase
+    .from("b2b_pedidos")
+    .select("*")
+    .eq("status", "concluido")
+    .order("criado_em", { ascending: false });
+
+  if (error) throw new Error(error.message);
+  if (!pedidos?.length) return [];
+
+  // Buscar NFs de todos os pedidos concluídos
+  const { data: nfs } = await supabase
+    .from("b2b_nfs")
+    .select("*")
+    .in("pedido_id", pedidos.map(p => p.id))
+    .order("data_faturamento", { ascending: true });
+
+  // Buscar valor total dos itens
+  const { data: itens } = await supabase
+    .from("b2b_itens")
+    .select("pedido_id, valor, status")
+    .in("pedido_id", pedidos.map(p => p.id));
+
+  return pedidos.map(p => {
+    const nfsPedido   = (nfs || []).filter(n => n.pedido_id === p.id);
+    const itensPedido = (itens || []).filter(i => i.pedido_id === p.id);
+    const valorTotal  = itensPedido.reduce((s, i) => s + (i.valor || 0), 0);
+    const valorFat    = nfsPedido.reduce((s, n) => s + (n.valor_total || 0), 0);
+
+    // Tempo médio de faturamento em dias
+    const dataPedido = p.data_pedido ? new Date(p.data_pedido) : new Date(p.criado_em);
+    const datasNF    = nfsPedido.map(n => new Date(n.data_faturamento || n.importado_em));
+    const tempoMedio = datasNF.length > 0
+      ? datasNF.reduce((s, d) => s + (d - dataPedido), 0) / datasNF.length / (1000 * 60 * 60 * 24)
+      : null;
+
+    return {
+      ...p,
+      nfs:         nfsPedido,
+      valorTotal,
+      valorFat,
+      tempoMedio:  tempoMedio ? Math.round(tempoMedio) : null,
+      anoPedido:   dataPedido.getFullYear(),
+      mesPedido:   dataPedido.getMonth() + 1,
+    };
+  });
 }
