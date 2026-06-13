@@ -94,82 +94,35 @@ export async function previewTriagemAssurant(file) {
   });
 }
 
-// ── Upload com streaming — usa RPC para garantir upsert ──
+// ── Upload — lê tudo primeiro, depois processa em batches ─
 export async function uploadTriagemAssurant(file, userId, mesReferencia, onProgress) {
-  return new Promise((resolve, reject) => {
-    let chunk      = [];
-    let inserted   = 0;
-    let duplicates = 0;
-    let total      = 0;
-    let hasError   = false;
-
-    const insertQueue = [];
-    let processing = false;
-
-    async function processQueue() {
-      if (processing || insertQueue.length === 0) return;
-      processing = true;
-
-      while (insertQueue.length > 0) {
-        const batch = insertQueue.shift();
-        try {
-          console.log("=== CHAMANDO RPC upsert_triagem, batch size:", batch.length);
-          console.log("=== PRIMEIRO ITEM:", JSON.stringify(batch[0]));
-
-          const { error } = await supabase.rpc("upsert_triagem", {
-            rows: batch,
-          });
-
-          if (error) {
-            console.error("=== ERRO RPC:", error);
-            throw new Error(error.message);
-          }
-
-          console.log("=== RPC OK");
-          inserted   += batch.length;
-          duplicates  = 0;
-          onProgress?.({ inserted, duplicates, total });
-        } catch (e) {
-          hasError = true;
-          reject(e);
-          return;
-        }
-      }
-
-      processing = false;
-    }
-
+  // Passo 1: lê o CSV completo de uma vez
+  const allRows = await new Promise((resolve, reject) => {
     Papa.parse(file, {
       header:         true,
       skipEmptyLines: true,
       encoding:       "ISO-8859-1",
       delimiter:      ";",
-      step: (result) => {
-        if (hasError) return;
-
-        total++;
-        chunk.push(parseRow(result.data, userId, mesReferencia));
-
-        if (chunk.length >= 500) {
-          insertQueue.push([...chunk]);
-          chunk = [];
-          processQueue();
-        }
-      },
-      complete: async () => {
-        if (chunk.length > 0) {
-          insertQueue.push([...chunk]);
-        }
-
-        while (insertQueue.length > 0 || processing) {
-          await new Promise(r => setTimeout(r, 200));
-        }
-
-        if (!hasError) {
-          resolve({ inserted, duplicates, total });
-        }
-      },
-      error: (err) => reject(new Error(err.message)),
+      complete: (results) => resolve(results.data || []),
+      error:    (err)     => reject(new Error(err.message)),
     });
   });
+
+  const total = allRows.length;
+  let inserted = 0;
+
+  // Passo 2: processa em batches de 500
+  const CHUNK = 500;
+  for (let i = 0; i < allRows.length; i += CHUNK) {
+    const batch = allRows.slice(i, i + CHUNK).map(r => parseRow(r, userId, mesReferencia));
+
+    const { error } = await supabase.rpc("upsert_triagem", { rows: batch });
+
+    if (error) throw new Error(error.message);
+
+    inserted += batch.length;
+    onProgress?.({ inserted, duplicates: 0, total });
+  }
+
+  return { inserted, duplicates: 0, total };
 }
