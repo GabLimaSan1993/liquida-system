@@ -99,12 +99,8 @@ function ModalNaoLocalizado({ item, onConfirmar, onCancelar }) {
           O aparelho será marcado como <span className="font-bold text-amber-700">Não Localizado</span> e removido da lista de pendentes.
         </p>
         <div className="flex gap-3">
-          <button onClick={onConfirmar} className="flex-1 rounded-2xl bg-amber-500 py-3 text-sm font-bold text-white hover:bg-amber-600 transition">
-            Confirmar — Não Localizado
-          </button>
-          <button onClick={onCancelar} className="flex-1 rounded-2xl bg-slate-100 py-3 text-sm font-bold text-slate-600 hover:bg-slate-200 transition">
-            Cancelar
-          </button>
+          <button onClick={onConfirmar} className="flex-1 rounded-2xl bg-amber-500 py-3 text-sm font-bold text-white hover:bg-amber-600 transition">Confirmar — Não Localizado</button>
+          <button onClick={onCancelar} className="flex-1 rounded-2xl bg-slate-100 py-3 text-sm font-bold text-slate-600 hover:bg-slate-200 transition">Cancelar</button>
         </div>
       </div>
     </div>
@@ -146,38 +142,20 @@ function ModalReverter({ item, onConfirmar, onCancelar }) {
           <p className="text-xs text-slate-500 font-mono">{item.imei}</p>
         </div>
         <div className="grid grid-cols-2 gap-3 mb-4">
-          <div>
-            <label className="block text-xs font-bold text-slate-600 mb-1">Rua *</label>
-            <input value={rua} onChange={e => setRua(e.target.value)} className={inputCls} placeholder="Ex: 1" />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-600 mb-1">Bloco *</label>
-            <input value={bloco} onChange={e => setBloco(e.target.value)} className={inputCls} placeholder="Ex: 03" />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-600 mb-1">Andar *</label>
-            <input value={andar} onChange={e => setAndar(e.target.value)} className={inputCls} placeholder="Ex: 02" />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-600 mb-1">AP *</label>
-            <input value={ap} onChange={e => setAp(e.target.value)} className={inputCls} placeholder="Ex: B03" />
-          </div>
+          <div><label className="block text-xs font-bold text-slate-600 mb-1">Rua *</label><input value={rua} onChange={e => setRua(e.target.value)} className={inputCls} placeholder="Ex: 1" /></div>
+          <div><label className="block text-xs font-bold text-slate-600 mb-1">Bloco *</label><input value={bloco} onChange={e => setBloco(e.target.value)} className={inputCls} placeholder="Ex: 03" /></div>
+          <div><label className="block text-xs font-bold text-slate-600 mb-1">Andar *</label><input value={andar} onChange={e => setAndar(e.target.value)} className={inputCls} placeholder="Ex: 02" /></div>
+          <div><label className="block text-xs font-bold text-slate-600 mb-1">AP *</label><input value={ap} onChange={e => setAp(e.target.value)} className={inputCls} placeholder="Ex: B03" /></div>
         </div>
         {(rua || bloco || andar || ap) && (
           <div className="bg-purple-50 ring-1 ring-purple-200 rounded-xl px-4 py-2 mb-4 text-xs font-mono text-purple-700 font-bold">
             Novo local: RUA {rua || "?"}/BL{bloco || "?"}/AD{andar || "?"}/{ap?.toUpperCase() || "?"}
           </div>
         )}
-        {erro && (
-          <div className="bg-red-50 ring-1 ring-red-200 rounded-xl px-4 py-2 mb-4 text-xs font-semibold text-red-600">{erro}</div>
-        )}
+        {erro && <div className="bg-red-50 ring-1 ring-red-200 rounded-xl px-4 py-2 mb-4 text-xs font-semibold text-red-600">{erro}</div>}
         <div className="flex gap-3">
-          <button onClick={handleConfirmar} className="flex-1 rounded-2xl bg-[#7F2D92] py-3 text-sm font-bold text-white hover:bg-[#5B1E74] transition">
-            Confirmar nova localização
-          </button>
-          <button onClick={onCancelar} className="flex-1 rounded-2xl bg-slate-100 py-3 text-sm font-bold text-slate-600 hover:bg-slate-200 transition">
-            Cancelar
-          </button>
+          <button onClick={handleConfirmar} className="flex-1 rounded-2xl bg-[#7F2D92] py-3 text-sm font-bold text-white hover:bg-[#5B1E74] transition">Confirmar nova localização</button>
+          <button onClick={onCancelar} className="flex-1 rounded-2xl bg-slate-100 py-3 text-sm font-bold text-slate-600 hover:bg-slate-200 transition">Cancelar</button>
         </div>
       </div>
     </div>
@@ -312,14 +290,8 @@ function TabPicking({ pedidos, onAtualizar }) {
 
       <div className="space-y-4">
         <div className="flex items-center gap-3 flex-wrap">
-          <button onClick={() => { setPedido(null); setItens([]); setRuasSel([]); }}
-            className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1">
-            <X className="h-3 w-3" /> Trocar pedido
-          </button>
-          <div className="flex-1">
-            <h3 className="font-black text-slate-800 text-sm">{pedidoSel.lote}</h3>
-            <p className="text-xs text-slate-500">{pedidoSel.cliente}</p>
-          </div>
+          <button onClick={() => { setPedido(null); setItens([]); setRuasSel([]); }} className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1"><X className="h-3 w-3" /> Trocar pedido</button>
+          <div className="flex-1"><h3 className="font-black text-slate-800 text-sm">{pedidoSel.lote}</h3><p className="text-xs text-slate-500">{pedidoSel.cliente}</p></div>
           <StatusBadge status={pedidoSel.status} />
         </div>
 
@@ -722,7 +694,7 @@ function TabEmbalagem({ pedidos, onAtualizar }) {
 // ══════════════════════════════════════════════════════════
 // ABA FATURAMENTO — Em aberto
 // ══════════════════════════════════════════════════════════
-function TabPedidos({ pedidos, onAtualizar, onVerConcluidos }) {
+function TabPedidos({ pedidos, onAtualizar }) {
   const { user, profile }               = useAuth();
   const [exportando, setExportando]     = useState(null);
   const [feedbackExp, setFeedbackExp]   = useState({});
@@ -787,9 +759,7 @@ function TabPedidos({ pedidos, onAtualizar, onVerConcluidos }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="font-black text-slate-800 flex items-center gap-2 text-sm">
-          <BarChart3 className="h-4 w-4 text-[#7F2D92]" /> Faturamento B2B
-        </h3>
+        <h3 className="font-black text-slate-800 flex items-center gap-2 text-sm"><BarChart3 className="h-4 w-4 text-[#7F2D92]" /> Faturamento B2B</h3>
         <button onClick={onAtualizar} className="text-xs text-slate-500 hover:text-purple-700 font-semibold">↻ Atualizar</button>
       </div>
 
@@ -800,10 +770,7 @@ function TabPedidos({ pedidos, onAtualizar, onVerConcluidos }) {
       </div>
 
       {pedidosAbertos.length === 0 ? (
-        <div className="text-center py-12 text-slate-400">
-          <Package className="h-8 w-8 mx-auto mb-2 opacity-30" />
-          <p className="text-sm">Nenhum pedido em aberto.</p>
-        </div>
+        <div className="text-center py-12 text-slate-400"><Package className="h-8 w-8 mx-auto mb-2 opacity-30" /><p className="text-sm">Nenhum pedido em aberto.</p></div>
       ) : (
         <div className="space-y-3">
           {pedidosAbertos.map(p => {
@@ -909,10 +876,10 @@ function TabPedidos({ pedidos, onAtualizar, onVerConcluidos }) {
 // ABA CONCLUÍDOS — Analytics
 // ══════════════════════════════════════════════════════════
 function TabConcluidos({ onVoltar }) {
-  const [pedidos, setPedidos]     = useState([]);
-  const [loading, setLoading]     = useState(true);
-  const [filtroAno, setFiltroAno] = useState("todos");
-  const [filtroMes, setFiltroMes] = useState("todos");
+  const [pedidos, setPedidos]           = useState([]);
+  const [loading, setLoading]           = useState(true);
+  const [filtroAno, setFiltroAno]       = useState("todos");
+  const [filtroMes, setFiltroMes]       = useState("todos");
   const [painelAberto, setPainelAberto] = useState({});
 
   useEffect(() => { carregar(); }, []);
@@ -932,20 +899,19 @@ function TabConcluidos({ onVoltar }) {
     return matchAno && matchMes;
   });
 
-  // Analytics globais
   const totalValorFat   = pedidosFiltrados.reduce((s, p) => s + (p.valorFat || 0), 0);
   const totalQtd        = pedidosFiltrados.reduce((s, p) => s + (p.total_itens || 0), 0);
-  const tempoMedioGeral = pedidosFiltrados.filter(p => p.tempoMedio != null).length > 0
-    ? Math.round(pedidosFiltrados.filter(p => p.tempoMedio != null).reduce((s, p) => s + p.tempoMedio, 0) / pedidosFiltrados.filter(p => p.tempoMedio != null).length)
+  const temposMedios    = pedidosFiltrados.filter(p => p.tempoMedio != null);
+  const tempoMedioGeral = temposMedios.length > 0
+    ? Math.round(temposMedios.reduce((s, p) => s + p.tempoMedio, 0) / temposMedios.length)
     : null;
 
-  // Agrupamento por mês/ano
   const porMes = {};
   pedidosFiltrados.forEach(p => {
     const key = `${p.anoPedido}-${String(p.mesPedido).padStart(2, "0")}`;
     if (!porMes[key]) porMes[key] = { ano: p.anoPedido, mes: p.mesPedido, qtdPedidos: 0, valorFat: 0, totalItens: 0 };
     porMes[key].qtdPedidos++;
-    porMes[key].valorFat  += p.valorFat || 0;
+    porMes[key].valorFat   += p.valorFat || 0;
     porMes[key].totalItens += p.total_itens || 0;
   });
   const resumoMeses = Object.values(porMes).sort((a, b) => b.ano - a.ano || b.mes - a.mes);
@@ -953,23 +919,17 @@ function TabConcluidos({ onVoltar }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
-        <button onClick={onVoltar} className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1">
-          <X className="h-3 w-3" /> Voltar
-        </button>
-        <h3 className="font-black text-slate-800 flex items-center gap-2 text-sm flex-1">
-          <TrendingUp className="h-4 w-4 text-emerald-600" /> Pedidos Concluídos
-        </h3>
+        <button onClick={onVoltar} className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1"><X className="h-3 w-3" /> Voltar</button>
+        <h3 className="font-black text-slate-800 flex items-center gap-2 text-sm flex-1"><TrendingUp className="h-4 w-4 text-emerald-600" /> Pedidos Faturados</h3>
         <button onClick={carregar} className="text-xs text-slate-500 hover:text-purple-700 font-semibold">↻ Atualizar</button>
       </div>
 
-      {/* KPIs globais */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <KpiMini label="Total faturado" value={fmtR(totalValorFat)} sub={`${pedidosFiltrados.length} pedidos`} color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
         <KpiMini label="Produtos faturados" value={fmtN(totalQtd)} sub="unidades" color="bg-purple-50 ring-purple-200 text-purple-700" />
         <KpiMini label="Tempo médio" value={tempoMedioGeral != null ? `${tempoMedioGeral}d` : "—"} sub="do pedido ao faturamento" color="bg-blue-50 ring-blue-200 text-blue-700" />
       </div>
 
-      {/* Filtros */}
       <Card>
         <div className="flex items-center gap-3 flex-wrap">
           <Calendar className="h-4 w-4 text-slate-400" />
@@ -988,7 +948,6 @@ function TabConcluidos({ onVoltar }) {
         </div>
       </Card>
 
-      {/* Resumo por mês */}
       {resumoMeses.length > 0 && (
         <Card>
           <h4 className="font-black text-slate-700 text-xs mb-3 flex items-center gap-2"><Calendar className="h-3.5 w-3.5 text-purple-500" /> Resumo por período</h4>
@@ -1007,14 +966,10 @@ function TabConcluidos({ onVoltar }) {
         </Card>
       )}
 
-      {/* Lista de pedidos concluídos */}
       {loading ? (
         <div className="flex items-center justify-center h-32"><div className="h-8 w-8 border-4 border-purple-200 border-t-[#7F2D92] rounded-full animate-spin" /></div>
       ) : pedidosFiltrados.length === 0 ? (
-        <div className="text-center py-12 text-slate-400">
-          <CheckCircle className="h-8 w-8 mx-auto mb-2 opacity-30" />
-          <p className="text-sm">Nenhum pedido concluído encontrado.</p>
-        </div>
+        <div className="text-center py-12 text-slate-400"><CheckCircle className="h-8 w-8 mx-auto mb-2 opacity-30" /><p className="text-sm">Nenhum pedido faturado encontrado.</p></div>
       ) : (
         <div className="space-y-3">
           {pedidosFiltrados.map(p => (
@@ -1036,7 +991,6 @@ function TabConcluidos({ onVoltar }) {
                 </div>
               </div>
 
-              {/* NFs */}
               {p.nfs?.length > 0 && (
                 <div>
                   <button onClick={() => setPainelAberto(prev => ({ ...prev, [p.id]: !prev[p.id] }))}
@@ -1054,9 +1008,7 @@ function TabConcluidos({ onVoltar }) {
                             <span className="text-slate-400">· {fmtN(nf.total_itens)} itens · {fmtN(nf.total_caixas)} caixas</span>
                             {nf.valor_total > 0 && <span className="font-semibold text-emerald-600">· {fmtR(nf.valor_total)}</span>}
                           </div>
-                          {nf.data_faturamento && (
-                            <span className="text-slate-400">{new Date(nf.data_faturamento).toLocaleDateString("pt-BR")}</span>
-                          )}
+                          {nf.data_faturamento && <span className="text-slate-400">{new Date(nf.data_faturamento).toLocaleDateString("pt-BR")}</span>}
                         </div>
                       ))}
                     </div>
@@ -1075,8 +1027,8 @@ function TabConcluidos({ onVoltar }) {
 // PÁGINA PRINCIPAL
 // ══════════════════════════════════════════════════════════
 export default function B2BPickingPage() {
-  const [aba, setAba]               = useState("picking");
-  const [pedidos, setPedidos]       = useState([]);
+  const [aba, setAba]                     = useState("picking");
+  const [pedidos, setPedidos]             = useState([]);
   const [verConcluidos, setVerConcluidos] = useState(false);
 
   useEffect(() => { carregarPedidos(); }, []);
@@ -1092,8 +1044,29 @@ export default function B2BPickingPage() {
     { key: "pedidos",   label: "Faturamento", icon: BarChart3 },
   ];
 
-  const pedidosAbertos    = pedidos.filter(p => p.status === "aberto").length;
-  const pedidosConcluidos = pedidos.filter(p => p.status === "concluido").length;
+  // Contadores contextuais por aba
+  const contadores = {
+    picking: {
+      aberto:         pedidos.filter(p => p.status === "aberto").length,
+      concluido:      pedidos.filter(p => p.status === "concluido").length,
+      labelAberto:    "em aberto",
+      labelConcluido: "concluído",
+    },
+    embalagem: {
+      aberto:         pedidos.filter(p => (p.total_bipados || 0) > 0 && p.status !== "concluido").length,
+      concluido:      pedidos.filter(p => p.status === "concluido").length,
+      labelAberto:    "para embalar",
+      labelConcluido: "embalado",
+    },
+    pedidos: {
+      aberto:         pedidos.filter(p => p.status !== "concluido").length,
+      concluido:      pedidos.filter(p => p.status === "concluido").length,
+      labelAberto:    "aguardando faturamento",
+      labelConcluido: "faturado",
+    },
+  };
+
+  const ctx = contadores[aba];
 
   return (
     <div className="space-y-5">
@@ -1106,18 +1079,16 @@ export default function B2BPickingPage() {
           </div>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
-          {pedidosAbertos > 0 && (
-            <button
-              onClick={() => { setAba("pedidos"); setVerConcluidos(false); }}
+          {ctx.aberto > 0 && (
+            <button onClick={() => setVerConcluidos(false)}
               className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-orange-50 text-orange-700 ring-1 ring-orange-200 hover:bg-orange-100 transition">
-              {pedidosAbertos} em aberto
+              {ctx.aberto} {ctx.labelAberto}
             </button>
           )}
-          {pedidosConcluidos > 0 && (
-            <button
-              onClick={() => { setAba("pedidos"); setVerConcluidos(true); }}
+          {ctx.concluido > 0 && (
+            <button onClick={() => { setAba("pedidos"); setVerConcluidos(true); }}
               className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100 transition">
-              {pedidosConcluidos} concluído{pedidosConcluidos > 1 ? "s" : ""}
+              {ctx.concluido} {ctx.labelConcluido}{ctx.concluido > 1 ? "s" : ""}
             </button>
           )}
         </div>
@@ -1143,7 +1114,7 @@ export default function B2BPickingPage() {
 
       {aba === "picking"   && <TabPicking   pedidos={pedidos} onAtualizar={carregarPedidos} />}
       {aba === "embalagem" && <TabEmbalagem pedidos={pedidos} onAtualizar={carregarPedidos} />}
-      {aba === "pedidos"   && !verConcluidos && <TabPedidos pedidos={pedidos} onAtualizar={carregarPedidos} onVerConcluidos={() => setVerConcluidos(true)} />}
+      {aba === "pedidos"   && !verConcluidos && <TabPedidos pedidos={pedidos} onAtualizar={carregarPedidos} />}
       {aba === "pedidos"   && verConcluidos  && <TabConcluidos onVoltar={() => setVerConcluidos(false)} />}
     </div>
   );
