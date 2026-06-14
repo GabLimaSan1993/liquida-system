@@ -6,7 +6,7 @@ import {
   ChevronDown, ChevronUp, Calendar,
 } from "lucide-react";
 import {
-  listarPedidosB2B, listarItens,
+  listarPedidosB2B, listarItensComStatusGaia,
   registrarBipagem, exportarFaturamento,
   listarExportacoes, marcarNaoLocalizado,
   reverterNaoLocalizado, buscarResumoValorPedido,
@@ -25,11 +25,7 @@ function fmtR(v) { return v != null ? `R$ ${Number(v).toLocaleString("pt-BR", { 
 const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
 function Card({ children, className = "" }) {
-  return (
-    <div className={`bg-white rounded-2xl p-5 ring-1 ring-slate-200 shadow-sm ${className}`}>
-      {children}
-    </div>
-  );
+  return <div className={`bg-white rounded-2xl p-5 ring-1 ring-slate-200 shadow-sm ${className}`}>{children}</div>;
 }
 
 function KpiMini({ label, value, sub, color = "bg-purple-50 ring-purple-200 text-purple-700" }) {
@@ -53,11 +49,7 @@ function StatusBadge({ status }) {
     fechada:        { label: "Fechada",         cls: "bg-slate-50 text-slate-600 ring-slate-200" },
   };
   const s = map[status] || { label: status, cls: "bg-slate-50 text-slate-500 ring-slate-200" };
-  return (
-    <span className={`text-xs font-semibold px-2 py-0.5 rounded-lg ring-1 ${s.cls}`}>
-      {s.label}
-    </span>
-  );
+  return <span className={`text-xs font-semibold px-2 py-0.5 rounded-lg ring-1 ${s.cls}`}>{s.label}</span>;
 }
 
 function ProgressBar({ value, total, color }) {
@@ -81,13 +73,8 @@ function ModalNaoLocalizado({ item, onConfirmar, onCancelar }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
       <div className="w-full max-w-md rounded-[28px] bg-white p-8 shadow-2xl">
         <div className="flex items-center gap-3 mb-4">
-          <div className="h-10 w-10 rounded-2xl bg-amber-100 flex items-center justify-center shrink-0">
-            <MapPin className="h-5 w-5 text-amber-600" />
-          </div>
-          <div>
-            <h2 className="text-lg font-black text-slate-800">Não Localizado</h2>
-            <p className="text-xs text-slate-500">Confirme que o aparelho não foi encontrado</p>
-          </div>
+          <div className="h-10 w-10 rounded-2xl bg-amber-100 flex items-center justify-center shrink-0"><MapPin className="h-5 w-5 text-amber-600" /></div>
+          <div><h2 className="text-lg font-black text-slate-800">Não Localizado</h2><p className="text-xs text-slate-500">Confirme que o aparelho não foi encontrado</p></div>
         </div>
         <div className="bg-amber-50 ring-1 ring-amber-200 rounded-2xl p-4 mb-6 space-y-1">
           <p className="text-xs font-bold text-amber-700">Aparelho</p>
@@ -95,9 +82,7 @@ function ModalNaoLocalizado({ item, onConfirmar, onCancelar }) {
           <p className="text-xs text-slate-500 font-mono">{item.imei}</p>
           <p className="text-xs text-slate-500">Local: <span className="font-semibold font-mono">{item.local_estoque || "—"}</span></p>
         </div>
-        <p className="text-sm text-slate-600 mb-6">
-          O aparelho será marcado como <span className="font-bold text-amber-700">Não Localizado</span> e removido da lista de pendentes.
-        </p>
+        <p className="text-sm text-slate-600 mb-6">O aparelho será marcado como <span className="font-bold text-amber-700">Não Localizado</span> e removido da lista de pendentes.</p>
         <div className="flex gap-3">
           <button onClick={onConfirmar} className="flex-1 rounded-2xl bg-amber-500 py-3 text-sm font-bold text-white hover:bg-amber-600 transition">Confirmar — Não Localizado</button>
           <button onClick={onCancelar} className="flex-1 rounded-2xl bg-slate-100 py-3 text-sm font-bold text-slate-600 hover:bg-slate-200 transition">Cancelar</button>
@@ -108,17 +93,10 @@ function ModalNaoLocalizado({ item, onConfirmar, onCancelar }) {
 }
 
 function ModalReverter({ item, onConfirmar, onCancelar }) {
-  const [rua, setRua]     = useState("");
-  const [bloco, setBloco] = useState("");
-  const [andar, setAndar] = useState("");
-  const [ap, setAp]       = useState("");
-  const [erro, setErro]   = useState("");
+  const [rua, setRua] = useState(""), [bloco, setBloco] = useState(""), [andar, setAndar] = useState(""), [ap, setAp] = useState(""), [erro, setErro] = useState("");
 
   function handleConfirmar() {
-    if (!rua.trim() || !bloco.trim() || !andar.trim() || !ap.trim()) {
-      setErro("Preencha todos os campos de localização.");
-      return;
-    }
+    if (!rua.trim() || !bloco.trim() || !andar.trim() || !ap.trim()) { setErro("Preencha todos os campos de localização."); return; }
     onConfirmar(`RUA ${rua.trim()}/BL${bloco.trim()}/AD${andar.trim()}/${ap.trim().toUpperCase()}`);
   }
 
@@ -128,13 +106,8 @@ function ModalReverter({ item, onConfirmar, onCancelar }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
       <div className="w-full max-w-md rounded-[28px] bg-white p-8 shadow-2xl">
         <div className="flex items-center gap-3 mb-4">
-          <div className="h-10 w-10 rounded-2xl bg-purple-100 flex items-center justify-center shrink-0">
-            <RotateCcw className="h-5 w-5 text-purple-600" />
-          </div>
-          <div>
-            <h2 className="text-lg font-black text-slate-800">Reverter para Pendente</h2>
-            <p className="text-xs text-slate-500">Informe a nova localização do aparelho</p>
-          </div>
+          <div className="h-10 w-10 rounded-2xl bg-purple-100 flex items-center justify-center shrink-0"><RotateCcw className="h-5 w-5 text-purple-600" /></div>
+          <div><h2 className="text-lg font-black text-slate-800">Reverter para Pendente</h2><p className="text-xs text-slate-500">Informe a nova localização do aparelho</p></div>
         </div>
         <div className="bg-slate-50 ring-1 ring-slate-200 rounded-2xl p-4 mb-5 space-y-1">
           <p className="text-xs font-bold text-slate-500">Aparelho</p>
@@ -162,6 +135,17 @@ function ModalReverter({ item, onConfirmar, onCancelar }) {
   );
 }
 
+// ── Helper badge status Gaia ──────────────────────────────
+function GaiaBadge({ status }) {
+  if (!status) return <span className="text-slate-300">—</span>;
+  const cls =
+    status === "Finalizado"          ? "bg-emerald-50 text-emerald-700" :
+    status === "Produto disponível"  ? "bg-blue-50 text-blue-700"       :
+    status === "Reservado para reparo" ? "bg-orange-50 text-orange-700" :
+    "bg-slate-50 text-slate-500";
+  return <span className={`px-2 py-0.5 rounded-lg font-semibold text-xs ${cls}`}>{status}</span>;
+}
+
 // ══════════════════════════════════════════════════════════
 // ABA PICKING
 // ══════════════════════════════════════════════════════════
@@ -184,7 +168,7 @@ function TabPicking({ pedidos, onAtualizar }) {
 
   async function carregarItens() {
     setLoading(true);
-    const data = await listarItens(pedidoSel.id);
+    const data = await listarItensComStatusGaia(pedidoSel.id);
     setItens(data);
     setLoading(false);
   }
@@ -258,20 +242,14 @@ function TabPicking({ pedidos, onAtualizar }) {
           <button onClick={onAtualizar} className="text-xs text-slate-500 hover:text-purple-700 font-semibold">↻ Atualizar</button>
         </div>
         {pedidos.filter(p => p.status === "aberto").length === 0 ? (
-          <div className="text-center py-12 text-slate-400">
-            <Package className="h-8 w-8 mx-auto mb-2 opacity-30" />
-            <p className="text-sm">Nenhum pedido em aberto.</p>
-          </div>
+          <div className="text-center py-12 text-slate-400"><Package className="h-8 w-8 mx-auto mb-2 opacity-30" /><p className="text-sm">Nenhum pedido em aberto.</p></div>
         ) : (
           <div className="grid gap-3">
             {pedidos.filter(p => p.status === "aberto").map(p => (
               <button key={p.id} onClick={() => setPedido(p)}
                 className="bg-white rounded-2xl p-4 ring-1 ring-slate-200 text-left hover:ring-purple-300 hover:bg-purple-50 transition-all">
                 <div className="flex items-start justify-between gap-3 mb-3">
-                  <div>
-                    <div className="font-bold text-slate-800 text-sm">{p.lote}</div>
-                    <div className="text-xs text-slate-500 mt-0.5">{p.cliente}</div>
-                  </div>
+                  <div><div className="font-bold text-slate-800 text-sm">{p.lote}</div><div className="text-xs text-slate-500 mt-0.5">{p.cliente}</div></div>
                   <StatusBadge status={p.status} />
                 </div>
                 <ProgressBar value={p.total_bipados || 0} total={p.total_itens || 0} />
@@ -359,7 +337,7 @@ function TabPicking({ pedidos, onAtualizar }) {
           <div className="relative mb-3">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
             <input type="text" value={busca} onChange={e => setBusca(e.target.value)}
-              placeholder="Buscar IMEI, modelo, voucher ou local..."
+              placeholder="Buscar IMEI, modelo, voucher, local ou status Gaia..."
               className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#7F2D92]" />
           </div>
           {loading ? (
@@ -374,6 +352,7 @@ function TabPicking({ pedidos, onAtualizar }) {
                     <th className="px-3 py-2 text-left font-bold text-slate-500">Modelo</th>
                     <th className="px-3 py-2 text-left font-bold text-slate-500">Grade</th>
                     <th className="px-3 py-2 text-left font-bold text-slate-500">Voucher</th>
+                    <th className="px-3 py-2 text-left font-bold text-slate-500">Status Gaia</th>
                     <th className="px-3 py-2 text-center font-bold text-slate-500">Status</th>
                     <th className="px-3 py-2 text-center font-bold text-slate-500">Ação</th>
                   </tr></thead>
@@ -382,9 +361,10 @@ function TabPicking({ pedidos, onAtualizar }) {
                       <tr key={item.id} className={`hover:bg-slate-50 ${item.status === "bipado" ? "opacity-50" : ""}`}>
                         <td className="px-3 py-2 font-mono text-slate-600">{item.local_estoque || "—"}</td>
                         <td className="px-3 py-2 font-mono font-semibold text-slate-800">{item.imei}</td>
-                        <td className="px-3 py-2 text-slate-600 max-w-[180px] truncate">{item.modelo}</td>
+                        <td className="px-3 py-2 text-slate-600 max-w-[160px] truncate">{item.modelo}</td>
                         <td className="px-3 py-2"><span className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded-lg font-semibold">{item.grade}</span></td>
                         <td className="px-3 py-2 font-mono text-slate-600">{item.voucher || "—"}</td>
+                        <td className="px-3 py-2"><GaiaBadge status={item.status_gaia} /></td>
                         <td className="px-3 py-2 text-center"><StatusBadge status={item.status} /></td>
                         <td className="px-3 py-2 text-center">
                           {item.status === "pendente" && (
@@ -734,7 +714,6 @@ function TabPedidos({ pedidos, onAtualizar }) {
   }
 
   const pedidosAbertos = pedidos.filter(p => p.status !== "concluido");
-
   const totalValorGlobal    = Object.values(resumos).reduce((s, r) => s + (r?.totalValor || 0), 0);
   const totalFaturadoGlobal = Object.values(resumos).reduce((s, r) => s + (r?.valorFaturado || 0), 0);
   const totalAguardando     = totalValorGlobal - totalFaturadoGlobal;
@@ -742,8 +721,7 @@ function TabPedidos({ pedidos, onAtualizar }) {
 
   function getStatusFat(p, resumo, nfsPedido) {
     if (nfsPedido?.length > 0) return "faturado";
-    const bipados = p.total_bipados || 0;
-    const total   = p.total_itens || 0;
+    const bipados = p.total_bipados || 0, total = p.total_itens || 0;
     if (bipados >= total && total > 0) return "em_faturamento";
     if (bipados > 0) return "em_separacao";
     return "ag_separacao";
@@ -1050,14 +1028,14 @@ export default function B2BPickingPage() {
       concluido:      pedidos.filter(p => p.status === "concluido").length,
       labelAberto:    "em aberto",
       labelConcluido: "concluído",
-      aoConcluido:    () => setVerConcluidos(false), // picking não tem tela de concluídos
+      aoConcluido:    () => setVerConcluidos(false),
     },
     embalagem: {
       aberto:         pedidos.filter(p => (p.total_bipados || 0) > 0 && p.status !== "concluido").length,
       concluido:      pedidos.filter(p => p.status === "concluido").length,
       labelAberto:    "para embalar",
       labelConcluido: "embalado",
-      aoConcluido:    () => setVerConcluidos(false), // embalagem não tem tela de concluídos
+      aoConcluido:    () => setVerConcluidos(false),
     },
     pedidos: {
       aberto:         pedidos.filter(p => p.status !== "concluido").length,
@@ -1082,7 +1060,7 @@ export default function B2BPickingPage() {
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           {ctx.aberto > 0 && (
-            <button onClick={() => { setVerConcluidos(false); }}
+            <button onClick={() => setVerConcluidos(false)}
               className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-orange-50 text-orange-700 ring-1 ring-orange-200 hover:bg-orange-100 transition">
               {ctx.aberto} {ctx.labelAberto}
             </button>
