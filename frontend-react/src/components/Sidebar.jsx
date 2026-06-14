@@ -7,6 +7,7 @@ import {
   Truck, TrendingUp, Users, LogOut, X, ShoppingCart,
   Landmark, BarChart2, Lock, TrendingDown, Database,
   Package, Clock, LayoutDashboard, ScanLine, RefreshCw,
+  PlusCircle, Settings,
 } from "lucide-react";
 import { useAuth } from "../AuthContext.jsx";
 import { signOut } from "../services/authService.js";
@@ -177,7 +178,9 @@ function MenuAssurant({ onClose, telas }) {
 // ── Menu Assurant Trocas (usuário externo) ────────────────
 function MenuAssurantTrocas({ onClose }) {
   return (
-    <NavItem to="/trocas-b2c/nova" icon={RefreshCw} label="Nova Solicitação de Troca" onClick={onClose} />
+    <CollapseGroup icon={RefreshCw} label="Trocas B2C" paths={["/trocas-b2c"]}>
+      <NavItem to="/trocas-b2c/nova"  icon={PlusCircle} label="Nova Solicitação" indent onClick={onClose} />
+    </CollapseGroup>
   );
 }
 
@@ -250,7 +253,8 @@ function SidebarContent({ profile, onClose, handleLogout }) {
               <NavItem to="/assurant/sla"       icon={Clock}           label="SLA & Rastreabilidade" indent onClick={onClose} />
               <NavItem to="/assurant/layout"    icon={LayoutDashboard} label="Layout Warehouse"      indent onClick={onClose} />
               <NavItem to="/b2b/picking"        icon={ScanLine}        label="Picking B2B"           indent onClick={onClose} />
-              <NavItem to="/trocas-b2c/gestao"  icon={RefreshCw}       label="Trocas B2C"            indent onClick={onClose} />
+              <NavItem to="/trocas-b2c/nova"    icon={PlusCircle}      label="Trocas — Assurant"     indent onClick={onClose} />
+              <NavItem to="/trocas-b2c/gestao"  icon={RefreshCw}       label="Trocas — Furbtech"     indent onClick={onClose} />
               <NavItemDisabled icon={DollarSign} label="DRE Gerencial" indent />
             </CollapseGroup>
           </>
