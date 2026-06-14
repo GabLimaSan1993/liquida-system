@@ -1,7 +1,7 @@
 // src/pages/TrocasB2CAssurantPage.jsx
-import { useState } from "react";
-import { Plus, Trash2, CheckCircle, AlertTriangle, ArrowRight, X } from "lucide-react";
-import { criarTroca } from "../services/trocasB2CService.js";
+import { useState, useEffect, useRef } from "react";
+import { Plus, Trash2, CheckCircle, AlertTriangle, ArrowRight, Loader } from "lucide-react";
+import { criarTroca, buscarDescricaoPorSku } from "../services/trocasB2CService.js";
 import { useAuth } from "../AuthContext.jsx";
 
 function Card({ children, className = "" }) {
@@ -15,6 +15,88 @@ function Card({ children, className = "" }) {
 const inputCls = "w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7F2D92] bg-white";
 const labelCls = "block text-xs font-bold text-slate-600 mb-1";
 
+// ── Campo SKU com autocomplete de descrição ───────────────
+function SkuField({ idx, s, onChange, onRemove, showRemove }) {
+  const [buscando, setBuscando] = useState(false);
+  const debounceRef             = useRef(null);
+
+  function handleSkuChange(valor) {
+    onChange(idx, "sku", valor);
+
+    // Limpa descrição ao mudar o SKU
+    onChange(idx, "descricao", "");
+
+    // Debounce de 600ms para buscar descrição
+    clearTimeout(debounceRef.current);
+    if (valor.trim().length >= 4) {
+      setBuscando(true);
+      debounceRef.current = setTimeout(async () => {
+        try {
+          const desc = await buscarDescricaoPorSku(valor.trim());
+          if (desc) onChange(idx, "descricao", desc);
+        } catch (_) {}
+        finally { setBuscando(false); }
+      }, 600);
+    } else {
+      setBuscando(false);
+    }
+  }
+
+  return (
+    <div className="flex gap-2 items-start">
+      <div className="h-7 w-7 rounded-xl bg-purple-100 text-purple-700 text-xs font-black flex items-center justify-center shrink-0 mt-3">
+        {idx + 1}
+      </div>
+      <div className="flex-1 grid grid-cols-1 gap-2">
+        {/* Campo SKU */}
+        <div className="relative">
+          <input
+            value={s.sku}
+            onChange={e => handleSkuChange(e.target.value)}
+            className={inputCls}
+            placeholder="SKU (ex: BRZDEV11894)"
+          />
+          {buscando && (
+            <div className="absolute right-3 top-3.5">
+              <Loader className="h-4 w-4 text-purple-500 animate-spin" />
+            </div>
+          )}
+        </div>
+
+        {/* Campo descrição — preenchido automaticamente */}
+        <div className="relative">
+          <input
+            value={s.descricao}
+            onChange={e => onChange(idx, "descricao", e.target.value)}
+            className={`${inputCls} ${s.descricao && !buscando ? "border-emerald-200 bg-emerald-50 text-emerald-800" : ""}`}
+            placeholder="Descrição (carregada automaticamente pelo SKU)"
+          />
+          {s.descricao && !buscando && (
+            <div className="absolute right-3 top-3.5">
+              <CheckCircle className="h-4 w-4 text-emerald-500" />
+            </div>
+          )}
+        </div>
+
+        {/* Aviso se SKU não encontrado */}
+        {s.sku.trim().length >= 4 && !buscando && !s.descricao && (
+          <p className="text-xs text-amber-600 font-semibold flex items-center gap-1">
+            <AlertTriangle className="h-3 w-3" />
+            SKU não encontrado na base — verifique ou preencha a descrição manualmente.
+          </p>
+        )}
+      </div>
+
+      {showRemove && (
+        <button type="button" onClick={() => onRemove(idx)}
+          className="mt-3 text-slate-400 hover:text-red-500 transition shrink-0">
+          <Trash2 className="h-4 w-4" />
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function TrocasB2CAssurantPage() {
   const { user } = useAuth();
 
@@ -26,10 +108,10 @@ export default function TrocasB2CAssurantPage() {
     produto_original: "",
   });
 
-  const [skus, setSkus] = useState([{ sku: "", descricao: "" }]);
-  const [salvando, setSalvando]   = useState(false);
-  const [feedback, setFeedback]   = useState(null);
-  const [sucesso, setSucesso]     = useState(false);
+  const [skus, setSkus]         = useState([{ sku: "", descricao: "" }]);
+  const [salvando, setSalvando] = useState(false);
+  const [feedback, setFeedback] = useState(null);
+  const [sucesso, setSucesso]   = useState(false);
 
   function setField(field, value) {
     setForm(prev => ({ ...prev, [field]: value }));
@@ -51,8 +133,8 @@ export default function TrocasB2CAssurantPage() {
     e.preventDefault();
     setFeedback(null);
 
-    if (!form.id_anymarket.trim()) return setFeedback("Informe o ID AnyMarket.");
-    if (!form.nome_cliente.trim()) return setFeedback("Informe o nome do cliente.");
+    if (!form.id_anymarket.trim())  return setFeedback("Informe o ID AnyMarket.");
+    if (!form.nome_cliente.trim())  return setFeedback("Informe o nome do cliente.");
     if (!form.produto_original.trim()) return setFeedback("Informe o produto comprado.");
     if (skus.every(s => !s.sku.trim())) return setFeedback("Informe ao menos um SKU aceito.");
 
@@ -105,9 +187,7 @@ export default function TrocasB2CAssurantPage() {
 
         {/* Dados do pedido */}
         <Card>
-          <h3 className="font-black text-slate-700 text-sm mb-4 flex items-center gap-2">
-            📋 Dados do Pedido
-          </h3>
+          <h3 className="font-black text-slate-700 text-sm mb-4">📋 Dados do Pedido</h3>
           <div className="space-y-3">
             <div>
               <label className={labelCls}>ID AnyMarket *</label>
@@ -124,21 +204,17 @@ export default function TrocasB2CAssurantPage() {
 
         {/* Dados do cliente */}
         <Card>
-          <h3 className="font-black text-slate-700 text-sm mb-4 flex items-center gap-2">
-            👤 Dados do Cliente
-          </h3>
+          <h3 className="font-black text-slate-700 text-sm mb-4">👤 Dados do Cliente</h3>
           <div className="space-y-3">
             <div>
               <label className={labelCls}>Nome *</label>
               <input value={form.nome_cliente} onChange={e => setField("nome_cliente", e.target.value)}
                 className={inputCls} placeholder="Nome completo" />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={labelCls}>CPF</label>
-                <input value={form.cpf} onChange={e => setField("cpf", e.target.value)}
-                  className={inputCls} placeholder="000.000.000-00" />
-              </div>
+            <div>
+              <label className={labelCls}>CPF</label>
+              <input value={form.cpf} onChange={e => setField("cpf", e.target.value)}
+                className={inputCls} placeholder="000.000.000-00" />
             </div>
             <div>
               <label className={labelCls}>Endereço de Entrega</label>
@@ -152,39 +228,24 @@ export default function TrocasB2CAssurantPage() {
         {/* SKUs aceitos */}
         <Card>
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-black text-slate-700 text-sm flex items-center gap-2">
-              📦 SKUs Aceitos para Substituição
-            </h3>
+            <h3 className="font-black text-slate-700 text-sm">📦 SKUs Aceitos para Substituição</h3>
             <span className="text-xs text-slate-400">em ordem de preferência</span>
           </div>
 
-          <div className="space-y-3">
+          <div className="bg-blue-50 ring-1 ring-blue-200 rounded-xl px-4 py-2.5 mb-4 text-xs text-blue-700 font-semibold">
+            ℹ A descrição será carregada automaticamente ao digitar o SKU.
+          </div>
+
+          <div className="space-y-4">
             {skus.map((s, idx) => (
-              <div key={idx} className="flex gap-2 items-start">
-                <div className="h-7 w-7 rounded-xl bg-purple-100 text-purple-700 text-xs font-black flex items-center justify-center shrink-0 mt-3">
-                  {idx + 1}
-                </div>
-                <div className="flex-1 grid grid-cols-1 gap-2">
-                  <input
-                    value={s.sku}
-                    onChange={e => setSku(idx, "sku", e.target.value)}
-                    className={inputCls}
-                    placeholder="SKU (ex: BRZDEV11894)"
-                  />
-                  <input
-                    value={s.descricao}
-                    onChange={e => setSku(idx, "descricao", e.target.value)}
-                    className={inputCls}
-                    placeholder="Descrição (ex: SAMSUNG GALAXY S23 256GB BLACK)"
-                  />
-                </div>
-                {skus.length > 1 && (
-                  <button type="button" onClick={() => removeSku(idx)}
-                    className="mt-3 text-slate-400 hover:text-red-500 transition shrink-0">
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
+              <SkuField
+                key={idx}
+                idx={idx}
+                s={s}
+                onChange={setSku}
+                onRemove={removeSku}
+                showRemove={skus.length > 1}
+              />
             ))}
           </div>
 

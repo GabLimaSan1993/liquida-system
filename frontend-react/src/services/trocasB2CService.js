@@ -1,6 +1,6 @@
+// src/services/trocasB2CService.js
 import { supabase } from "../lib/supabase";
 
-// ── Criar solicitação de troca (Assurant) ────────────────
 export async function criarTroca(dados, skus, userId) {
   const { data: troca, error } = await supabase
     .from("trocas_b2c")
@@ -35,7 +35,6 @@ export async function criarTroca(dados, skus, userId) {
   return troca;
 }
 
-// ── Listar trocas ─────────────────────────────────────────
 export async function listarTrocas(filtroStatus = null) {
   let query = supabase
     .from("trocas_b2c")
@@ -49,7 +48,6 @@ export async function listarTrocas(filtroStatus = null) {
   return data || [];
 }
 
-// ── Buscar troca por ID ───────────────────────────────────
 export async function buscarTroca(id) {
   const { data, error } = await supabase
     .from("trocas_b2c")
@@ -60,7 +58,6 @@ export async function buscarTroca(id) {
   return data;
 }
 
-// ── Atualizar status da troca ─────────────────────────────
 export async function atualizarStatusTroca(id, status) {
   const { error } = await supabase
     .from("trocas_b2c")
@@ -69,7 +66,6 @@ export async function atualizarStatusTroca(id, status) {
   if (error) throw new Error(error.message);
 }
 
-// ── Salvar/atualizar operação Furbtech ───────────────────
 export async function salvarOperacao(trocaId, dados, userId) {
   const { data: existente } = await supabase
     .from("trocas_b2c_operacao")
@@ -80,35 +76,33 @@ export async function salvarOperacao(trocaId, dados, userId) {
   if (existente) {
     const { error } = await supabase
       .from("trocas_b2c_operacao")
-      .update({
-        ...dados,
-        atualizado_em:  new Date().toISOString(),
-        atualizado_por: userId,
-      })
+      .update({ ...dados, atualizado_em: new Date().toISOString(), atualizado_por: userId })
       .eq("troca_id", trocaId);
     if (error) throw new Error(error.message);
   } else {
     const { error } = await supabase
       .from("trocas_b2c_operacao")
-      .insert({
-        troca_id:       trocaId,
-        ...dados,
-        atualizado_por: userId,
-      });
+      .insert({ troca_id: trocaId, ...dados, atualizado_por: userId });
     if (error) throw new Error(error.message);
   }
 }
 
+// ── Buscar descrição por SKU na triagem ──────────────────
+export async function buscarDescricaoPorSku(sku) {
+  if (!sku || sku.trim().length < 4) return null;
+  const { data } = await supabase
+    .from("assurant_triagem")
+    .select("sku, modelo")
+    .eq("sku", sku.trim())
+    .limit(1)
+    .single();
+  return data?.modelo || null;
+}
+
 // ── Buscar sugestões FIFO por SKU ────────────────────────
-// Para cada SKU da lista, retorna os 5 IMEIs mais antigos disponíveis
-// Regras:
-//   1. Existe em assurant_triagem com o SKU correto
-//   2. Não está em b2b_itens com status pendente/bipado
-//   3. Não está em trocas_b2c_operacao já em uso
 export async function buscarSugestoesPorSku(skus) {
   if (!skus?.length) return {};
 
-  // Buscar IMEIs já usados em trocas (em separação ou faturado)
   const { data: imeisEmTroca } = await supabase
     .from("trocas_b2c_operacao")
     .select("imei")
@@ -117,7 +111,6 @@ export async function buscarSugestoesPorSku(skus) {
 
   const imeisOcupadosTroca = new Set((imeisEmTroca || []).map(i => i.imei).filter(Boolean));
 
-  // Buscar IMEIs ocupados no B2B
   const { data: imeisB2B } = await supabase
     .from("b2b_itens")
     .select("imei")
@@ -131,20 +124,19 @@ export async function buscarSugestoesPorSku(skus) {
     const sku = skuObj.sku?.trim();
     if (!sku) continue;
 
-    // Buscar candidatos na triagem ordenados por data_alocacao (FIFO)
     const { data: candidatos } = await supabase
       .from("assurant_triagem")
       .select("imei, sku, modelo, local, data_alocacao, grade, status_atual")
       .eq("sku", sku)
       .not("imei", "is", null)
       .order("data_alocacao", { ascending: true })
-      .limit(50); // busca mais para filtrar os ocupados
+      .limit(50);
 
     const disponiveis = (candidatos || []).filter(c =>
       c.imei &&
       !imeisOcupadosTroca.has(c.imei) &&
       !imeisOcupadosB2B.has(c.imei)
-    ).slice(0, 5); // pega os 5 mais antigos
+    ).slice(0, 5);
 
     resultado[sku] = disponiveis;
   }
@@ -156,7 +148,6 @@ export async function buscarSugestoesPorSku(skus) {
 export async function validarImeiTroca(imei, skusAceitos) {
   const imeiTrim = String(imei).trim();
 
-  // 1. Existe na triagem?
   const { data: triagem } = await supabase
     .from("assurant_triagem")
     .select("imei, sku, modelo, local, data_alocacao, grade")
@@ -165,7 +156,6 @@ export async function validarImeiTroca(imei, skusAceitos) {
 
   if (!triagem) return { ok: false, erro: "IMEI não encontrado na base Assurant." };
 
-  // 2. SKU compatível com os aceitos?
   const skusAceitosLista = skusAceitos.map(s => s.sku?.trim()).filter(Boolean);
   if (!skusAceitosLista.includes(triagem.sku)) {
     return {
@@ -174,34 +164,28 @@ export async function validarImeiTroca(imei, skusAceitos) {
     };
   }
 
-  // 3. Não está em pedido B2B ativo?
   const { data: b2bItem } = await supabase
     .from("b2b_itens")
-    .select("id, status, pedido_id")
+    .select("id, status")
     .eq("imei", imeiTrim)
     .in("status", ["pendente", "bipado"])
     .single();
 
-  if (b2bItem) {
-    return { ok: false, erro: "IMEI reservado em pedido B2B ativo — não disponível para troca." };
-  }
+  if (b2bItem) return { ok: false, erro: "IMEI reservado em pedido B2B ativo — não disponível para troca." };
 
-  // 4. Não está em outra troca ativa?
   const { data: trocaAtiva } = await supabase
     .from("trocas_b2c_operacao")
-    .select("id, troca_id, status_furbtech")
+    .select("id")
     .eq("imei", imeiTrim)
     .in("status_furbtech", ["em_separacao", "faturado", "postado"])
     .single();
 
-  if (trocaAtiva) {
-    return { ok: false, erro: "IMEI já está sendo usado em outra troca B2C." };
-  }
+  if (trocaAtiva) return { ok: false, erro: "IMEI já está sendo usado em outra troca B2C." };
 
   return { ok: true, item: triagem };
 }
 
-// ── Registrar separação (bipar IMEI) ─────────────────────
+// ── Registrar separação ───────────────────────────────────
 export async function registrarSeparacao(trocaId, imei, skuEscolhido, userId) {
   const { data: existente } = await supabase
     .from("trocas_b2c_operacao")
@@ -220,18 +204,14 @@ export async function registrarSeparacao(trocaId, imei, skuEscolhido, userId) {
 
   if (existente) {
     const { error } = await supabase
-      .from("trocas_b2c_operacao")
-      .update(payload)
-      .eq("troca_id", trocaId);
+      .from("trocas_b2c_operacao").update(payload).eq("troca_id", trocaId);
     if (error) throw new Error(error.message);
   } else {
     const { error } = await supabase
-      .from("trocas_b2c_operacao")
-      .insert({ troca_id: trocaId, ...payload });
+      .from("trocas_b2c_operacao").insert({ troca_id: trocaId, ...payload });
     if (error) throw new Error(error.message);
   }
 
-  // Atualiza status da troca
   await atualizarStatusTroca(trocaId, "em_aberto");
 }
 
@@ -251,9 +231,7 @@ export async function registrarFaturamento(trocaId, dados, userId) {
 
   if (error) throw new Error(error.message);
 
-  // Se tem rastreio, conclui a troca
-  const novoStatus = dados.rastreio ? "concluido" : "em_aberto";
-  await atualizarStatusTroca(trocaId, novoStatus);
+  await atualizarStatusTroca(trocaId, dados.rastreio ? "concluido" : "em_aberto");
 }
 
 // ── Mover para reembolso ──────────────────────────────────
