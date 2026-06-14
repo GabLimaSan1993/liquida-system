@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Search, CheckCircle, AlertTriangle, Download,
   Package, X, BarChart3, Clock, Box, FileText,
@@ -148,8 +148,9 @@ function GaiaBadge({ status }) {
 // ══════════════════════════════════════════════════════════
 // ABA PICKING
 // ══════════════════════════════════════════════════════════
-function TabPicking({ pedidos, onAtualizar }) {
+function TabPicking({ pedidosIniciais, onAtualizarSilencioso }) {
   const { user }                          = useAuth();
+  const [pedidos, setPedidos]             = useState(pedidosIniciais);
   const [pedidoSel, setPedido]            = useState(null);
   const [itens, setItens]                 = useState([]);
   const [loading, setLoading]             = useState(false);
@@ -161,6 +162,18 @@ function TabPicking({ pedidos, onAtualizar }) {
   const [modalNaoLoc, setModalNaoLoc]     = useState(null);
   const [modalReverter, setModalReverter] = useState(null);
   const inputRef                          = useRef(null);
+
+  // Atualiza lista de pedidos sem resetar pedidoSel
+  async function atualizarPedidos() {
+    const data = await listarPedidosB2B();
+    setPedidos(data);
+    // Atualiza o pedido selecionado se ainda existir
+    if (pedidoSel) {
+      const atualizado = data.find(p => p.id === pedidoSel.id);
+      if (atualizado) setPedido(atualizado);
+    }
+    onAtualizarSilencioso?.(data);
+  }
 
   useEffect(() => { if (pedidoSel) carregarItens(); }, [pedidoSel]);
   useEffect(() => { if (pedidoSel) inputRef.current?.focus(); }, [pedidoSel]);
@@ -181,7 +194,8 @@ function TabPicking({ pedidos, onAtualizar }) {
       setFeedback({ tipo: "ok", msg: `✓ IMEI ${imeiInput.trim()} bipado!`, item: res.item });
       setItens(prev => prev.map(i => i.imei === imeiInput.trim() ? { ...i, status: "bipado", bipado_em: new Date().toISOString() } : i));
       setPedido(prev => ({ ...prev, total_bipados: (prev.total_bipados || 0) + 1 }));
-      onAtualizar?.();
+      // Atualiza contadores sem resetar tela
+      atualizarPedidos();
     } else {
       setFeedback({ tipo: "erro", msg: res.erro });
     }
@@ -238,7 +252,7 @@ function TabPicking({ pedidos, onAtualizar }) {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <p className="text-sm text-slate-500">Selecione um pedido:</p>
-          <button onClick={onAtualizar} className="text-xs text-slate-500 hover:text-purple-700 font-semibold">↻ Atualizar</button>
+          <button onClick={atualizarPedidos} className="text-xs text-slate-500 hover:text-purple-700 font-semibold">↻ Atualizar</button>
         </div>
         {pedidos.filter(p => p.status === "aberto").length === 0 ? (
           <div className="text-center py-12 text-slate-400"><Package className="h-8 w-8 mx-auto mb-2 opacity-30" /><p className="text-sm">Nenhum pedido em aberto.</p></div>
@@ -393,8 +407,9 @@ function TabPicking({ pedidos, onAtualizar }) {
 // ══════════════════════════════════════════════════════════
 // ABA EMBALAGEM
 // ══════════════════════════════════════════════════════════
-function TabEmbalagem({ pedidos, onAtualizar }) {
+function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
   const { user }                    = useAuth();
+  const [pedidos, setPedidos]       = useState(pedidosIniciais);
   const [pedidoSel, setPedido]      = useState(null);
   const [caixaAtiva, setCaixaAtiva] = useState(null);
   const [caixas, setCaixas]         = useState([]);
@@ -408,6 +423,16 @@ function TabEmbalagem({ pedidos, onAtualizar }) {
   const [itensCaixaDet, setItensCaixaDet]     = useState([]);
   const inputRef                    = useRef(null);
   const CAPACIDADE                  = 30;
+
+  async function atualizarPedidos() {
+    const data = await listarPedidosB2B();
+    setPedidos(data);
+    if (pedidoSel) {
+      const atualizado = data.find(p => p.id === pedidoSel.id);
+      if (atualizado) setPedido(atualizado);
+    }
+    onAtualizarSilencioso?.(data);
+  }
 
   useEffect(() => { if (pedidoSel) carregarCaixas(); }, [pedidoSel]);
   useEffect(() => { if (caixaAtiva) { carregarItensCaixa(); setTimeout(() => inputRef.current?.focus(), 100); } }, [caixaAtiva]);
@@ -493,7 +518,10 @@ function TabEmbalagem({ pedidos, onAtualizar }) {
     const pedidosDisponiveis = pedidos.filter(p => p.total_bipados > 0);
     return (
       <div className="space-y-4">
-        <p className="text-sm text-slate-500">Selecione um pedido para iniciar a embalagem:</p>
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-slate-500">Selecione um pedido para iniciar a embalagem:</p>
+          <button onClick={atualizarPedidos} className="text-xs text-slate-500 hover:text-purple-700 font-semibold">↻ Atualizar</button>
+        </div>
         {pedidosDisponiveis.length === 0 ? (
           <div className="text-center py-12 text-slate-400"><Box className="h-8 w-8 mx-auto mb-2 opacity-30" /><p className="text-sm">Nenhum pedido com itens bipados ainda.</p></div>
         ) : (
@@ -671,10 +699,11 @@ function TabEmbalagem({ pedidos, onAtualizar }) {
 }
 
 // ══════════════════════════════════════════════════════════
-// ABA FATURAMENTO — Em aberto
+// ABA FATURAMENTO
 // ══════════════════════════════════════════════════════════
-function TabPedidos({ pedidos, onAtualizar }) {
+function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
   const { user, profile }               = useAuth();
+  const [pedidos, setPedidos]           = useState(pedidosIniciais);
   const [exportando, setExportando]     = useState(null);
   const [importandoNF, setImportandoNF] = useState(null);
   const [feedbackExp, setFeedbackExp]   = useState({});
@@ -683,6 +712,12 @@ function TabPedidos({ pedidos, onAtualizar }) {
   const [painelAberto, setPainelAberto] = useState({});
   const [loadingResumo, setLoadingResumo] = useState({});
   const inputNFRefs = useRef({});
+
+  async function atualizarPedidos() {
+    const data = await listarPedidosB2B();
+    setPedidos(data);
+    onAtualizarSilencioso?.(data);
+  }
 
   useEffect(() => { pedidos.forEach(p => carregarResumo(p.id)); }, [pedidos]);
 
@@ -707,7 +742,7 @@ function TabPedidos({ pedidos, onAtualizar }) {
         setFeedbackExp(prev => ({ ...prev, [pedido.id]: { tipo: "ok", msg: `✓ Exportação v${res.numeroExportacao} — ${fmtN(res.total)} itens — ${res.nomeArquivo}` } }));
         setResumos(prev => ({ ...prev, [pedido.id]: null }));
         carregarResumo(pedido.id);
-        onAtualizar?.();
+        atualizarPedidos();
       }
     } catch (e) {
       setFeedbackExp(prev => ({ ...prev, [pedido.id]: { tipo: "erro", msg: e.message } }));
@@ -730,7 +765,7 @@ function TabPedidos({ pedidos, onAtualizar }) {
       setResumos(prev => ({ ...prev, [pedido.id]: null }));
       setNfs(prev => ({ ...prev, [pedido.id]: null }));
       carregarResumo(pedido.id);
-      onAtualizar?.();
+      atualizarPedidos();
     } catch (e) {
       setFeedbackExp(prev => ({ ...prev, [pedido.id]: { tipo: "erro", msg: e.message } }));
     } finally {
@@ -764,7 +799,7 @@ function TabPedidos({ pedidos, onAtualizar }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="font-black text-slate-800 flex items-center gap-2 text-sm"><BarChart3 className="h-4 w-4 text-[#7F2D92]" /> Faturamento B2B</h3>
-        <button onClick={onAtualizar} className="text-xs text-slate-500 hover:text-purple-700 font-semibold">↻ Atualizar</button>
+        <button onClick={atualizarPedidos} className="text-xs text-slate-500 hover:text-purple-700 font-semibold">↻ Atualizar</button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
@@ -854,41 +889,24 @@ function TabPedidos({ pedidos, onAtualizar }) {
                   </div>
                 )}
 
-                {/* Botões de ação */}
                 <div className="flex gap-2 flex-wrap items-center">
-                  {/* Exportar faturamento */}
                   <button onClick={() => handleExportar(p)} disabled={exportando === p.id || !p.total_bipados}
                     className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100 transition disabled:opacity-40">
                     {exportando === p.id ? <div className="h-3 w-3 border-2 border-emerald-300 border-t-emerald-700 rounded-full animate-spin" /> : <Download className="h-3 w-3" />}
                     Exportar faturamento
                   </button>
-
-                  {/* Importar NF via planilha */}
-                  <label className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl ring-1 transition cursor-pointer ${
-                    importandoNF === p.id ? "bg-blue-50 text-blue-400 ring-blue-200 opacity-60" : "bg-blue-50 text-blue-700 ring-blue-200 hover:bg-blue-100"
-                  }`}>
-                    {importandoNF === p.id
-                      ? <div className="h-3 w-3 border-2 border-blue-300 border-t-blue-700 rounded-full animate-spin" />
-                      : <Upload className="h-3 w-3" />
-                    }
+                  <label className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl ring-1 transition cursor-pointer ${importandoNF === p.id ? "bg-blue-50 text-blue-400 ring-blue-200 opacity-60" : "bg-blue-50 text-blue-700 ring-blue-200 hover:bg-blue-100"}`}>
+                    {importandoNF === p.id ? <div className="h-3 w-3 border-2 border-blue-300 border-t-blue-700 rounded-full animate-spin" /> : <Upload className="h-3 w-3" />}
                     Importar NF
-                    <input
-                      type="file"
-                      accept=".xlsx,.xls"
-                      className="hidden"
+                    <input type="file" accept=".xlsx,.xls" className="hidden"
                       ref={el => inputNFRefs.current[p.id] = el}
                       disabled={importandoNF === p.id}
-                      onChange={e => handleImportarNF(p, e.target.files?.[0])}
-                    />
+                      onChange={e => handleImportarNF(p, e.target.files?.[0])} />
                   </label>
                 </div>
 
                 {fb && (
-                  <div className={`mt-3 flex items-start gap-2 text-xs rounded-xl px-4 py-3 ring-1 ${
-                    fb.tipo === "ok" ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
-                    : fb.tipo === "bloqueado" ? "bg-amber-50 text-amber-700 ring-amber-200"
-                    : "bg-red-50 text-red-700 ring-red-200"
-                  }`}>
+                  <div className={`mt-3 flex items-start gap-2 text-xs rounded-xl px-4 py-3 ring-1 ${fb.tipo === "ok" ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : fb.tipo === "bloqueado" ? "bg-amber-50 text-amber-700 ring-amber-200" : "bg-red-50 text-red-700 ring-red-200"}`}>
                     {fb.tipo === "ok" ? <CheckCircle className="h-4 w-4 shrink-0 mt-0.5" /> : <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />}
                     <p className="font-semibold leading-relaxed">{fb.msg}</p>
                   </div>
@@ -903,7 +921,7 @@ function TabPedidos({ pedidos, onAtualizar }) {
 }
 
 // ══════════════════════════════════════════════════════════
-// ABA CONCLUÍDOS — Analytics
+// ABA CONCLUÍDOS
 // ══════════════════════════════════════════════════════════
 function TabConcluidos({ onVoltar }) {
   const [pedidos, setPedidos]           = useState([]);
@@ -1020,7 +1038,6 @@ function TabConcluidos({ onVoltar }) {
                   <span className="text-sm font-black text-emerald-700">{fmtR(p.valorFat)}</span>
                 </div>
               </div>
-
               {p.nfs?.length > 0 && (
                 <div>
                   <button onClick={() => setPainelAberto(prev => ({ ...prev, [p.id]: !prev[p.id] }))}
@@ -1065,6 +1082,11 @@ export default function B2BPickingPage() {
 
   async function carregarPedidos() {
     const data = await listarPedidosB2B();
+    setPedidos(data);
+  }
+
+  // Atualização silenciosa — só atualiza os contadores do header
+  function atualizarSilencioso(data) {
     setPedidos(data);
   }
 
@@ -1144,9 +1166,10 @@ export default function B2BPickingPage() {
         <span>Para importar um novo pedido B2B, acesse <strong>Uploads → Pedido B2B — Picking</strong>.</span>
       </div>
 
-      {aba === "picking"   && <TabPicking   pedidos={pedidos} onAtualizar={carregarPedidos} />}
-      {aba === "embalagem" && <TabEmbalagem pedidos={pedidos} onAtualizar={carregarPedidos} />}
-      {aba === "pedidos"   && !verConcluidos && <TabPedidos pedidos={pedidos} onAtualizar={carregarPedidos} />}
+      {/* Cada aba gerencia seus próprios pedidos internamente */}
+      {aba === "picking"   && <TabPicking   pedidosIniciais={pedidos} onAtualizarSilencioso={atualizarSilencioso} />}
+      {aba === "embalagem" && <TabEmbalagem pedidosIniciais={pedidos} onAtualizarSilencioso={atualizarSilencioso} />}
+      {aba === "pedidos"   && !verConcluidos && <TabPedidos pedidosIniciais={pedidos} onAtualizarSilencioso={atualizarSilencioso} />}
       {aba === "pedidos"   && verConcluidos  && <TabConcluidos onVoltar={() => setVerConcluidos(false)} />}
     </div>
   );
