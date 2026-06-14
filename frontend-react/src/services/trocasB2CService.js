@@ -4,15 +4,22 @@ export async function criarTroca(dados, skus, userId) {
   const { data: troca, error } = await supabase
     .from("trocas_b2c")
     .insert({
-      id_anymarket:     dados.id_anymarket,
-      nome_cliente:     dados.nome_cliente,
-      cpf:              dados.cpf,
-      endereco:         dados.endereco,
-      produto_original: dados.produto_original,
-      produto_condicao: dados.produto_condicao,
-      produto_grade:    dados.produto_grade,
-      status:           "em_aberto",
-      criado_por:       userId,
+      id_anymarket:          dados.id_anymarket,
+      nome_cliente:          dados.nome_cliente,
+      cpf:                   dados.cpf,
+      endereco:              dados.endereco,
+      endereco_cep:          dados.endereco_cep,
+      endereco_rua:          dados.endereco_rua,
+      endereco_numero:       dados.endereco_numero,
+      endereco_complemento:  dados.endereco_complemento,
+      endereco_bairro:       dados.endereco_bairro,
+      endereco_cidade:       dados.endereco_cidade,
+      endereco_estado:       dados.endereco_estado,
+      produto_original:      dados.produto_original,
+      produto_condicao:      dados.produto_condicao,
+      produto_grade:         dados.produto_grade,
+      status:                "em_aberto",
+      criado_por:            userId,
     })
     .select()
     .single();

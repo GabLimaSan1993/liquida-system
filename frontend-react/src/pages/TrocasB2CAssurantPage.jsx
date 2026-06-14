@@ -1,6 +1,6 @@
 // src/pages/TrocasB2CAssurantPage.jsx
 import { useState, useRef } from "react";
-import { Plus, Trash2, CheckCircle, AlertTriangle, ArrowRight, Loader } from "lucide-react";
+import { Plus, Trash2, CheckCircle, AlertTriangle, ArrowRight, Loader, MapPin } from "lucide-react";
 import { criarTroca, buscarDescricaoPorSku } from "../services/trocasB2CService.js";
 import { useAuth } from "../AuthContext.jsx";
 
@@ -17,6 +17,7 @@ const labelCls = "block text-xs font-bold text-slate-600 mb-1";
 
 const GRADES = ["BOM", "MUITO BOM", "EXCELENTE", "LIKE NEW", "REGULAR", "QUEBRADO"];
 
+// ── Campo SKU com autocomplete ────────────────────────────
 function SkuField({ idx, s, onChange, onRemove, showRemove }) {
   const [buscando, setBuscando] = useState(false);
   const debounceRef             = useRef(null);
@@ -88,17 +89,166 @@ function SkuField({ idx, s, onChange, onRemove, showRemove }) {
   );
 }
 
+// ── Campos de endereço com ViaCEP ─────────────────────────
+function EnderecoFields({ endereco, onChange }) {
+  const [buscandoCep, setBuscandoCep] = useState(false);
+  const [erroCep, setErroCep]         = useState("");
+  const debounceRef                   = useRef(null);
+
+  function handleCepChange(valor) {
+    // Remove tudo que não for número
+    const cep = valor.replace(/\D/g, "").slice(0, 8);
+    onChange("endereco_cep", cep);
+    setErroCep("");
+
+    clearTimeout(debounceRef.current);
+    if (cep.length === 8) {
+      setBuscandoCep(true);
+      debounceRef.current = setTimeout(async () => {
+        try {
+          const res  = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+          const data = await res.json();
+          if (data.erro) {
+            setErroCep("CEP não encontrado.");
+          } else {
+            onChange("endereco_rua",    data.logradouro || "");
+            onChange("endereco_bairro", data.bairro     || "");
+            onChange("endereco_cidade", data.localidade || "");
+            onChange("endereco_estado", data.uf         || "");
+          }
+        } catch (_) {
+          setErroCep("Erro ao buscar CEP.");
+        } finally {
+          setBuscandoCep(false);
+        }
+      }, 500);
+    }
+  }
+
+  // Formata CEP para exibição: 00000-000
+  const cepFormatado = endereco.endereco_cep
+    ? endereco.endereco_cep.replace(/(\d{5})(\d{1,3})/, "$1-$2")
+    : "";
+
+  return (
+    <div className="space-y-3">
+
+      {/* CEP */}
+      <div>
+        <label className={labelCls}>CEP</label>
+        <div className="relative">
+          <input
+            value={cepFormatado}
+            onChange={e => handleCepChange(e.target.value)}
+            className={inputCls}
+            placeholder="00000-000"
+            maxLength={9}
+          />
+          {buscandoCep && (
+            <div className="absolute right-3 top-3.5">
+              <Loader className="h-4 w-4 text-purple-500 animate-spin" />
+            </div>
+          )}
+          {!buscandoCep && endereco.endereco_rua && (
+            <div className="absolute right-3 top-3.5">
+              <CheckCircle className="h-4 w-4 text-emerald-500" />
+            </div>
+          )}
+        </div>
+        {erroCep && (
+          <p className="text-xs text-red-600 font-semibold mt-1 flex items-center gap-1">
+            <AlertTriangle className="h-3 w-3" /> {erroCep}
+          </p>
+        )}
+      </div>
+
+      {/* Rua + Número */}
+      <div className="grid grid-cols-3 gap-2">
+        <div className="col-span-2">
+          <label className={labelCls}>Rua / Logradouro</label>
+          <input
+            value={endereco.endereco_rua}
+            onChange={e => onChange("endereco_rua", e.target.value)}
+            className={`${inputCls} ${endereco.endereco_rua ? "border-emerald-200 bg-emerald-50 text-emerald-800" : ""}`}
+            placeholder="Rua, Avenida..."
+          />
+        </div>
+        <div>
+          <label className={labelCls}>Número</label>
+          <input
+            value={endereco.endereco_numero}
+            onChange={e => onChange("endereco_numero", e.target.value)}
+            className={inputCls}
+            placeholder="Ex: 123"
+          />
+        </div>
+      </div>
+
+      {/* Complemento */}
+      <div>
+        <label className={labelCls}>Complemento</label>
+        <input
+          value={endereco.endereco_complemento}
+          onChange={e => onChange("endereco_complemento", e.target.value)}
+          className={inputCls}
+          placeholder="Apto, Bloco, Casa... (opcional)"
+        />
+      </div>
+
+      {/* Bairro */}
+      <div>
+        <label className={labelCls}>Bairro</label>
+        <input
+          value={endereco.endereco_bairro}
+          onChange={e => onChange("endereco_bairro", e.target.value)}
+          className={`${inputCls} ${endereco.endereco_bairro ? "border-emerald-200 bg-emerald-50 text-emerald-800" : ""}`}
+          placeholder="Bairro"
+        />
+      </div>
+
+      {/* Cidade + Estado */}
+      <div className="grid grid-cols-3 gap-2">
+        <div className="col-span-2">
+          <label className={labelCls}>Cidade</label>
+          <input
+            value={endereco.endereco_cidade}
+            onChange={e => onChange("endereco_cidade", e.target.value)}
+            className={`${inputCls} ${endereco.endereco_cidade ? "border-emerald-200 bg-emerald-50 text-emerald-800" : ""}`}
+            placeholder="Cidade"
+          />
+        </div>
+        <div>
+          <label className={labelCls}>Estado</label>
+          <input
+            value={endereco.endereco_estado}
+            onChange={e => onChange("endereco_estado", e.target.value)}
+            className={`${inputCls} ${endereco.endereco_estado ? "border-emerald-200 bg-emerald-50 text-emerald-800" : ""}`}
+            placeholder="UF"
+            maxLength={2}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function TrocasB2CAssurantPage() {
   const { user } = useAuth();
 
   const [form, setForm] = useState({
-    id_anymarket:     "",
-    nome_cliente:     "",
-    cpf:              "",
-    endereco:         "",
-    produto_nome:     "",
-    produto_condicao: "Usado",
-    produto_grade:    "",
+    id_anymarket:          "",
+    nome_cliente:          "",
+    cpf:                   "",
+    produto_nome:          "",
+    produto_condicao:      "Usado",
+    produto_grade:         "",
+    endereco_cep:          "",
+    endereco_rua:          "",
+    endereco_numero:       "",
+    endereco_complemento:  "",
+    endereco_bairro:       "",
+    endereco_cidade:       "",
+    endereco_estado:       "",
   });
 
   const [skus, setSkus]         = useState([{ sku: "", descricao: "" }]);
@@ -129,22 +279,34 @@ export default function TrocasB2CAssurantPage() {
     const skusValidos     = skus.filter(s => s.sku.trim());
     const produtoOriginal = `${form.produto_condicao}: ${form.produto_nome.trim()} - ${form.produto_grade}`;
 
+    // Monta endereço legível para o campo antigo (retrocompatibilidade)
+    const enderecoCompleto = [
+      form.endereco_rua,
+      form.endereco_numero,
+      form.endereco_complemento,
+      form.endereco_bairro,
+      form.endereco_cidade,
+      form.endereco_estado,
+      form.endereco_cep,
+    ].filter(Boolean).join(", ");
+
     setSalvando(true);
     try {
       await criarTroca(
         {
           ...form,
           produto_original: produtoOriginal,
-          produto_condicao: form.produto_condicao,
-          produto_grade:    form.produto_grade,
+          endereco:         enderecoCompleto,
         },
         skusValidos,
         user.id
       );
       setSucesso(true);
       setForm({
-        id_anymarket: "", nome_cliente: "", cpf: "", endereco: "",
+        id_anymarket: "", nome_cliente: "", cpf: "",
         produto_nome: "", produto_condicao: "Usado", produto_grade: "",
+        endereco_cep: "", endereco_rua: "", endereco_numero: "",
+        endereco_complemento: "", endereco_bairro: "", endereco_cidade: "", endereco_estado: "",
       });
       setSkus([{ sku: "", descricao: "" }]);
     } catch (e) {
@@ -203,8 +365,6 @@ export default function TrocasB2CAssurantPage() {
             {/* Produto comprado */}
             <div>
               <label className={labelCls}>Produto Comprado Originalmente *</label>
-
-              {/* Condição */}
               <div className="flex gap-2 mb-2">
                 {["Usado", "Novo"].map(c => (
                   <button key={c} type="button" onClick={() => setField("produto_condicao", c)}
@@ -217,28 +377,20 @@ export default function TrocasB2CAssurantPage() {
                   </button>
                 ))}
               </div>
-
-              {/* Nome */}
               <input
                 value={form.produto_nome}
                 onChange={e => setField("produto_nome", e.target.value)}
                 className={`${inputCls} mb-2`}
                 placeholder="Ex: Samsung Galaxy S23 256GB Preto"
               />
-
-              {/* Grade */}
               <select
                 value={form.produto_grade}
                 onChange={e => setField("produto_grade", e.target.value)}
                 className={inputCls}
               >
                 <option value="">Selecione o grade...</option>
-                {GRADES.map(g => (
-                  <option key={g} value={g}>{g}</option>
-                ))}
+                {GRADES.map(g => <option key={g} value={g}>{g}</option>)}
               </select>
-
-              {/* Preview */}
               {previewProduto && (
                 <div className="mt-2 bg-purple-50 ring-1 ring-purple-200 rounded-xl px-4 py-2.5 text-xs text-purple-700 font-semibold">
                   📦 {previewProduto}
@@ -262,13 +414,18 @@ export default function TrocasB2CAssurantPage() {
               <input value={form.cpf} onChange={e => setField("cpf", e.target.value)}
                 className={inputCls} placeholder="000.000.000-00" />
             </div>
-            <div>
-              <label className={labelCls}>Endereço de Entrega</label>
-              <textarea value={form.endereco} onChange={e => setField("endereco", e.target.value)}
-                className={inputCls + " resize-none"} rows={3}
-                placeholder="Rua, número, bairro, cidade, estado, CEP" />
-            </div>
           </div>
+        </Card>
+
+        {/* Endereço de entrega */}
+        <Card>
+          <h3 className="font-black text-slate-700 text-sm mb-4 flex items-center gap-2">
+            <MapPin className="h-4 w-4 text-[#7F2D92]" /> Endereço de Entrega
+          </h3>
+          <div className="bg-blue-50 ring-1 ring-blue-200 rounded-xl px-4 py-2.5 mb-4 text-xs text-blue-700 font-semibold">
+            ℹ Digite o CEP para preencher automaticamente o endereço.
+          </div>
+          <EnderecoFields endereco={form} onChange={setField} />
         </Card>
 
         {/* SKUs aceitos */}
@@ -277,11 +434,9 @@ export default function TrocasB2CAssurantPage() {
             <h3 className="font-black text-slate-700 text-sm">📦 SKUs Aceitos para Substituição</h3>
             <span className="text-xs text-slate-400">em ordem de preferência</span>
           </div>
-
           <div className="bg-blue-50 ring-1 ring-blue-200 rounded-xl px-4 py-2.5 mb-4 text-xs text-blue-700 font-semibold">
             ℹ A descrição será carregada automaticamente ao digitar o SKU.
           </div>
-
           <div className="space-y-4">
             {skus.map((s, idx) => (
               <SkuField
@@ -294,7 +449,6 @@ export default function TrocasB2CAssurantPage() {
               />
             ))}
           </div>
-
           <button type="button" onClick={addSku}
             className="mt-4 flex items-center gap-2 text-xs font-semibold text-purple-700 hover:text-purple-900 transition">
             <Plus className="h-4 w-4" /> Adicionar outro SKU
