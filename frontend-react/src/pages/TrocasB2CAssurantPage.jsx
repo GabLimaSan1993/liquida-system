@@ -1,3 +1,4 @@
+// src/pages/TrocasB2CAssurantPage.jsx
 import { useState, useRef } from "react";
 import { Plus, Trash2, CheckCircle, AlertTriangle, ArrowRight, Loader } from "lucide-react";
 import { criarTroca, buscarDescricaoPorSku } from "../services/trocasB2CService.js";
@@ -91,13 +92,13 @@ export default function TrocasB2CAssurantPage() {
   const { user } = useAuth();
 
   const [form, setForm] = useState({
-    id_anymarket:      "",
-    nome_cliente:      "",
-    cpf:               "",
-    endereco:          "",
-    produto_nome:      "",
-    produto_condicao:  "Usado",
-    produto_grade:     "",
+    id_anymarket:     "",
+    nome_cliente:     "",
+    cpf:              "",
+    endereco:         "",
+    produto_nome:     "",
+    produto_condicao: "Usado",
+    produto_grade:    "",
   });
 
   const [skus, setSkus]         = useState([{ sku: "", descricao: "" }]);
@@ -107,16 +108,6 @@ export default function TrocasB2CAssurantPage() {
 
   function setField(field, value) {
     setForm(prev => ({ ...prev, [field]: value }));
-  }
-
-  // Monta o produto_original juntando os três campos
-  function montarProdutoOriginal() {
-    const partes = [];
-    if (form.produto_condicao) partes.push(form.produto_condicao);
-    if (form.produto_nome.trim()) partes.push(form.produto_nome.trim());
-    if (form.produto_grade) partes.push(form.produto_grade);
-    return partes.join(": ").replace(": ", " ").trim();
-    // Ex: "Usado: Samsung Galaxy S23 256GB Preto - Bom"
   }
 
   function addSku() { setSkus(prev => [...prev, { sku: "", descricao: "" }]); }
@@ -141,12 +132,20 @@ export default function TrocasB2CAssurantPage() {
     setSalvando(true);
     try {
       await criarTroca(
-        { ...form, produto_original: produtoOriginal },
+        {
+          ...form,
+          produto_original: produtoOriginal,
+          produto_condicao: form.produto_condicao,
+          produto_grade:    form.produto_grade,
+        },
         skusValidos,
         user.id
       );
       setSucesso(true);
-      setForm({ id_anymarket: "", nome_cliente: "", cpf: "", endereco: "", produto_nome: "", produto_condicao: "Usado", produto_grade: "" });
+      setForm({
+        id_anymarket: "", nome_cliente: "", cpf: "", endereco: "",
+        produto_nome: "", produto_condicao: "Usado", produto_grade: "",
+      });
       setSkus([{ sku: "", descricao: "" }]);
     } catch (e) {
       setFeedback(e.message);
@@ -154,6 +153,12 @@ export default function TrocasB2CAssurantPage() {
       setSalvando(false);
     }
   }
+
+  const previewProduto = [
+    form.produto_condicao,
+    form.produto_nome.trim(),
+    form.produto_grade,
+  ].filter(Boolean).join(" · ");
 
   if (sucesso) {
     return (
@@ -163,10 +168,7 @@ export default function TrocasB2CAssurantPage() {
             <CheckCircle className="h-8 w-8 text-emerald-600" />
           </div>
           <h2 className="text-xl font-black text-slate-800 mb-2">Solicitação registrada!</h2>
-          <p className="text-sm text-slate-500 mb-2">A equipe Furbtech já pode visualizar e processar a troca.</p>
-          <p className="text-xs text-slate-400 mb-6 bg-slate-50 rounded-xl px-3 py-2 font-mono">
-            {`${form.produto_condicao || "Usado"}: ${form.produto_nome || "—"} - ${form.produto_grade || "—"}`}
-          </p>
+          <p className="text-sm text-slate-500 mb-6">A equipe Furbtech já pode visualizar e processar a troca.</p>
           <button onClick={() => setSucesso(false)}
             className="bg-[#7F2D92] text-white px-6 py-3 rounded-2xl text-sm font-bold hover:bg-[#5B1E74] transition">
             Nova solicitação
@@ -175,13 +177,6 @@ export default function TrocasB2CAssurantPage() {
       </div>
     );
   }
-
-  // Preview do produto montado
-  const previewProduto = [
-    form.produto_condicao,
-    form.produto_nome.trim(),
-    form.produto_grade,
-  ].filter(Boolean).join(" · ");
 
   return (
     <div className="space-y-5 max-w-2xl mx-auto">
@@ -205,11 +200,11 @@ export default function TrocasB2CAssurantPage() {
                 className={inputCls} placeholder="Ex: 232991879" />
             </div>
 
-            {/* Produto comprado — 3 campos */}
+            {/* Produto comprado */}
             <div>
               <label className={labelCls}>Produto Comprado Originalmente *</label>
 
-              {/* Condição: Usado / Novo */}
+              {/* Condição */}
               <div className="flex gap-2 mb-2">
                 {["Usado", "Novo"].map(c => (
                   <button key={c} type="button" onClick={() => setField("produto_condicao", c)}
@@ -223,7 +218,7 @@ export default function TrocasB2CAssurantPage() {
                 ))}
               </div>
 
-              {/* Nome do produto */}
+              {/* Nome */}
               <input
                 value={form.produto_nome}
                 onChange={e => setField("produto_nome", e.target.value)}

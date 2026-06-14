@@ -1,4 +1,3 @@
-// src/services/trocasB2CService.js
 import { supabase } from "../lib/supabase";
 
 export async function criarTroca(dados, skus, userId) {
@@ -10,6 +9,8 @@ export async function criarTroca(dados, skus, userId) {
       cpf:              dados.cpf,
       endereco:         dados.endereco,
       produto_original: dados.produto_original,
+      produto_condicao: dados.produto_condicao,
+      produto_grade:    dados.produto_grade,
       status:           "em_aberto",
       criado_por:       userId,
     })
@@ -87,7 +88,6 @@ export async function salvarOperacao(trocaId, dados, userId) {
   }
 }
 
-// ── Buscar descrição por SKU na triagem ──────────────────
 export async function buscarDescricaoPorSku(sku) {
   if (!sku || sku.trim().length < 4) return null;
   const { data } = await supabase
@@ -99,7 +99,6 @@ export async function buscarDescricaoPorSku(sku) {
   return data?.modelo || null;
 }
 
-// ── Buscar sugestões FIFO por SKU ────────────────────────
 export async function buscarSugestoesPorSku(skus) {
   if (!skus?.length) return {};
 
@@ -144,7 +143,6 @@ export async function buscarSugestoesPorSku(skus) {
   return resultado;
 }
 
-// ── Validar IMEI para separação ──────────────────────────
 export async function validarImeiTroca(imei, skusAceitos) {
   const imeiTrim = String(imei).trim();
 
@@ -185,7 +183,6 @@ export async function validarImeiTroca(imei, skusAceitos) {
   return { ok: true, item: triagem };
 }
 
-// ── Registrar separação ───────────────────────────────────
 export async function registrarSeparacao(trocaId, imei, skuEscolhido, userId) {
   const { data: existente } = await supabase
     .from("trocas_b2c_operacao")
@@ -215,7 +212,6 @@ export async function registrarSeparacao(trocaId, imei, skuEscolhido, userId) {
   await atualizarStatusTroca(trocaId, "em_aberto");
 }
 
-// ── Registrar faturamento ────────────────────────────────
 export async function registrarFaturamento(trocaId, dados, userId) {
   const { error } = await supabase
     .from("trocas_b2c_operacao")
@@ -234,7 +230,6 @@ export async function registrarFaturamento(trocaId, dados, userId) {
   await atualizarStatusTroca(trocaId, dados.rastreio ? "concluido" : "em_aberto");
 }
 
-// ── Mover para reembolso ──────────────────────────────────
 export async function moverParaReembolso(trocaId) {
   await atualizarStatusTroca(trocaId, "movido_reembolso");
 }
