@@ -3,11 +3,11 @@ import {
   Search, CheckCircle, AlertTriangle, Download,
   Package, X, BarChart3, Clock, Box, FileText,
   Tag, Plus, Lock, MapPin, RotateCcw, TrendingUp,
-  ChevronDown, ChevronUp, Calendar,
+  ChevronDown, ChevronUp, Calendar, Upload,
 } from "lucide-react";
 import {
   listarPedidosB2B, listarItensComStatusGaia,
-  registrarBipagem, exportarFaturamento,
+  registrarBipagem, exportarFaturamento, importarNFPlanilha,
   listarExportacoes, marcarNaoLocalizado,
   reverterNaoLocalizado, buscarResumoValorPedido,
   listarNFsPedido, listarPedidosConcluidos,
@@ -135,13 +135,12 @@ function ModalReverter({ item, onConfirmar, onCancelar }) {
   );
 }
 
-// ── Helper badge status Gaia ──────────────────────────────
 function GaiaBadge({ status }) {
   if (!status) return <span className="text-slate-300">—</span>;
   const cls =
-    status === "Finalizado"          ? "bg-emerald-50 text-emerald-700" :
-    status === "Produto disponível"  ? "bg-blue-50 text-blue-700"       :
-    status === "Reservado para reparo" ? "bg-orange-50 text-orange-700" :
+    status === "Finalizado"            ? "bg-emerald-50 text-emerald-700" :
+    status === "Produto disponível"    ? "bg-blue-50 text-blue-700"       :
+    status === "Reservado para reparo" ? "bg-orange-50 text-orange-700"   :
     "bg-slate-50 text-slate-500";
   return <span className={`px-2 py-0.5 rounded-lg font-semibold text-xs ${cls}`}>{status}</span>;
 }
@@ -677,11 +676,13 @@ function TabEmbalagem({ pedidos, onAtualizar }) {
 function TabPedidos({ pedidos, onAtualizar }) {
   const { user, profile }               = useAuth();
   const [exportando, setExportando]     = useState(null);
+  const [importandoNF, setImportandoNF] = useState(null);
   const [feedbackExp, setFeedbackExp]   = useState({});
   const [resumos, setResumos]           = useState({});
   const [nfs, setNfs]                   = useState({});
   const [painelAberto, setPainelAberto] = useState({});
   const [loadingResumo, setLoadingResumo] = useState({});
+  const inputNFRefs = useRef({});
 
   useEffect(() => { pedidos.forEach(p => carregarResumo(p.id)); }, [pedidos]);
 
@@ -711,6 +712,31 @@ function TabPedidos({ pedidos, onAtualizar }) {
     } catch (e) {
       setFeedbackExp(prev => ({ ...prev, [pedido.id]: { tipo: "erro", msg: e.message } }));
     } finally { setExportando(null); }
+  }
+
+  async function handleImportarNF(pedido, file) {
+    if (!file) return;
+    setImportandoNF(pedido.id);
+    setFeedbackExp(prev => ({ ...prev, [pedido.id]: null }));
+    try {
+      const res = await importarNFPlanilha(file, pedido.id, user.id);
+      setFeedbackExp(prev => ({
+        ...prev,
+        [pedido.id]: {
+          tipo: "ok",
+          msg: `✓ ${res.totalNFs} NF${res.totalNFs > 1 ? "s" : ""} importada${res.totalNFs > 1 ? "s" : ""} (${res.nfs.join(", ")}) — ${fmtN(res.totalItens)} itens`,
+        },
+      }));
+      setResumos(prev => ({ ...prev, [pedido.id]: null }));
+      setNfs(prev => ({ ...prev, [pedido.id]: null }));
+      carregarResumo(pedido.id);
+      onAtualizar?.();
+    } catch (e) {
+      setFeedbackExp(prev => ({ ...prev, [pedido.id]: { tipo: "erro", msg: e.message } }));
+    } finally {
+      setImportandoNF(null);
+      if (inputNFRefs.current[pedido.id]) inputNFRefs.current[pedido.id].value = "";
+    }
   }
 
   const pedidosAbertos = pedidos.filter(p => p.status !== "concluido");
@@ -814,7 +840,8 @@ function TabPedidos({ pedidos, onAtualizar }) {
                             <div className="flex items-center gap-2">
                               <FileText className="h-3.5 w-3.5 text-purple-500" />
                               <span className="font-bold text-slate-700">NF {nf.numero_nf}</span>
-                              <span className="text-slate-400">· {fmtN(nf.total_itens)} itens · {fmtN(nf.total_caixas)} caixas</span>
+                              <span className="text-slate-400">· {fmtN(nf.total_itens)} itens</span>
+                              {nf.valor_total > 0 && <span className="font-semibold text-emerald-600">· {fmtR(nf.valor_total)}</span>}
                               {nf.data_faturamento && <span className="text-slate-400">· {new Date(nf.data_faturamento).toLocaleDateString("pt-BR")}</span>}
                             </div>
                             <span className="text-xs font-semibold px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 flex items-center gap-1">
@@ -827,16 +854,41 @@ function TabPedidos({ pedidos, onAtualizar }) {
                   </div>
                 )}
 
-                <div className="flex gap-2 flex-wrap">
+                {/* Botões de ação */}
+                <div className="flex gap-2 flex-wrap items-center">
+                  {/* Exportar faturamento */}
                   <button onClick={() => handleExportar(p)} disabled={exportando === p.id || !p.total_bipados}
                     className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100 transition disabled:opacity-40">
                     {exportando === p.id ? <div className="h-3 w-3 border-2 border-emerald-300 border-t-emerald-700 rounded-full animate-spin" /> : <Download className="h-3 w-3" />}
                     Exportar faturamento
                   </button>
+
+                  {/* Importar NF via planilha */}
+                  <label className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl ring-1 transition cursor-pointer ${
+                    importandoNF === p.id ? "bg-blue-50 text-blue-400 ring-blue-200 opacity-60" : "bg-blue-50 text-blue-700 ring-blue-200 hover:bg-blue-100"
+                  }`}>
+                    {importandoNF === p.id
+                      ? <div className="h-3 w-3 border-2 border-blue-300 border-t-blue-700 rounded-full animate-spin" />
+                      : <Upload className="h-3 w-3" />
+                    }
+                    Importar NF
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls"
+                      className="hidden"
+                      ref={el => inputNFRefs.current[p.id] = el}
+                      disabled={importandoNF === p.id}
+                      onChange={e => handleImportarNF(p, e.target.files?.[0])}
+                    />
+                  </label>
                 </div>
 
                 {fb && (
-                  <div className={`mt-3 flex items-start gap-2 text-xs rounded-xl px-4 py-3 ring-1 ${fb.tipo === "ok" ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : fb.tipo === "bloqueado" ? "bg-amber-50 text-amber-700 ring-amber-200" : "bg-red-50 text-red-700 ring-red-200"}`}>
+                  <div className={`mt-3 flex items-start gap-2 text-xs rounded-xl px-4 py-3 ring-1 ${
+                    fb.tipo === "ok" ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                    : fb.tipo === "bloqueado" ? "bg-amber-50 text-amber-700 ring-amber-200"
+                    : "bg-red-50 text-red-700 ring-red-200"
+                  }`}>
                     {fb.tipo === "ok" ? <CheckCircle className="h-4 w-4 shrink-0 mt-0.5" /> : <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />}
                     <p className="font-semibold leading-relaxed">{fb.msg}</p>
                   </div>
@@ -983,7 +1035,7 @@ function TabConcluidos({ onVoltar }) {
                           <div className="flex items-center gap-2">
                             <FileText className="h-3.5 w-3.5 text-emerald-500" />
                             <span className="font-bold text-slate-700">NF {nf.numero_nf}</span>
-                            <span className="text-slate-400">· {fmtN(nf.total_itens)} itens · {fmtN(nf.total_caixas)} caixas</span>
+                            <span className="text-slate-400">· {fmtN(nf.total_itens)} itens</span>
                             {nf.valor_total > 0 && <span className="font-semibold text-emerald-600">· {fmtR(nf.valor_total)}</span>}
                           </div>
                           {nf.data_faturamento && <span className="text-slate-400">{new Date(nf.data_faturamento).toLocaleDateString("pt-BR")}</span>}

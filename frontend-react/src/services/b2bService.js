@@ -110,7 +110,6 @@ export async function listarItens(pedidoId) {
   return data || [];
 }
 
-// ── Buscar itens com status do Gaia ──────────────────────
 export async function listarItensComStatusGaia(pedidoId) {
   const { data: itens, error } = await supabase
     .from("b2b_itens").select("*").eq("pedido_id", pedidoId).order("local_estoque", { ascending: true });
@@ -168,6 +167,7 @@ export async function reverterNaoLocalizado(itemId, novoLocal) {
   if (error) throw new Error(error.message);
 }
 
+// ── Exportar para faturamento ─────────────────────────────
 export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
   const { data: exportacoes } = await supabase.from("b2b_exportacoes").select("*").eq("pedido_id", pedidoId).order("exportado_em", { ascending: false });
   const ultimaExportacao = exportacoes?.[0] || null;
@@ -190,6 +190,12 @@ export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
   }
 
   const { data: pedido } = await supabase.from("b2b_pedidos").select("*").eq("id", pedidoId).single();
+
+  // Buscar CNPJ do cliente
+  const { data: clienteData } = await supabase
+    .from("b2b_clientes").select("cnpj").eq("nome", pedido.cliente).single();
+  const cnpj = clienteData?.cnpj || "";
+
   const { data: novaExportacao, error: errExp } = await supabase.from("b2b_exportacoes")
     .insert({ pedido_id: pedidoId, exportado_por: userId, nome_usuario: nomeUsuario, total_itens: itensNovos.length })
     .select().single();
@@ -205,6 +211,7 @@ export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
   const rows = itensNovos.map(i => ({
     "LOTE":      pedido.lote,
     "CLIENTE":   pedido.cliente,
+    "CNPJ":      cnpj,
     "VOUCHER":   i.voucher,
     "IMEI":      i.imei,
     "MODELO":    i.modelo,
@@ -212,8 +219,9 @@ export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
     "DESC_ITEM": i.desc_item,
     "COD_ITEM":  i.cod_item,
     "LOCAL":     i.local_estoque,
-    "VALOR":     i.valor ? i.valor.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "",
+    "VALOR":     i.valor != null ? i.valor.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "",
     "BIPADO_EM": i.bipado_em ? new Date(i.bipado_em).toLocaleString("pt-BR") : "",
+    "NF":        "",
   }));
 
   const wb = XLSX.utils.book_new();
@@ -223,6 +231,84 @@ export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
   XLSX.writeFile(wb, nomeArquivo);
 
   return { bloqueado: false, total: itensNovos.length, numeroExportacao, nomeArquivo };
+}
+
+// ── Importar NF via planilha de faturamento preenchida ───
+export async function importarNFPlanilha(file, pedidoId, userId) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const wb   = XLSX.read(e.target.result, { type: "binary" });
+        const ws   = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { defval: null });
+
+        if (!rows.length) throw new Error("Planilha vazia.");
+
+        // Filtrar apenas linhas com NF preenchida
+        const linhasComNF = rows.filter(r => r["NF"] && String(r["NF"]).trim() !== "");
+        if (!linhasComNF.length) throw new Error("Nenhuma linha com NF preenchida encontrada.");
+
+        // Verificar que o pedido existe
+        const { data: pedido, error: errPedido } = await supabase
+          .from("b2b_pedidos").select("*").eq("id", pedidoId).single();
+        if (errPedido || !pedido) throw new Error("Pedido não encontrado.");
+
+        // Agrupar linhas por número de NF
+        const nfMap = {};
+        for (const row of linhasComNF) {
+          const nf    = String(row["NF"]).trim();
+          const imei  = String(row["IMEI"] || "").trim();
+          // Valor pode vir em formato americano (1,234.56) — converter para número
+          const valorRaw = row["VALOR"] ? String(row["VALOR"]).replace(/,/g, "") : "0";
+          const valor    = parseFloat(valorRaw) || 0;
+
+          if (!nfMap[nf]) nfMap[nf] = { itens: [], valorTotal: 0 };
+          nfMap[nf].itens.push(imei);
+          nfMap[nf].valorTotal += valor;
+        }
+
+        // Verificar NFs já cadastradas neste pedido
+        const { data: nfsExistentes } = await supabase
+          .from("b2b_nfs").select("numero_nf").eq("pedido_id", pedidoId);
+        const nfsJaCadastradas = new Set((nfsExistentes || []).map(n => String(n.numero_nf)));
+
+        const nfsParaInserir = Object.entries(nfMap).filter(([nf]) => !nfsJaCadastradas.has(nf));
+        if (!nfsParaInserir.length) throw new Error("Todas as NFs desta planilha já foram importadas.");
+
+        // Inserir cada NF separadamente
+        const nfsInseridas = [];
+        for (const [numeroNf, dados] of nfsParaInserir) {
+          const { data: nfInserida, error: errNF } = await supabase
+            .from("b2b_nfs")
+            .insert({
+              pedido_id:        pedidoId,
+              numero_nf:        numeroNf,
+              total_itens:      dados.itens.length,
+              total_caixas:     0,
+              valor_total:      dados.valorTotal,
+              data_faturamento: new Date().toISOString(),
+              importado_por:    userId,
+            })
+            .select().single();
+          if (errNF) throw new Error(`Erro ao inserir NF ${numeroNf}: ${errNF.message}`);
+          nfsInseridas.push(nfInserida);
+        }
+
+        // Marcar pedido como concluido
+        await supabase.from("b2b_pedidos").update({ status: "concluido" }).eq("id", pedidoId);
+
+        resolve({
+          ok:           true,
+          totalNFs:     nfsInseridas.length,
+          totalItens:   linhasComNF.length,
+          nfs:          nfsInseridas.map(n => n.numero_nf),
+        });
+      } catch (err) { reject(err); }
+    };
+    reader.onerror = () => reject(new Error("Erro ao ler o arquivo."));
+    reader.readAsBinaryString(file);
+  });
 }
 
 export async function importarNFPedido(pedidoId, numeroNf, totalItens, totalCaixas, userId) {
