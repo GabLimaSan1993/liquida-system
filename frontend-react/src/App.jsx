@@ -26,6 +26,8 @@ import AssurantSLAPage from "./pages/assurant/AssurantSLAPage.jsx";
 import AssurantLayoutPage from "./pages/assurant/AssurantLayoutPage.jsx";
 
 import B2BPickingPage from "./pages/B2BPickingPage.jsx";
+import TrocasB2CAssurantPage from "./pages/TrocasB2CAssurantPage.jsx";
+import TrocasB2CFurbtechPage from "./pages/TrocasB2CFurbtechPage.jsx";
 
 function ProtectedRoute({ tela, children }) {
   const { user, loading, hasAccess } = useAuth();
@@ -41,6 +43,7 @@ function DefaultRedirect() {
   if (!profile) return <Navigate to="/login" replace />;
   if (profile.is_master)                                                          return <Navigate to="/upload" replace />;
   if (profile.area_tecnica === "assurant")                                        return <Navigate to="/b2b/picking" replace />;
+  if (profile.area_tecnica === "assurant_trocas")                                 return <Navigate to="/trocas-b2c/nova" replace />;
   if (profile.area_tecnica === "refrigeracao")                                    return <Navigate to="/linha-branca/triagem" replace />;
   if (["climatizacao", "lavadoras", "diversos"].includes(profile.area_tecnica))   return <Navigate to="/linha-branca/triagem-reparos" replace />;
   if (profile.telas_permitidas?.length > 0)                                       return <Navigate to={profile.telas_permitidas[0]} replace />;
@@ -100,7 +103,11 @@ export default function App() {
         <Route path="/assurant/sla"       element={<ProtectedRoute tela="/assurant/sla"><AssurantSLAPage /></ProtectedRoute>} />
         <Route path="/assurant/layout"    element={<ProtectedRoute tela="/assurant/layout"><AssurantLayoutPage /></ProtectedRoute>} />
 
-        <Route path="/b2b/picking" element={<ProtectedRoute tela="/b2b/picking"><B2BPickingPage /></ProtectedRoute>} />
+        <Route path="/b2b/picking"      element={<ProtectedRoute tela="/b2b/picking"><B2BPickingPage /></ProtectedRoute>} />
+
+        {/* Trocas B2C */}
+        <Route path="/trocas-b2c/nova"   element={<ProtectedRoute tela="/trocas-b2c/nova"><TrocasB2CAssurantPage /></ProtectedRoute>} />
+        <Route path="/trocas-b2c/gestao" element={<ProtectedRoute tela="/trocas-b2c/gestao"><TrocasB2CFurbtechPage /></ProtectedRoute>} />
       </Route>
     </Routes>
   );

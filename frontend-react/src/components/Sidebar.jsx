@@ -6,7 +6,7 @@ import {
   Camera, ShieldCheck, ChevronDown, ChevronRight, Layers,
   Truck, TrendingUp, Users, LogOut, X, ShoppingCart,
   Landmark, BarChart2, Lock, TrendingDown, Database,
-  Package, Clock, LayoutDashboard, ScanLine,
+  Package, Clock, LayoutDashboard, ScanLine, RefreshCw,
 } from "lucide-react";
 import { useAuth } from "../AuthContext.jsx";
 import { signOut } from "../services/authService.js";
@@ -153,7 +153,7 @@ function MenuAssurant({ onClose, telas }) {
       {tem("/upload") && (
         <NavItem to="/upload" icon={Upload} label="Uploads" onClick={onClose} />
       )}
-      <CollapseGroup icon={Package} label="Assurant Warehouse" paths={["/assurant", "/b2b"]}>
+      <CollapseGroup icon={Package} label="Assurant Warehouse" paths={["/assurant", "/b2b", "/trocas-b2c"]}>
         {tem("/assurant/dashboard") && (
           <NavItem to="/assurant/dashboard" icon={BarChart3}       label="Dashboard"             indent onClick={onClose} />
         )}
@@ -166,15 +166,26 @@ function MenuAssurant({ onClose, telas }) {
         {tem("/b2b/picking") && (
           <NavItem to="/b2b/picking"        icon={ScanLine}        label="Picking B2B"           indent onClick={onClose} />
         )}
+        {tem("/trocas-b2c/gestao") && (
+          <NavItem to="/trocas-b2c/gestao"  icon={RefreshCw}       label="Trocas B2C"            indent onClick={onClose} />
+        )}
       </CollapseGroup>
     </>
   );
 }
 
+// ── Menu Assurant Trocas (usuário externo) ────────────────
+function MenuAssurantTrocas({ onClose }) {
+  return (
+    <NavItem to="/trocas-b2c/nova" icon={RefreshCw} label="Nova Solicitação de Troca" onClick={onClose} />
+  );
+}
+
 function SidebarContent({ profile, onClose, handleLogout }) {
   const { isRefrigeracao, isOutrasLinhas } = useAuth();
-  const isMaster   = profile?.is_master;
-  const isAssurant = profile?.area_tecnica === "assurant" && !isMaster;
+  const isMaster         = profile?.is_master;
+  const isAssurant       = profile?.area_tecnica === "assurant" && !isMaster;
+  const isAssurantTrocas = profile?.area_tecnica === "assurant_trocas" && !isMaster;
 
   function renderLinhaBranca() {
     if (isMaster)       return <LinhaBrancaMaster       onClose={onClose} />;
@@ -183,11 +194,12 @@ function SidebarContent({ profile, onClose, handleLogout }) {
     return null;
   }
 
-  // Label do perfil no card de usuário
   const perfilLabel = isMaster
     ? "Master"
     : isAssurant
     ? "Operador Assurant"
+    : isAssurantTrocas
+    ? "Assurant — Trocas"
     : profile?.area_tecnica || "Usuário";
 
   return (
@@ -233,11 +245,12 @@ function SidebarContent({ profile, onClose, handleLogout }) {
               <NavItem to="/abertura-os" icon={ClipboardList} label="Abertura de OS" indent onClick={onClose} />
             </CollapseGroup>
 
-            <CollapseGroup icon={Package} label="Assurant Warehouse" paths={["/assurant", "/b2b"]}>
+            <CollapseGroup icon={Package} label="Assurant Warehouse" paths={["/assurant", "/b2b", "/trocas-b2c"]}>
               <NavItem to="/assurant/dashboard" icon={BarChart3}       label="Dashboard"             indent onClick={onClose} />
               <NavItem to="/assurant/sla"       icon={Clock}           label="SLA & Rastreabilidade" indent onClick={onClose} />
               <NavItem to="/assurant/layout"    icon={LayoutDashboard} label="Layout Warehouse"      indent onClick={onClose} />
               <NavItem to="/b2b/picking"        icon={ScanLine}        label="Picking B2B"           indent onClick={onClose} />
+              <NavItem to="/trocas-b2c/gestao"  icon={RefreshCw}       label="Trocas B2C"            indent onClick={onClose} />
               <NavItemDisabled icon={DollarSign} label="DRE Gerencial" indent />
             </CollapseGroup>
           </>
@@ -246,6 +259,11 @@ function SidebarContent({ profile, onClose, handleLogout }) {
         {/* ── Operador Assurant ── */}
         {isAssurant && (
           <MenuAssurant onClose={onClose} telas={profile?.telas_permitidas} />
+        )}
+
+        {/* ── Assurant Trocas (externo) ── */}
+        {isAssurantTrocas && (
+          <MenuAssurantTrocas onClose={onClose} />
         )}
 
         {/* ── Linha Branca ── */}

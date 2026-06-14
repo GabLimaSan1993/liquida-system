@@ -1,0 +1,215 @@
+// src/pages/TrocasB2CAssurantPage.jsx
+import { useState } from "react";
+import { Plus, Trash2, CheckCircle, AlertTriangle, ArrowRight, X } from "lucide-react";
+import { criarTroca } from "../services/trocasB2CService.js";
+import { useAuth } from "../AuthContext.jsx";
+
+function Card({ children, className = "" }) {
+  return (
+    <div className={`bg-white rounded-2xl p-5 ring-1 ring-slate-200 shadow-sm ${className}`}>
+      {children}
+    </div>
+  );
+}
+
+const inputCls = "w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7F2D92] bg-white";
+const labelCls = "block text-xs font-bold text-slate-600 mb-1";
+
+export default function TrocasB2CAssurantPage() {
+  const { user } = useAuth();
+
+  const [form, setForm] = useState({
+    id_anymarket:     "",
+    nome_cliente:     "",
+    cpf:              "",
+    endereco:         "",
+    produto_original: "",
+  });
+
+  const [skus, setSkus] = useState([{ sku: "", descricao: "" }]);
+  const [salvando, setSalvando]   = useState(false);
+  const [feedback, setFeedback]   = useState(null);
+  const [sucesso, setSucesso]     = useState(false);
+
+  function setField(field, value) {
+    setForm(prev => ({ ...prev, [field]: value }));
+  }
+
+  function addSku() {
+    setSkus(prev => [...prev, { sku: "", descricao: "" }]);
+  }
+
+  function removeSku(idx) {
+    setSkus(prev => prev.filter((_, i) => i !== idx));
+  }
+
+  function setSku(idx, field, value) {
+    setSkus(prev => prev.map((s, i) => i === idx ? { ...s, [field]: value } : s));
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setFeedback(null);
+
+    if (!form.id_anymarket.trim()) return setFeedback("Informe o ID AnyMarket.");
+    if (!form.nome_cliente.trim()) return setFeedback("Informe o nome do cliente.");
+    if (!form.produto_original.trim()) return setFeedback("Informe o produto comprado.");
+    if (skus.every(s => !s.sku.trim())) return setFeedback("Informe ao menos um SKU aceito.");
+
+    const skusValidos = skus.filter(s => s.sku.trim());
+
+    setSalvando(true);
+    try {
+      await criarTroca(form, skusValidos, user.id);
+      setSucesso(true);
+      setForm({ id_anymarket: "", nome_cliente: "", cpf: "", endereco: "", produto_original: "" });
+      setSkus([{ sku: "", descricao: "" }]);
+    } catch (e) {
+      setFeedback(e.message);
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  if (sucesso) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center p-4">
+        <div className="text-center max-w-sm">
+          <div className="h-16 w-16 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
+            <CheckCircle className="h-8 w-8 text-emerald-600" />
+          </div>
+          <h2 className="text-xl font-black text-slate-800 mb-2">Solicitação registrada!</h2>
+          <p className="text-sm text-slate-500 mb-6">A equipe Furbtech já pode visualizar e processar a troca.</p>
+          <button
+            onClick={() => setSucesso(false)}
+            className="bg-[#7F2D92] text-white px-6 py-3 rounded-2xl text-sm font-bold hover:bg-[#5B1E74] transition"
+          >
+            Nova solicitação
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5 max-w-2xl mx-auto">
+      <div className="flex items-center gap-3">
+        <span className="text-2xl">🔄</span>
+        <div>
+          <h2 className="text-lg font-black text-slate-800">Nova Solicitação de Troca</h2>
+          <p className="text-xs text-slate-500">Preencha os dados do cliente e os SKUs aceitos para substituição</p>
+        </div>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+
+        {/* Dados do pedido */}
+        <Card>
+          <h3 className="font-black text-slate-700 text-sm mb-4 flex items-center gap-2">
+            📋 Dados do Pedido
+          </h3>
+          <div className="space-y-3">
+            <div>
+              <label className={labelCls}>ID AnyMarket *</label>
+              <input value={form.id_anymarket} onChange={e => setField("id_anymarket", e.target.value)}
+                className={inputCls} placeholder="Ex: 232991879" />
+            </div>
+            <div>
+              <label className={labelCls}>Produto Comprado Originalmente *</label>
+              <input value={form.produto_original} onChange={e => setField("produto_original", e.target.value)}
+                className={inputCls} placeholder="Ex: Usado: Samsung Galaxy S23 256GB Preto - Bom" />
+            </div>
+          </div>
+        </Card>
+
+        {/* Dados do cliente */}
+        <Card>
+          <h3 className="font-black text-slate-700 text-sm mb-4 flex items-center gap-2">
+            👤 Dados do Cliente
+          </h3>
+          <div className="space-y-3">
+            <div>
+              <label className={labelCls}>Nome *</label>
+              <input value={form.nome_cliente} onChange={e => setField("nome_cliente", e.target.value)}
+                className={inputCls} placeholder="Nome completo" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>CPF</label>
+                <input value={form.cpf} onChange={e => setField("cpf", e.target.value)}
+                  className={inputCls} placeholder="000.000.000-00" />
+              </div>
+            </div>
+            <div>
+              <label className={labelCls}>Endereço de Entrega</label>
+              <textarea value={form.endereco} onChange={e => setField("endereco", e.target.value)}
+                className={inputCls + " resize-none"} rows={3}
+                placeholder="Rua, número, bairro, cidade, estado, CEP" />
+            </div>
+          </div>
+        </Card>
+
+        {/* SKUs aceitos */}
+        <Card>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-black text-slate-700 text-sm flex items-center gap-2">
+              📦 SKUs Aceitos para Substituição
+            </h3>
+            <span className="text-xs text-slate-400">em ordem de preferência</span>
+          </div>
+
+          <div className="space-y-3">
+            {skus.map((s, idx) => (
+              <div key={idx} className="flex gap-2 items-start">
+                <div className="h-7 w-7 rounded-xl bg-purple-100 text-purple-700 text-xs font-black flex items-center justify-center shrink-0 mt-3">
+                  {idx + 1}
+                </div>
+                <div className="flex-1 grid grid-cols-1 gap-2">
+                  <input
+                    value={s.sku}
+                    onChange={e => setSku(idx, "sku", e.target.value)}
+                    className={inputCls}
+                    placeholder="SKU (ex: BRZDEV11894)"
+                  />
+                  <input
+                    value={s.descricao}
+                    onChange={e => setSku(idx, "descricao", e.target.value)}
+                    className={inputCls}
+                    placeholder="Descrição (ex: SAMSUNG GALAXY S23 256GB BLACK)"
+                  />
+                </div>
+                {skus.length > 1 && (
+                  <button type="button" onClick={() => removeSku(idx)}
+                    className="mt-3 text-slate-400 hover:text-red-500 transition shrink-0">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <button type="button" onClick={addSku}
+            className="mt-4 flex items-center gap-2 text-xs font-semibold text-purple-700 hover:text-purple-900 transition">
+            <Plus className="h-4 w-4" /> Adicionar outro SKU
+          </button>
+        </Card>
+
+        {feedback && (
+          <div className="flex items-center gap-2 bg-red-50 ring-1 ring-red-200 rounded-2xl px-4 py-3 text-sm text-red-700">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span className="font-semibold">{feedback}</span>
+          </div>
+        )}
+
+        <button type="submit" disabled={salvando}
+          className="w-full flex items-center justify-center gap-2 bg-[#7F2D92] text-white py-4 rounded-2xl text-sm font-bold hover:bg-[#5B1E74] transition disabled:opacity-50">
+          {salvando
+            ? <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            : <ArrowRight className="h-4 w-4" />
+          }
+          {salvando ? "Registrando..." : "Registrar Solicitação"}
+        </button>
+      </form>
+    </div>
+  );
+}
