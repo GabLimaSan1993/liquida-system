@@ -1,32 +1,15 @@
 import * as XLSX from "xlsx";
 import { supabase } from "../lib/supabase";
 
-// ── Buscar cliente da base pelo nome do Ganhador ─────────
 async function resolverCliente(ganhador) {
   if (!ganhador) return "Cliente não identificado";
-
   const termo = ganhador.substring(0, 30).trim();
   const { data } = await supabase
-    .from("b2b_clientes")
-    .select("nome, nome_cnpj")
-    .ilike("nome_cnpj", `%${termo}%`)
-    .limit(1)
-    .single();
-
+    .from("b2b_clientes").select("nome, nome_cnpj").ilike("nome_cnpj", `%${termo}%`).limit(1).single();
   if (data?.nome) return data.nome;
-
   const { data: data2 } = await supabase
-    .from("b2b_clientes")
-    .select("nome, nome_cnpj")
-    .ilike("nome", `%${ganhador.split(" ")[0]}%`)
-    .limit(1)
-    .single();
-
+    .from("b2b_clientes").select("nome, nome_cnpj").ilike("nome", `%${ganhador.split(" ")[0]}%`).limit(1).single();
   return data2?.nome || ganhador;
-}
-
-function normKey(k) {
-  return k.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
 
 export async function importarPedidoB2B(file, userId) {
@@ -36,7 +19,6 @@ export async function importarPedidoB2B(file, userId) {
       try {
         const wb = XLSX.read(e.target.result, { type: "binary" });
         const ws = wb.Sheets[wb.SheetNames[0]];
-
         const allRows    = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
         const rawHeaders = allRows[1] || [];
 
@@ -47,45 +29,28 @@ export async function importarPedidoB2B(file, userId) {
         });
 
         const rows = XLSX.utils.sheet_to_json(ws, { defval: null, range: 1 });
-
         if (!rows.length) throw new Error("Planilha vazia ou formato inválido.");
 
         const loteColuna = rows.find(r => r["RESERVA"] || r["LOTE"])?.[("RESERVA")] ||
                            rows.find(r => r["RESERVA"] || r["LOTE"])?.[("LOTE")];
-
         const loteArquivo = file.name
-          .replace(/^PICKING[\s_|]+/i, "")
-          .replace(/\.xlsx?$/i, "")
-          .replace(/\s*\(\d+\)\s*$/, "")
-          .replace(/__\d+_$/g, "")
-          .replace(/\s+/g, "_")
-          .replace(/_+/g, "_")
-          .replace(/^_|_$/g, "")
-          .trim();
-
+          .replace(/^PICKING[\s_|]+/i, "").replace(/\.xlsx?$/i, "")
+          .replace(/\s*\(\d+\)\s*$/, "").replace(/__\d+_$/g, "")
+          .replace(/\s+/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "").trim();
         const lote = loteColuna || loteArquivo || "SEM_LOTE";
 
         const ganhador = rows[0]["Ganhador"] || "";
         const cliente  = await resolverCliente(ganhador);
 
-        const { data: existing } = await supabase
-          .from("b2b_pedidos").select("id").eq("lote", lote).single();
-
+        const { data: existing } = await supabase.from("b2b_pedidos").select("id").eq("lote", lote).single();
         if (existing) throw new Error(`Pedido "${lote}" já foi importado.`);
 
         const { data: pedido, error: errPedido } = await supabase
-          .from("b2b_pedidos")
-          .insert({ lote, cliente, total_itens: rows.length, criado_por: userId })
-          .select().single();
-
+          .from("b2b_pedidos").insert({ lote, cliente, total_itens: rows.length, criado_por: userId }).select().single();
         if (errPedido) throw new Error(errPedido.message);
 
-        const imeisLista = rows
-          .map(r => String(r["IMEI"] || r["NUM_IMEI"] || "").trim())
-          .filter(i => i.length > 5);
-
-        const { data: triagem } = await supabase
-          .from("assurant_triagem").select("imei, local, voucher").in("imei", imeisLista);
+        const imeisLista = rows.map(r => String(r["IMEI"] || r["NUM_IMEI"] || "").trim()).filter(i => i.length > 5);
+        const { data: triagem } = await supabase.from("assurant_triagem").select("imei, local, voucher").in("imei", imeisLista);
 
         const localMap = {}, voucherMap = {};
         (triagem || []).forEach(t => {
@@ -95,21 +60,17 @@ export async function importarPedidoB2B(file, userId) {
 
         const itens = rows.map((r, rowIdx) => {
           const imei = String(r["IMEI"] || r["NUM_IMEI"] || "").trim();
-
           let valor = null;
           if (valorIdx >= 0) {
-            const rawRow = allRows[rowIdx + 2];
-            const rawVal = rawRow?.[valorIdx];
+            const rawVal = allRows[rowIdx + 2]?.[valorIdx];
             if (rawVal != null && !isNaN(parseFloat(rawVal))) valor = parseFloat(rawVal);
           }
           if (valor === null) {
             const k = Object.keys(r).find(k => k.includes("$"));
             if (k && r[k] != null) valor = parseFloat(r[k]);
           }
-
           return {
-            pedido_id:     pedido.id,
-            imei,
+            pedido_id: pedido.id, imei,
             voucher:       voucherMap[imei] || String(r["NUM_IMEI"] || "").trim(),
             modelo:        r["MODELO"]  || r["CNN"]  || null,
             grade:         r["GRADE"]   || null,
@@ -118,8 +79,7 @@ export async function importarPedidoB2B(file, userId) {
             cod_item:      r["COD_ITEM"]  || null,
             local_estoque: localMap[imei] || r["LOCAL"] || null,
             aging:         r["AGING"] ? parseInt(r["AGING"]) : null,
-            valor,
-            status: "pendente",
+            valor, status: "pendente",
           };
         }).filter(i => i.imei && i.imei.length > 5);
 
@@ -130,7 +90,6 @@ export async function importarPedidoB2B(file, userId) {
           const { error } = await supabase.from("b2b_itens").insert(itens.slice(i, i + CHUNK));
           if (error) throw new Error(error.message);
         }
-
         resolve({ pedido, total: itens.length, lote, cliente });
       } catch (err) { reject(err); }
     };
@@ -140,15 +99,13 @@ export async function importarPedidoB2B(file, userId) {
 }
 
 export async function listarPedidosB2B() {
-  const { data, error } = await supabase
-    .from("b2b_pedidos").select("*").order("criado_em", { ascending: false });
+  const { data, error } = await supabase.from("b2b_pedidos").select("*").order("criado_em", { ascending: false });
   if (error) throw new Error(error.message);
   return data || [];
 }
 
 export async function listarItens(pedidoId) {
-  const { data, error } = await supabase
-    .from("b2b_itens").select("*").eq("pedido_id", pedidoId).order("local_estoque", { ascending: true });
+  const { data, error } = await supabase.from("b2b_itens").select("*").eq("pedido_id", pedidoId).order("local_estoque", { ascending: true });
   if (error) throw new Error(error.message);
   return data || [];
 }
@@ -175,75 +132,56 @@ export async function listarItensComStatusGaia(pedidoId) {
 }
 
 export async function listarExportacoes(pedidoId) {
-  const { data, error } = await supabase
-    .from("b2b_exportacoes").select("*").eq("pedido_id", pedidoId).order("exportado_em", { ascending: false });
+  const { data, error } = await supabase.from("b2b_exportacoes").select("*").eq("pedido_id", pedidoId).order("exportado_em", { ascending: false });
   if (error) throw new Error(error.message);
   return data || [];
 }
 
 export async function registrarBipagem(imeiDigitado, pedidoId, userId) {
   const imei = String(imeiDigitado).trim();
-
-  const { data: item, error: errItem } = await supabase
-    .from("b2b_itens").select("*").eq("pedido_id", pedidoId).eq("imei", imei).single();
-
+  const { data: item, error: errItem } = await supabase.from("b2b_itens").select("*").eq("pedido_id", pedidoId).eq("imei", imei).single();
   if (errItem || !item) {
-    const { data: outroItem } = await supabase
-      .from("b2b_itens").select("pedido_id, status").eq("imei", imei).eq("status", "bipado").single();
+    const { data: outroItem } = await supabase.from("b2b_itens").select("pedido_id, status").eq("imei", imei).eq("status", "bipado").single();
     if (outroItem) return { ok: false, erro: "IMEI já bipado em outro pedido — reservado." };
     return { ok: false, erro: "IMEI não encontrado neste pedido." };
   }
-
   if (item.status === "bipado") return { ok: false, erro: "IMEI já bipado neste pedido.", item };
-
-  const { error: errUpdate } = await supabase
-    .from("b2b_itens")
+  const { error: errUpdate } = await supabase.from("b2b_itens")
     .update({ status: "bipado", imei_bipado: imei, bipado_em: new Date().toISOString(), bipado_por: userId })
     .eq("id", item.id);
-
   if (errUpdate) return { ok: false, erro: errUpdate.message };
-
   await supabase.rpc("b2b_atualizar_contador", { p_pedido_id: pedidoId });
-
   return { ok: true, item };
 }
 
 export async function marcarNaoLocalizado(itemId, userId) {
-  const { error } = await supabase
-    .from("b2b_itens")
+  const { error } = await supabase.from("b2b_itens")
     .update({ status: "nao_localizado", nao_localizado_em: new Date().toISOString(), nao_localizado_por: userId })
     .eq("id", itemId);
   if (error) throw new Error(error.message);
 }
 
 export async function reverterNaoLocalizado(itemId, novoLocal) {
-  const { error } = await supabase
-    .from("b2b_itens")
+  const { error } = await supabase.from("b2b_itens")
     .update({ status: "pendente", local_estoque: novoLocal, nao_localizado_em: null, nao_localizado_por: null, nao_localizado_local: novoLocal })
     .eq("id", itemId);
   if (error) throw new Error(error.message);
 }
 
 export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
-  const { data: exportacoes } = await supabase
-    .from("b2b_exportacoes").select("*").eq("pedido_id", pedidoId).order("exportado_em", { ascending: false });
-
+  const { data: exportacoes } = await supabase.from("b2b_exportacoes").select("*").eq("pedido_id", pedidoId).order("exportado_em", { ascending: false });
   const ultimaExportacao = exportacoes?.[0] || null;
 
   let idsJaExportados = new Set();
   if (exportacoes?.length > 0) {
-    const { data: jaExportados } = await supabase
-      .from("b2b_itens_exportados").select("item_id").in("exportacao_id", exportacoes.map(e => e.id));
+    const { data: jaExportados } = await supabase.from("b2b_itens_exportados").select("item_id").in("exportacao_id", exportacoes.map(e => e.id));
     (jaExportados || []).forEach(e => idsJaExportados.add(e.item_id));
   }
 
-  const { data: itensBipados } = await supabase
-    .from("b2b_itens").select("*").eq("pedido_id", pedidoId).eq("status", "bipado").order("local_estoque");
-
+  const { data: itensBipados } = await supabase.from("b2b_itens").select("*").eq("pedido_id", pedidoId).eq("status", "bipado").order("local_estoque");
   if (!itensBipados?.length) throw new Error("Nenhum item bipado para exportar.");
 
   const itensNovos = itensBipados.filter(i => !idsJaExportados.has(i.id));
-
   if (itensNovos.length === 0) {
     return {
       bloqueado: true, ultimaExportacao,
@@ -252,12 +190,9 @@ export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
   }
 
   const { data: pedido } = await supabase.from("b2b_pedidos").select("*").eq("id", pedidoId).single();
-
-  const { data: novaExportacao, error: errExp } = await supabase
-    .from("b2b_exportacoes")
+  const { data: novaExportacao, error: errExp } = await supabase.from("b2b_exportacoes")
     .insert({ pedido_id: pedidoId, exportado_por: userId, nome_usuario: nomeUsuario, total_itens: itensNovos.length })
     .select().single();
-
   if (errExp) throw new Error(errExp.message);
 
   const CHUNK = 500;
@@ -291,54 +226,38 @@ export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
 }
 
 export async function importarNFPedido(pedidoId, numeroNf, totalItens, totalCaixas, userId) {
-  const valorTotal = await supabase
-    .from("b2b_itens").select("valor").eq("pedido_id", pedidoId).eq("status", "bipado");
-
-  const valor = (valorTotal.data || []).reduce((s, i) => s + (i.valor || 0), 0);
-
-  const { data, error } = await supabase
-    .from("b2b_nfs")
+  const { data: itensData } = await supabase.from("b2b_itens").select("valor").eq("pedido_id", pedidoId).eq("status", "bipado");
+  const valor = (itensData || []).reduce((s, i) => s + (i.valor || 0), 0);
+  const { data, error } = await supabase.from("b2b_nfs")
     .insert({ pedido_id: pedidoId, numero_nf: numeroNf, total_itens: totalItens, total_caixas: totalCaixas, valor_total: valor, data_faturamento: new Date().toISOString(), importado_por: userId })
     .select().single();
-
   if (error) throw new Error(error.message);
-
   await supabase.from("b2b_pedidos").update({ status: "concluido" }).eq("id", pedidoId);
-
   return data;
 }
 
 export async function buscarResumoValorPedido(pedidoId) {
-  const { data } = await supabase
-    .from("b2b_itens").select("status, valor, nf").eq("pedido_id", pedidoId);
-
+  const { data } = await supabase.from("b2b_itens").select("status, valor, nf").eq("pedido_id", pedidoId);
   const itens = data || [];
   const totalValor    = itens.reduce((s, i) => s + (i.valor || 0), 0);
   const valorBipado   = itens.filter(i => i.status === "bipado").reduce((s, i) => s + (i.valor || 0), 0);
   const valorFaturado = itens.filter(i => i.nf).reduce((s, i) => s + (i.valor || 0), 0);
   const qtdFaturada   = itens.filter(i => i.nf).length;
-
   return { totalValor, valorBipado, valorFaturado, qtdFaturada };
 }
 
 export async function listarNFsPedido(pedidoId) {
-  const { data } = await supabase
-    .from("b2b_nfs").select("*").eq("pedido_id", pedidoId).order("importado_em", { ascending: true });
+  const { data } = await supabase.from("b2b_nfs").select("*").eq("pedido_id", pedidoId).order("importado_em", { ascending: true });
   return data || [];
 }
 
 export async function listarPedidosConcluidos() {
-  const { data: pedidos, error } = await supabase
-    .from("b2b_pedidos").select("*").eq("status", "concluido").order("criado_em", { ascending: false });
-
+  const { data: pedidos, error } = await supabase.from("b2b_pedidos").select("*").eq("status", "concluido").order("criado_em", { ascending: false });
   if (error) throw new Error(error.message);
   if (!pedidos?.length) return [];
 
-  const { data: nfs } = await supabase
-    .from("b2b_nfs").select("*").in("pedido_id", pedidos.map(p => p.id)).order("data_faturamento", { ascending: true });
-
-  const { data: itens } = await supabase
-    .from("b2b_itens").select("pedido_id, valor, status").in("pedido_id", pedidos.map(p => p.id));
+  const { data: nfs } = await supabase.from("b2b_nfs").select("*").in("pedido_id", pedidos.map(p => p.id)).order("data_faturamento", { ascending: true });
+  const { data: itens } = await supabase.from("b2b_itens").select("pedido_id, valor, status").in("pedido_id", pedidos.map(p => p.id));
 
   return pedidos.map(p => {
     const nfsPedido   = (nfs || []).filter(n => n.pedido_id === p.id);
