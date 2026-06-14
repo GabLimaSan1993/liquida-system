@@ -1,5 +1,4 @@
-// src/pages/TrocasB2CAssurantPage.jsx
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import { Plus, Trash2, CheckCircle, AlertTriangle, ArrowRight, Loader } from "lucide-react";
 import { criarTroca, buscarDescricaoPorSku } from "../services/trocasB2CService.js";
 import { useAuth } from "../AuthContext.jsx";
@@ -15,18 +14,15 @@ function Card({ children, className = "" }) {
 const inputCls = "w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7F2D92] bg-white";
 const labelCls = "block text-xs font-bold text-slate-600 mb-1";
 
-// ── Campo SKU com autocomplete de descrição ───────────────
+const GRADES = ["BOM", "MUITO BOM", "EXCELENTE", "LIKE NEW", "REGULAR", "QUEBRADO"];
+
 function SkuField({ idx, s, onChange, onRemove, showRemove }) {
   const [buscando, setBuscando] = useState(false);
   const debounceRef             = useRef(null);
 
   function handleSkuChange(valor) {
     onChange(idx, "sku", valor);
-
-    // Limpa descrição ao mudar o SKU
     onChange(idx, "descricao", "");
-
-    // Debounce de 600ms para buscar descrição
     clearTimeout(debounceRef.current);
     if (valor.trim().length >= 4) {
       setBuscando(true);
@@ -48,7 +44,6 @@ function SkuField({ idx, s, onChange, onRemove, showRemove }) {
         {idx + 1}
       </div>
       <div className="flex-1 grid grid-cols-1 gap-2">
-        {/* Campo SKU */}
         <div className="relative">
           <input
             value={s.sku}
@@ -62,8 +57,6 @@ function SkuField({ idx, s, onChange, onRemove, showRemove }) {
             </div>
           )}
         </div>
-
-        {/* Campo descrição — preenchido automaticamente */}
         <div className="relative">
           <input
             value={s.descricao}
@@ -77,8 +70,6 @@ function SkuField({ idx, s, onChange, onRemove, showRemove }) {
             </div>
           )}
         </div>
-
-        {/* Aviso se SKU não encontrado */}
         {s.sku.trim().length >= 4 && !buscando && !s.descricao && (
           <p className="text-xs text-amber-600 font-semibold flex items-center gap-1">
             <AlertTriangle className="h-3 w-3" />
@@ -86,7 +77,6 @@ function SkuField({ idx, s, onChange, onRemove, showRemove }) {
           </p>
         )}
       </div>
-
       {showRemove && (
         <button type="button" onClick={() => onRemove(idx)}
           className="mt-3 text-slate-400 hover:text-red-500 transition shrink-0">
@@ -101,11 +91,13 @@ export default function TrocasB2CAssurantPage() {
   const { user } = useAuth();
 
   const [form, setForm] = useState({
-    id_anymarket:     "",
-    nome_cliente:     "",
-    cpf:              "",
-    endereco:         "",
-    produto_original: "",
+    id_anymarket:      "",
+    nome_cliente:      "",
+    cpf:               "",
+    endereco:          "",
+    produto_nome:      "",
+    produto_condicao:  "Usado",
+    produto_grade:     "",
   });
 
   const [skus, setSkus]         = useState([{ sku: "", descricao: "" }]);
@@ -117,14 +109,18 @@ export default function TrocasB2CAssurantPage() {
     setForm(prev => ({ ...prev, [field]: value }));
   }
 
-  function addSku() {
-    setSkus(prev => [...prev, { sku: "", descricao: "" }]);
+  // Monta o produto_original juntando os três campos
+  function montarProdutoOriginal() {
+    const partes = [];
+    if (form.produto_condicao) partes.push(form.produto_condicao);
+    if (form.produto_nome.trim()) partes.push(form.produto_nome.trim());
+    if (form.produto_grade) partes.push(form.produto_grade);
+    return partes.join(": ").replace(": ", " ").trim();
+    // Ex: "Usado: Samsung Galaxy S23 256GB Preto - Bom"
   }
 
-  function removeSku(idx) {
-    setSkus(prev => prev.filter((_, i) => i !== idx));
-  }
-
+  function addSku() { setSkus(prev => [...prev, { sku: "", descricao: "" }]); }
+  function removeSku(idx) { setSkus(prev => prev.filter((_, i) => i !== idx)); }
   function setSku(idx, field, value) {
     setSkus(prev => prev.map((s, i) => i === idx ? { ...s, [field]: value } : s));
   }
@@ -135,16 +131,22 @@ export default function TrocasB2CAssurantPage() {
 
     if (!form.id_anymarket.trim())  return setFeedback("Informe o ID AnyMarket.");
     if (!form.nome_cliente.trim())  return setFeedback("Informe o nome do cliente.");
-    if (!form.produto_original.trim()) return setFeedback("Informe o produto comprado.");
+    if (!form.produto_nome.trim())  return setFeedback("Informe o nome do produto comprado.");
+    if (!form.produto_grade)        return setFeedback("Selecione o grade do produto.");
     if (skus.every(s => !s.sku.trim())) return setFeedback("Informe ao menos um SKU aceito.");
 
-    const skusValidos = skus.filter(s => s.sku.trim());
+    const skusValidos     = skus.filter(s => s.sku.trim());
+    const produtoOriginal = `${form.produto_condicao}: ${form.produto_nome.trim()} - ${form.produto_grade}`;
 
     setSalvando(true);
     try {
-      await criarTroca(form, skusValidos, user.id);
+      await criarTroca(
+        { ...form, produto_original: produtoOriginal },
+        skusValidos,
+        user.id
+      );
       setSucesso(true);
-      setForm({ id_anymarket: "", nome_cliente: "", cpf: "", endereco: "", produto_original: "" });
+      setForm({ id_anymarket: "", nome_cliente: "", cpf: "", endereco: "", produto_nome: "", produto_condicao: "Usado", produto_grade: "" });
       setSkus([{ sku: "", descricao: "" }]);
     } catch (e) {
       setFeedback(e.message);
@@ -161,17 +163,25 @@ export default function TrocasB2CAssurantPage() {
             <CheckCircle className="h-8 w-8 text-emerald-600" />
           </div>
           <h2 className="text-xl font-black text-slate-800 mb-2">Solicitação registrada!</h2>
-          <p className="text-sm text-slate-500 mb-6">A equipe Furbtech já pode visualizar e processar a troca.</p>
-          <button
-            onClick={() => setSucesso(false)}
-            className="bg-[#7F2D92] text-white px-6 py-3 rounded-2xl text-sm font-bold hover:bg-[#5B1E74] transition"
-          >
+          <p className="text-sm text-slate-500 mb-2">A equipe Furbtech já pode visualizar e processar a troca.</p>
+          <p className="text-xs text-slate-400 mb-6 bg-slate-50 rounded-xl px-3 py-2 font-mono">
+            {`${form.produto_condicao || "Usado"}: ${form.produto_nome || "—"} - ${form.produto_grade || "—"}`}
+          </p>
+          <button onClick={() => setSucesso(false)}
+            className="bg-[#7F2D92] text-white px-6 py-3 rounded-2xl text-sm font-bold hover:bg-[#5B1E74] transition">
             Nova solicitação
           </button>
         </div>
       </div>
     );
   }
+
+  // Preview do produto montado
+  const previewProduto = [
+    form.produto_condicao,
+    form.produto_nome.trim(),
+    form.produto_grade,
+  ].filter(Boolean).join(" · ");
 
   return (
     <div className="space-y-5 max-w-2xl mx-auto">
@@ -194,10 +204,51 @@ export default function TrocasB2CAssurantPage() {
               <input value={form.id_anymarket} onChange={e => setField("id_anymarket", e.target.value)}
                 className={inputCls} placeholder="Ex: 232991879" />
             </div>
+
+            {/* Produto comprado — 3 campos */}
             <div>
               <label className={labelCls}>Produto Comprado Originalmente *</label>
-              <input value={form.produto_original} onChange={e => setField("produto_original", e.target.value)}
-                className={inputCls} placeholder="Ex: Usado: Samsung Galaxy S23 256GB Preto - Bom" />
+
+              {/* Condição: Usado / Novo */}
+              <div className="flex gap-2 mb-2">
+                {["Usado", "Novo"].map(c => (
+                  <button key={c} type="button" onClick={() => setField("produto_condicao", c)}
+                    className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ring-1 ${
+                      form.produto_condicao === c
+                        ? "bg-[#7F2D92] text-white ring-[#7F2D92]"
+                        : "bg-slate-50 text-slate-600 ring-slate-200 hover:bg-slate-100"
+                    }`}>
+                    {c}
+                  </button>
+                ))}
+              </div>
+
+              {/* Nome do produto */}
+              <input
+                value={form.produto_nome}
+                onChange={e => setField("produto_nome", e.target.value)}
+                className={`${inputCls} mb-2`}
+                placeholder="Ex: Samsung Galaxy S23 256GB Preto"
+              />
+
+              {/* Grade */}
+              <select
+                value={form.produto_grade}
+                onChange={e => setField("produto_grade", e.target.value)}
+                className={inputCls}
+              >
+                <option value="">Selecione o grade...</option>
+                {GRADES.map(g => (
+                  <option key={g} value={g}>{g}</option>
+                ))}
+              </select>
+
+              {/* Preview */}
+              {previewProduto && (
+                <div className="mt-2 bg-purple-50 ring-1 ring-purple-200 rounded-xl px-4 py-2.5 text-xs text-purple-700 font-semibold">
+                  📦 {previewProduto}
+                </div>
+              )}
             </div>
           </div>
         </Card>
