@@ -1044,25 +1044,27 @@ export default function B2BPickingPage() {
     { key: "pedidos",   label: "Faturamento", icon: BarChart3 },
   ];
 
-  // Contadores contextuais por aba
   const contadores = {
     picking: {
       aberto:         pedidos.filter(p => p.status === "aberto").length,
       concluido:      pedidos.filter(p => p.status === "concluido").length,
       labelAberto:    "em aberto",
       labelConcluido: "concluído",
+      aoConcluido:    () => setVerConcluidos(false), // picking não tem tela de concluídos
     },
     embalagem: {
       aberto:         pedidos.filter(p => (p.total_bipados || 0) > 0 && p.status !== "concluido").length,
       concluido:      pedidos.filter(p => p.status === "concluido").length,
       labelAberto:    "para embalar",
       labelConcluido: "embalado",
+      aoConcluido:    () => setVerConcluidos(false), // embalagem não tem tela de concluídos
     },
     pedidos: {
       aberto:         pedidos.filter(p => p.status !== "concluido").length,
       concluido:      pedidos.filter(p => p.status === "concluido").length,
       labelAberto:    "aguardando faturamento",
       labelConcluido: "faturado",
+      aoConcluido:    () => { setAba("pedidos"); setVerConcluidos(true); },
     },
   };
 
@@ -1080,13 +1082,13 @@ export default function B2BPickingPage() {
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           {ctx.aberto > 0 && (
-            <button onClick={() => setVerConcluidos(false)}
+            <button onClick={() => { setVerConcluidos(false); }}
               className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-orange-50 text-orange-700 ring-1 ring-orange-200 hover:bg-orange-100 transition">
               {ctx.aberto} {ctx.labelAberto}
             </button>
           )}
           {ctx.concluido > 0 && (
-            <button onClick={() => { setAba("pedidos"); setVerConcluidos(true); }}
+            <button onClick={ctx.aoConcluido}
               className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100 transition">
               {ctx.concluido} {ctx.labelConcluido}{ctx.concluido > 1 ? "s" : ""}
             </button>
@@ -1098,7 +1100,7 @@ export default function B2BPickingPage() {
         {ABAS.map(a => {
           const Icon = a.icon;
           return (
-            <button key={a.key} onClick={() => { setAba(a.key); if (a.key !== "pedidos") setVerConcluidos(false); }}
+            <button key={a.key} onClick={() => { setAba(a.key); setVerConcluidos(false); }}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all whitespace-nowrap ${aba === a.key ? "bg-[#7F2D92] text-white shadow-md" : "text-slate-500 hover:bg-slate-100"}`}>
               <Icon className="h-4 w-4 shrink-0" />
               {a.label}
