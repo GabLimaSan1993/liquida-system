@@ -251,13 +251,23 @@ export async function gerarRomaneioPedido(pedido) {
     if (i.caixa_id) nfCaixasTotal[i.nf].add(i.caixa_id);
   });
 
+  // Buscar NFs da tabela b2b_nfs
+  const { data: nfsTabela } = await supabase
+    .from("b2b_nfs").select("numero_nf")
+    .eq("pedido_id", pedido.id)
+    .order("importado_em", { ascending: true });
+
   const { data: itensEmbalados } = await supabase
     .from("b2b_itens").select("id")
     .eq("pedido_id", pedido.id).not("caixa_id", "is", null);
 
   const totalItens   = itensEmbalados?.length || 0;
   const totalVolumes = caixas?.length || 0;
-  const nfs          = Object.keys(nfTotalItens).sort();
+
+  // NFs: prioriza b2b_nfs, fallback para itens
+  const nfs = nfsTabela?.length > 0
+    ? nfsTabela.map(n => String(n.numero_nf))
+    : Object.keys(nfTotalItens).sort();
 
   const doc   = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const margL = 30;
@@ -267,12 +277,14 @@ export async function gerarRomaneioPedido(pedido) {
   const col2X = margL + col1W;
   const col2W = colW - col1W;
   const rowH  = 14;
+  const lineH = 5; // altura por linha de texto
 
   let y = 40;
 
   doc.setDrawColor(0, 0, 0);
   doc.setLineWidth(0.5);
 
+  // ── Header ───────────────────────────────────────────────
   const headerH = 22;
   doc.rect(margL, y, col1W, headerH);
   doc.setFillColor(30, 30, 30);
@@ -290,34 +302,70 @@ export async function gerarRomaneioPedido(pedido) {
   doc.setFont("helvetica", "bold");
   doc.text("ROMANEIO DE EXPEDIÇÃO", col2X + col2W / 2, y + 9, { align: "center" });
 
+  // Lote formatado com quebra de linha
   const loteFormatado = pedido.lote
     .replace(/ - \d+ PRODUTOS.*$/i, "")
     .replace(/_LOTE_\d+$/i, "")
+    .replace(/_/g, " ")
     .trim();
-  doc.setFontSize(9);
+
+  doc.setFontSize(8);
   doc.setFont("helvetica", "bold");
-  doc.text(loteFormatado, col2X + col2W / 2, y + 17, { align: "center" });
+  const loteLinhas = doc.splitTextToSize(loteFormatado, col2W - 6);
+  if (loteLinhas.length === 1) {
+    doc.text(loteLinhas[0], col2X + col2W / 2, y + 17, { align: "center" });
+  } else {
+    loteLinhas.forEach((linha, idx) => {
+      doc.text(linha, col2X + col2W / 2, y + 15 + idx * 4, { align: "center" });
+    });
+  }
 
   y += headerH;
 
-  function drawRow(label, value, h = rowH) {
+  // ── Funções de linha com suporte a quebra de texto ───────
+  function calcRowH(text, maxW, fontSize = 9) {
+    doc.setFontSize(fontSize);
+    const linhas = doc.splitTextToSize(String(text), maxW - 6);
+    return Math.max(rowH, linhas.length * lineH + 6);
+  }
+
+  function drawRow(label, value) {
+    const h = calcRowH(value, col2W);
     doc.rect(margL, y, col1W, h);
     doc.rect(col2X, y, col2W, h);
+
+    // Label (coluna esquerda)
     doc.setFontSize(9);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(0, 0, 0);
-    doc.text(label, margL + col1W / 2, y + h / 2 + 2, { align: "center" });
+    doc.text(label, margL + col1W / 2, y + h / 2 + 1.5, { align: "center" });
+
+    // Value (coluna direita) com quebra de linha
     doc.setFont("helvetica", "normal");
-    doc.text(String(value), col2X + col2W / 2, y + h / 2 + 2, { align: "center" });
+    const linhas = doc.splitTextToSize(String(value), col2W - 6);
+    const totalTextH = linhas.length * lineH;
+    const startTextY = y + (h - totalTextH) / 2 + lineH - 1;
+    linhas.forEach((linha, idx) => {
+      doc.text(linha, col2X + col2W / 2, startTextY + idx * lineH, { align: "center" });
+    });
+
     y += h;
   }
 
-  function drawFullRow(text, h = rowH, fontSize = 9, fontStyle = "bold") {
-    doc.rect(margL, y, colW, h);
+  function drawFullRow(text, customH = null, fontSize = 9, fontStyle = "bold") {
     doc.setFontSize(fontSize);
     doc.setFont("helvetica", fontStyle);
+    const linhas = doc.splitTextToSize(String(text), colW - 6);
+    const h = customH || Math.max(rowH, linhas.length * lineH + 6);
+
+    doc.rect(margL, y, colW, h);
+    const totalTextH = linhas.length * lineH;
+    const startTextY = y + (h - totalTextH) / 2 + lineH - 1;
     doc.setTextColor(0, 0, 0);
-    doc.text(text, margL + colW / 2, y + h / 2 + 2, { align: "center" });
+    linhas.forEach((linha, idx) => {
+      doc.text(linha, margL + colW / 2, startTextY + idx * lineH, { align: "center" });
+    });
+
     y += h;
   }
 
@@ -327,12 +375,16 @@ export async function gerarRomaneioPedido(pedido) {
 
   drawRow("DATA :", dataHoje);
   drawRow("CLIENTE :", pedido.cliente);
-  drawFullRow("NOTA FISCAL");
+
+  // ── NOTA FISCAL ─────────────────────────────────────────
+  // Cabeçalho "NOTA FISCAL"
+  drawFullRow("NOTA FISCAL", rowH, 9, "bold");
 
   if (nfs.length === 0) {
     drawFullRow("Sem NFs vinculadas", rowH, 8, "normal");
   } else {
-    nfs.forEach(nf => drawFullRow(nf, rowH, 10, "bold"));
+    // Cada NF em sua própria linha
+    nfs.forEach(nf => drawFullRow(String(nf), rowH, 10, "bold"));
   }
 
   y += 4;
@@ -349,7 +401,6 @@ export async function gerarEtiqueta(caixaId, pedido, totalCaixasPedido) {
   const { data: caixa } = await supabase
     .from("b2b_caixas").select("*").eq("id", caixaId).single();
 
-  // Gerar código de barras via JsBarcode
   const JsBarcode = (await import("jsbarcode")).default;
   const codigoBarras = `${pedido.lote}-CX${caixa.numero}-${caixa.total_itens}UN`;
   const canvas = document.createElement("canvas");
@@ -362,7 +413,6 @@ export async function gerarEtiqueta(caixaId, pedido, totalCaixasPedido) {
   });
   const barcodeDataUrl = canvas.toDataURL("image/png");
 
-  // 105x50mm landscape
   const doc = new jsPDF({
     orientation: "landscape",
     unit:        "mm",
@@ -378,44 +428,36 @@ export async function gerarEtiqueta(caixaId, pedido, totalCaixasPedido) {
   doc.setLineWidth(0.4);
   doc.rect(1.5, 1.5, W - 3, H - 3, "S");
 
-  // Lote formatado
   const loteFormatado = pedido.lote
     .replace(/ - \d+ PRODUTOS.*$/i, "")
     .replace(/_LOTE_\d+$/i, "")
     .replace(/_/g, " ")
     .trim();
 
-  // Linha 1 — Lote
   doc.setFontSize(11);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(0, 0, 0);
   doc.text(loteFormatado, W / 2, 9, { align: "center" });
 
-  // Divisor
   doc.setDrawColor(180, 180, 180);
   doc.setLineWidth(0.3);
   doc.line(4, 12, W - 4, 12);
 
-  // Linha 2 — CAIXA X
   doc.setFontSize(22);
   doc.setFont("helvetica", "bold");
   doc.text(`CAIXA ${caixa.numero}`, W / 2, 23, { align: "center" });
 
-  // Linha 3 — Quantidade
   doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
   doc.text(`${caixa.total_itens} UNIDADES`, W / 2, 32, { align: "center" });
 
-  // Divisor
   doc.line(4, 35, W - 4, 35);
 
-  // Código de barras
   const barcodeW = 85;
   const barcodeH = 10;
   const barcodeX = (W - barcodeW) / 2;
   doc.addImage(barcodeDataUrl, "PNG", barcodeX, 36, barcodeW, barcodeH);
 
-  // Texto do código de barras
   doc.setFontSize(6);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(80, 80, 80);
