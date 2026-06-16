@@ -1,4 +1,3 @@
-// src/pages/B2BPickingPage.jsx
 import { useState, useEffect, useRef } from "react";
 import {
   Search, CheckCircle, AlertTriangle, Download,
@@ -17,6 +16,7 @@ import {
   buscarCaixaAberta, criarCaixa, listarCaixas,
   listarItensCaixa, embalarImei, fecharCaixa,
   gerarRomaneio, gerarEtiqueta, gerarRomaneioPedido,
+  verificarNFsPedido,
 } from "../services/b2bEmbalagemService.js";
 import { useAuth } from "../AuthContext.jsx";
 
@@ -165,9 +165,7 @@ function TabPicking({ pedidosIniciais, onAtualizarSilencioso }) {
   const inputRef                          = useRef(null);
 
   useEffect(() => {
-    if (pedidosIniciais.length > 0 && pedidos.length === 0) {
-      setPedidos(pedidosIniciais);
-    }
+    if (pedidosIniciais.length > 0 && pedidos.length === 0) setPedidos(pedidosIniciais);
   }, [pedidosIniciais]);
 
   async function atualizarPedidos() {
@@ -419,13 +417,12 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
   const [gerandoRomaneio, setGerandoRomaneio] = useState(false);
   const [caixaDetalhes, setCaixaDetalhes]     = useState(null);
   const [itensCaixaDet, setItensCaixaDet]     = useState([]);
+  const [nfsPedido, setNfsPedido]             = useState([]); // ← NOVO
   const inputRef                    = useRef(null);
   const CAPACIDADE                  = 30;
 
   useEffect(() => {
-    if (pedidosIniciais.length > 0 && pedidos.length === 0) {
-      setPedidos(pedidosIniciais);
-    }
+    if (pedidosIniciais.length > 0 && pedidos.length === 0) setPedidos(pedidosIniciais);
   }, [pedidosIniciais]);
 
   async function atualizarPedidos() {
@@ -438,8 +435,17 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
     onAtualizarSilencioso?.(data);
   }
 
-  useEffect(() => { if (pedidoSel) carregarCaixas(); }, [pedidoSel]);
-  useEffect(() => { if (caixaAtiva) { carregarItensCaixa(); setTimeout(() => inputRef.current?.focus(), 100); } }, [caixaAtiva]);
+  // ── Carrega caixas E NFs ao selecionar pedido ──────────
+  useEffect(() => {
+    if (pedidoSel) {
+      carregarCaixas();
+      carregarNFs();
+    }
+  }, [pedidoSel]);
+
+  useEffect(() => {
+    if (caixaAtiva) { carregarItensCaixa(); setTimeout(() => inputRef.current?.focus(), 100); }
+  }, [caixaAtiva]);
 
   async function carregarCaixas() {
     setLoading(true);
@@ -448,6 +454,15 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
     const aberta = data.find(c => c.status === "aberta");
     if (aberta) setCaixaAtiva(aberta);
     setLoading(false);
+  }
+
+  async function carregarNFs() {
+    try {
+      const nfs = await verificarNFsPedido(pedidoSel.id);
+      setNfsPedido(nfs);
+    } catch (_) {
+      setNfsPedido([]);
+    }
   }
 
   async function carregarItensCaixa() {
@@ -518,6 +533,9 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
   const totalEmbalados = caixas.reduce((s, c) => s + (c.total_itens || 0), 0);
   const totalBipados   = pedidoSel?.total_bipados || 0;
 
+  // Botões de romaneio só habilitados se houver NFs
+  const temNFs = nfsPedido.length > 0;
+
   if (!pedidoSel) {
     const pedidosDisponiveis = pedidos.filter(p => p.total_bipados > 0);
     return (
@@ -548,21 +566,44 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3 flex-wrap">
-        <button onClick={() => { setPedido(null); setCaixaAtiva(null); setCaixas([]); setItensCaixa([]); }} className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1"><X className="h-3 w-3" /> Trocar pedido</button>
+        <button onClick={() => { setPedido(null); setCaixaAtiva(null); setCaixas([]); setItensCaixa([]); setNfsPedido([]); }} className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1"><X className="h-3 w-3" /> Trocar pedido</button>
         <div className="flex-1"><h3 className="font-black text-slate-800 text-sm">{pedidoSel.lote}</h3><p className="text-xs text-slate-500">{pedidoSel.cliente}</p></div>
-        <button onClick={handleRomaneioPedido} disabled={gerandoRomaneio || caixas.length === 0}
-          className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-purple-50 text-purple-700 ring-1 ring-purple-200 hover:bg-purple-100 transition disabled:opacity-40">
-          {gerandoRomaneio ? <div className="h-3 w-3 border-2 border-purple-300 border-t-purple-700 rounded-full animate-spin" /> : <FileText className="h-3 w-3" />}
-          Romaneio do Pedido
-        </button>
+
+        {/* Romaneio do Pedido — só habilita com NFs */}
+        <div className="flex items-center gap-2">
+          {!temNFs && (
+            <span className="text-xs text-amber-600 font-semibold flex items-center gap-1">
+              <AlertTriangle className="h-3 w-3" /> Importe as NFs para gerar romaneios
+            </span>
+          )}
+          <button
+            onClick={handleRomaneioPedido}
+            disabled={gerandoRomaneio || caixas.length === 0 || !temNFs}
+            title={!temNFs ? "Importe as NFs primeiro" : ""}
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-purple-50 text-purple-700 ring-1 ring-purple-200 hover:bg-purple-100 transition disabled:opacity-40">
+            {gerandoRomaneio ? <div className="h-3 w-3 border-2 border-purple-300 border-t-purple-700 rounded-full animate-spin" /> : <FileText className="h-3 w-3" />}
+            Romaneio do Pedido
+          </button>
+        </div>
       </div>
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiMini label="Bipados (disponíveis)" value={fmtN(totalBipados)} color="bg-purple-50 ring-purple-200 text-purple-700" />
         <KpiMini label="Embalados" value={fmtN(totalEmbalados)} sub={`${Math.round((totalEmbalados / (totalBipados || 1)) * 100)}%`} color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
         <KpiMini label="A embalar" value={fmtN(totalBipados - totalEmbalados)} color="bg-orange-50 ring-orange-200 text-orange-700" />
         <KpiMini label="Caixas" value={fmtN(caixas.length)} sub={`${caixas.filter(c => c.status === "fechada").length} fechadas`} color="bg-blue-50 ring-blue-200 text-blue-700" />
       </div>
+
+      {/* Aviso de NFs quando há NFs — mostra quais estão vinculadas */}
+      {temNFs && (
+        <div className="bg-emerald-50 ring-1 ring-emerald-200 rounded-xl px-4 py-2.5 flex items-center gap-2 text-xs text-emerald-700 font-semibold">
+          <CheckCircle className="h-3.5 w-3.5 shrink-0" />
+          NFs vinculadas: {nfsPedido.map(n => n.numero_nf).join(", ")} — romaneios liberados
+        </div>
+      )}
+
       <Card><p className="text-xs font-semibold text-slate-500 mb-2">Progresso da embalagem</p><ProgressBar value={totalEmbalados} total={totalBipados} color="#F97316" /></Card>
+
       {caixaAtiva && caixaAtiva.status === "aberta" ? (
         <Card>
           <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
@@ -639,6 +680,7 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
           </div>
         </Card>
       )}
+
       {caixas.length > 0 && (
         <Card>
           <h3 className="font-black text-slate-800 text-sm flex items-center gap-2 mb-4"><Box className="h-4 w-4 text-[#7F2D92]" /> Todas as caixas ({caixas.length})</h3>
@@ -653,10 +695,16 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
                   <div className="flex items-center gap-2 flex-wrap justify-end">
                     <StatusBadge status={caixa.status} />
                     <button onClick={() => verDetalhesCaixa(caixa)} className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50 transition">{caixaDetalhes?.id === caixa.id ? "Ocultar" : "Ver itens"}</button>
-                    <button onClick={() => handleRomaneio(caixa)} disabled={gerando === caixa.id + "_rom" || !caixa.total_itens}
+
+                    {/* Romaneio da caixa — só habilita com NFs */}
+                    <button
+                      onClick={() => handleRomaneio(caixa)}
+                      disabled={gerando === caixa.id + "_rom" || !caixa.total_itens || !temNFs}
+                      title={!temNFs ? "Importe as NFs primeiro" : ""}
                       className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-purple-50 text-purple-700 ring-1 ring-purple-200 hover:bg-purple-100 transition disabled:opacity-40">
                       {gerando === caixa.id + "_rom" ? <div className="h-3 w-3 border-2 border-purple-300 border-t-purple-700 rounded-full animate-spin" /> : <FileText className="h-3 w-3" />} Romaneio
                     </button>
+
                     <button onClick={() => handleEtiqueta(caixa)} disabled={gerando === caixa.id + "_etq" || !caixa.total_itens}
                       className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-orange-50 text-orange-700 ring-1 ring-orange-200 hover:bg-orange-100 transition disabled:opacity-40">
                       {gerando === caixa.id + "_etq" ? <div className="h-3 w-3 border-2 border-orange-300 border-t-orange-700 rounded-full animate-spin" /> : <Tag className="h-3 w-3" />} Etiqueta
@@ -714,9 +762,7 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
   const inputNFRefs = useRef({});
 
   useEffect(() => {
-    if (pedidosIniciais.length > 0 && pedidos.length === 0) {
-      setPedidos(pedidosIniciais);
-    }
+    if (pedidosIniciais.length > 0 && pedidos.length === 0) setPedidos(pedidosIniciais);
   }, [pedidosIniciais]);
 
   async function atualizarPedidos() {
@@ -1070,7 +1116,6 @@ export default function B2BPickingPage({ abaInicial = "picking" }) {
   const [verConcluidos, setVerConcluidos]   = useState(false);
   const [loadingPedidos, setLoadingPedidos] = useState(true);
 
-  // ── Filtra abas conforme telas_permitidas do perfil ──
   const TODAS_ABAS = [
     { key: "picking",   label: "Picking",     icon: Search,    tela: "/b2b/picking"     },
     { key: "embalagem", label: "Embalagem",   icon: Box,       tela: "/b2b/embalagem"   },
@@ -1081,7 +1126,6 @@ export default function B2BPickingPage({ abaInicial = "picking" }) {
     ? TODAS_ABAS
     : TODAS_ABAS.filter(a => profile?.telas_permitidas?.includes(a.tela));
 
-  // Garante que a aba inicial seja uma das visíveis
   const abaInicialValida = ABAS.find(a => a.key === abaInicial)?.key || ABAS[0]?.key || "picking";
   const [aba, setAba] = useState(abaInicialValida);
 
@@ -1094,32 +1138,12 @@ export default function B2BPickingPage({ abaInicial = "picking" }) {
     setLoadingPedidos(false);
   }
 
-  function atualizarSilencioso(data) {
-    setPedidos(data);
-  }
+  function atualizarSilencioso(data) { setPedidos(data); }
 
   const contadores = {
-    picking: {
-      aberto:         pedidos.filter(p => p.status === "aberto").length,
-      concluido:      pedidos.filter(p => p.status === "concluido").length,
-      labelAberto:    "em aberto",
-      labelConcluido: "concluído",
-      aoConcluido:    () => setVerConcluidos(false),
-    },
-    embalagem: {
-      aberto:         pedidos.filter(p => (p.total_bipados || 0) > 0 && p.status !== "concluido").length,
-      concluido:      pedidos.filter(p => p.status === "concluido").length,
-      labelAberto:    "para embalar",
-      labelConcluido: "embalado",
-      aoConcluido:    () => setVerConcluidos(false),
-    },
-    pedidos: {
-      aberto:         pedidos.filter(p => p.status !== "concluido").length,
-      concluido:      pedidos.filter(p => p.status === "concluido").length,
-      labelAberto:    "aguardando faturamento",
-      labelConcluido: "faturado",
-      aoConcluido:    () => { setAba("pedidos"); setVerConcluidos(true); },
-    },
+    picking:  { aberto: pedidos.filter(p => p.status === "aberto").length, concluido: pedidos.filter(p => p.status === "concluido").length, labelAberto: "em aberto", labelConcluido: "concluído", aoConcluido: () => setVerConcluidos(false) },
+    embalagem:{ aberto: pedidos.filter(p => (p.total_bipados || 0) > 0 && p.status !== "concluido").length, concluido: pedidos.filter(p => p.status === "concluido").length, labelAberto: "para embalar", labelConcluido: "embalado", aoConcluido: () => setVerConcluidos(false) },
+    pedidos:  { aberto: pedidos.filter(p => p.status !== "concluido").length, concluido: pedidos.filter(p => p.status === "concluido").length, labelAberto: "aguardando faturamento", labelConcluido: "faturado", aoConcluido: () => { setAba("pedidos"); setVerConcluidos(true); } },
   };
 
   const ctx = contadores[aba] || contadores["picking"];
@@ -1150,7 +1174,6 @@ export default function B2BPickingPage({ abaInicial = "picking" }) {
         </div>
       </div>
 
-      {/* Só mostra abas se houver mais de uma visível */}
       {ABAS.length > 1 && (
         <div className="flex items-center gap-2 overflow-x-auto pb-1">
           {ABAS.map(a => {
