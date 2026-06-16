@@ -191,7 +191,6 @@ export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
 
   const { data: pedido } = await supabase.from("b2b_pedidos").select("*").eq("id", pedidoId).single();
 
-  // Buscar CNPJ do cliente
   const { data: clienteData } = await supabase
     .from("b2b_clientes").select("cnpj").eq("nome", pedido.cliente).single();
   const cnpj = clienteData?.cnpj || "";
@@ -233,7 +232,28 @@ export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
   return { bloqueado: false, total: itensNovos.length, numeroExportacao, nomeArquivo };
 }
 
-// ── Importar NF via planilha de faturamento preenchida ───
+// ── Helper: verifica se pedido deve ser concluído ─────────
+async function verificarEConcluirPedido(pedidoId) {
+  const { data: itensBipados } = await supabase
+    .from("b2b_itens").select("id")
+    .eq("pedido_id", pedidoId)
+    .eq("status", "bipado");
+
+  const { data: todasNFs } = await supabase
+    .from("b2b_nfs").select("total_itens")
+    .eq("pedido_id", pedidoId);
+
+  const totalBipados = (itensBipados || []).length;
+  const totalComNF   = (todasNFs || []).reduce((s, n) => s + (n.total_itens || 0), 0);
+
+  if (totalBipados > 0 && totalComNF >= totalBipados) {
+    await supabase.from("b2b_pedidos").update({ status: "concluido" }).eq("id", pedidoId);
+    return true;
+  }
+  return false;
+}
+
+// ── Importar NF via planilha de faturamento preenchida ────
 export async function importarNFPlanilha(file, pedidoId, userId) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -245,21 +265,17 @@ export async function importarNFPlanilha(file, pedidoId, userId) {
 
         if (!rows.length) throw new Error("Planilha vazia.");
 
-        // Filtrar apenas linhas com NF preenchida
         const linhasComNF = rows.filter(r => r["NF"] && String(r["NF"]).trim() !== "");
         if (!linhasComNF.length) throw new Error("Nenhuma linha com NF preenchida encontrada.");
 
-        // Verificar que o pedido existe
         const { data: pedido, error: errPedido } = await supabase
           .from("b2b_pedidos").select("*").eq("id", pedidoId).single();
         if (errPedido || !pedido) throw new Error("Pedido não encontrado.");
 
-        // Agrupar linhas por número de NF
         const nfMap = {};
         for (const row of linhasComNF) {
-          const nf    = String(row["NF"]).trim();
-          const imei  = String(row["IMEI"] || "").trim();
-          // Valor pode vir em formato americano (1,234.56) — converter para número
+          const nf       = String(row["NF"]).trim();
+          const imei     = String(row["IMEI"] || "").trim();
           const valorRaw = row["VALOR"] ? String(row["VALOR"]).replace(/,/g, "") : "0";
           const valor    = parseFloat(valorRaw) || 0;
 
@@ -268,7 +284,6 @@ export async function importarNFPlanilha(file, pedidoId, userId) {
           nfMap[nf].valorTotal += valor;
         }
 
-        // Verificar NFs já cadastradas neste pedido
         const { data: nfsExistentes } = await supabase
           .from("b2b_nfs").select("numero_nf").eq("pedido_id", pedidoId);
         const nfsJaCadastradas = new Set((nfsExistentes || []).map(n => String(n.numero_nf)));
@@ -276,7 +291,6 @@ export async function importarNFPlanilha(file, pedidoId, userId) {
         const nfsParaInserir = Object.entries(nfMap).filter(([nf]) => !nfsJaCadastradas.has(nf));
         if (!nfsParaInserir.length) throw new Error("Todas as NFs desta planilha já foram importadas.");
 
-        // Inserir cada NF separadamente
         const nfsInseridas = [];
         for (const [numeroNf, dados] of nfsParaInserir) {
           const { data: nfInserida, error: errNF } = await supabase
@@ -295,14 +309,14 @@ export async function importarNFPlanilha(file, pedidoId, userId) {
           nfsInseridas.push(nfInserida);
         }
 
-        // Marcar pedido como concluido
-        await supabase.from("b2b_pedidos").update({ status: "concluido" }).eq("id", pedidoId);
+        // Só conclui o pedido se total de itens com NF >= total bipados
+        await verificarEConcluirPedido(pedidoId);
 
         resolve({
-          ok:           true,
-          totalNFs:     nfsInseridas.length,
-          totalItens:   linhasComNF.length,
-          nfs:          nfsInseridas.map(n => n.numero_nf),
+          ok:         true,
+          totalNFs:   nfsInseridas.length,
+          totalItens: linhasComNF.length,
+          nfs:        nfsInseridas.map(n => n.numero_nf),
         });
       } catch (err) { reject(err); }
     };
@@ -312,13 +326,26 @@ export async function importarNFPlanilha(file, pedidoId, userId) {
 }
 
 export async function importarNFPedido(pedidoId, numeroNf, totalItens, totalCaixas, userId) {
-  const { data: itensData } = await supabase.from("b2b_itens").select("valor").eq("pedido_id", pedidoId).eq("status", "bipado");
+  const { data: itensData } = await supabase
+    .from("b2b_itens").select("valor").eq("pedido_id", pedidoId).eq("status", "bipado");
   const valor = (itensData || []).reduce((s, i) => s + (i.valor || 0), 0);
+
   const { data, error } = await supabase.from("b2b_nfs")
-    .insert({ pedido_id: pedidoId, numero_nf: numeroNf, total_itens: totalItens, total_caixas: totalCaixas, valor_total: valor, data_faturamento: new Date().toISOString(), importado_por: userId })
+    .insert({
+      pedido_id:        pedidoId,
+      numero_nf:        numeroNf,
+      total_itens:      totalItens,
+      total_caixas:     totalCaixas,
+      valor_total:      valor,
+      data_faturamento: new Date().toISOString(),
+      importado_por:    userId,
+    })
     .select().single();
   if (error) throw new Error(error.message);
-  await supabase.from("b2b_pedidos").update({ status: "concluido" }).eq("id", pedidoId);
+
+  // Só conclui se total de itens com NF >= total bipados
+  await verificarEConcluirPedido(pedidoId);
+
   return data;
 }
 
@@ -360,11 +387,11 @@ export async function listarPedidosConcluidos() {
 
     return {
       ...p,
-      nfs: nfsPedido,
+      nfs:        nfsPedido,
       valorFat,
-      tempoMedio:  tempoMedio ? Math.round(tempoMedio) : null,
-      anoPedido:   dataPedido.getFullYear(),
-      mesPedido:   dataPedido.getMonth() + 1,
+      tempoMedio: tempoMedio ? Math.round(tempoMedio) : null,
+      anoPedido:  dataPedido.getFullYear(),
+      mesPedido:  dataPedido.getMonth() + 1,
     };
   });
 }
