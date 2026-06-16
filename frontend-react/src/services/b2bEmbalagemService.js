@@ -4,6 +4,15 @@ import { supabase } from "../lib/supabase";
 
 const CAPACIDADE_CAIXA = 30;
 
+// ── Verifica se pedido tem NFs importadas ─────────────────
+export async function verificarNFsPedido(pedidoId) {
+  const { data } = await supabase
+    .from("b2b_nfs")
+    .select("id, numero_nf")
+    .eq("pedido_id", pedidoId);
+  return data || [];
+}
+
 export async function buscarCaixaAberta(pedidoId) {
   const { data } = await supabase
     .from("b2b_caixas")
@@ -107,8 +116,14 @@ export async function fecharCaixa(caixaId, userId) {
   if (error) throw new Error(error.message);
 }
 
-// ── Romaneio por Caixa ───────────────────────────────────
+// ── Romaneio por Caixa ────────────────────────────────────
 export async function gerarRomaneio(caixaId, pedido) {
+  // Verifica se há NFs importadas para este pedido
+  const nfsPedido = await verificarNFsPedido(pedido.id);
+  if (!nfsPedido.length) {
+    throw new Error("Não é possível gerar o romaneio sem NFs importadas. Importe as NFs primeiro.");
+  }
+
   const itens = await listarItensCaixa(caixaId);
 
   const { data: caixa } = await supabase
@@ -123,6 +138,10 @@ export async function gerarRomaneio(caixaId, pedido) {
     nfContagem[i.nf] = (nfContagem[i.nf] || 0) + 1;
   });
 
+  // Busca NFs da tabela b2b_nfs como fonte principal
+  const nfsTabela = nfsPedido.map(n => String(n.numero_nf));
+
+  // Monta contagem por NF usando b2b_nfs
   const { data: itensPedidoNF } = await supabase
     .from("b2b_itens").select("nf, caixa_id")
     .eq("pedido_id", pedido.id).not("nf", "is", null);
@@ -135,6 +154,11 @@ export async function gerarRomaneio(caixaId, pedido) {
     if (!nfCaixasTotal[i.nf]) nfCaixasTotal[i.nf] = new Set();
     if (i.caixa_id) nfCaixasTotal[i.nf].add(i.caixa_id);
   });
+
+  // Se nfContagem vazio, usa NFs do pedido como referência
+  const nfsParaRomaneio = Object.keys(nfContagem).length > 0
+    ? nfContagem
+    : Object.fromEntries(nfsTabela.map(nf => [nf, "—"]));
 
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
@@ -167,32 +191,35 @@ export async function gerarRomaneio(caixaId, pedido) {
 
   let currentY = 66;
 
-  if (Object.keys(nfContagem).length > 0) {
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(127, 45, 146);
-    doc.text("NOTAS FISCAIS DESTA CAIXA", 14, currentY);
-    currentY += 4;
+  // Seção de NFs — sempre mostra (já garantimos que existe)
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(127, 45, 146);
+  doc.text("NOTAS FISCAIS DESTA CAIXA", 14, currentY);
+  currentY += 4;
 
-    doc.autoTable({
-      startY: currentY,
-      head: [["Nº NF", "Aparelhos nesta caixa", "Total aparelhos na NF", "Total caixas na NF"]],
-      body: Object.entries(nfContagem).map(([nf, qtd]) => [
+  const nfsBody = Object.keys(nfContagem).length > 0
+    ? Object.entries(nfContagem).map(([nf, qtd]) => [
         nf, qtd, nfTotalItens[nf] || qtd, nfCaixasTotal[nf]?.size || 1,
-      ]),
-      styles:     { fontSize: 8, cellPadding: 2.5 },
-      headStyles: { fillColor: [91, 30, 116], textColor: [255, 255, 255], fontStyle: "bold", fontSize: 8 },
-      columnStyles: {
-        0: { cellWidth: 35, halign: "center" },
-        1: { cellWidth: 50, halign: "center" },
-        2: { cellWidth: 55, halign: "center" },
-        3: { cellWidth: 46, halign: "center" },
-      },
-      margin: { left: 14, right: 14 },
-    });
+      ])
+    : nfsTabela.map(nf => [nf, "—", "—", "—"]);
 
-    currentY = (doc.lastAutoTable?.finalY || currentY) + 8;
-  }
+  doc.autoTable({
+    startY: currentY,
+    head: [["Nº NF", "Aparelhos nesta caixa", "Total aparelhos na NF", "Total caixas na NF"]],
+    body: nfsBody,
+    styles:     { fontSize: 8, cellPadding: 2.5 },
+    headStyles: { fillColor: [91, 30, 116], textColor: [255, 255, 255], fontStyle: "bold", fontSize: 8 },
+    columnStyles: {
+      0: { cellWidth: 35, halign: "center" },
+      1: { cellWidth: 50, halign: "center" },
+      2: { cellWidth: 55, halign: "center" },
+      3: { cellWidth: 46, halign: "center" },
+    },
+    margin: { left: 14, right: 14 },
+  });
+
+  currentY = (doc.lastAutoTable?.finalY || currentY) + 8;
 
   doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
@@ -232,8 +259,14 @@ export async function gerarRomaneio(caixaId, pedido) {
   doc.save(`romaneio_caixa_${caixa.numero}_${pedido.lote}.pdf`);
 }
 
-// ── Romaneio do Pedido Completo ──────────────────────────
+// ── Romaneio do Pedido Completo ───────────────────────────
 export async function gerarRomaneioPedido(pedido) {
+  // Verifica se há NFs importadas para este pedido
+  const nfsPedidoCheck = await verificarNFsPedido(pedido.id);
+  if (!nfsPedidoCheck.length) {
+    throw new Error("Não é possível gerar o romaneio sem NFs importadas. Importe as NFs primeiro.");
+  }
+
   const { data: caixas } = await supabase
     .from("b2b_caixas").select("*")
     .eq("pedido_id", pedido.id).order("numero", { ascending: true });
@@ -251,8 +284,8 @@ export async function gerarRomaneioPedido(pedido) {
     if (i.caixa_id) nfCaixasTotal[i.nf].add(i.caixa_id);
   });
 
-  // Buscar NFs da tabela b2b_nfs
-  const { data: nfsTabela } = await supabase
+  // NFs da tabela b2b_nfs
+  const nfsTabela = await supabase
     .from("b2b_nfs").select("numero_nf")
     .eq("pedido_id", pedido.id)
     .order("importado_em", { ascending: true });
@@ -264,9 +297,8 @@ export async function gerarRomaneioPedido(pedido) {
   const totalItens   = itensEmbalados?.length || 0;
   const totalVolumes = caixas?.length || 0;
 
-  // NFs: prioriza b2b_nfs, fallback para itens
-  const nfs = nfsTabela?.length > 0
-    ? nfsTabela.map(n => String(n.numero_nf))
+  const nfs = nfsTabela.data?.length > 0
+    ? nfsTabela.data.map(n => String(n.numero_nf))
     : Object.keys(nfTotalItens).sort();
 
   const doc   = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -277,14 +309,14 @@ export async function gerarRomaneioPedido(pedido) {
   const col2X = margL + col1W;
   const col2W = colW - col1W;
   const rowH  = 14;
-  const lineH = 5; // altura por linha de texto
+  const lineH = 5;
 
   let y = 40;
 
   doc.setDrawColor(0, 0, 0);
   doc.setLineWidth(0.5);
 
-  // ── Header ───────────────────────────────────────────────
+  // ── Header ────────────────────────────────────────────────
   const headerH = 22;
   doc.rect(margL, y, col1W, headerH);
   doc.setFillColor(30, 30, 30);
@@ -302,7 +334,6 @@ export async function gerarRomaneioPedido(pedido) {
   doc.setFont("helvetica", "bold");
   doc.text("ROMANEIO DE EXPEDIÇÃO", col2X + col2W / 2, y + 9, { align: "center" });
 
-  // Lote formatado com quebra de linha
   const loteFormatado = pedido.lote
     .replace(/ - \d+ PRODUTOS.*$/i, "")
     .replace(/_LOTE_\d+$/i, "")
@@ -322,7 +353,7 @@ export async function gerarRomaneioPedido(pedido) {
 
   y += headerH;
 
-  // ── Funções de linha com suporte a quebra de texto ───────
+  // ── Funções auxiliares ────────────────────────────────────
   function calcRowH(text, maxW, fontSize = 9) {
     doc.setFontSize(fontSize);
     const linhas = doc.splitTextToSize(String(text), maxW - 6);
@@ -334,13 +365,11 @@ export async function gerarRomaneioPedido(pedido) {
     doc.rect(margL, y, col1W, h);
     doc.rect(col2X, y, col2W, h);
 
-    // Label (coluna esquerda)
     doc.setFontSize(9);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(0, 0, 0);
     doc.text(label, margL + col1W / 2, y + h / 2 + 1.5, { align: "center" });
 
-    // Value (coluna direita) com quebra de linha
     doc.setFont("helvetica", "normal");
     const linhas = doc.splitTextToSize(String(value), col2W - 6);
     const totalTextH = linhas.length * lineH;
@@ -369,23 +398,13 @@ export async function gerarRomaneioPedido(pedido) {
     y += h;
   }
 
-  const dataHoje = new Date().toLocaleDateString("pt-BR", {
-    day: "2-digit", month: "2-digit", year: "2-digit",
-  });
-
-  drawRow("DATA :", dataHoje);
+  // DATA em branco para preenchimento manual
+  drawRow("DATA :", "");
   drawRow("CLIENTE :", pedido.cliente);
 
-  // ── NOTA FISCAL ─────────────────────────────────────────
-  // Cabeçalho "NOTA FISCAL"
+  // ── NOTA FISCAL ──────────────────────────────────────────
   drawFullRow("NOTA FISCAL", rowH, 9, "bold");
-
-  if (nfs.length === 0) {
-    drawFullRow("Sem NFs vinculadas", rowH, 8, "normal");
-  } else {
-    // Cada NF em sua própria linha
-    nfs.forEach(nf => drawFullRow(String(nf), rowH, 10, "bold"));
-  }
+  nfs.forEach(nf => drawFullRow(String(nf), rowH, 10, "bold"));
 
   y += 4;
   drawRow("QUANTIDADE :", totalItens);
@@ -396,7 +415,7 @@ export async function gerarRomaneioPedido(pedido) {
   doc.save(`romaneio_${pedido.lote}.pdf`);
 }
 
-// ── Etiqueta PDF ─────────────────────────────────────────
+// ── Etiqueta PDF ──────────────────────────────────────────
 export async function gerarEtiqueta(caixaId, pedido, totalCaixasPedido) {
   const { data: caixa } = await supabase
     .from("b2b_caixas").select("*").eq("id", caixaId).single();
