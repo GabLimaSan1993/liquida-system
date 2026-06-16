@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Search, CheckCircle, AlertTriangle, Download,
   Package, X, BarChart3, Clock, Box, FileText,
@@ -163,11 +163,16 @@ function TabPicking({ pedidosIniciais, onAtualizarSilencioso }) {
   const [modalReverter, setModalReverter] = useState(null);
   const inputRef                          = useRef(null);
 
-  // Atualiza lista de pedidos sem resetar pedidoSel
+  // ── CORREÇÃO: sincroniza quando o pai termina de carregar ──
+  useEffect(() => {
+    if (pedidosIniciais.length > 0 && pedidos.length === 0) {
+      setPedidos(pedidosIniciais);
+    }
+  }, [pedidosIniciais]);
+
   async function atualizarPedidos() {
     const data = await listarPedidosB2B();
     setPedidos(data);
-    // Atualiza o pedido selecionado se ainda existir
     if (pedidoSel) {
       const atualizado = data.find(p => p.id === pedidoSel.id);
       if (atualizado) setPedido(atualizado);
@@ -194,7 +199,6 @@ function TabPicking({ pedidosIniciais, onAtualizarSilencioso }) {
       setFeedback({ tipo: "ok", msg: `✓ IMEI ${imeiInput.trim()} bipado!`, item: res.item });
       setItens(prev => prev.map(i => i.imei === imeiInput.trim() ? { ...i, status: "bipado", bipado_em: new Date().toISOString() } : i));
       setPedido(prev => ({ ...prev, total_bipados: (prev.total_bipados || 0) + 1 }));
-      // Atualiza contadores sem resetar tela
       atualizarPedidos();
     } else {
       setFeedback({ tipo: "erro", msg: res.erro });
@@ -423,6 +427,12 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
   const [itensCaixaDet, setItensCaixaDet]     = useState([]);
   const inputRef                    = useRef(null);
   const CAPACIDADE                  = 30;
+
+  useEffect(() => {
+    if (pedidosIniciais.length > 0 && pedidos.length === 0) {
+      setPedidos(pedidosIniciais);
+    }
+  }, [pedidosIniciais]);
 
   async function atualizarPedidos() {
     const data = await listarPedidosB2B();
@@ -713,6 +723,12 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
   const [loadingResumo, setLoadingResumo] = useState({});
   const inputNFRefs = useRef({});
 
+  useEffect(() => {
+    if (pedidosIniciais.length > 0 && pedidos.length === 0) {
+      setPedidos(pedidosIniciais);
+    }
+  }, [pedidosIniciais]);
+
   async function atualizarPedidos() {
     const data = await listarPedidosB2B();
     setPedidos(data);
@@ -838,12 +854,10 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
                     {resumo && <span className="text-sm font-black text-slate-800">{fmtR(resumo.totalValor)}</span>}
                   </div>
                 </div>
-
                 <div className="mb-4">
                   <p className="text-xs font-semibold text-slate-400 mb-1">Separação</p>
                   <ProgressBar value={p.total_bipados || 0} total={p.total_itens || 0} />
                 </div>
-
                 {isLoading ? (
                   <div className="flex items-center justify-center h-12"><div className="h-4 w-4 border-2 border-purple-200 border-t-[#7F2D92] rounded-full animate-spin" /></div>
                 ) : resumo ? (
@@ -860,7 +874,6 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
                     </div>
                   </div>
                 ) : null}
-
                 {nfsPedido.length > 0 && (
                   <div className="mb-4">
                     <button onClick={() => setPainelAberto(prev => ({ ...prev, [p.id]: !prev[p.id] }))}
@@ -888,7 +901,6 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
                     )}
                   </div>
                 )}
-
                 <div className="flex gap-2 flex-wrap items-center">
                   <button onClick={() => handleExportar(p)} disabled={exportando === p.id || !p.total_bipados}
                     className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100 transition disabled:opacity-40">
@@ -904,7 +916,6 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
                       onChange={e => handleImportarNF(p, e.target.files?.[0])} />
                   </label>
                 </div>
-
                 {fb && (
                   <div className={`mt-3 flex items-start gap-2 text-xs rounded-xl px-4 py-3 ring-1 ${fb.tipo === "ok" ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : fb.tipo === "bloqueado" ? "bg-amber-50 text-amber-700 ring-amber-200" : "bg-red-50 text-red-700 ring-red-200"}`}>
                     {fb.tipo === "ok" ? <CheckCircle className="h-4 w-4 shrink-0 mt-0.5" /> : <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />}
@@ -1074,18 +1085,20 @@ function TabConcluidos({ onVoltar }) {
 // PÁGINA PRINCIPAL
 // ══════════════════════════════════════════════════════════
 export default function B2BPickingPage() {
-  const [aba, setAba]                     = useState("picking");
-  const [pedidos, setPedidos]             = useState([]);
-  const [verConcluidos, setVerConcluidos] = useState(false);
+  const [aba, setAba]                       = useState("picking");
+  const [pedidos, setPedidos]               = useState([]);
+  const [verConcluidos, setVerConcluidos]   = useState(false);
+  const [loadingPedidos, setLoadingPedidos] = useState(true);
 
   useEffect(() => { carregarPedidos(); }, []);
 
   async function carregarPedidos() {
+    setLoadingPedidos(true);
     const data = await listarPedidosB2B();
     setPedidos(data);
+    setLoadingPedidos(false);
   }
 
-  // Atualização silenciosa — só atualiza os contadores do header
   function atualizarSilencioso(data) {
     setPedidos(data);
   }
@@ -1166,11 +1179,19 @@ export default function B2BPickingPage() {
         <span>Para importar um novo pedido B2B, acesse <strong>Uploads → Pedido B2B — Picking</strong>.</span>
       </div>
 
-      {/* Cada aba gerencia seus próprios pedidos internamente */}
-      {aba === "picking"   && <TabPicking   pedidosIniciais={pedidos} onAtualizarSilencioso={atualizarSilencioso} />}
-      {aba === "embalagem" && <TabEmbalagem pedidosIniciais={pedidos} onAtualizarSilencioso={atualizarSilencioso} />}
-      {aba === "pedidos"   && !verConcluidos && <TabPedidos pedidosIniciais={pedidos} onAtualizarSilencioso={atualizarSilencioso} />}
-      {aba === "pedidos"   && verConcluidos  && <TabConcluidos onVoltar={() => setVerConcluidos(false)} />}
+      {/* Aguarda carregar antes de renderizar as abas */}
+      {loadingPedidos ? (
+        <div className="flex items-center justify-center h-32">
+          <div className="h-8 w-8 border-4 border-purple-200 border-t-[#7F2D92] rounded-full animate-spin" />
+        </div>
+      ) : (
+        <>
+          {aba === "picking"   && <TabPicking   pedidosIniciais={pedidos} onAtualizarSilencioso={atualizarSilencioso} />}
+          {aba === "embalagem" && <TabEmbalagem pedidosIniciais={pedidos} onAtualizarSilencioso={atualizarSilencioso} />}
+          {aba === "pedidos"   && !verConcluidos && <TabPedidos pedidosIniciais={pedidos} onAtualizarSilencioso={atualizarSilencioso} />}
+          {aba === "pedidos"   && verConcluidos  && <TabConcluidos onVoltar={() => setVerConcluidos(false)} />}
+        </>
+      )}
     </div>
   );
 }
