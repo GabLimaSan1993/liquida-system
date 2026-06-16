@@ -1,3 +1,4 @@
+// src/pages/B2BPickingPage.jsx
 import { useState, useEffect, useRef } from "react";
 import {
   Search, CheckCircle, AlertTriangle, Download,
@@ -163,7 +164,6 @@ function TabPicking({ pedidosIniciais, onAtualizarSilencioso }) {
   const [modalReverter, setModalReverter] = useState(null);
   const inputRef                          = useRef(null);
 
-  // ── CORREÇÃO: sincroniza quando o pai termina de carregar ──
   useEffect(() => {
     if (pedidosIniciais.length > 0 && pedidos.length === 0) {
       setPedidos(pedidosIniciais);
@@ -282,14 +282,12 @@ function TabPicking({ pedidosIniciais, onAtualizarSilencioso }) {
     <>
       {modalNaoLoc && <ModalNaoLocalizado item={modalNaoLoc} onConfirmar={confirmarNaoLocalizado} onCancelar={() => { setModalNaoLoc(null); inputRef.current?.focus(); }} />}
       {modalReverter && <ModalReverter item={modalReverter} onConfirmar={confirmarReverter} onCancelar={() => { setModalReverter(null); inputRef.current?.focus(); }} />}
-
       <div className="space-y-4">
         <div className="flex items-center gap-3 flex-wrap">
           <button onClick={() => { setPedido(null); setItens([]); setRuasSel([]); }} className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1"><X className="h-3 w-3" /> Trocar pedido</button>
           <div className="flex-1"><h3 className="font-black text-slate-800 text-sm">{pedidoSel.lote}</h3><p className="text-xs text-slate-500">{pedidoSel.cliente}</p></div>
           <StatusBadge status={pedidoSel.status} />
         </div>
-
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <KpiMini label="Total" value={fmtN(pedidoSel.total_itens)} color="bg-purple-50 ring-purple-200 text-purple-700" />
           <KpiMini label="Bipados" value={fmtN(totalBipados)} sub={`${Math.round((totalBipados / (pedidoSel.total_itens || 1)) * 100)}%`} color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
@@ -299,9 +297,7 @@ function TabPicking({ pedidosIniciais, onAtualizarSilencioso }) {
             : <KpiMini label="Valor bipado" value={fmtR(valorTotal)} color="bg-blue-50 ring-blue-200 text-blue-700" />
           }
         </div>
-
         <Card><ProgressBar value={totalBipados} total={pedidoSel.total_itens || 0} /></Card>
-
         {ruasDisponiveis.length > 0 && (
           <Card>
             <div className="flex items-center gap-2 flex-wrap">
@@ -314,7 +310,6 @@ function TabPicking({ pedidosIniciais, onAtualizarSilencioso }) {
             </div>
           </Card>
         )}
-
         <Card>
           <h3 className="font-black text-slate-800 flex items-center gap-2 mb-4 text-sm"><Search className="h-4 w-4 text-[#7F2D92]" /> Bipar IMEI</h3>
           <form onSubmit={handleBipar} className="flex gap-3">
@@ -337,7 +332,6 @@ function TabPicking({ pedidosIniciais, onAtualizarSilencioso }) {
             </div>
           )}
         </Card>
-
         <Card>
           <div className="flex items-center gap-3 mb-4 flex-wrap">
             <h3 className="font-black text-slate-800 text-sm flex items-center gap-2"><Package className="h-4 w-4 text-[#7F2D92]" /> Lista de itens</h3>
@@ -562,16 +556,13 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
           Romaneio do Pedido
         </button>
       </div>
-
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiMini label="Bipados (disponíveis)" value={fmtN(totalBipados)} color="bg-purple-50 ring-purple-200 text-purple-700" />
         <KpiMini label="Embalados" value={fmtN(totalEmbalados)} sub={`${Math.round((totalEmbalados / (totalBipados || 1)) * 100)}%`} color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
         <KpiMini label="A embalar" value={fmtN(totalBipados - totalEmbalados)} color="bg-orange-50 ring-orange-200 text-orange-700" />
         <KpiMini label="Caixas" value={fmtN(caixas.length)} sub={`${caixas.filter(c => c.status === "fechada").length} fechadas`} color="bg-blue-50 ring-blue-200 text-blue-700" />
       </div>
-
       <Card><p className="text-xs font-semibold text-slate-500 mb-2">Progresso da embalagem</p><ProgressBar value={totalEmbalados} total={totalBipados} color="#F97316" /></Card>
-
       {caixaAtiva && caixaAtiva.status === "aberta" ? (
         <Card>
           <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
@@ -648,7 +639,6 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
           </div>
         </Card>
       )}
-
       {caixas.length > 0 && (
         <Card>
           <h3 className="font-black text-slate-800 text-sm flex items-center gap-2 mb-4"><Box className="h-4 w-4 text-[#7F2D92]" /> Todas as caixas ({caixas.length})</h3>
@@ -817,13 +807,11 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
         <h3 className="font-black text-slate-800 flex items-center gap-2 text-sm"><BarChart3 className="h-4 w-4 text-[#7F2D92]" /> Faturamento B2B</h3>
         <button onClick={atualizarPedidos} className="text-xs text-slate-500 hover:text-purple-700 font-semibold">↻ Atualizar</button>
       </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <KpiMini label="Aguardando faturamento" value={fmtR(totalAguardando)} sub={`${fmtN(pedidosAbertos.length)} pedidos`} color="bg-orange-50 ring-orange-200 text-orange-700" />
         <KpiMini label="Faturado" value={fmtR(totalFaturadoGlobal)} sub={`${fmtN(Object.values(resumos).reduce((s, r) => s + (r?.qtdFaturada || 0), 0))} itens`} color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
         <KpiMini label="% Faturado" value={`${pctFaturado}%`} sub="do valor total" color="bg-purple-50 ring-purple-200 text-purple-700" />
       </div>
-
       {pedidosAbertos.length === 0 ? (
         <div className="text-center py-12 text-slate-400"><Package className="h-8 w-8 mx-auto mb-2 opacity-30" /><p className="text-sm">Nenhum pedido em aberto.</p></div>
       ) : (
@@ -840,7 +828,6 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
             const qtdFaturada     = resumo?.qtdFaturada || 0;
             const qtdAguardando   = (p.total_bipados || 0) - qtdFaturada;
             const borderColor     = statusFat === "faturado" ? "ring-emerald-200" : statusFat === "em_faturamento" ? "ring-purple-200" : statusFat === "em_separacao" ? "ring-yellow-200" : "ring-slate-200";
-
             return (
               <Card key={p.id} className={`ring-1 ${borderColor}`}>
                 <div className="flex items-start justify-between gap-3 mb-4 flex-wrap">
@@ -951,7 +938,6 @@ function TabConcluidos({ onVoltar }) {
   }
 
   const anos = [...new Set(pedidos.map(p => p.anoPedido))].sort((a, b) => b - a);
-
   const pedidosFiltrados = pedidos.filter(p => {
     const matchAno = filtroAno === "todos" || p.anoPedido === Number(filtroAno);
     const matchMes = filtroMes === "todos" || p.mesPedido === Number(filtroMes);
@@ -961,9 +947,7 @@ function TabConcluidos({ onVoltar }) {
   const totalValorFat   = pedidosFiltrados.reduce((s, p) => s + (p.valorFat || 0), 0);
   const totalQtd        = pedidosFiltrados.reduce((s, p) => s + (p.total_itens || 0), 0);
   const temposMedios    = pedidosFiltrados.filter(p => p.tempoMedio != null);
-  const tempoMedioGeral = temposMedios.length > 0
-    ? Math.round(temposMedios.reduce((s, p) => s + p.tempoMedio, 0) / temposMedios.length)
-    : null;
+  const tempoMedioGeral = temposMedios.length > 0 ? Math.round(temposMedios.reduce((s, p) => s + p.tempoMedio, 0) / temposMedios.length) : null;
 
   const porMes = {};
   pedidosFiltrados.forEach(p => {
@@ -982,13 +966,11 @@ function TabConcluidos({ onVoltar }) {
         <h3 className="font-black text-slate-800 flex items-center gap-2 text-sm flex-1"><TrendingUp className="h-4 w-4 text-emerald-600" /> Pedidos Faturados</h3>
         <button onClick={carregar} className="text-xs text-slate-500 hover:text-purple-700 font-semibold">↻ Atualizar</button>
       </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <KpiMini label="Total faturado" value={fmtR(totalValorFat)} sub={`${pedidosFiltrados.length} pedidos`} color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
         <KpiMini label="Produtos faturados" value={fmtN(totalQtd)} sub="unidades" color="bg-purple-50 ring-purple-200 text-purple-700" />
         <KpiMini label="Tempo médio" value={tempoMedioGeral != null ? `${tempoMedioGeral}d` : "—"} sub="do pedido ao faturamento" color="bg-blue-50 ring-blue-200 text-blue-700" />
       </div>
-
       <Card>
         <div className="flex items-center gap-3 flex-wrap">
           <Calendar className="h-4 w-4 text-slate-400" />
@@ -1006,7 +988,6 @@ function TabConcluidos({ onVoltar }) {
           </div>
         </div>
       </Card>
-
       {resumoMeses.length > 0 && (
         <Card>
           <h4 className="font-black text-slate-700 text-xs mb-3 flex items-center gap-2"><Calendar className="h-3.5 w-3.5 text-purple-500" /> Resumo por período</h4>
@@ -1024,7 +1005,6 @@ function TabConcluidos({ onVoltar }) {
           </div>
         </Card>
       )}
-
       {loading ? (
         <div className="flex items-center justify-center h-32"><div className="h-8 w-8 border-4 border-purple-200 border-t-[#7F2D92] rounded-full animate-spin" /></div>
       ) : pedidosFiltrados.length === 0 ? (
@@ -1084,11 +1064,26 @@ function TabConcluidos({ onVoltar }) {
 // ══════════════════════════════════════════════════════════
 // PÁGINA PRINCIPAL
 // ══════════════════════════════════════════════════════════
-export default function B2BPickingPage() {
-  const [aba, setAba]                       = useState("picking");
+export default function B2BPickingPage({ abaInicial = "picking" }) {
+  const { profile }                         = useAuth();
   const [pedidos, setPedidos]               = useState([]);
   const [verConcluidos, setVerConcluidos]   = useState(false);
   const [loadingPedidos, setLoadingPedidos] = useState(true);
+
+  // ── Filtra abas conforme telas_permitidas do perfil ──
+  const TODAS_ABAS = [
+    { key: "picking",   label: "Picking",     icon: Search,    tela: "/b2b/picking"     },
+    { key: "embalagem", label: "Embalagem",   icon: Box,       tela: "/b2b/embalagem"   },
+    { key: "pedidos",   label: "Faturamento", icon: BarChart3, tela: "/b2b/faturamento" },
+  ];
+
+  const ABAS = profile?.is_master
+    ? TODAS_ABAS
+    : TODAS_ABAS.filter(a => profile?.telas_permitidas?.includes(a.tela));
+
+  // Garante que a aba inicial seja uma das visíveis
+  const abaInicialValida = ABAS.find(a => a.key === abaInicial)?.key || ABAS[0]?.key || "picking";
+  const [aba, setAba] = useState(abaInicialValida);
 
   useEffect(() => { carregarPedidos(); }, []);
 
@@ -1102,12 +1097,6 @@ export default function B2BPickingPage() {
   function atualizarSilencioso(data) {
     setPedidos(data);
   }
-
-  const ABAS = [
-    { key: "picking",   label: "Picking",     icon: Search    },
-    { key: "embalagem", label: "Embalagem",   icon: Box       },
-    { key: "pedidos",   label: "Faturamento", icon: BarChart3 },
-  ];
 
   const contadores = {
     picking: {
@@ -1133,7 +1122,7 @@ export default function B2BPickingPage() {
     },
   };
 
-  const ctx = contadores[aba];
+  const ctx = contadores[aba] || contadores["picking"];
 
   return (
     <div className="space-y-5">
@@ -1161,25 +1150,29 @@ export default function B2BPickingPage() {
         </div>
       </div>
 
-      <div className="flex items-center gap-2 overflow-x-auto pb-1">
-        {ABAS.map(a => {
-          const Icon = a.icon;
-          return (
-            <button key={a.key} onClick={() => { setAba(a.key); setVerConcluidos(false); }}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all whitespace-nowrap ${aba === a.key ? "bg-[#7F2D92] text-white shadow-md" : "text-slate-500 hover:bg-slate-100"}`}>
-              <Icon className="h-4 w-4 shrink-0" />
-              {a.label}
-            </button>
-          );
-        })}
-      </div>
+      {/* Só mostra abas se houver mais de uma visível */}
+      {ABAS.length > 1 && (
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+          {ABAS.map(a => {
+            const Icon = a.icon;
+            return (
+              <button key={a.key} onClick={() => { setAba(a.key); setVerConcluidos(false); }}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all whitespace-nowrap ${aba === a.key ? "bg-[#7F2D92] text-white shadow-md" : "text-slate-500 hover:bg-slate-100"}`}>
+                <Icon className="h-4 w-4 shrink-0" />
+                {a.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
-      <div className="bg-blue-50 ring-1 ring-blue-200 rounded-2xl px-4 py-3 flex items-center gap-2 text-xs text-blue-700">
-        <span>ℹ</span>
-        <span>Para importar um novo pedido B2B, acesse <strong>Uploads → Pedido B2B — Picking</strong>.</span>
-      </div>
+      {profile?.is_master && (
+        <div className="bg-blue-50 ring-1 ring-blue-200 rounded-2xl px-4 py-3 flex items-center gap-2 text-xs text-blue-700">
+          <span>ℹ</span>
+          <span>Para importar um novo pedido B2B, acesse <strong>Uploads → Pedido B2B — Picking</strong>.</span>
+        </div>
+      )}
 
-      {/* Aguarda carregar antes de renderizar as abas */}
       {loadingPedidos ? (
         <div className="flex items-center justify-center h-32">
           <div className="h-8 w-8 border-4 border-purple-200 border-t-[#7F2D92] rounded-full animate-spin" />

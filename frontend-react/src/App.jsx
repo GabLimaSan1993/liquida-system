@@ -1,3 +1,4 @@
+// src/App.jsx
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./AuthContext.jsx";
 
@@ -41,12 +42,16 @@ function DefaultRedirect() {
   const { profile, loading } = useAuth();
   if (loading) return <div className="min-h-screen flex items-center justify-center text-purple-700 font-bold">Carregando...</div>;
   if (!profile) return <Navigate to="/login" replace />;
-  if (profile.is_master)                                                          return <Navigate to="/upload" replace />;
-  if (profile.area_tecnica === "assurant")                                        return <Navigate to="/b2b/picking" replace />;
-  if (profile.area_tecnica === "assurant_trocas")                                 return <Navigate to="/trocas-b2c/nova" replace />;
-  if (profile.area_tecnica === "refrigeracao")                                    return <Navigate to="/linha-branca/triagem" replace />;
-  if (["climatizacao", "lavadoras", "diversos"].includes(profile.area_tecnica))   return <Navigate to="/linha-branca/triagem-reparos" replace />;
-  if (profile.telas_permitidas?.length > 0)                                       return <Navigate to={profile.telas_permitidas[0]} replace />;
+  if (profile.is_master)                                                        return <Navigate to="/upload" replace />;
+  if (profile.area_tecnica === "assurant_trocas")                               return <Navigate to="/trocas-b2c/nova" replace />;
+  if (profile.area_tecnica === "refrigeracao")                                  return <Navigate to="/linha-branca/triagem" replace />;
+  if (["climatizacao", "lavadoras", "diversos"].includes(profile.area_tecnica)) return <Navigate to="/linha-branca/triagem-reparos" replace />;
+  // Operador Assurant → cai na primeira tela permitida
+  if (profile.area_tecnica === "assurant") {
+    const primeira = profile.telas_permitidas?.[0];
+    return <Navigate to={primeira || "/sem-acesso"} replace />;
+  }
+  if (profile.telas_permitidas?.length > 0) return <Navigate to={profile.telas_permitidas[0]} replace />;
   return <Navigate to="/sem-acesso" replace />;
 }
 
@@ -103,7 +108,10 @@ export default function App() {
         <Route path="/assurant/sla"       element={<ProtectedRoute tela="/assurant/sla"><AssurantSLAPage /></ProtectedRoute>} />
         <Route path="/assurant/layout"    element={<ProtectedRoute tela="/assurant/layout"><AssurantLayoutPage /></ProtectedRoute>} />
 
-        <Route path="/b2b/picking"      element={<ProtectedRoute tela="/b2b/picking"><B2BPickingPage /></ProtectedRoute>} />
+        {/* B2B — mesma página, rotas por função */}
+        <Route path="/b2b/picking"     element={<ProtectedRoute tela="/b2b/picking"><B2BPickingPage abaInicial="picking" /></ProtectedRoute>} />
+        <Route path="/b2b/embalagem"   element={<ProtectedRoute tela="/b2b/embalagem"><B2BPickingPage abaInicial="embalagem" /></ProtectedRoute>} />
+        <Route path="/b2b/faturamento" element={<ProtectedRoute tela="/b2b/faturamento"><B2BPickingPage abaInicial="pedidos" /></ProtectedRoute>} />
 
         {/* Trocas B2C */}
         <Route path="/trocas-b2c/nova"   element={<ProtectedRoute tela="/trocas-b2c/nova"><TrocasB2CAssurantPage /></ProtectedRoute>} />
