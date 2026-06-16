@@ -164,7 +164,6 @@ export async function marcarNaoLocalizado(itemId, userId) {
   if (error) throw new Error(error.message);
 }
 
-// ── Em Análise: marcar item para análise ─────────────────
 export async function marcarEmAnalise(itemId, userId) {
   const { error } = await supabase.from("b2b_itens")
     .update({
@@ -176,16 +175,14 @@ export async function marcarEmAnalise(itemId, userId) {
   if (error) throw new Error(error.message);
 }
 
-// ── Em Análise: marcar como localizado → volta para bipado ─
 export async function marcarLocalizado(itemId, novaLocalizacao, userId) {
   const { error } = await supabase.from("b2b_itens")
     .update({
-      status:           "bipado",
-      local_estoque:    novaLocalizacao,
-      localizado_em:    new Date().toISOString(),
-      localizado_por:   userId,
-      localizado_local: novaLocalizacao,
-      // Limpa campos de não localizado
+      status:             "bipado",
+      local_estoque:      novaLocalizacao,
+      localizado_em:      new Date().toISOString(),
+      localizado_por:     userId,
+      localizado_local:   novaLocalizacao,
       nao_localizado_em:  null,
       nao_localizado_por: null,
     })
@@ -193,58 +190,32 @@ export async function marcarLocalizado(itemId, novaLocalizacao, userId) {
   if (error) throw new Error(error.message);
 }
 
-// ── Em Análise: marcar como não faturar ──────────────────
 export async function marcarNaoFaturar(itemId, motivo, observacao, userId) {
   const { error } = await supabase.from("b2b_itens")
     .update({
-      status:               "nao_faturar",
-      motivo_nao_faturar:   motivo,
-      obs_nao_faturar:      observacao || null,
-      nao_faturar_em:       new Date().toISOString(),
-      nao_faturar_por:      userId,
+      status:             "nao_faturar",
+      motivo_nao_faturar: motivo,
+      obs_nao_faturar:    observacao || null,
+      nao_faturar_em:     new Date().toISOString(),
+      nao_faturar_por:    userId,
     })
     .eq("id", itemId);
   if (error) throw new Error(error.message);
-}
-
-// ── Listar itens em análise de um pedido ─────────────────
-export async function listarItensEmAnalise(pedidoId) {
-  const { data, error } = await supabase
-    .from("b2b_itens")
-    .select("*")
-    .eq("pedido_id", pedidoId)
-    .in("status", ["nao_localizado", "em_analise"])
-    .order("nao_localizado_em", { ascending: true });
-  if (error) throw new Error(error.message);
-  return data || [];
-}
-
-// ── Listar itens não faturar de um pedido ────────────────
-export async function listarItensNaoFaturar(pedidoId) {
-  const { data, error } = await supabase
-    .from("b2b_itens")
-    .select("*")
-    .eq("pedido_id", pedidoId)
-    .eq("status", "nao_faturar")
-    .order("nao_faturar_em", { ascending: true });
-  if (error) throw new Error(error.message);
-  return data || [];
 }
 
 export async function reverterNaoLocalizado(itemId, novoLocal) {
   const { error } = await supabase.from("b2b_itens")
     .update({
-      status:             "pendente",
-      local_estoque:      novoLocal,
-      nao_localizado_em:  null,
-      nao_localizado_por: null,
+      status:               "pendente",
+      local_estoque:        novoLocal,
+      nao_localizado_em:    null,
+      nao_localizado_por:   null,
       nao_localizado_local: novoLocal,
     })
     .eq("id", itemId);
   if (error) throw new Error(error.message);
 }
 
-// ── Exportar para faturamento ─────────────────────────────
 export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
   const { data: exportacoes } = await supabase.from("b2b_exportacoes").select("*").eq("pedido_id", pedidoId).order("exportado_em", { ascending: false });
   const ultimaExportacao = exportacoes?.[0] || null;
@@ -255,7 +226,6 @@ export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
     (jaExportados || []).forEach(e => idsJaExportados.add(e.item_id));
   }
 
-  // Exclui itens nao_faturar da exportação
   const { data: itensBipados } = await supabase
     .from("b2b_itens").select("*")
     .eq("pedido_id", pedidoId)
@@ -312,9 +282,7 @@ export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
   return { bloqueado: false, total: itensNovos.length, numeroExportacao, nomeArquivo };
 }
 
-// ── Helper: verifica se pedido deve ser concluído ─────────
 async function verificarEConcluirPedido(pedidoId) {
-  // Conta itens bipados (únicos que vão para NF)
   const { data: itensBipados } = await supabase
     .from("b2b_itens").select("id")
     .eq("pedido_id", pedidoId)
@@ -334,7 +302,6 @@ async function verificarEConcluirPedido(pedidoId) {
   return false;
 }
 
-// ── Importar NF via planilha de faturamento preenchida ────
 export async function importarNFPlanilha(file, pedidoId, userId) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -430,15 +397,28 @@ export async function importarNFPedido(pedidoId, numeroNf, totalItens, totalCaix
 export async function buscarResumoValorPedido(pedidoId) {
   const { data } = await supabase.from("b2b_itens").select("status, valor, nf").eq("pedido_id", pedidoId);
   const itens = data || [];
+
   const totalValor      = itens.reduce((s, i) => s + (i.valor || 0), 0);
-  const valorBipado     = itens.filter(i => i.status === "bipado").reduce((s, i) => s + (i.valor || 0), 0);
+  const itensBipados    = itens.filter(i => i.status === "bipado");
+  const valorBipado     = itensBipados.reduce((s, i) => s + (i.valor || 0), 0);
+  const qtdBipados      = itensBipados.length;
   const valorFaturado   = itens.filter(i => i.nf).reduce((s, i) => s + (i.valor || 0), 0);
   const qtdFaturada     = itens.filter(i => i.nf).length;
-  // Desconta itens nao_faturar do total
-  const valorNaoFaturar = itens.filter(i => i.status === "nao_faturar").reduce((s, i) => s + (i.valor || 0), 0);
-  const qtdNaoFaturar   = itens.filter(i => i.status === "nao_faturar").length;
+  const itensNaoFaturar = itens.filter(i => i.status === "nao_faturar");
+  const valorNaoFaturar = itensNaoFaturar.reduce((s, i) => s + (i.valor || 0), 0);
+  const qtdNaoFaturar   = itensNaoFaturar.length;
   const qtdEmAnalise    = itens.filter(i => ["nao_localizado", "em_analise"].includes(i.status)).length;
-  return { totalValor, valorBipado, valorFaturado, qtdFaturada, valorNaoFaturar, qtdNaoFaturar, qtdEmAnalise };
+
+  return {
+    totalValor,
+    valorBipado,
+    qtdBipados,
+    valorFaturado,
+    qtdFaturada,
+    valorNaoFaturar,
+    qtdNaoFaturar,
+    qtdEmAnalise,
+  };
 }
 
 export async function listarNFsPedido(pedidoId) {
