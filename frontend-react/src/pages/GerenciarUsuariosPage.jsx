@@ -21,18 +21,23 @@ const TELAS = [
   { id: "/assurant/sla",                  label: "Assurant — SLA & Rastreabilidade", grupo: "Assurant" },
   { id: "/assurant/layout",               label: "Assurant — Layout Warehouse",      grupo: "Assurant" },
   { id: "/b2b/picking",                   label: "Assurant — Picking B2B",           grupo: "Assurant" },
+  { id: "/b2b/embalagem",                 label: "Assurant — Embalagem B2B",         grupo: "Assurant" },
+  { id: "/b2b/faturamento",               label: "Assurant — Faturamento B2B",       grupo: "Assurant" },
+  { id: "/trocas-b2c/gestao",             label: "Assurant — Trocas B2C (Gestão)",   grupo: "Assurant" },
+  { id: "/trocas-b2c/nova",               label: "Assurant — Trocas B2C (Nova)",     grupo: "Assurant" },
 ];
 
 const AREAS_TECNICAS = [
-  { value: "",              label: "Nenhuma (não é técnico)"  },
-  { value: "assurant",      label: "Operador Assurant"        },
-  { value: "refrigeracao",  label: "Refrigeração"             },
-  { value: "climatizacao",  label: "Climatização"             },
-  { value: "lavadoras",     label: "Lavadoras"                },
-  { value: "diversos",      label: "Diversos"                 },
+  { value: "",                label: "Nenhuma (não é técnico)"  },
+  { value: "assurant",        label: "Operador Assurant"        },
+  { value: "assurant_trocas", label: "Assurant — Trocas"        },
+  { value: "refrigeracao",    label: "Refrigeração"             },
+  { value: "climatizacao",    label: "Climatização"             },
+  { value: "lavadoras",       label: "Lavadoras"                },
+  { value: "diversos",        label: "Diversos"                 },
 ];
 
-const TELAS_ASSURANT_PADRAO = ["/upload", "/b2b/picking"];
+const TELAS_ASSURANT_PADRAO = ["/upload", "/b2b/picking", "/b2b/embalagem", "/b2b/faturamento"];
 const GRUPOS = [...new Set(TELAS.map(t => t.grupo))];
 
 function SectionCard({ children }) {
@@ -57,18 +62,20 @@ function Button({ children, primary = false, ...props }) {
 
 function AreaBadge({ area }) {
   const styles = {
-    assurant:     "bg-purple-100 text-purple-700",
-    refrigeracao: "bg-blue-100 text-blue-700",
-    climatizacao: "bg-cyan-100 text-cyan-700",
-    lavadoras:    "bg-green-100 text-green-700",
-    diversos:     "bg-orange-100 text-orange-700",
+    assurant:        "bg-purple-100 text-purple-700",
+    assurant_trocas: "bg-pink-100 text-pink-700",
+    refrigeracao:    "bg-blue-100 text-blue-700",
+    climatizacao:    "bg-cyan-100 text-cyan-700",
+    lavadoras:       "bg-green-100 text-green-700",
+    diversos:        "bg-orange-100 text-orange-700",
   };
   const labels = {
-    assurant:     "Operador Assurant",
-    refrigeracao: "Refrigeração",
-    climatizacao: "Climatização",
-    lavadoras:    "Lavadoras",
-    diversos:     "Diversos",
+    assurant:        "Operador Assurant",
+    assurant_trocas: "Assurant — Trocas",
+    refrigeracao:    "Refrigeração",
+    climatizacao:    "Climatização",
+    lavadoras:       "Lavadoras",
+    diversos:        "Diversos",
   };
   if (!area) return null;
   return (
@@ -174,11 +181,7 @@ function ModalNovoUsuario({ onSave, onCancel }) {
       await onSave(email.trim(), senha, nome.trim(), isMaster, telas, areaTecnica);
     } catch (err) {
       setError(
-        typeof err === "string"
-          ? err
-          : err?.message
-          ? err.message
-          : "Erro ao criar usuário. Tente novamente."
+        typeof err === "string" ? err : err?.message ? err.message : "Erro ao criar usuário. Tente novamente."
       );
     } finally {
       setSaving(false);
@@ -201,42 +204,24 @@ function ModalNovoUsuario({ onSave, onCancel }) {
         <div className="space-y-4">
           <label>
             <span className="text-sm font-semibold text-slate-600">Nome completo *</span>
-            <input
-              value={nome}
-              onChange={e => setNome(e.target.value)}
-              className={inputClass()}
-              placeholder="Nome do usuário"
-            />
+            <input value={nome} onChange={e => setNome(e.target.value)}
+              className={inputClass()} placeholder="Nome do usuário" />
           </label>
 
           <label>
             <span className="text-sm font-semibold text-slate-600">E-mail *</span>
-            <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              className={inputClass()}
-              placeholder="email@exemplo.com"
-            />
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+              className={inputClass()} placeholder="email@exemplo.com" />
           </label>
 
           <label>
             <span className="text-sm font-semibold text-slate-600">Senha *</span>
-            <input
-              type="password"
-              value={senha}
-              onChange={e => setSenha(e.target.value)}
-              className={inputClass()}
-              placeholder="Mínimo 6 caracteres"
-            />
+            <input type="password" value={senha} onChange={e => setSenha(e.target.value)}
+              className={inputClass()} placeholder="Mínimo 6 caracteres" />
           </label>
 
           <label className="flex items-center gap-3 cursor-pointer rounded-2xl border border-[#E9D5FF] px-4 py-3">
-            <input
-              type="checkbox"
-              checked={isMaster}
-              onChange={e => setIsMaster(e.target.checked)}
-            />
+            <input type="checkbox" checked={isMaster} onChange={e => setIsMaster(e.target.checked)} />
             <div>
               <div className="text-sm font-semibold text-slate-700">Usuário master</div>
               <div className="text-xs text-slate-400">Acesso total ao sistema</div>
@@ -247,11 +232,8 @@ function ModalNovoUsuario({ onSave, onCancel }) {
             <>
               <div>
                 <span className="text-sm font-semibold text-slate-600">Perfil / Área</span>
-                <select
-                  value={areaTecnica}
-                  onChange={e => handleAreaChange(e.target.value)}
-                  className={inputClass()}
-                >
+                <select value={areaTecnica} onChange={e => handleAreaChange(e.target.value)}
+                  className={inputClass()}>
                   {AREAS_TECNICAS.map(a => (
                     <option key={a.value} value={a.value}>{a.label}</option>
                   ))}
@@ -277,17 +259,12 @@ function ModalNovoUsuario({ onSave, onCancel }) {
           )}
 
           <div className="flex gap-3 pt-2">
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="flex-1 rounded-2xl bg-[linear-gradient(135deg,#F97316_0%,#F59E0B_100%)] py-3 text-sm font-bold text-white disabled:opacity-50"
-            >
+            <button onClick={handleSave} disabled={saving}
+              className="flex-1 rounded-2xl bg-[linear-gradient(135deg,#F97316_0%,#F59E0B_100%)] py-3 text-sm font-bold text-white disabled:opacity-50">
               {saving ? "Criando..." : "Criar usuário"}
             </button>
-            <button
-              onClick={onCancel}
-              className="flex-1 rounded-2xl bg-slate-100 py-3 text-sm font-bold text-slate-600 hover:bg-slate-200"
-            >
+            <button onClick={onCancel}
+              className="flex-1 rounded-2xl bg-slate-100 py-3 text-sm font-bold text-slate-600 hover:bg-slate-200">
               Cancelar
             </button>
           </div>
@@ -318,11 +295,7 @@ function ModalPermissoes({ usuario, onSave, onCancel }) {
       await onSave(usuario.id, telas, isMaster, areaTecnica);
     } catch (err) {
       setError(
-        typeof err === "string"
-          ? err
-          : err?.message
-          ? err.message
-          : "Erro ao salvar permissões."
+        typeof err === "string" ? err : err?.message ? err.message : "Erro ao salvar permissões."
       );
     } finally {
       setSaving(false);
@@ -344,11 +317,7 @@ function ModalPermissoes({ usuario, onSave, onCancel }) {
 
         <div className="space-y-4">
           <label className="flex items-center gap-3 cursor-pointer rounded-2xl border border-[#E9D5FF] px-4 py-3">
-            <input
-              type="checkbox"
-              checked={isMaster}
-              onChange={e => setIsMaster(e.target.checked)}
-            />
+            <input type="checkbox" checked={isMaster} onChange={e => setIsMaster(e.target.checked)} />
             <div>
               <div className="text-sm font-semibold text-slate-700">Usuário master</div>
               <div className="text-xs text-slate-400">Acesso total ao sistema</div>
@@ -359,11 +328,8 @@ function ModalPermissoes({ usuario, onSave, onCancel }) {
             <>
               <div>
                 <span className="text-sm font-semibold text-slate-600">Perfil / Área</span>
-                <select
-                  value={areaTecnica}
-                  onChange={e => handleAreaChange(e.target.value)}
-                  className={inputClass()}
-                >
+                <select value={areaTecnica} onChange={e => handleAreaChange(e.target.value)}
+                  className={inputClass()}>
                   {AREAS_TECNICAS.map(a => (
                     <option key={a.value} value={a.value}>{a.label}</option>
                   ))}
@@ -384,17 +350,12 @@ function ModalPermissoes({ usuario, onSave, onCancel }) {
           )}
 
           <div className="flex gap-3 pt-2">
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="flex-1 rounded-2xl bg-[linear-gradient(135deg,#F97316_0%,#F59E0B_100%)] py-3 text-sm font-bold text-white disabled:opacity-50"
-            >
+            <button onClick={handleSave} disabled={saving}
+              className="flex-1 rounded-2xl bg-[linear-gradient(135deg,#F97316_0%,#F59E0B_100%)] py-3 text-sm font-bold text-white disabled:opacity-50">
               {saving ? "Salvando..." : "Salvar permissões"}
             </button>
-            <button
-              onClick={onCancel}
-              className="flex-1 rounded-2xl bg-slate-100 py-3 text-sm font-bold text-slate-600"
-            >
+            <button onClick={onCancel}
+              className="flex-1 rounded-2xl bg-slate-100 py-3 text-sm font-bold text-slate-600">
               Cancelar
             </button>
           </div>
@@ -440,9 +401,10 @@ export default function GerenciarUsuariosPage() {
   }
 
   const gruposUsuarios = {
-    master:   usuarios.filter(u => u.is_master),
-    assurant: usuarios.filter(u => !u.is_master && u.area_tecnica === "assurant"),
-    outros:   usuarios.filter(u => !u.is_master && u.area_tecnica !== "assurant"),
+    master:          usuarios.filter(u => u.is_master),
+    assurant:        usuarios.filter(u => !u.is_master && u.area_tecnica === "assurant"),
+    assurantTrocas:  usuarios.filter(u => !u.is_master && u.area_tecnica === "assurant_trocas"),
+    outros:          usuarios.filter(u => !u.is_master && u.area_tecnica !== "assurant" && u.area_tecnica !== "assurant_trocas"),
   };
 
   function renderUsuario(u) {
@@ -525,6 +487,12 @@ export default function GerenciarUsuariosPage() {
                 <div>
                   <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Operadores Assurant</p>
                   <div className="space-y-3">{gruposUsuarios.assurant.map(renderUsuario)}</div>
+                </div>
+              )}
+              {gruposUsuarios.assurantTrocas.length > 0 && (
+                <div>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Assurant — Trocas</p>
+                  <div className="space-y-3">{gruposUsuarios.assurantTrocas.map(renderUsuario)}</div>
                 </div>
               )}
               {gruposUsuarios.outros.length > 0 && (
