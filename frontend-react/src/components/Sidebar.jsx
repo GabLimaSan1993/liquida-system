@@ -7,7 +7,7 @@ import {
   Truck, TrendingUp, Users, LogOut, X, ShoppingCart,
   Landmark, BarChart2, Lock, TrendingDown, Database,
   Package, Clock, LayoutDashboard, ScanLine, RefreshCw,
-  PlusCircle, Settings,
+  PlusCircle, Box,
 } from "lucide-react";
 import { useAuth } from "../AuthContext.jsx";
 import { signOut } from "../services/authService.js";
@@ -167,6 +167,12 @@ function MenuAssurant({ onClose, telas }) {
         {tem("/b2b/picking") && (
           <NavItem to="/b2b/picking"        icon={ScanLine}        label="Picking B2B"           indent onClick={onClose} />
         )}
+        {tem("/b2b/embalagem") && (
+          <NavItem to="/b2b/embalagem"      icon={Box}             label="Embalagem B2B"         indent onClick={onClose} />
+        )}
+        {tem("/b2b/faturamento") && (
+          <NavItem to="/b2b/faturamento"    icon={BarChart3}       label="Faturamento B2B"       indent onClick={onClose} />
+        )}
         {tem("/trocas-b2c/gestao") && (
           <NavItem to="/trocas-b2c/gestao"  icon={RefreshCw}       label="Trocas B2C"            indent onClick={onClose} />
         )}
@@ -179,7 +185,7 @@ function MenuAssurant({ onClose, telas }) {
 function MenuAssurantTrocas({ onClose }) {
   return (
     <CollapseGroup icon={RefreshCw} label="Trocas B2C" paths={["/trocas-b2c"]}>
-      <NavItem to="/trocas-b2c/nova"  icon={PlusCircle} label="Nova Solicitação" indent onClick={onClose} />
+      <NavItem to="/trocas-b2c/nova" icon={PlusCircle} label="Nova Solicitação" indent onClick={onClose} />
     </CollapseGroup>
   );
 }
@@ -253,6 +259,8 @@ function SidebarContent({ profile, onClose, handleLogout }) {
               <NavItem to="/assurant/sla"       icon={Clock}           label="SLA & Rastreabilidade" indent onClick={onClose} />
               <NavItem to="/assurant/layout"    icon={LayoutDashboard} label="Layout Warehouse"      indent onClick={onClose} />
               <NavItem to="/b2b/picking"        icon={ScanLine}        label="Picking B2B"           indent onClick={onClose} />
+              <NavItem to="/b2b/embalagem"      icon={Box}             label="Embalagem B2B"         indent onClick={onClose} />
+              <NavItem to="/b2b/faturamento"    icon={BarChart3}       label="Faturamento B2B"       indent onClick={onClose} />
               <NavItem to="/trocas-b2c/nova"    icon={PlusCircle}      label="Trocas — Assurant"     indent onClick={onClose} />
               <NavItem to="/trocas-b2c/gestao"  icon={RefreshCw}       label="Trocas — Furbtech"     indent onClick={onClose} />
               <NavItemDisabled icon={DollarSign} label="DRE Gerencial" indent />
