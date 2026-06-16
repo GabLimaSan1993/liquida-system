@@ -13,7 +13,6 @@ import {
   reverterNaoLocalizado, buscarResumoValorPedido,
   listarNFsPedido, listarPedidosConcluidos,
   marcarEmAnalise, marcarLocalizado, marcarNaoFaturar,
-  listarItensEmAnalise,
 } from "../services/b2bService.js";
 import {
   buscarCaixaAberta, criarCaixa, listarCaixas,
@@ -21,6 +20,7 @@ import {
   gerarRomaneio, gerarEtiqueta, gerarRomaneioPedido,
   verificarNFsPedido,
 } from "../services/b2bEmbalagemService.js";
+import { supabase } from "../lib/supabase";
 import { useAuth } from "../AuthContext.jsx";
 
 function fmtN(v) { return (v || 0).toLocaleString("pt-BR"); }
@@ -29,11 +29,11 @@ function fmtR(v) { return v != null ? `R$ ${Number(v).toLocaleString("pt-BR", { 
 const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
 const MOTIVOS_NAO_FATURAR = [
-  { value: "produto_em_reparo",      label: "Produto em reparo" },
-  { value: "produto_vendido",        label: "Produto vendido" },
-  { value: "localizacao_incorreta",  label: "Localização incorreta" },
-  { value: "produto_danificado",     label: "Produto danificado" },
-  { value: "outro",                  label: "Outro" },
+  { value: "produto_em_reparo",     label: "Produto em reparo" },
+  { value: "produto_vendido",       label: "Produto vendido" },
+  { value: "localizacao_incorreta", label: "Localização incorreta" },
+  { value: "produto_danificado",    label: "Produto danificado" },
+  { value: "outro",                 label: "Outro" },
 ];
 
 function Card({ children, className = "" }) {
@@ -52,15 +52,15 @@ function KpiMini({ label, value, sub, color = "bg-purple-50 ring-purple-200 text
 
 function StatusBadge({ status }) {
   const map = {
-    aberto:         { label: "Em aberto",      cls: "bg-blue-50 text-blue-700 ring-blue-200" },
-    concluido:      { label: "Concluído",       cls: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
-    pendente:       { label: "Pendente",        cls: "bg-slate-50 text-slate-500 ring-slate-200" },
-    bipado:         { label: "Bipado",          cls: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
-    nao_localizado: { label: "Não Localizado",  cls: "bg-amber-50 text-amber-700 ring-amber-200" },
-    em_analise:     { label: "Em Análise",      cls: "bg-orange-50 text-orange-700 ring-orange-200" },
-    nao_faturar:    { label: "Não Faturar",     cls: "bg-red-50 text-red-700 ring-red-200" },
-    aberta:         { label: "Aberta",          cls: "bg-blue-50 text-blue-700 ring-blue-200" },
-    fechada:        { label: "Fechada",         cls: "bg-slate-50 text-slate-600 ring-slate-200" },
+    aberto:         { label: "Em aberto",     cls: "bg-blue-50 text-blue-700 ring-blue-200" },
+    concluido:      { label: "Concluído",      cls: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
+    pendente:       { label: "Pendente",       cls: "bg-slate-50 text-slate-500 ring-slate-200" },
+    bipado:         { label: "Bipado",         cls: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
+    nao_localizado: { label: "Não Localizado", cls: "bg-amber-50 text-amber-700 ring-amber-200" },
+    em_analise:     { label: "Em Análise",     cls: "bg-orange-50 text-orange-700 ring-orange-200" },
+    nao_faturar:    { label: "Não Faturar",    cls: "bg-red-50 text-red-700 ring-red-200" },
+    aberta:         { label: "Aberta",         cls: "bg-blue-50 text-blue-700 ring-blue-200" },
+    fechada:        { label: "Fechada",        cls: "bg-slate-50 text-slate-600 ring-slate-200" },
   };
   const s = map[status] || { label: status, cls: "bg-slate-50 text-slate-500 ring-slate-200" };
   return <span className={`text-xs font-semibold px-2 py-0.5 rounded-lg ring-1 ${s.cls}`}>{s.label}</span>;
@@ -114,7 +114,7 @@ function ModalLocalizado({ item, onConfirmar, onCancelar }) {
   const [erro, setErro]   = useState("");
 
   function handleConfirmar() {
-    if (!rua.trim() || !bloco.trim() || !andar.trim() || !ap.trim()) { setErro("Preencha todos os campos de localização."); return; }
+    if (!rua.trim() || !bloco.trim() || !andar.trim() || !ap.trim()) { setErro("Preencha todos os campos."); return; }
     onConfirmar(`RUA ${rua.trim()}/BL${bloco.trim()}/AD${andar.trim()}/${ap.trim().toUpperCase()}`);
   }
 
@@ -155,9 +155,9 @@ function ModalLocalizado({ item, onConfirmar, onCancelar }) {
 }
 
 function ModalNaoFaturar({ item, onConfirmar, onCancelar }) {
-  const [motivo, setMotivo]   = useState("");
-  const [obs, setObs]         = useState("");
-  const [erro, setErro]       = useState("");
+  const [motivo, setMotivo] = useState("");
+  const [obs, setObs]       = useState("");
+  const [erro, setErro]     = useState("");
 
   function handleConfirmar() {
     if (!motivo) { setErro("Selecione um motivo."); return; }
@@ -217,18 +217,18 @@ function GaiaBadge({ status }) {
 // ABA PICKING
 // ══════════════════════════════════════════════════════════
 function TabPicking({ pedidosIniciais, onAtualizarSilencioso }) {
-  const { user }                          = useAuth();
-  const [pedidos, setPedidos]             = useState(pedidosIniciais);
-  const [pedidoSel, setPedido]            = useState(null);
-  const [itens, setItens]                 = useState([]);
-  const [loading, setLoading]             = useState(false);
-  const [imeiInput, setImei]              = useState("");
-  const [feedback, setFeedback]           = useState(null);
-  const [filtro, setFiltro]               = useState("pendente");
-  const [busca, setBusca]                 = useState("");
-  const [ruasSel, setRuasSel]             = useState([]);
-  const [modalNaoLoc, setModalNaoLoc]     = useState(null);
-  const inputRef                          = useRef(null);
+  const { user }                      = useAuth();
+  const [pedidos, setPedidos]         = useState(pedidosIniciais);
+  const [pedidoSel, setPedido]        = useState(null);
+  const [itens, setItens]             = useState([]);
+  const [loading, setLoading]         = useState(false);
+  const [imeiInput, setImei]          = useState("");
+  const [feedback, setFeedback]       = useState(null);
+  const [filtro, setFiltro]           = useState("pendente");
+  const [busca, setBusca]             = useState("");
+  const [ruasSel, setRuasSel]         = useState([]);
+  const [modalNaoLoc, setModalNaoLoc] = useState(null);
+  const inputRef                      = useRef(null);
 
   useEffect(() => {
     if (pedidosIniciais.length > 0 && pedidos.length === 0) setPedidos(pedidosIniciais);
@@ -405,7 +405,7 @@ function TabPicking({ pedidosIniciais, onAtualizarSilencioso }) {
           <div className="relative mb-3">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
             <input type="text" value={busca} onChange={e => setBusca(e.target.value)}
-              placeholder="Buscar IMEI, modelo, voucher, local ou status Gaia..."
+              placeholder="Buscar IMEI, modelo, voucher, local..."
               className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#7F2D92]" />
           </div>
           {loading ? (
@@ -458,15 +458,15 @@ function TabPicking({ pedidosIniciais, onAtualizarSilencioso }) {
 // ABA EM ANÁLISE
 // ══════════════════════════════════════════════════════════
 function TabAnalise({ pedidosIniciais, onAtualizarSilencioso }) {
-  const { user }                          = useAuth();
-  const [pedidos, setPedidos]             = useState(pedidosIniciais);
-  const [pedidoSel, setPedido]            = useState(null);
-  const [itens, setItens]                 = useState([]);
-  const [loading, setLoading]             = useState(false);
+  const { user }                              = useAuth();
+  const [pedidos, setPedidos]                 = useState(pedidosIniciais);
+  const [pedidoSel, setPedido]                = useState(null);
+  const [itens, setItens]                     = useState([]);
+  const [loading, setLoading]                 = useState(false);
   const [modalLocalizado, setModalLocalizado] = useState(null);
   const [modalNaoFaturar, setModalNaoFaturar] = useState(null);
-  const [feedback, setFeedback]           = useState(null);
-  const [busca, setBusca]                 = useState("");
+  const [feedback, setFeedback]               = useState(null);
+  const [busca, setBusca]                     = useState("");
 
   useEffect(() => {
     if (pedidosIniciais.length > 0 && pedidos.length === 0) setPedidos(pedidosIniciais);
@@ -478,13 +478,28 @@ function TabAnalise({ pedidosIniciais, onAtualizarSilencioso }) {
     onAtualizarSilencioso?.(data);
   }
 
-  useEffect(() => { if (pedidoSel) carregarItens(); }, [pedidoSel]);
+  useEffect(() => {
+    if (!pedidoSel?.id) return;
+    carregarItens();
+  }, [pedidoSel?.id]);
 
   async function carregarItens() {
     setLoading(true);
-    const data = await listarItensEmAnalise(pedidoSel.id);
-    setItens(data);
-    setLoading(false);
+    setItens([]);
+    try {
+      const { data, error } = await supabase
+        .from("b2b_itens")
+        .select("*")
+        .eq("pedido_id", pedidoSel.id)
+        .in("status", ["nao_localizado", "em_analise"])
+        .order("nao_localizado_em", { ascending: true });
+      if (error) throw new Error(error.message);
+      setItens(data || []);
+    } catch (e) {
+      setFeedback({ tipo: "erro", msg: e.message });
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function confirmarLocalizado(novaLocalizacao) {
@@ -512,16 +527,9 @@ function TabAnalise({ pedidosIniciais, onAtualizarSilencioso }) {
     finally { setModalNaoFaturar(null); }
   }
 
-  // Pedidos que têm itens em análise
-  const pedidosComAnalise = pedidos.filter(p =>
-    p.status === "aberto" || p.status === "concluido"
-  );
-
   const itensFiltrados = itens.filter(i =>
     !busca || i.imei.includes(busca) || i.modelo?.toLowerCase().includes(busca.toLowerCase()) || i.voucher?.toLowerCase().includes(busca.toLowerCase())
   );
-
-  const MOTIVO_LABEL = Object.fromEntries(MOTIVOS_NAO_FATURAR.map(m => [m.value, m.label]));
 
   if (!pedidoSel) {
     return (
@@ -530,11 +538,11 @@ function TabAnalise({ pedidosIniciais, onAtualizarSilencioso }) {
           <p className="text-sm text-slate-500">Selecione um pedido para analisar itens:</p>
           <button onClick={atualizarPedidos} className="text-xs text-slate-500 hover:text-purple-700 font-semibold">↻ Atualizar</button>
         </div>
-        {pedidosComAnalise.length === 0 ? (
+        {pedidos.length === 0 ? (
           <div className="text-center py-12 text-slate-400"><ClipboardList className="h-8 w-8 mx-auto mb-2 opacity-30" /><p className="text-sm">Nenhum pedido disponível.</p></div>
         ) : (
           <div className="grid gap-3">
-            {pedidosComAnalise.map(p => (
+            {pedidos.map(p => (
               <button key={p.id} onClick={() => setPedido(p)}
                 className="bg-white rounded-2xl p-4 ring-1 ring-slate-200 text-left hover:ring-orange-300 hover:bg-orange-50 transition-all">
                 <div className="flex items-start justify-between gap-3 mb-3">
@@ -552,30 +560,22 @@ function TabAnalise({ pedidosIniciais, onAtualizarSilencioso }) {
 
   return (
     <>
-      {modalLocalizado && (
-        <ModalLocalizado
-          item={modalLocalizado}
-          onConfirmar={confirmarLocalizado}
-          onCancelar={() => setModalLocalizado(null)}
-        />
-      )}
-      {modalNaoFaturar && (
-        <ModalNaoFaturar
-          item={modalNaoFaturar}
-          onConfirmar={confirmarNaoFaturar}
-          onCancelar={() => setModalNaoFaturar(null)}
-        />
-      )}
+      {modalLocalizado && <ModalLocalizado item={modalLocalizado} onConfirmar={confirmarLocalizado} onCancelar={() => setModalLocalizado(null)} />}
+      {modalNaoFaturar && <ModalNaoFaturar item={modalNaoFaturar} onConfirmar={confirmarNaoFaturar} onCancelar={() => setModalNaoFaturar(null)} />}
 
       <div className="space-y-4">
         <div className="flex items-center gap-3 flex-wrap">
-          <button onClick={() => { setPedido(null); setItens([]); }} className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1"><X className="h-3 w-3" /> Trocar pedido</button>
+          <button onClick={() => { setPedido(null); setItens([]); setFeedback(null); }} className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1"><X className="h-3 w-3" /> Trocar pedido</button>
           <div className="flex-1"><h3 className="font-black text-slate-800 text-sm">{pedidoSel.lote}</h3><p className="text-xs text-slate-500">{pedidoSel.cliente}</p></div>
           <StatusBadge status={pedidoSel.status} />
         </div>
 
         {feedback && (
-          <div className={`flex items-start gap-2 text-sm rounded-xl px-4 py-3 ring-1 ${feedback.tipo === "ok" ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : feedback.tipo === "aviso" ? "bg-amber-50 text-amber-700 ring-amber-200" : "bg-red-50 text-red-700 ring-red-200"}`}>
+          <div className={`flex items-start gap-2 text-sm rounded-xl px-4 py-3 ring-1 ${
+            feedback.tipo === "ok"    ? "bg-emerald-50 text-emerald-700 ring-emerald-200" :
+            feedback.tipo === "aviso" ? "bg-amber-50 text-amber-700 ring-amber-200" :
+            "bg-red-50 text-red-700 ring-red-200"
+          }`}>
             {feedback.tipo === "ok" ? <CheckCircle className="h-4 w-4 shrink-0 mt-0.5" /> : <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />}
             <p className="font-semibold">{feedback.msg}</p>
           </div>
@@ -620,22 +620,18 @@ function TabAnalise({ pedidosIniciais, onAtualizarSilencioso }) {
                         <StatusBadge status={item.status} />
                         {item.valor && <span className="text-xs font-bold text-orange-700">{fmtR(item.valor)}</span>}
                       </div>
-                      <p className="text-xs text-slate-600 truncate">{item.modelo} {item.grade ? `· ${item.grade}` : ""}</p>
+                      <p className="text-xs text-slate-600 truncate">{item.modelo}{item.grade ? ` · ${item.grade}` : ""}</p>
                       <p className="text-xs text-slate-400 font-mono">Local original: {item.local_estoque || "—"}</p>
                       {item.nao_localizado_em && (
-                        <p className="text-xs text-slate-400">
-                          Não localizado em: {new Date(item.nao_localizado_em).toLocaleString("pt-BR")}
-                        </p>
+                        <p className="text-xs text-slate-400">Não localizado em: {new Date(item.nao_localizado_em).toLocaleString("pt-BR")}</p>
                       )}
                     </div>
-                    <div className="flex gap-2 shrink-0">
-                      <button
-                        onClick={() => setModalLocalizado(item)}
+                    <div className="flex gap-2 shrink-0 flex-wrap">
+                      <button onClick={() => setModalLocalizado(item)}
                         className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100 transition">
                         <MapPin className="h-3 w-3" /> Localizado
                       </button>
-                      <button
-                        onClick={() => setModalNaoFaturar(item)}
+                      <button onClick={() => setModalNaoFaturar(item)}
                         className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-red-50 text-red-700 ring-1 ring-red-200 hover:bg-red-100 transition">
                         <X className="h-3 w-3" /> Não Faturar
                       </button>
@@ -650,7 +646,6 @@ function TabAnalise({ pedidosIniciais, onAtualizarSilencioso }) {
     </>
   );
 }
-
 // ══════════════════════════════════════════════════════════
 // ABA EMBALAGEM
 // ══════════════════════════════════════════════════════════
@@ -1044,7 +1039,7 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
     }
   }
 
-  const pedidosAbertos = pedidos.filter(p => p.status !== "concluido");
+  const pedidosAbertos      = pedidos.filter(p => p.status !== "concluido");
   const totalValorGlobal    = Object.values(resumos).reduce((s, r) => s + (r?.valorBipado || 0), 0);
   const totalFaturadoGlobal = Object.values(resumos).reduce((s, r) => s + (r?.valorFaturado || 0), 0);
   const totalNaoFaturar     = Object.values(resumos).reduce((s, r) => s + (r?.valorNaoFaturar || 0), 0);
@@ -1082,12 +1077,12 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
       ) : (
         <div className="space-y-3">
           {pedidosAbertos.map(p => {
-            const resumo    = resumos[p.id];
-            const nfsPedido = nfs[p.id] || [];
-            const isLoading = loadingResumo[p.id];
-            const fb        = feedbackExp[p.id];
-            const statusFat = getStatusFat(p, resumo, nfsPedido);
-            const cfgStatus = STATUS_FAT[statusFat];
+            const resumo          = resumos[p.id];
+            const nfsPedido       = nfs[p.id] || [];
+            const isLoading       = loadingResumo[p.id];
+            const fb              = feedbackExp[p.id];
+            const statusFat       = getStatusFat(p, resumo, nfsPedido);
+            const cfgStatus       = STATUS_FAT[statusFat];
             const valorFaturado   = resumo?.valorFaturado || 0;
             const valorBipado     = resumo?.valorBipado || 0;
             const valorNaoFaturar = resumo?.valorNaoFaturar || 0;
@@ -1354,10 +1349,10 @@ export default function B2BPickingPage({ abaInicial = "picking" }) {
   const [loadingPedidos, setLoadingPedidos] = useState(true);
 
   const TODAS_ABAS = [
-    { key: "picking",   label: "Picking",     icon: Search,        tela: "/b2b/picking"     },
-    { key: "analise",   label: "Em Análise",  icon: AlertCircle,   tela: "/b2b/picking"     }, // mesma tela, visível para quem tem picking
-    { key: "embalagem", label: "Embalagem",   icon: Box,           tela: "/b2b/embalagem"   },
-    { key: "pedidos",   label: "Faturamento", icon: BarChart3,     tela: "/b2b/faturamento" },
+    { key: "picking",   label: "Picking",    icon: Search,      tela: "/b2b/picking"     },
+    { key: "analise",   label: "Em Análise", icon: AlertCircle, tela: "/b2b/picking"     },
+    { key: "embalagem", label: "Embalagem",  icon: Box,         tela: "/b2b/embalagem"   },
+    { key: "pedidos",   label: "Faturamento",icon: BarChart3,   tela: "/b2b/faturamento" },
   ];
 
   const ABAS = profile?.is_master
@@ -1378,12 +1373,9 @@ export default function B2BPickingPage({ abaInicial = "picking" }) {
 
   function atualizarSilencioso(data) { setPedidos(data); }
 
-  // Conta itens em análise para badge
-  const totalAnaliseGlobal = pedidos.reduce((s, p) => s + 0, 0); // badge será mostrado na aba
-
   const contadores = {
     picking:   { aberto: pedidos.filter(p => p.status === "aberto").length, concluido: pedidos.filter(p => p.status === "concluido").length, labelAberto: "em aberto", labelConcluido: "concluído", aoConcluido: () => setVerConcluidos(false) },
-    analise:   { aberto: pedidos.filter(p => p.status === "aberto").length, concluido: 0, labelAberto: "pedidos", labelConcluido: "", aoConcluido: () => {} },
+    analise:   { aberto: pedidos.length, concluido: 0, labelAberto: "pedidos", labelConcluido: "", aoConcluido: () => {} },
     embalagem: { aberto: pedidos.filter(p => (p.total_bipados || 0) > 0 && p.status !== "concluido").length, concluido: pedidos.filter(p => p.status === "concluido").length, labelAberto: "para embalar", labelConcluido: "embalado", aoConcluido: () => setVerConcluidos(false) },
     pedidos:   { aberto: pedidos.filter(p => p.status !== "concluido").length, concluido: pedidos.filter(p => p.status === "concluido").length, labelAberto: "aguardando faturamento", labelConcluido: "faturado", aoConcluido: () => { setAba("pedidos"); setVerConcluidos(true); } },
   };
@@ -1447,7 +1439,7 @@ export default function B2BPickingPage({ abaInicial = "picking" }) {
           {aba === "picking"   && <TabPicking   pedidosIniciais={pedidos} onAtualizarSilencioso={atualizarSilencioso} />}
           {aba === "analise"   && <TabAnalise   pedidosIniciais={pedidos} onAtualizarSilencioso={atualizarSilencioso} />}
           {aba === "embalagem" && <TabEmbalagem pedidosIniciais={pedidos} onAtualizarSilencioso={atualizarSilencioso} />}
-          {aba === "pedidos"   && !verConcluidos && <TabPedidos pedidosIniciais={pedidos} onAtualizarSilencioso={atualizarSilencioso} />}
+          {aba === "pedidos"   && !verConcluidos && <TabPedidos   pedidosIniciais={pedidos} onAtualizarSilencioso={atualizarSilencioso} />}
           {aba === "pedidos"   && verConcluidos  && <TabConcluidos onVoltar={() => setVerConcluidos(false)} />}
         </>
       )}
