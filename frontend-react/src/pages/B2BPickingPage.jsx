@@ -3,7 +3,8 @@ import {
   Search, CheckCircle, AlertTriangle, Download,
   Package, X, BarChart3, Clock, Box, FileText,
   Tag, Plus, Lock, MapPin, RotateCcw, TrendingUp,
-  ChevronDown, ChevronUp, Calendar, Upload,
+  ChevronDown, ChevronUp, Calendar, Upload, AlertCircle,
+  ClipboardList,
 } from "lucide-react";
 import {
   listarPedidosB2B, listarItensComStatusGaia,
@@ -11,6 +12,8 @@ import {
   listarExportacoes, marcarNaoLocalizado,
   reverterNaoLocalizado, buscarResumoValorPedido,
   listarNFsPedido, listarPedidosConcluidos,
+  marcarEmAnalise, marcarLocalizado, marcarNaoFaturar,
+  listarItensEmAnalise,
 } from "../services/b2bService.js";
 import {
   buscarCaixaAberta, criarCaixa, listarCaixas,
@@ -24,6 +27,14 @@ function fmtN(v) { return (v || 0).toLocaleString("pt-BR"); }
 function fmtR(v) { return v != null ? `R$ ${Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "—"; }
 
 const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+
+const MOTIVOS_NAO_FATURAR = [
+  { value: "produto_em_reparo",      label: "Produto em reparo" },
+  { value: "produto_vendido",        label: "Produto vendido" },
+  { value: "localizacao_incorreta",  label: "Localização incorreta" },
+  { value: "produto_danificado",     label: "Produto danificado" },
+  { value: "outro",                  label: "Outro" },
+];
 
 function Card({ children, className = "" }) {
   return <div className={`bg-white rounded-2xl p-5 ring-1 ring-slate-200 shadow-sm ${className}`}>{children}</div>;
@@ -46,6 +57,8 @@ function StatusBadge({ status }) {
     pendente:       { label: "Pendente",        cls: "bg-slate-50 text-slate-500 ring-slate-200" },
     bipado:         { label: "Bipado",          cls: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
     nao_localizado: { label: "Não Localizado",  cls: "bg-amber-50 text-amber-700 ring-amber-200" },
+    em_analise:     { label: "Em Análise",      cls: "bg-orange-50 text-orange-700 ring-orange-200" },
+    nao_faturar:    { label: "Não Faturar",     cls: "bg-red-50 text-red-700 ring-red-200" },
     aberta:         { label: "Aberta",          cls: "bg-blue-50 text-blue-700 ring-blue-200" },
     fechada:        { label: "Fechada",         cls: "bg-slate-50 text-slate-600 ring-slate-200" },
   };
@@ -83,7 +96,7 @@ function ModalNaoLocalizado({ item, onConfirmar, onCancelar }) {
           <p className="text-xs text-slate-500 font-mono">{item.imei}</p>
           <p className="text-xs text-slate-500">Local: <span className="font-semibold font-mono">{item.local_estoque || "—"}</span></p>
         </div>
-        <p className="text-sm text-slate-600 mb-6">O aparelho será marcado como <span className="font-bold text-amber-700">Não Localizado</span> e removido da lista de pendentes.</p>
+        <p className="text-sm text-slate-600 mb-6">O aparelho irá para a aba <span className="font-bold text-orange-700">Em Análise</span> aguardando uma decisão.</p>
         <div className="flex gap-3">
           <button onClick={onConfirmar} className="flex-1 rounded-2xl bg-amber-500 py-3 text-sm font-bold text-white hover:bg-amber-600 transition">Confirmar — Não Localizado</button>
           <button onClick={onCancelar} className="flex-1 rounded-2xl bg-slate-100 py-3 text-sm font-bold text-slate-600 hover:bg-slate-200 transition">Cancelar</button>
@@ -93,8 +106,12 @@ function ModalNaoLocalizado({ item, onConfirmar, onCancelar }) {
   );
 }
 
-function ModalReverter({ item, onConfirmar, onCancelar }) {
-  const [rua, setRua] = useState(""), [bloco, setBloco] = useState(""), [andar, setAndar] = useState(""), [ap, setAp] = useState(""), [erro, setErro] = useState("");
+function ModalLocalizado({ item, onConfirmar, onCancelar }) {
+  const [rua, setRua]     = useState("");
+  const [bloco, setBloco] = useState("");
+  const [andar, setAndar] = useState("");
+  const [ap, setAp]       = useState("");
+  const [erro, setErro]   = useState("");
 
   function handleConfirmar() {
     if (!rua.trim() || !bloco.trim() || !andar.trim() || !ap.trim()) { setErro("Preencha todos os campos de localização."); return; }
@@ -107,13 +124,14 @@ function ModalReverter({ item, onConfirmar, onCancelar }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
       <div className="w-full max-w-md rounded-[28px] bg-white p-8 shadow-2xl">
         <div className="flex items-center gap-3 mb-4">
-          <div className="h-10 w-10 rounded-2xl bg-purple-100 flex items-center justify-center shrink-0"><RotateCcw className="h-5 w-5 text-purple-600" /></div>
-          <div><h2 className="text-lg font-black text-slate-800">Reverter para Pendente</h2><p className="text-xs text-slate-500">Informe a nova localização do aparelho</p></div>
+          <div className="h-10 w-10 rounded-2xl bg-emerald-100 flex items-center justify-center shrink-0"><MapPin className="h-5 w-5 text-emerald-600" /></div>
+          <div><h2 className="text-lg font-black text-slate-800">Produto Localizado</h2><p className="text-xs text-slate-500">Informe onde o produto foi encontrado</p></div>
         </div>
         <div className="bg-slate-50 ring-1 ring-slate-200 rounded-2xl p-4 mb-5 space-y-1">
           <p className="text-xs font-bold text-slate-500">Aparelho</p>
           <p className="text-sm font-semibold text-slate-800">{item.modelo}</p>
           <p className="text-xs text-slate-500 font-mono">{item.imei}</p>
+          <p className="text-xs text-slate-400">Local anterior: <span className="font-mono">{item.local_estoque || "—"}</span></p>
         </div>
         <div className="grid grid-cols-2 gap-3 mb-4">
           <div><label className="block text-xs font-bold text-slate-600 mb-1">Rua *</label><input value={rua} onChange={e => setRua(e.target.value)} className={inputCls} placeholder="Ex: 1" /></div>
@@ -122,13 +140,62 @@ function ModalReverter({ item, onConfirmar, onCancelar }) {
           <div><label className="block text-xs font-bold text-slate-600 mb-1">AP *</label><input value={ap} onChange={e => setAp(e.target.value)} className={inputCls} placeholder="Ex: B03" /></div>
         </div>
         {(rua || bloco || andar || ap) && (
-          <div className="bg-purple-50 ring-1 ring-purple-200 rounded-xl px-4 py-2 mb-4 text-xs font-mono text-purple-700 font-bold">
+          <div className="bg-emerald-50 ring-1 ring-emerald-200 rounded-xl px-4 py-2 mb-4 text-xs font-mono text-emerald-700 font-bold">
             Novo local: RUA {rua || "?"}/BL{bloco || "?"}/AD{andar || "?"}/{ap?.toUpperCase() || "?"}
           </div>
         )}
         {erro && <div className="bg-red-50 ring-1 ring-red-200 rounded-xl px-4 py-2 mb-4 text-xs font-semibold text-red-600">{erro}</div>}
         <div className="flex gap-3">
-          <button onClick={handleConfirmar} className="flex-1 rounded-2xl bg-[#7F2D92] py-3 text-sm font-bold text-white hover:bg-[#5B1E74] transition">Confirmar nova localização</button>
+          <button onClick={handleConfirmar} className="flex-1 rounded-2xl bg-emerald-600 py-3 text-sm font-bold text-white hover:bg-emerald-700 transition">Confirmar localização</button>
+          <button onClick={onCancelar} className="flex-1 rounded-2xl bg-slate-100 py-3 text-sm font-bold text-slate-600 hover:bg-slate-200 transition">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModalNaoFaturar({ item, onConfirmar, onCancelar }) {
+  const [motivo, setMotivo]   = useState("");
+  const [obs, setObs]         = useState("");
+  const [erro, setErro]       = useState("");
+
+  function handleConfirmar() {
+    if (!motivo) { setErro("Selecione um motivo."); return; }
+    onConfirmar(motivo, obs);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="w-full max-w-md rounded-[28px] bg-white p-8 shadow-2xl">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="h-10 w-10 rounded-2xl bg-red-100 flex items-center justify-center shrink-0"><AlertCircle className="h-5 w-5 text-red-600" /></div>
+          <div><h2 className="text-lg font-black text-slate-800">Não Faturar</h2><p className="text-xs text-slate-500">Este produto não será incluído no faturamento</p></div>
+        </div>
+        <div className="bg-slate-50 ring-1 ring-slate-200 rounded-2xl p-4 mb-5 space-y-1">
+          <p className="text-xs font-bold text-slate-500">Aparelho</p>
+          <p className="text-sm font-semibold text-slate-800">{item.modelo}</p>
+          <p className="text-xs text-slate-500 font-mono">{item.imei}</p>
+          {item.valor && <p className="text-xs font-semibold text-red-600">Valor descontado: {fmtR(item.valor)}</p>}
+        </div>
+        <div className="space-y-3 mb-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-600 mb-1">Motivo *</label>
+            <select value={motivo} onChange={e => setMotivo(e.target.value)}
+              className="w-full rounded-xl border border-[#E9D5FF] px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7F2D92] bg-white">
+              <option value="">Selecione...</option>
+              {MOTIVOS_NAO_FATURAR.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-600 mb-1">Observação (opcional)</label>
+            <textarea value={obs} onChange={e => setObs(e.target.value)} rows={3}
+              placeholder="Detalhes adicionais..."
+              className="w-full rounded-xl border border-[#E9D5FF] px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7F2D92] bg-white resize-none" />
+          </div>
+        </div>
+        {erro && <div className="bg-red-50 ring-1 ring-red-200 rounded-xl px-4 py-2 mb-4 text-xs font-semibold text-red-600">{erro}</div>}
+        <div className="flex gap-3">
+          <button onClick={handleConfirmar} className="flex-1 rounded-2xl bg-red-600 py-3 text-sm font-bold text-white hover:bg-red-700 transition">Confirmar — Não Faturar</button>
           <button onClick={onCancelar} className="flex-1 rounded-2xl bg-slate-100 py-3 text-sm font-bold text-slate-600 hover:bg-slate-200 transition">Cancelar</button>
         </div>
       </div>
@@ -161,7 +228,6 @@ function TabPicking({ pedidosIniciais, onAtualizarSilencioso }) {
   const [busca, setBusca]                 = useState("");
   const [ruasSel, setRuasSel]             = useState([]);
   const [modalNaoLoc, setModalNaoLoc]     = useState(null);
-  const [modalReverter, setModalReverter] = useState(null);
   const inputRef                          = useRef(null);
 
   useEffect(() => {
@@ -208,23 +274,12 @@ function TabPicking({ pedidosIniciais, onAtualizarSilencioso }) {
   async function confirmarNaoLocalizado() {
     if (!modalNaoLoc) return;
     try {
-      await marcarNaoLocalizado(modalNaoLoc.id, user.id);
-      setItens(prev => prev.map(i => i.id === modalNaoLoc.id ? { ...i, status: "nao_localizado", nao_localizado_em: new Date().toISOString() } : i));
-      setFeedback({ tipo: "aviso", msg: `⚠ IMEI ${modalNaoLoc.imei} marcado como Não Localizado.` });
+      await marcarEmAnalise(modalNaoLoc.id, user.id);
+      setItens(prev => prev.map(i => i.id === modalNaoLoc.id ? { ...i, status: "em_analise", nao_localizado_em: new Date().toISOString() } : i));
+      setFeedback({ tipo: "aviso", msg: `⚠ IMEI ${modalNaoLoc.imei} enviado para Em Análise.` });
       setTimeout(() => setFeedback(null), 3000);
     } catch (e) { setFeedback({ tipo: "erro", msg: e.message }); }
     finally { setModalNaoLoc(null); inputRef.current?.focus(); }
-  }
-
-  async function confirmarReverter(novoLocal) {
-    if (!modalReverter) return;
-    try {
-      await reverterNaoLocalizado(modalReverter.id, novoLocal);
-      setItens(prev => prev.map(i => i.id === modalReverter.id ? { ...i, status: "pendente", local_estoque: novoLocal, nao_localizado_em: null } : i));
-      setFeedback({ tipo: "ok", msg: `✓ IMEI ${modalReverter.imei} revertido para Pendente.` });
-      setTimeout(() => setFeedback(null), 3000);
-    } catch (e) { setFeedback({ tipo: "erro", msg: e.message }); }
-    finally { setModalReverter(null); inputRef.current?.focus(); }
   }
 
   const ruasDisponiveis = [...new Set(
@@ -246,7 +301,7 @@ function TabPicking({ pedidosIniciais, onAtualizarSilencioso }) {
 
   const totalBipados  = itens.filter(i => i.status === "bipado").length;
   const totalPendente = itens.filter(i => i.status === "pendente").length;
-  const totalNaoLoc   = itens.filter(i => i.status === "nao_localizado").length;
+  const totalAnalise  = itens.filter(i => ["nao_localizado", "em_analise"].includes(i.status)).length;
   const valorTotal    = itens.filter(i => i.status === "bipado").reduce((s, i) => s + (i.valor || 0), 0);
 
   if (!pedidoSel) {
@@ -279,7 +334,6 @@ function TabPicking({ pedidosIniciais, onAtualizarSilencioso }) {
   return (
     <>
       {modalNaoLoc && <ModalNaoLocalizado item={modalNaoLoc} onConfirmar={confirmarNaoLocalizado} onCancelar={() => { setModalNaoLoc(null); inputRef.current?.focus(); }} />}
-      {modalReverter && <ModalReverter item={modalReverter} onConfirmar={confirmarReverter} onCancelar={() => { setModalReverter(null); inputRef.current?.focus(); }} />}
       <div className="space-y-4">
         <div className="flex items-center gap-3 flex-wrap">
           <button onClick={() => { setPedido(null); setItens([]); setRuasSel([]); }} className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1"><X className="h-3 w-3" /> Trocar pedido</button>
@@ -290,8 +344,8 @@ function TabPicking({ pedidosIniciais, onAtualizarSilencioso }) {
           <KpiMini label="Total" value={fmtN(pedidoSel.total_itens)} color="bg-purple-50 ring-purple-200 text-purple-700" />
           <KpiMini label="Bipados" value={fmtN(totalBipados)} sub={`${Math.round((totalBipados / (pedidoSel.total_itens || 1)) * 100)}%`} color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
           <KpiMini label="Pendentes" value={fmtN(totalPendente)} color="bg-orange-50 ring-orange-200 text-orange-700" />
-          {totalNaoLoc > 0
-            ? <KpiMini label="Não Localizados" value={fmtN(totalNaoLoc)} color="bg-amber-50 ring-amber-200 text-amber-700" />
+          {totalAnalise > 0
+            ? <KpiMini label="Em Análise" value={fmtN(totalAnalise)} color="bg-amber-50 ring-amber-200 text-amber-700" />
             : <KpiMini label="Valor bipado" value={fmtR(valorTotal)} color="bg-blue-50 ring-blue-200 text-blue-700" />
           }
         </div>
@@ -334,11 +388,16 @@ function TabPicking({ pedidosIniciais, onAtualizarSilencioso }) {
           <div className="flex items-center gap-3 mb-4 flex-wrap">
             <h3 className="font-black text-slate-800 text-sm flex items-center gap-2"><Package className="h-4 w-4 text-[#7F2D92]" /> Lista de itens</h3>
             <div className="flex gap-2 ml-auto flex-wrap">
-              {[{ key: "todos", label: "Todos" }, { key: "pendente", label: "Pendentes" }, { key: "bipado", label: "Bipados" }, { key: "nao_localizado", label: "Não Localizados" }].map(f => (
+              {[
+                { key: "todos",      label: "Todos" },
+                { key: "pendente",   label: "Pendentes" },
+                { key: "bipado",     label: "Bipados" },
+                { key: "em_analise", label: "Em Análise" },
+              ].map(f => (
                 <button key={f.key} onClick={() => setFiltro(f.key)}
                   className={`text-xs px-3 py-1.5 rounded-xl font-semibold transition-all ${filtro === f.key ? "bg-[#7F2D92] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
                   {f.label}
-                  {f.key === "nao_localizado" && totalNaoLoc > 0 && <span className="ml-1.5 bg-amber-400 text-white rounded-full px-1.5 py-0.5 text-xs">{totalNaoLoc}</span>}
+                  {f.key === "em_analise" && totalAnalise > 0 && <span className="ml-1.5 bg-amber-400 text-white rounded-full px-1.5 py-0.5 text-xs">{totalAnalise}</span>}
                 </button>
               ))}
             </div>
@@ -379,11 +438,6 @@ function TabPicking({ pedidosIniciais, onAtualizarSilencioso }) {
                           {item.status === "pendente" && (
                             <button onClick={() => setModalNaoLoc(item)} className="text-xs font-semibold px-2 py-1 rounded-lg bg-amber-50 text-amber-700 ring-1 ring-amber-200 hover:bg-amber-100 transition whitespace-nowrap">Não localizado</button>
                           )}
-                          {item.status === "nao_localizado" && (
-                            <button onClick={() => setModalReverter(item)} className="text-xs font-semibold px-2 py-1 rounded-lg bg-purple-50 text-purple-700 ring-1 ring-purple-200 hover:bg-purple-100 transition flex items-center gap-1 mx-auto">
-                              <RotateCcw className="h-3 w-3" /> Reverter
-                            </button>
-                          )}
                         </td>
                       </tr>
                     ))}
@@ -393,6 +447,203 @@ function TabPicking({ pedidosIniciais, onAtualizarSilencioso }) {
               {itensFiltrados.length > 200 && <p className="text-xs text-center text-slate-400 mt-2">Mostrando 200 de {fmtN(itensFiltrados.length)} itens.</p>}
               {itensFiltrados.length === 0 && <p className="text-center text-slate-400 text-sm py-8">Nenhum item encontrado.</p>}
             </>
+          )}
+        </Card>
+      </div>
+    </>
+  );
+}
+
+// ══════════════════════════════════════════════════════════
+// ABA EM ANÁLISE
+// ══════════════════════════════════════════════════════════
+function TabAnalise({ pedidosIniciais, onAtualizarSilencioso }) {
+  const { user }                          = useAuth();
+  const [pedidos, setPedidos]             = useState(pedidosIniciais);
+  const [pedidoSel, setPedido]            = useState(null);
+  const [itens, setItens]                 = useState([]);
+  const [loading, setLoading]             = useState(false);
+  const [modalLocalizado, setModalLocalizado] = useState(null);
+  const [modalNaoFaturar, setModalNaoFaturar] = useState(null);
+  const [feedback, setFeedback]           = useState(null);
+  const [busca, setBusca]                 = useState("");
+
+  useEffect(() => {
+    if (pedidosIniciais.length > 0 && pedidos.length === 0) setPedidos(pedidosIniciais);
+  }, [pedidosIniciais]);
+
+  async function atualizarPedidos() {
+    const data = await listarPedidosB2B();
+    setPedidos(data);
+    onAtualizarSilencioso?.(data);
+  }
+
+  useEffect(() => { if (pedidoSel) carregarItens(); }, [pedidoSel]);
+
+  async function carregarItens() {
+    setLoading(true);
+    const data = await listarItensEmAnalise(pedidoSel.id);
+    setItens(data);
+    setLoading(false);
+  }
+
+  async function confirmarLocalizado(novaLocalizacao) {
+    if (!modalLocalizado) return;
+    try {
+      await marcarLocalizado(modalLocalizado.id, novaLocalizacao, user.id);
+      setItens(prev => prev.filter(i => i.id !== modalLocalizado.id));
+      setFeedback({ tipo: "ok", msg: `✓ IMEI ${modalLocalizado.imei} localizado em ${novaLocalizacao} — voltou para Bipado.` });
+      setTimeout(() => setFeedback(null), 4000);
+      atualizarPedidos();
+    } catch (e) { setFeedback({ tipo: "erro", msg: e.message }); }
+    finally { setModalLocalizado(null); }
+  }
+
+  async function confirmarNaoFaturar(motivo, obs) {
+    if (!modalNaoFaturar) return;
+    try {
+      await marcarNaoFaturar(modalNaoFaturar.id, motivo, obs, user.id);
+      setItens(prev => prev.filter(i => i.id !== modalNaoFaturar.id));
+      const motivoLabel = MOTIVOS_NAO_FATURAR.find(m => m.value === motivo)?.label || motivo;
+      setFeedback({ tipo: "aviso", msg: `⚠ IMEI ${modalNaoFaturar.imei} marcado como Não Faturar — ${motivoLabel}.` });
+      setTimeout(() => setFeedback(null), 4000);
+      atualizarPedidos();
+    } catch (e) { setFeedback({ tipo: "erro", msg: e.message }); }
+    finally { setModalNaoFaturar(null); }
+  }
+
+  // Pedidos que têm itens em análise
+  const pedidosComAnalise = pedidos.filter(p =>
+    p.status === "aberto" || p.status === "concluido"
+  );
+
+  const itensFiltrados = itens.filter(i =>
+    !busca || i.imei.includes(busca) || i.modelo?.toLowerCase().includes(busca.toLowerCase()) || i.voucher?.toLowerCase().includes(busca.toLowerCase())
+  );
+
+  const MOTIVO_LABEL = Object.fromEntries(MOTIVOS_NAO_FATURAR.map(m => [m.value, m.label]));
+
+  if (!pedidoSel) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-slate-500">Selecione um pedido para analisar itens:</p>
+          <button onClick={atualizarPedidos} className="text-xs text-slate-500 hover:text-purple-700 font-semibold">↻ Atualizar</button>
+        </div>
+        {pedidosComAnalise.length === 0 ? (
+          <div className="text-center py-12 text-slate-400"><ClipboardList className="h-8 w-8 mx-auto mb-2 opacity-30" /><p className="text-sm">Nenhum pedido disponível.</p></div>
+        ) : (
+          <div className="grid gap-3">
+            {pedidosComAnalise.map(p => (
+              <button key={p.id} onClick={() => setPedido(p)}
+                className="bg-white rounded-2xl p-4 ring-1 ring-slate-200 text-left hover:ring-orange-300 hover:bg-orange-50 transition-all">
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div><div className="font-bold text-slate-800 text-sm">{p.lote}</div><div className="text-xs text-slate-500 mt-0.5">{p.cliente}</div></div>
+                  <StatusBadge status={p.status} />
+                </div>
+                <ProgressBar value={p.total_bipados || 0} total={p.total_itens || 0} />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {modalLocalizado && (
+        <ModalLocalizado
+          item={modalLocalizado}
+          onConfirmar={confirmarLocalizado}
+          onCancelar={() => setModalLocalizado(null)}
+        />
+      )}
+      {modalNaoFaturar && (
+        <ModalNaoFaturar
+          item={modalNaoFaturar}
+          onConfirmar={confirmarNaoFaturar}
+          onCancelar={() => setModalNaoFaturar(null)}
+        />
+      )}
+
+      <div className="space-y-4">
+        <div className="flex items-center gap-3 flex-wrap">
+          <button onClick={() => { setPedido(null); setItens([]); }} className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1"><X className="h-3 w-3" /> Trocar pedido</button>
+          <div className="flex-1"><h3 className="font-black text-slate-800 text-sm">{pedidoSel.lote}</h3><p className="text-xs text-slate-500">{pedidoSel.cliente}</p></div>
+          <StatusBadge status={pedidoSel.status} />
+        </div>
+
+        {feedback && (
+          <div className={`flex items-start gap-2 text-sm rounded-xl px-4 py-3 ring-1 ${feedback.tipo === "ok" ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : feedback.tipo === "aviso" ? "bg-amber-50 text-amber-700 ring-amber-200" : "bg-red-50 text-red-700 ring-red-200"}`}>
+            {feedback.tipo === "ok" ? <CheckCircle className="h-4 w-4 shrink-0 mt-0.5" /> : <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />}
+            <p className="font-semibold">{feedback.msg}</p>
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-3">
+          <KpiMini label="Em Análise" value={fmtN(itens.length)} color="bg-orange-50 ring-orange-200 text-orange-700" />
+          <KpiMini label="Valor em risco" value={fmtR(itens.reduce((s, i) => s + (i.valor || 0), 0))} color="bg-red-50 ring-red-200 text-red-700" />
+        </div>
+
+        <Card>
+          <div className="flex items-center gap-3 mb-4 flex-wrap">
+            <h3 className="font-black text-slate-800 text-sm flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-orange-500" /> Itens em Análise ({itens.length})
+            </h3>
+            <div className="ml-auto">
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                <input type="text" value={busca} onChange={e => setBusca(e.target.value)}
+                  placeholder="Buscar IMEI, modelo..."
+                  className="pl-9 pr-4 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#7F2D92] w-56" />
+              </div>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="flex items-center justify-center h-32"><div className="h-8 w-8 border-4 border-purple-200 border-t-[#7F2D92] rounded-full animate-spin" /></div>
+          ) : itensFiltrados.length === 0 ? (
+            <div className="text-center py-12 text-slate-400">
+              <CheckCircle className="h-8 w-8 mx-auto mb-2 opacity-30 text-emerald-500" />
+              <p className="text-sm font-semibold text-emerald-600">Nenhum item em análise!</p>
+              <p className="text-xs text-slate-400 mt-1">Todos os itens foram resolvidos.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {itensFiltrados.map(item => (
+                <div key={item.id} className="bg-orange-50 ring-1 ring-orange-200 rounded-2xl p-4">
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div className="space-y-1 flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono font-bold text-slate-800 text-sm">{item.imei}</span>
+                        <StatusBadge status={item.status} />
+                        {item.valor && <span className="text-xs font-bold text-orange-700">{fmtR(item.valor)}</span>}
+                      </div>
+                      <p className="text-xs text-slate-600 truncate">{item.modelo} {item.grade ? `· ${item.grade}` : ""}</p>
+                      <p className="text-xs text-slate-400 font-mono">Local original: {item.local_estoque || "—"}</p>
+                      {item.nao_localizado_em && (
+                        <p className="text-xs text-slate-400">
+                          Não localizado em: {new Date(item.nao_localizado_em).toLocaleString("pt-BR")}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <button
+                        onClick={() => setModalLocalizado(item)}
+                        className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100 transition">
+                        <MapPin className="h-3 w-3" /> Localizado
+                      </button>
+                      <button
+                        onClick={() => setModalNaoFaturar(item)}
+                        className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-red-50 text-red-700 ring-1 ring-red-200 hover:bg-red-100 transition">
+                        <X className="h-3 w-3" /> Não Faturar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </Card>
       </div>
@@ -417,7 +668,7 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
   const [gerandoRomaneio, setGerandoRomaneio] = useState(false);
   const [caixaDetalhes, setCaixaDetalhes]     = useState(null);
   const [itensCaixaDet, setItensCaixaDet]     = useState([]);
-  const [nfsPedido, setNfsPedido]             = useState([]); // ← NOVO
+  const [nfsPedido, setNfsPedido]             = useState([]);
   const inputRef                    = useRef(null);
   const CAPACIDADE                  = 30;
 
@@ -435,12 +686,8 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
     onAtualizarSilencioso?.(data);
   }
 
-  // ── Carrega caixas E NFs ao selecionar pedido ──────────
   useEffect(() => {
-    if (pedidoSel) {
-      carregarCaixas();
-      carregarNFs();
-    }
+    if (pedidoSel) { carregarCaixas(); carregarNFs(); }
   }, [pedidoSel]);
 
   useEffect(() => {
@@ -457,12 +704,7 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
   }
 
   async function carregarNFs() {
-    try {
-      const nfs = await verificarNFsPedido(pedidoSel.id);
-      setNfsPedido(nfs);
-    } catch (_) {
-      setNfsPedido([]);
-    }
+    try { setNfsPedido(await verificarNFsPedido(pedidoSel.id)); } catch { setNfsPedido([]); }
   }
 
   async function carregarItensCaixa() {
@@ -532,9 +774,7 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
 
   const totalEmbalados = caixas.reduce((s, c) => s + (c.total_itens || 0), 0);
   const totalBipados   = pedidoSel?.total_bipados || 0;
-
-  // Botões de romaneio só habilitados se houver NFs
-  const temNFs = nfsPedido.length > 0;
+  const temNFs         = nfsPedido.length > 0;
 
   if (!pedidoSel) {
     const pedidosDisponiveis = pedidos.filter(p => p.total_bipados > 0);
@@ -568,17 +808,9 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
       <div className="flex items-center gap-3 flex-wrap">
         <button onClick={() => { setPedido(null); setCaixaAtiva(null); setCaixas([]); setItensCaixa([]); setNfsPedido([]); }} className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1"><X className="h-3 w-3" /> Trocar pedido</button>
         <div className="flex-1"><h3 className="font-black text-slate-800 text-sm">{pedidoSel.lote}</h3><p className="text-xs text-slate-500">{pedidoSel.cliente}</p></div>
-
-        {/* Romaneio do Pedido — só habilita com NFs */}
         <div className="flex items-center gap-2">
-          {!temNFs && (
-            <span className="text-xs text-amber-600 font-semibold flex items-center gap-1">
-              <AlertTriangle className="h-3 w-3" /> Importe as NFs para gerar romaneios
-            </span>
-          )}
-          <button
-            onClick={handleRomaneioPedido}
-            disabled={gerandoRomaneio || caixas.length === 0 || !temNFs}
+          {!temNFs && <span className="text-xs text-amber-600 font-semibold flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Importe as NFs para gerar romaneios</span>}
+          <button onClick={handleRomaneioPedido} disabled={gerandoRomaneio || caixas.length === 0 || !temNFs}
             title={!temNFs ? "Importe as NFs primeiro" : ""}
             className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-purple-50 text-purple-700 ring-1 ring-purple-200 hover:bg-purple-100 transition disabled:opacity-40">
             {gerandoRomaneio ? <div className="h-3 w-3 border-2 border-purple-300 border-t-purple-700 rounded-full animate-spin" /> : <FileText className="h-3 w-3" />}
@@ -586,24 +818,19 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
           </button>
         </div>
       </div>
-
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiMini label="Bipados (disponíveis)" value={fmtN(totalBipados)} color="bg-purple-50 ring-purple-200 text-purple-700" />
         <KpiMini label="Embalados" value={fmtN(totalEmbalados)} sub={`${Math.round((totalEmbalados / (totalBipados || 1)) * 100)}%`} color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
         <KpiMini label="A embalar" value={fmtN(totalBipados - totalEmbalados)} color="bg-orange-50 ring-orange-200 text-orange-700" />
         <KpiMini label="Caixas" value={fmtN(caixas.length)} sub={`${caixas.filter(c => c.status === "fechada").length} fechadas`} color="bg-blue-50 ring-blue-200 text-blue-700" />
       </div>
-
-      {/* Aviso de NFs quando há NFs — mostra quais estão vinculadas */}
       {temNFs && (
         <div className="bg-emerald-50 ring-1 ring-emerald-200 rounded-xl px-4 py-2.5 flex items-center gap-2 text-xs text-emerald-700 font-semibold">
           <CheckCircle className="h-3.5 w-3.5 shrink-0" />
           NFs vinculadas: {nfsPedido.map(n => n.numero_nf).join(", ")} — romaneios liberados
         </div>
       )}
-
       <Card><p className="text-xs font-semibold text-slate-500 mb-2">Progresso da embalagem</p><ProgressBar value={totalEmbalados} total={totalBipados} color="#F97316" /></Card>
-
       {caixaAtiva && caixaAtiva.status === "aberta" ? (
         <Card>
           <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
@@ -680,7 +907,6 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
           </div>
         </Card>
       )}
-
       {caixas.length > 0 && (
         <Card>
           <h3 className="font-black text-slate-800 text-sm flex items-center gap-2 mb-4"><Box className="h-4 w-4 text-[#7F2D92]" /> Todas as caixas ({caixas.length})</h3>
@@ -695,16 +921,11 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
                   <div className="flex items-center gap-2 flex-wrap justify-end">
                     <StatusBadge status={caixa.status} />
                     <button onClick={() => verDetalhesCaixa(caixa)} className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50 transition">{caixaDetalhes?.id === caixa.id ? "Ocultar" : "Ver itens"}</button>
-
-                    {/* Romaneio da caixa — só habilita com NFs */}
-                    <button
-                      onClick={() => handleRomaneio(caixa)}
-                      disabled={gerando === caixa.id + "_rom" || !caixa.total_itens || !temNFs}
+                    <button onClick={() => handleRomaneio(caixa)} disabled={gerando === caixa.id + "_rom" || !caixa.total_itens || !temNFs}
                       title={!temNFs ? "Importe as NFs primeiro" : ""}
                       className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-purple-50 text-purple-700 ring-1 ring-purple-200 hover:bg-purple-100 transition disabled:opacity-40">
                       {gerando === caixa.id + "_rom" ? <div className="h-3 w-3 border-2 border-purple-300 border-t-purple-700 rounded-full animate-spin" /> : <FileText className="h-3 w-3" />} Romaneio
                     </button>
-
                     <button onClick={() => handleEtiqueta(caixa)} disabled={gerando === caixa.id + "_etq" || !caixa.total_itens}
                       className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-orange-50 text-orange-700 ring-1 ring-orange-200 hover:bg-orange-100 transition disabled:opacity-40">
                       {gerando === caixa.id + "_etq" ? <div className="h-3 w-3 border-2 border-orange-300 border-t-orange-700 rounded-full animate-spin" /> : <Tag className="h-3 w-3" />} Etiqueta
@@ -809,10 +1030,7 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
       const res = await importarNFPlanilha(file, pedido.id, user.id);
       setFeedbackExp(prev => ({
         ...prev,
-        [pedido.id]: {
-          tipo: "ok",
-          msg: `✓ ${res.totalNFs} NF${res.totalNFs > 1 ? "s" : ""} importada${res.totalNFs > 1 ? "s" : ""} (${res.nfs.join(", ")}) — ${fmtN(res.totalItens)} itens`,
-        },
+        [pedido.id]: { tipo: "ok", msg: `✓ ${res.totalNFs} NF${res.totalNFs > 1 ? "s" : ""} importada${res.totalNFs > 1 ? "s" : ""} (${res.nfs.join(", ")}) — ${fmtN(res.totalItens)} itens` },
       }));
       setResumos(prev => ({ ...prev, [pedido.id]: null }));
       setNfs(prev => ({ ...prev, [pedido.id]: null }));
@@ -827,9 +1045,10 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
   }
 
   const pedidosAbertos = pedidos.filter(p => p.status !== "concluido");
-  const totalValorGlobal    = Object.values(resumos).reduce((s, r) => s + (r?.totalValor || 0), 0);
+  const totalValorGlobal    = Object.values(resumos).reduce((s, r) => s + (r?.valorBipado || 0), 0);
   const totalFaturadoGlobal = Object.values(resumos).reduce((s, r) => s + (r?.valorFaturado || 0), 0);
-  const totalAguardando     = totalValorGlobal - totalFaturadoGlobal;
+  const totalNaoFaturar     = Object.values(resumos).reduce((s, r) => s + (r?.valorNaoFaturar || 0), 0);
+  const totalAguardando     = totalValorGlobal - totalFaturadoGlobal - totalNaoFaturar;
   const pctFaturado         = totalValorGlobal > 0 ? Math.round((totalFaturadoGlobal / totalValorGlobal) * 100) : 0;
 
   function getStatusFat(p, resumo, nfsPedido) {
@@ -856,7 +1075,7 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <KpiMini label="Aguardando faturamento" value={fmtR(totalAguardando)} sub={`${fmtN(pedidosAbertos.length)} pedidos`} color="bg-orange-50 ring-orange-200 text-orange-700" />
         <KpiMini label="Faturado" value={fmtR(totalFaturadoGlobal)} sub={`${fmtN(Object.values(resumos).reduce((s, r) => s + (r?.qtdFaturada || 0), 0))} itens`} color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
-        <KpiMini label="% Faturado" value={`${pctFaturado}%`} sub="do valor total" color="bg-purple-50 ring-purple-200 text-purple-700" />
+        <KpiMini label="Não Faturar" value={fmtR(totalNaoFaturar)} sub={`${fmtN(Object.values(resumos).reduce((s, r) => s + (r?.qtdNaoFaturar || 0), 0))} itens descartados`} color="bg-red-50 ring-red-200 text-red-700" />
       </div>
       {pedidosAbertos.length === 0 ? (
         <div className="text-center py-12 text-slate-400"><Package className="h-8 w-8 mx-auto mb-2 opacity-30" /><p className="text-sm">Nenhum pedido em aberto.</p></div>
@@ -870,9 +1089,13 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
             const statusFat = getStatusFat(p, resumo, nfsPedido);
             const cfgStatus = STATUS_FAT[statusFat];
             const valorFaturado   = resumo?.valorFaturado || 0;
-            const valorAguardando = (resumo?.totalValor || 0) - valorFaturado;
+            const valorBipado     = resumo?.valorBipado || 0;
+            const valorNaoFaturar = resumo?.valorNaoFaturar || 0;
+            const valorAguardando = valorBipado - valorFaturado - valorNaoFaturar;
             const qtdFaturada     = resumo?.qtdFaturada || 0;
-            const qtdAguardando   = (p.total_bipados || 0) - qtdFaturada;
+            const qtdNaoFaturar   = resumo?.qtdNaoFaturar || 0;
+            const qtdEmAnalise    = resumo?.qtdEmAnalise || 0;
+            const qtdAguardando   = (p.total_bipados || 0) - qtdFaturada - qtdNaoFaturar;
             const borderColor     = statusFat === "faturado" ? "ring-emerald-200" : statusFat === "em_faturamento" ? "ring-purple-200" : statusFat === "em_separacao" ? "ring-yellow-200" : "ring-slate-200";
             return (
               <Card key={p.id} className={`ring-1 ${borderColor}`}>
@@ -894,7 +1117,7 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
                 {isLoading ? (
                   <div className="flex items-center justify-center h-12"><div className="h-4 w-4 border-2 border-purple-200 border-t-[#7F2D92] rounded-full animate-spin" /></div>
                 ) : resumo ? (
-                  <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-4">
                     <div className="bg-emerald-50 ring-1 ring-emerald-100 rounded-xl p-3">
                       <p className="text-xs text-emerald-600 font-semibold mb-1">✓ Faturado</p>
                       <p className="text-sm font-black text-emerald-700">{fmtR(valorFaturado)}</p>
@@ -905,6 +1128,20 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
                       <p className="text-sm font-black text-orange-700">{fmtR(valorAguardando)}</p>
                       <p className="text-xs text-orange-500 mt-0.5">{fmtN(qtdAguardando)} itens</p>
                     </div>
+                    {qtdNaoFaturar > 0 && (
+                      <div className="bg-red-50 ring-1 ring-red-100 rounded-xl p-3">
+                        <p className="text-xs text-red-600 font-semibold mb-1">✗ Não Faturar</p>
+                        <p className="text-sm font-black text-red-700">{fmtR(valorNaoFaturar)}</p>
+                        <p className="text-xs text-red-500 mt-0.5">{fmtN(qtdNaoFaturar)} itens</p>
+                      </div>
+                    )}
+                    {qtdEmAnalise > 0 && (
+                      <div className="bg-amber-50 ring-1 ring-amber-100 rounded-xl p-3">
+                        <p className="text-xs text-amber-600 font-semibold mb-1">⚠ Em Análise</p>
+                        <p className="text-sm font-black text-amber-700">{fmtN(qtdEmAnalise)}</p>
+                        <p className="text-xs text-amber-500 mt-0.5">itens pendentes</p>
+                      </div>
+                    )}
                   </div>
                 ) : null}
                 {nfsPedido.length > 0 && (
@@ -1117,9 +1354,10 @@ export default function B2BPickingPage({ abaInicial = "picking" }) {
   const [loadingPedidos, setLoadingPedidos] = useState(true);
 
   const TODAS_ABAS = [
-    { key: "picking",   label: "Picking",     icon: Search,    tela: "/b2b/picking"     },
-    { key: "embalagem", label: "Embalagem",   icon: Box,       tela: "/b2b/embalagem"   },
-    { key: "pedidos",   label: "Faturamento", icon: BarChart3, tela: "/b2b/faturamento" },
+    { key: "picking",   label: "Picking",     icon: Search,        tela: "/b2b/picking"     },
+    { key: "analise",   label: "Em Análise",  icon: AlertCircle,   tela: "/b2b/picking"     }, // mesma tela, visível para quem tem picking
+    { key: "embalagem", label: "Embalagem",   icon: Box,           tela: "/b2b/embalagem"   },
+    { key: "pedidos",   label: "Faturamento", icon: BarChart3,     tela: "/b2b/faturamento" },
   ];
 
   const ABAS = profile?.is_master
@@ -1140,10 +1378,14 @@ export default function B2BPickingPage({ abaInicial = "picking" }) {
 
   function atualizarSilencioso(data) { setPedidos(data); }
 
+  // Conta itens em análise para badge
+  const totalAnaliseGlobal = pedidos.reduce((s, p) => s + 0, 0); // badge será mostrado na aba
+
   const contadores = {
-    picking:  { aberto: pedidos.filter(p => p.status === "aberto").length, concluido: pedidos.filter(p => p.status === "concluido").length, labelAberto: "em aberto", labelConcluido: "concluído", aoConcluido: () => setVerConcluidos(false) },
-    embalagem:{ aberto: pedidos.filter(p => (p.total_bipados || 0) > 0 && p.status !== "concluido").length, concluido: pedidos.filter(p => p.status === "concluido").length, labelAberto: "para embalar", labelConcluido: "embalado", aoConcluido: () => setVerConcluidos(false) },
-    pedidos:  { aberto: pedidos.filter(p => p.status !== "concluido").length, concluido: pedidos.filter(p => p.status === "concluido").length, labelAberto: "aguardando faturamento", labelConcluido: "faturado", aoConcluido: () => { setAba("pedidos"); setVerConcluidos(true); } },
+    picking:   { aberto: pedidos.filter(p => p.status === "aberto").length, concluido: pedidos.filter(p => p.status === "concluido").length, labelAberto: "em aberto", labelConcluido: "concluído", aoConcluido: () => setVerConcluidos(false) },
+    analise:   { aberto: pedidos.filter(p => p.status === "aberto").length, concluido: 0, labelAberto: "pedidos", labelConcluido: "", aoConcluido: () => {} },
+    embalagem: { aberto: pedidos.filter(p => (p.total_bipados || 0) > 0 && p.status !== "concluido").length, concluido: pedidos.filter(p => p.status === "concluido").length, labelAberto: "para embalar", labelConcluido: "embalado", aoConcluido: () => setVerConcluidos(false) },
+    pedidos:   { aberto: pedidos.filter(p => p.status !== "concluido").length, concluido: pedidos.filter(p => p.status === "concluido").length, labelAberto: "aguardando faturamento", labelConcluido: "faturado", aoConcluido: () => { setAba("pedidos"); setVerConcluidos(true); } },
   };
 
   const ctx = contadores[aba] || contadores["picking"];
@@ -1203,6 +1445,7 @@ export default function B2BPickingPage({ abaInicial = "picking" }) {
       ) : (
         <>
           {aba === "picking"   && <TabPicking   pedidosIniciais={pedidos} onAtualizarSilencioso={atualizarSilencioso} />}
+          {aba === "analise"   && <TabAnalise   pedidosIniciais={pedidos} onAtualizarSilencioso={atualizarSilencioso} />}
           {aba === "embalagem" && <TabEmbalagem pedidosIniciais={pedidos} onAtualizarSilencioso={atualizarSilencioso} />}
           {aba === "pedidos"   && !verConcluidos && <TabPedidos pedidosIniciais={pedidos} onAtualizarSilencioso={atualizarSilencioso} />}
           {aba === "pedidos"   && verConcluidos  && <TabConcluidos onVoltar={() => setVerConcluidos(false)} />}
