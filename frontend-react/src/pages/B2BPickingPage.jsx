@@ -456,7 +456,7 @@ function TabPicking({ pedidosIniciais, onAtualizarSilencioso }) {
 }
 
 // ══════════════════════════════════════════════════════════
-// ABA EM ANÁLISE — recebe itensAnalise como prop
+// ABA EM ANÁLISE
 // ══════════════════════════════════════════════════════════
 function TabAnalise({ pedidosIniciais, onAtualizarSilencioso, itensAnalise }) {
   const { user }                              = useAuth();
@@ -504,6 +504,37 @@ function TabAnalise({ pedidosIniciais, onAtualizarSilencioso, itensAnalise }) {
     }
   }
 
+  // Histórico completo do pedido (todos que passaram pelo fluxo)
+  async function carregarHistorico() {
+    setLoading(true);
+    setItens([]);
+    try {
+      const { data, error } = await supabase
+        .from("b2b_itens")
+        .select("*")
+        .eq("pedido_id", pedidoSel.id)
+        .not("nao_localizado_em", "is", null)
+        .order("nao_localizado_em", { ascending: true });
+      if (error) throw new Error(error.message);
+      setItens(data || []);
+    } catch (e) {
+      setFeedback({ tipo: "erro", msg: e.message });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!pedidoSel?.id) return;
+    // Se o pedido está resolvido (sem pendentes), mostra histórico completo
+    const pendentes = itensAnalise[pedidoSel.id] || 0;
+    if (pendentes === 0) {
+      carregarHistorico();
+    } else {
+      carregarItens();
+    }
+  }, [pedidoSel?.id]);
+
   async function confirmarLocalizado(novaLocalizacao) {
     if (!modalLocalizado) return;
     try {
@@ -533,10 +564,8 @@ function TabAnalise({ pedidosIniciais, onAtualizarSilencioso, itensAnalise }) {
     !busca || i.imei.includes(busca) || i.modelo?.toLowerCase().includes(busca.toLowerCase()) || i.voucher?.toLowerCase().includes(busca.toLowerCase())
   );
 
-  // Filtra pedidos que já tiveram análise (tem ou tiveram itens em análise)
-  // Pendentes: ainda têm itens em análise
-  // Resolvidos: já tiveram mas não têm mais
-  const pedidosComHistorico = pedidos.filter(p => (itensAnalise[p.id] !== undefined));
+  // Pedidos com histórico de análise
+  const pedidosComHistorico = pedidos.filter(p => itensAnalise[p.id] !== undefined);
   const qtdPendentes  = pedidosComHistorico.filter(p => (itensAnalise[p.id] || 0) > 0).length;
   const qtdResolvidos = pedidosComHistorico.filter(p => (itensAnalise[p.id] || 0) === 0).length;
 
@@ -548,7 +577,7 @@ function TabAnalise({ pedidosIniciais, onAtualizarSilencioso, itensAnalise }) {
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <p className="text-sm text-slate-500">Selecione um pedido para analisar itens:</p>
+          <p className="text-sm text-slate-500">Selecione um pedido:</p>
           <div className="flex items-center gap-2">
             <button onClick={() => setMostrarResolvidos(false)}
               className={`text-xs px-3 py-1.5 rounded-xl font-semibold transition-all ${!mostrarResolvidos ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
@@ -601,6 +630,8 @@ function TabAnalise({ pedidosIniciais, onAtualizarSilencioso, itensAnalise }) {
     );
   }
 
+  const pedidoResolvido = (itensAnalise[pedidoSel.id] || 0) === 0;
+
   return (
     <>
       {modalLocalizado && <ModalLocalizado item={modalLocalizado} onConfirmar={confirmarLocalizado} onCancelar={() => setModalLocalizado(null)} />}
@@ -609,22 +640,41 @@ function TabAnalise({ pedidosIniciais, onAtualizarSilencioso, itensAnalise }) {
         <div className="flex items-center gap-3 flex-wrap">
           <button onClick={() => { setPedido(null); setItens([]); setFeedback(null); }} className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1"><X className="h-3 w-3" /> Trocar pedido</button>
           <div className="flex-1"><h3 className="font-black text-slate-800 text-sm">{pedidoSel.lote}</h3><p className="text-xs text-slate-500">{pedidoSel.cliente}</p></div>
-          <StatusBadge status={pedidoSel.status} />
+          <div className="flex items-center gap-2">
+            {pedidoResolvido && (
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-lg ring-1 bg-emerald-50 text-emerald-700 ring-emerald-200 flex items-center gap-1">
+                <CheckCircle className="h-3 w-3" /> Todos resolvidos
+              </span>
+            )}
+            <StatusBadge status={pedidoSel.status} />
+          </div>
         </div>
+
         {feedback && (
           <div className={`flex items-start gap-2 text-sm rounded-xl px-4 py-3 ring-1 ${feedback.tipo === "ok" ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : feedback.tipo === "aviso" ? "bg-amber-50 text-amber-700 ring-amber-200" : "bg-red-50 text-red-700 ring-red-200"}`}>
             {feedback.tipo === "ok" ? <CheckCircle className="h-4 w-4 shrink-0 mt-0.5" /> : <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />}
             <p className="font-semibold">{feedback.msg}</p>
           </div>
         )}
+
         <div className="grid grid-cols-2 gap-3">
-          <KpiMini label="Em Análise" value={fmtN(itens.length)} color="bg-orange-50 ring-orange-200 text-orange-700" />
-          <KpiMini label="Valor em risco" value={fmtR(itens.reduce((s, i) => s + (i.valor || 0), 0))} color="bg-red-50 ring-red-200 text-red-700" />
+          <KpiMini
+            label={pedidoResolvido ? "Total do histórico" : "Em Análise"}
+            value={fmtN(itens.length)}
+            color={pedidoResolvido ? "bg-emerald-50 ring-emerald-200 text-emerald-700" : "bg-orange-50 ring-orange-200 text-orange-700"}
+          />
+          <KpiMini
+            label={pedidoResolvido ? "Valor envolvido" : "Valor em risco"}
+            value={fmtR(itens.reduce((s, i) => s + (i.valor || 0), 0))}
+            color={pedidoResolvido ? "bg-slate-50 ring-slate-200 text-slate-700" : "bg-red-50 ring-red-200 text-red-700"}
+          />
         </div>
+
         <Card>
           <div className="flex items-center gap-3 mb-4 flex-wrap">
             <h3 className="font-black text-slate-800 text-sm flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-orange-500" /> Itens em Análise ({itens.length})
+              <AlertCircle className="h-4 w-4 text-orange-500" />
+              {pedidoResolvido ? `Histórico de análise (${itens.length})` : `Itens em Análise (${itens.length})`}
             </h3>
             <div className="ml-auto">
               <div className="relative">
@@ -635,44 +685,69 @@ function TabAnalise({ pedidosIniciais, onAtualizarSilencioso, itensAnalise }) {
               </div>
             </div>
           </div>
+
+          {pedidoResolvido && (
+            <div className="bg-emerald-50 ring-1 ring-emerald-200 rounded-xl px-4 py-2.5 mb-4 text-xs text-emerald-700 font-semibold flex items-center gap-2">
+              <CheckCircle className="h-3.5 w-3.5 shrink-0" />
+              Todos os itens foram resolvidos — exibindo histórico para registro
+            </div>
+          )}
+
           {loading ? (
             <div className="flex items-center justify-center h-32"><div className="h-8 w-8 border-4 border-purple-200 border-t-[#7F2D92] rounded-full animate-spin" /></div>
           ) : itensFiltrados.length === 0 ? (
             <div className="text-center py-12 text-slate-400">
               <CheckCircle className="h-8 w-8 mx-auto mb-2 opacity-30 text-emerald-500" />
-              <p className="text-sm font-semibold text-emerald-600">Nenhum item em análise!</p>
-              <p className="text-xs text-slate-400 mt-1">Todos os itens foram resolvidos.</p>
+              <p className="text-sm font-semibold text-emerald-600">Nenhum item encontrado!</p>
             </div>
           ) : (
             <div className="space-y-3">
-              {itensFiltrados.map(item => (
-                <div key={item.id} className="bg-orange-50 ring-1 ring-orange-200 rounded-2xl p-4">
-                  <div className="flex items-start justify-between gap-3 flex-wrap">
-                    <div className="space-y-1 flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono font-bold text-slate-800 text-sm">{item.imei}</span>
-                        <StatusBadge status={item.status} />
-                        {item.valor && <span className="text-xs font-bold text-orange-700">{fmtR(item.valor)}</span>}
+              {itensFiltrados.map(item => {
+                const resolvido = !["nao_localizado", "em_analise"].includes(item.status);
+                return (
+                  <div key={item.id} className={`ring-1 rounded-2xl p-4 ${resolvido ? "bg-slate-50 ring-slate-200" : "bg-orange-50 ring-orange-200"}`}>
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <div className="space-y-1 flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-mono font-bold text-slate-800 text-sm">{item.imei}</span>
+                          <StatusBadge status={item.status} />
+                          {item.valor && <span className="text-xs font-bold text-orange-700">{fmtR(item.valor)}</span>}
+                        </div>
+                        <p className="text-xs text-slate-600 truncate">{item.modelo}{item.grade ? ` · ${item.grade}` : ""}</p>
+                        <p className="text-xs text-slate-400 font-mono">Local original: {item.local_estoque || "—"}</p>
+                        {item.nao_localizado_em && (
+                          <p className="text-xs text-slate-400">Não localizado em: {new Date(item.nao_localizado_em).toLocaleString("pt-BR")}</p>
+                        )}
+                        {/* Histórico de resolução */}
+                        {item.status === "bipado" && item.localizado_em && (
+                          <p className="text-xs text-emerald-600 font-semibold">
+                            ✓ Localizado em {new Date(item.localizado_em).toLocaleString("pt-BR")} → {item.localizado_local}
+                          </p>
+                        )}
+                        {item.status === "nao_faturar" && (
+                          <p className="text-xs text-red-500 font-semibold">
+                            ✗ Não faturar: {MOTIVOS_NAO_FATURAR.find(m => m.value === item.motivo_nao_faturar)?.label || item.motivo_nao_faturar}
+                            {item.obs_nao_faturar && ` — ${item.obs_nao_faturar}`}
+                          </p>
+                        )}
                       </div>
-                      <p className="text-xs text-slate-600 truncate">{item.modelo}{item.grade ? ` · ${item.grade}` : ""}</p>
-                      <p className="text-xs text-slate-400 font-mono">Local original: {item.local_estoque || "—"}</p>
-                      {item.nao_localizado_em && (
-                        <p className="text-xs text-slate-400">Não localizado em: {new Date(item.nao_localizado_em).toLocaleString("pt-BR")}</p>
+                      {/* Botões só aparecem se ainda em análise */}
+                      {!resolvido && (
+                        <div className="flex gap-2 shrink-0 flex-wrap">
+                          <button onClick={() => setModalLocalizado(item)}
+                            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100 transition">
+                            <MapPin className="h-3 w-3" /> Localizado
+                          </button>
+                          <button onClick={() => setModalNaoFaturar(item)}
+                            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-red-50 text-red-700 ring-1 ring-red-200 hover:bg-red-100 transition">
+                            <X className="h-3 w-3" /> Não Faturar
+                          </button>
+                        </div>
                       )}
                     </div>
-                    <div className="flex gap-2 shrink-0 flex-wrap">
-                      <button onClick={() => setModalLocalizado(item)}
-                        className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100 transition">
-                        <MapPin className="h-3 w-3" /> Localizado
-                      </button>
-                      <button onClick={() => setModalNaoFaturar(item)}
-                        className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-red-50 text-red-700 ring-1 ring-red-200 hover:bg-red-100 transition">
-                        <X className="h-3 w-3" /> Não Faturar
-                      </button>
-                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </Card>
@@ -1396,7 +1471,7 @@ export default function B2BPickingPage({ abaInicial = "picking" }) {
   const [pedidos, setPedidos]               = useState([]);
   const [verConcluidos, setVerConcluidos]   = useState(false);
   const [loadingPedidos, setLoadingPedidos] = useState(true);
-  const [itensAnalise, setItensAnalise]     = useState({}); // ← NOVO: mapa pedidoId → qtd em análise
+  const [itensAnalise, setItensAnalise]     = useState({});
 
   const TODAS_ABAS = [
     { key: "picking",   label: "Picking",    icon: Search,      tela: "/b2b/picking"     },
@@ -1424,14 +1499,30 @@ export default function B2BPickingPage({ abaInicial = "picking" }) {
 
   async function carregarItensAnalise() {
     try {
-      const { data } = await supabase
+      // Itens atualmente pendentes de análise
+      const { data: pendentes } = await supabase
         .from("b2b_itens")
         .select("pedido_id")
         .in("status", ["nao_localizado", "em_analise"]);
+
+      // Itens que já passaram pelo fluxo (têm nao_localizado_em preenchido)
+      const { data: historico } = await supabase
+        .from("b2b_itens")
+        .select("pedido_id")
+        .not("nao_localizado_em", "is", null);
+
       const mapa = {};
-      (data || []).forEach(i => {
+
+      // Marca todos com histórico como 0 (resolvido por padrão)
+      (historico || []).forEach(i => {
+        if (mapa[i.pedido_id] === undefined) mapa[i.pedido_id] = 0;
+      });
+
+      // Sobrescreve com contagem real dos pendentes
+      (pendentes || []).forEach(i => {
         mapa[i.pedido_id] = (mapa[i.pedido_id] || 0) + 1;
       });
+
       setItensAnalise(mapa);
     } catch { setItensAnalise({}); }
   }
@@ -1441,9 +1532,8 @@ export default function B2BPickingPage({ abaInicial = "picking" }) {
     await carregarItensAnalise();
   }
 
-  // Contadores para botões do topo
-  const pedidosComAnalise    = pedidos.filter(p => (itensAnalise[p.id] || 0) > 0);
-  const pedidosSemAnalise    = pedidos.filter(p => itensAnalise[p.id] !== undefined && (itensAnalise[p.id] || 0) === 0);
+  const pedidosComAnalise = pedidos.filter(p => (itensAnalise[p.id] || 0) > 0);
+  const pedidosSemAnalise = pedidos.filter(p => itensAnalise[p.id] !== undefined && (itensAnalise[p.id] || 0) === 0);
 
   const contadores = {
     picking:   { aberto: pedidos.filter(p => p.status === "aberto").length, concluido: pedidos.filter(p => p.status === "concluido").length, labelAberto: "em aberto", labelConcluido: "concluído", aoConcluido: () => setVerConcluidos(false) },
