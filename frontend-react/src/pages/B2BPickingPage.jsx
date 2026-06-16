@@ -49,15 +49,15 @@ function KpiMini({ label, value, sub, color = "bg-purple-50 ring-purple-200 text
 
 function StatusBadge({ status }) {
   const map = {
-    aberto:              { label: "Em aberto",            cls: "bg-blue-50 text-blue-700 ring-blue-200" },
-    concluido:           { label: "Concluído",             cls: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
-    pendente:            { label: "Pendente",              cls: "bg-slate-50 text-slate-500 ring-slate-200" },
-    bipado:              { label: "Bipado",                cls: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
-    nao_localizado:      { label: "Não Localizado",        cls: "bg-amber-50 text-amber-700 ring-amber-200" },
-    em_analise:          { label: "Em Análise",            cls: "bg-orange-50 text-orange-700 ring-orange-200" },
-    nao_faturar:         { label: "Não Faturar",           cls: "bg-red-50 text-red-700 ring-red-200" },
-    aberta:              { label: "Aberta",                cls: "bg-blue-50 text-blue-700 ring-blue-200" },
-    fechada:             { label: "Fechada",               cls: "bg-slate-50 text-slate-600 ring-slate-200" },
+    aberto:         { label: "Em aberto",     cls: "bg-blue-50 text-blue-700 ring-blue-200" },
+    concluido:      { label: "Concluído",      cls: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
+    pendente:       { label: "Pendente",       cls: "bg-slate-50 text-slate-500 ring-slate-200" },
+    bipado:         { label: "Bipado",         cls: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
+    nao_localizado: { label: "Não Localizado", cls: "bg-amber-50 text-amber-700 ring-amber-200" },
+    em_analise:     { label: "Em Análise",     cls: "bg-orange-50 text-orange-700 ring-orange-200" },
+    nao_faturar:    { label: "Não Faturar",    cls: "bg-red-50 text-red-700 ring-red-200" },
+    aberta:         { label: "Aberta",         cls: "bg-blue-50 text-blue-700 ring-blue-200" },
+    fechada:        { label: "Fechada",        cls: "bg-slate-50 text-slate-600 ring-slate-200" },
   };
   const s = map[status] || { label: status, cls: "bg-slate-50 text-slate-500 ring-slate-200" };
   return <span className={`text-xs font-semibold px-2 py-0.5 rounded-lg ring-1 ${s.cls}`}>{s.label}</span>;
@@ -456,9 +456,9 @@ function TabPicking({ pedidosIniciais, onAtualizarSilencioso }) {
 }
 
 // ══════════════════════════════════════════════════════════
-// ABA EM ANÁLISE
+// ABA EM ANÁLISE — recebe itensAnalise como prop
 // ══════════════════════════════════════════════════════════
-function TabAnalise({ pedidosIniciais, onAtualizarSilencioso }) {
+function TabAnalise({ pedidosIniciais, onAtualizarSilencioso, itensAnalise }) {
   const { user }                              = useAuth();
   const [pedidos, setPedidos]                 = useState(pedidosIniciais);
   const [pedidoSel, setPedido]                = useState(null);
@@ -468,6 +468,7 @@ function TabAnalise({ pedidosIniciais, onAtualizarSilencioso }) {
   const [modalNaoFaturar, setModalNaoFaturar] = useState(null);
   const [feedback, setFeedback]               = useState(null);
   const [busca, setBusca]                     = useState("");
+  const [mostrarResolvidos, setMostrarResolvidos] = useState(false);
 
   useEffect(() => {
     if (pedidosIniciais.length > 0 && pedidos.length === 0) setPedidos(pedidosIniciais);
@@ -532,27 +533,68 @@ function TabAnalise({ pedidosIniciais, onAtualizarSilencioso }) {
     !busca || i.imei.includes(busca) || i.modelo?.toLowerCase().includes(busca.toLowerCase()) || i.voucher?.toLowerCase().includes(busca.toLowerCase())
   );
 
+  // Filtra pedidos que já tiveram análise (tem ou tiveram itens em análise)
+  // Pendentes: ainda têm itens em análise
+  // Resolvidos: já tiveram mas não têm mais
+  const pedidosComHistorico = pedidos.filter(p => (itensAnalise[p.id] !== undefined));
+  const qtdPendentes  = pedidosComHistorico.filter(p => (itensAnalise[p.id] || 0) > 0).length;
+  const qtdResolvidos = pedidosComHistorico.filter(p => (itensAnalise[p.id] || 0) === 0).length;
+
+  const pedidosFiltrados = mostrarResolvidos
+    ? pedidosComHistorico.filter(p => (itensAnalise[p.id] || 0) === 0)
+    : pedidosComHistorico.filter(p => (itensAnalise[p.id] || 0) > 0);
+
   if (!pedidoSel) {
     return (
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <p className="text-sm text-slate-500">Selecione um pedido para analisar itens:</p>
-          <button onClick={atualizarPedidos} className="text-xs text-slate-500 hover:text-purple-700 font-semibold">↻ Atualizar</button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setMostrarResolvidos(false)}
+              className={`text-xs px-3 py-1.5 rounded-xl font-semibold transition-all ${!mostrarResolvidos ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
+              {qtdPendentes} com itens pendentes
+            </button>
+            <button onClick={() => setMostrarResolvidos(true)}
+              className={`text-xs px-3 py-1.5 rounded-xl font-semibold transition-all ${mostrarResolvidos ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
+              {qtdResolvidos} resolvido{qtdResolvidos !== 1 ? "s" : ""}
+            </button>
+            <button onClick={atualizarPedidos} className="text-xs text-slate-500 hover:text-purple-700 font-semibold">↻</button>
+          </div>
         </div>
-        {pedidos.length === 0 ? (
-          <div className="text-center py-12 text-slate-400"><ClipboardList className="h-8 w-8 mx-auto mb-2 opacity-30" /><p className="text-sm">Nenhum pedido disponível.</p></div>
+        {pedidosFiltrados.length === 0 ? (
+          <div className="text-center py-12 text-slate-400">
+            <ClipboardList className="h-8 w-8 mx-auto mb-2 opacity-30" />
+            <p className="text-sm">{mostrarResolvidos ? "Nenhum pedido resolvido ainda." : "Nenhum pedido com itens pendentes."}</p>
+          </div>
         ) : (
           <div className="grid gap-3">
-            {pedidos.map(p => (
-              <button key={p.id} onClick={() => setPedido(p)}
-                className="bg-white rounded-2xl p-4 ring-1 ring-slate-200 text-left hover:ring-orange-300 hover:bg-orange-50 transition-all">
-                <div className="flex items-start justify-between gap-3 mb-3">
-                  <div><div className="font-bold text-slate-800 text-sm">{p.lote}</div><div className="text-xs text-slate-500 mt-0.5">{p.cliente}</div></div>
-                  <StatusBadge status={p.status} />
-                </div>
-                <ProgressBar value={p.total_bipados || 0} total={p.total_itens || 0} />
-              </button>
-            ))}
+            {pedidosFiltrados.map(p => {
+              const qtdAnalise = itensAnalise[p.id] || 0;
+              return (
+                <button key={p.id} onClick={() => setPedido(p)}
+                  className="bg-white rounded-2xl p-4 ring-1 ring-slate-200 text-left hover:ring-orange-300 hover:bg-orange-50 transition-all">
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div>
+                      <div className="font-bold text-slate-800 text-sm">{p.lote}</div>
+                      <div className="text-xs text-slate-500 mt-0.5">{p.cliente}</div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {qtdAnalise > 0 ? (
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-lg ring-1 bg-orange-50 text-orange-700 ring-orange-200">
+                          {qtdAnalise} em análise
+                        </span>
+                      ) : (
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-lg ring-1 bg-emerald-50 text-emerald-700 ring-emerald-200 flex items-center gap-1">
+                          <CheckCircle className="h-3 w-3" /> Resolvido
+                        </span>
+                      )}
+                      <StatusBadge status={p.status} />
+                    </div>
+                  </div>
+                  <ProgressBar value={p.total_bipados || 0} total={p.total_itens || 0} />
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
@@ -638,6 +680,7 @@ function TabAnalise({ pedidosIniciais, onAtualizarSilencioso }) {
     </>
   );
 }
+
 // ══════════════════════════════════════════════════════════
 // ABA EMBALAGEM
 // ══════════════════════════════════════════════════════════
@@ -1036,18 +1079,13 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
   const totalNaoFaturar     = Object.values(resumos).reduce((s, r) => s + (r?.valorNaoFaturar || 0), 0);
   const totalAguardando     = Object.values(resumos).reduce((s, r) => s + Math.max(0, (r?.valorBipado || 0) - (r?.valorFaturado || 0)), 0);
 
-  // ── Status de faturamento considerando nao_faturar ────
   function getStatusFat(p, resumo, nfsPedido) {
     const qtdFaturada   = resumo?.qtdFaturada   || 0;
     const qtdNaoFaturar = resumo?.qtdNaoFaturar || 0;
     const qtdBipados    = resumo?.qtdBipados    || 0;
     const total         = p.total_itens         || 0;
-
-    // Separação completa = bipados + nao_faturar cobre o total do pedido
     const separacaoCompleta = total > 0 && (qtdBipados + qtdNaoFaturar) >= total;
-
     if (nfsPedido?.length > 0) {
-      // Tem NF mas ainda tem bipados sem NF = faturamento parcial
       if (qtdBipados > qtdFaturada) return "faturamento_parcial";
       return "faturado";
     }
@@ -1095,7 +1133,6 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
             const qtdEmAnalise    = resumo?.qtdEmAnalise    || 0;
             const valorAguardando = Math.max(0, valorBipado - valorFaturado);
             const qtdAguardando   = Math.max(0, qtdBipados - qtdFaturada);
-            // Progresso da separação considera bipados + nao_faturar
             const qtdSeparados    = qtdBipados + qtdNaoFaturar;
             const borderColor     = statusFat === "faturado" || statusFat === "faturamento_parcial" ? "ring-emerald-200" : statusFat === "em_faturamento" ? "ring-purple-200" : statusFat === "em_separacao" ? "ring-yellow-200" : "ring-slate-200";
 
@@ -1112,8 +1149,6 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
                     {resumo && <span className="text-sm font-black text-slate-800">{fmtR(resumo.totalValor)}</span>}
                   </div>
                 </div>
-
-                {/* Barra de separação — bipados + nao_faturar vs total */}
                 <div className="mb-4">
                   <p className="text-xs font-semibold text-slate-400 mb-1">Separação</p>
                   <ProgressBar value={qtdSeparados} total={p.total_itens || 0} />
@@ -1123,7 +1158,6 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
                     </p>
                   )}
                 </div>
-
                 {isLoading ? (
                   <div className="flex items-center justify-center h-12"><div className="h-4 w-4 border-2 border-purple-200 border-t-[#7F2D92] rounded-full animate-spin" /></div>
                 ) : resumo ? (
@@ -1154,7 +1188,6 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
                     )}
                   </div>
                 ) : null}
-
                 {nfsPedido.length > 0 && (
                   <div className="mb-4">
                     <button onClick={() => setPainelAberto(prev => ({ ...prev, [p.id]: !prev[p.id] }))}
@@ -1182,7 +1215,6 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
                     )}
                   </div>
                 )}
-
                 <div className="flex gap-2 flex-wrap items-center">
                   <button onClick={() => handleExportar(p)} disabled={exportando === p.id || !p.total_bipados}
                     className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100 transition disabled:opacity-40">
@@ -1364,6 +1396,7 @@ export default function B2BPickingPage({ abaInicial = "picking" }) {
   const [pedidos, setPedidos]               = useState([]);
   const [verConcluidos, setVerConcluidos]   = useState(false);
   const [loadingPedidos, setLoadingPedidos] = useState(true);
+  const [itensAnalise, setItensAnalise]     = useState({}); // ← NOVO: mapa pedidoId → qtd em análise
 
   const TODAS_ABAS = [
     { key: "picking",   label: "Picking",    icon: Search,      tela: "/b2b/picking"     },
@@ -1385,14 +1418,36 @@ export default function B2BPickingPage({ abaInicial = "picking" }) {
     setLoadingPedidos(true);
     const data = await listarPedidosB2B();
     setPedidos(data);
+    await carregarItensAnalise();
     setLoadingPedidos(false);
   }
 
-  function atualizarSilencioso(data) { setPedidos(data); }
+  async function carregarItensAnalise() {
+    try {
+      const { data } = await supabase
+        .from("b2b_itens")
+        .select("pedido_id")
+        .in("status", ["nao_localizado", "em_analise"]);
+      const mapa = {};
+      (data || []).forEach(i => {
+        mapa[i.pedido_id] = (mapa[i.pedido_id] || 0) + 1;
+      });
+      setItensAnalise(mapa);
+    } catch { setItensAnalise({}); }
+  }
+
+  async function atualizarSilencioso(data) {
+    setPedidos(data);
+    await carregarItensAnalise();
+  }
+
+  // Contadores para botões do topo
+  const pedidosComAnalise    = pedidos.filter(p => (itensAnalise[p.id] || 0) > 0);
+  const pedidosSemAnalise    = pedidos.filter(p => itensAnalise[p.id] !== undefined && (itensAnalise[p.id] || 0) === 0);
 
   const contadores = {
     picking:   { aberto: pedidos.filter(p => p.status === "aberto").length, concluido: pedidos.filter(p => p.status === "concluido").length, labelAberto: "em aberto", labelConcluido: "concluído", aoConcluido: () => setVerConcluidos(false) },
-    analise:   { aberto: pedidos.length, concluido: 0, labelAberto: "pedidos", labelConcluido: "", aoConcluido: () => {} },
+    analise:   { aberto: pedidosComAnalise.length, concluido: pedidosSemAnalise.length, labelAberto: "com itens pendentes", labelConcluido: "resolvido", aoConcluido: () => {} },
     embalagem: { aberto: pedidos.filter(p => (p.total_bipados || 0) > 0 && p.status !== "concluido").length, concluido: pedidos.filter(p => p.status === "concluido").length, labelAberto: "para embalar", labelConcluido: "embalado", aoConcluido: () => setVerConcluidos(false) },
     pedidos:   { aberto: pedidos.filter(p => p.status !== "concluido").length, concluido: pedidos.filter(p => p.status === "concluido").length, labelAberto: "aguardando faturamento", labelConcluido: "faturado", aoConcluido: () => { setAba("pedidos"); setVerConcluidos(true); } },
   };
@@ -1454,7 +1509,7 @@ export default function B2BPickingPage({ abaInicial = "picking" }) {
       ) : (
         <>
           {aba === "picking"   && <TabPicking   pedidosIniciais={pedidos} onAtualizarSilencioso={atualizarSilencioso} />}
-          {aba === "analise"   && <TabAnalise   pedidosIniciais={pedidos} onAtualizarSilencioso={atualizarSilencioso} />}
+          {aba === "analise"   && <TabAnalise   pedidosIniciais={pedidos} onAtualizarSilencioso={atualizarSilencioso} itensAnalise={itensAnalise} />}
           {aba === "embalagem" && <TabEmbalagem pedidosIniciais={pedidos} onAtualizarSilencioso={atualizarSilencioso} />}
           {aba === "pedidos"   && !verConcluidos && <TabPedidos   pedidosIniciais={pedidos} onAtualizarSilencioso={atualizarSilencioso} />}
           {aba === "pedidos"   && verConcluidos  && <TabConcluidos onVoltar={() => setVerConcluidos(false)} />}
