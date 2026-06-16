@@ -49,15 +49,15 @@ function KpiMini({ label, value, sub, color = "bg-purple-50 ring-purple-200 text
 
 function StatusBadge({ status }) {
   const map = {
-    aberto:         { label: "Em aberto",     cls: "bg-blue-50 text-blue-700 ring-blue-200" },
-    concluido:      { label: "Concluído",      cls: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
-    pendente:       { label: "Pendente",       cls: "bg-slate-50 text-slate-500 ring-slate-200" },
-    bipado:         { label: "Bipado",         cls: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
-    nao_localizado: { label: "Não Localizado", cls: "bg-amber-50 text-amber-700 ring-amber-200" },
-    em_analise:     { label: "Em Análise",     cls: "bg-orange-50 text-orange-700 ring-orange-200" },
-    nao_faturar:    { label: "Não Faturar",    cls: "bg-red-50 text-red-700 ring-red-200" },
-    aberta:         { label: "Aberta",         cls: "bg-blue-50 text-blue-700 ring-blue-200" },
-    fechada:        { label: "Fechada",        cls: "bg-slate-50 text-slate-600 ring-slate-200" },
+    aberto:              { label: "Em aberto",            cls: "bg-blue-50 text-blue-700 ring-blue-200" },
+    concluido:           { label: "Concluído",             cls: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
+    pendente:            { label: "Pendente",              cls: "bg-slate-50 text-slate-500 ring-slate-200" },
+    bipado:              { label: "Bipado",                cls: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
+    nao_localizado:      { label: "Não Localizado",        cls: "bg-amber-50 text-amber-700 ring-amber-200" },
+    em_analise:          { label: "Em Análise",            cls: "bg-orange-50 text-orange-700 ring-orange-200" },
+    nao_faturar:         { label: "Não Faturar",           cls: "bg-red-50 text-red-700 ring-red-200" },
+    aberta:              { label: "Aberta",                cls: "bg-blue-50 text-blue-700 ring-blue-200" },
+    fechada:             { label: "Fechada",               cls: "bg-slate-50 text-slate-600 ring-slate-200" },
   };
   const s = map[status] || { label: status, cls: "bg-slate-50 text-slate-500 ring-slate-200" };
   return <span className={`text-xs font-semibold px-2 py-0.5 rounded-lg ring-1 ${s.cls}`}>{s.label}</span>;
@@ -1036,19 +1036,32 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
   const totalNaoFaturar     = Object.values(resumos).reduce((s, r) => s + (r?.valorNaoFaturar || 0), 0);
   const totalAguardando     = Object.values(resumos).reduce((s, r) => s + Math.max(0, (r?.valorBipado || 0) - (r?.valorFaturado || 0)), 0);
 
+  // ── Status de faturamento considerando nao_faturar ────
   function getStatusFat(p, resumo, nfsPedido) {
-    if (nfsPedido?.length > 0) return "faturado";
-    const bipados = p.total_bipados || 0, total = p.total_itens || 0;
-    if (bipados >= total && total > 0) return "em_faturamento";
-    if (bipados > 0) return "em_separacao";
+    const qtdFaturada   = resumo?.qtdFaturada   || 0;
+    const qtdNaoFaturar = resumo?.qtdNaoFaturar || 0;
+    const qtdBipados    = resumo?.qtdBipados    || 0;
+    const total         = p.total_itens         || 0;
+
+    // Separação completa = bipados + nao_faturar cobre o total do pedido
+    const separacaoCompleta = total > 0 && (qtdBipados + qtdNaoFaturar) >= total;
+
+    if (nfsPedido?.length > 0) {
+      // Tem NF mas ainda tem bipados sem NF = faturamento parcial
+      if (qtdBipados > qtdFaturada) return "faturamento_parcial";
+      return "faturado";
+    }
+    if (separacaoCompleta) return "em_faturamento";
+    if (qtdBipados > 0)    return "em_separacao";
     return "ag_separacao";
   }
 
   const STATUS_FAT = {
-    faturado:       { label: "Faturado",       cls: "bg-emerald-100 text-emerald-700 ring-emerald-200" },
-    em_faturamento: { label: "Em Faturamento", cls: "bg-purple-100 text-purple-700 ring-purple-200"   },
-    em_separacao:   { label: "Em Separação",   cls: "bg-yellow-100 text-yellow-700 ring-yellow-200"   },
-    ag_separacao:   { label: "Ag. Separação",  cls: "bg-slate-100 text-slate-600 ring-slate-200"      },
+    faturado:            { label: "Faturado",            cls: "bg-emerald-100 text-emerald-700 ring-emerald-200" },
+    faturamento_parcial: { label: "Faturamento Parcial", cls: "bg-blue-100 text-blue-700 ring-blue-200"         },
+    em_faturamento:      { label: "Em Faturamento",      cls: "bg-purple-100 text-purple-700 ring-purple-200"   },
+    em_separacao:        { label: "Em Separação",        cls: "bg-yellow-100 text-yellow-700 ring-yellow-200"   },
+    ag_separacao:        { label: "Ag. Separação",       cls: "bg-slate-100 text-slate-600 ring-slate-200"      },
   };
 
   return (
@@ -1080,10 +1093,12 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
             const qtdNaoFaturar   = resumo?.qtdNaoFaturar   || 0;
             const qtdBipados      = resumo?.qtdBipados      || 0;
             const qtdEmAnalise    = resumo?.qtdEmAnalise    || 0;
-            // Aguardando = bipados que ainda não têm NF
             const valorAguardando = Math.max(0, valorBipado - valorFaturado);
             const qtdAguardando   = Math.max(0, qtdBipados - qtdFaturada);
-            const borderColor     = statusFat === "faturado" ? "ring-emerald-200" : statusFat === "em_faturamento" ? "ring-purple-200" : statusFat === "em_separacao" ? "ring-yellow-200" : "ring-slate-200";
+            // Progresso da separação considera bipados + nao_faturar
+            const qtdSeparados    = qtdBipados + qtdNaoFaturar;
+            const borderColor     = statusFat === "faturado" || statusFat === "faturamento_parcial" ? "ring-emerald-200" : statusFat === "em_faturamento" ? "ring-purple-200" : statusFat === "em_separacao" ? "ring-yellow-200" : "ring-slate-200";
+
             return (
               <div key={p.id} className={`bg-white rounded-2xl p-5 ring-1 shadow-sm ${borderColor}`}>
                 <div className="flex items-start justify-between gap-3 mb-4 flex-wrap">
@@ -1097,10 +1112,18 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
                     {resumo && <span className="text-sm font-black text-slate-800">{fmtR(resumo.totalValor)}</span>}
                   </div>
                 </div>
+
+                {/* Barra de separação — bipados + nao_faturar vs total */}
                 <div className="mb-4">
                   <p className="text-xs font-semibold text-slate-400 mb-1">Separação</p>
-                  <ProgressBar value={p.total_bipados || 0} total={p.total_itens || 0} />
+                  <ProgressBar value={qtdSeparados} total={p.total_itens || 0} />
+                  {qtdNaoFaturar > 0 && (
+                    <p className="text-xs text-red-500 font-semibold mt-1">
+                      {fmtN(qtdNaoFaturar)} não serão faturados · {fmtN(qtdBipados)} aptos para faturamento
+                    </p>
+                  )}
                 </div>
+
                 {isLoading ? (
                   <div className="flex items-center justify-center h-12"><div className="h-4 w-4 border-2 border-purple-200 border-t-[#7F2D92] rounded-full animate-spin" /></div>
                 ) : resumo ? (
@@ -1131,6 +1154,7 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
                     )}
                   </div>
                 ) : null}
+
                 {nfsPedido.length > 0 && (
                   <div className="mb-4">
                     <button onClick={() => setPainelAberto(prev => ({ ...prev, [p.id]: !prev[p.id] }))}
@@ -1158,6 +1182,7 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
                     )}
                   </div>
                 )}
+
                 <div className="flex gap-2 flex-wrap items-center">
                   <button onClick={() => handleExportar(p)} disabled={exportando === p.id || !p.total_bipados}
                     className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100 transition disabled:opacity-40">
