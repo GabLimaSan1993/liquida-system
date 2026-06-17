@@ -355,6 +355,19 @@ export async function importarNFPlanilha(file, pedidoId, userId) {
             .select().single();
           if (errNF) throw new Error(`Erro ao inserir NF ${numeroNf}: ${errNF.message}`);
           nfsInseridas.push(nfInserida);
+
+          // Atualiza o campo nf nos itens correspondentes
+          const imeisNF = dados.itens.filter(i => i.length > 5);
+          if (imeisNF.length > 0) {
+            const CHUNK = 500;
+            for (let i = 0; i < imeisNF.length; i += CHUNK) {
+              await supabase
+                .from("b2b_itens")
+                .update({ nf: numeroNf })
+                .eq("pedido_id", pedidoId)
+                .in("imei", imeisNF.slice(i, i + CHUNK));
+            }
+          }
         }
 
         await verificarEConcluirPedido(pedidoId);
@@ -395,19 +408,27 @@ export async function importarNFPedido(pedidoId, numeroNf, totalItens, totalCaix
 }
 
 export async function buscarResumoValorPedido(pedidoId) {
-  const { data } = await supabase.from("b2b_itens").select("status, valor, nf").eq("pedido_id", pedidoId);
-  const itens = data || [];
+  // Busca itens e NFs em paralelo
+  const [{ data: itensData }, { data: nfsData }] = await Promise.all([
+    supabase.from("b2b_itens").select("status, valor, nf").eq("pedido_id", pedidoId),
+    supabase.from("b2b_nfs").select("total_itens, valor_total").eq("pedido_id", pedidoId),
+  ]);
+
+  const itens = itensData || [];
+  const nfs   = nfsData   || [];
 
   const totalValor      = itens.reduce((s, i) => s + (i.valor || 0), 0);
   const itensBipados    = itens.filter(i => i.status === "bipado");
   const valorBipado     = itensBipados.reduce((s, i) => s + (i.valor || 0), 0);
   const qtdBipados      = itensBipados.length;
-  const valorFaturado   = itens.filter(i => i.nf).reduce((s, i) => s + (i.valor || 0), 0);
-  const qtdFaturada     = itens.filter(i => i.nf).length;
   const itensNaoFaturar = itens.filter(i => i.status === "nao_faturar");
   const valorNaoFaturar = itensNaoFaturar.reduce((s, i) => s + (i.valor || 0), 0);
   const qtdNaoFaturar   = itensNaoFaturar.length;
   const qtdEmAnalise    = itens.filter(i => ["nao_localizado", "em_analise"].includes(i.status)).length;
+
+  // Faturado calculado a partir da b2b_nfs (fonte de verdade)
+  const valorFaturado = nfs.reduce((s, n) => s + (n.valor_total || 0), 0);
+  const qtdFaturada   = nfs.reduce((s, n) => s + (n.total_itens || 0), 0);
 
   return {
     totalValor,
