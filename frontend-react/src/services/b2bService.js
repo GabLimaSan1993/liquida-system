@@ -293,19 +293,25 @@ export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
 }
 
 async function verificarEConcluirPedido(pedidoId) {
-  const { data: itensBipados } = await supabase
-    .from("b2b_itens").select("id")
-    .eq("pedido_id", pedidoId)
-    .eq("status", "bipado");
+  const { data: itens } = await supabase
+    .from("b2b_itens").select("status")
+    .eq("pedido_id", pedidoId);
 
   const { data: todasNFs } = await supabase
     .from("b2b_nfs").select("total_itens")
     .eq("pedido_id", pedidoId);
 
-  const totalBipados = (itensBipados || []).length;
-  const totalComNF   = (todasNFs || []).reduce((s, n) => s + (n.total_itens || 0), 0);
+  const todos          = itens || [];
+  const totalBipados   = todos.filter(i => i.status === "bipado").length;
+  const totalPendentes = todos.filter(i => i.status === "pendente").length;
+  const totalAnalise   = todos.filter(i => ["nao_localizado", "em_analise"].includes(i.status)).length;
+  const totalComNF     = (todasNFs || []).reduce((s, n) => s + (n.total_itens || 0), 0);
 
-  if (totalBipados > 0 && totalComNF >= totalBipados) {
+  // Só conclui se: não há pendentes, não há itens em análise,
+  // e as NFs cobrem todos os itens bipados.
+  const separacaoResolvida = totalPendentes === 0 && totalAnalise === 0;
+
+  if (totalBipados > 0 && separacaoResolvida && totalComNF >= totalBipados) {
     await supabase.from("b2b_pedidos").update({ status: "concluido" }).eq("id", pedidoId);
     return true;
   }
