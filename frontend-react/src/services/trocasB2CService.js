@@ -1,5 +1,41 @@
 import { supabase } from "../lib/supabase";
 
+// ════════════════════════════════════════════════════════
+// Parsing do SKU AnyMarket: extrai SKU limpo + grade-alvo do sufixo -ccN
+//   sem sufixo  -> grade EXCELENTE/LIKE NEW
+//   -cc2        -> MUITO BOM
+//   -cc3        -> BOM
+//   -cc4        -> OUTLET (bateria 70-79%)
+// Qualquer texto extra após o SKU vira observação.
+// ════════════════════════════════════════════════════════
+export function parseSkuGrade(bruto) {
+  if (!bruto) return { sku: "", gradeAlvo: null, obs: null };
+  const texto = String(bruto).trim();
+
+  const m = texto.match(/^(BRZDEV\d+)/i);
+  if (!m) return { sku: texto, gradeAlvo: null, obs: null };
+
+  const sku  = m[1].toUpperCase();
+  let resto  = texto.slice(m[1].length).trim();
+
+  // Detecta o sufixo -ccN (logo após o SKU)
+  const cc = resto.match(/^-cc(\d+)/i);
+  let gradeAlvo;
+  if (cc) {
+    const n = cc[1];
+    gradeAlvo = n === "2" ? "MUITO BOM"
+              : n === "3" ? "BOM"
+              : n === "4" ? "OUTLET"
+              : "EXCELENTE/LIKE NEW"; // cc1 ou outros = topo de linha
+    resto = resto.replace(/^-cc\d+/i, "").trim();
+  } else {
+    gradeAlvo = "EXCELENTE/LIKE NEW"; // sem sufixo
+  }
+
+  const obs = resto.replace(/^[\s\-,;]+/, "").trim();
+  return { sku, gradeAlvo, obs: obs || null };
+}
+
 export async function criarTroca(dados, skus, userId) {
   const { data: troca, error } = await supabase
     .from("trocas_b2c")
@@ -30,14 +66,19 @@ export async function criarTroca(dados, skus, userId) {
     const { error: errSkus } = await supabase
       .from("trocas_b2c_skus")
       .insert(
-        skus.map((s, idx) => ({
-          troca_id:   troca.id,
-          sku:        s.sku,
-          descricao:  s.descricao,
-          grade:      s.grade || null,
-          observacao: s.observacao || null,
-          ordem:      idx,
-        }))
+        skus.map((s, idx) => {
+          const { sku, gradeAlvo, obs } = parseSkuGrade(s.sku);
+          return {
+            troca_id:   troca.id,
+            sku,
+            descricao:  s.descricao || null,
+            // grade manual do operador prevalece; senão usa a derivada do sufixo
+            grade:      s.grade || null,
+            grade_alvo: s.grade || gradeAlvo || null,
+            observacao: s.observacao?.trim() || obs || null,
+            ordem:      idx,
+          };
+        })
       );
     if (errSkus) throw new Error(errSkus.message);
   }
@@ -99,10 +140,12 @@ export async function salvarOperacao(trocaId, dados, userId) {
 
 export async function buscarDescricaoPorSku(sku) {
   if (!sku || sku.trim().length < 4) return null;
+  // Limpa o sufixo antes de buscar, para casar com a triagem
+  const { sku: skuLimpo } = parseSkuGrade(sku.trim());
   const { data } = await supabase
     .from("assurant_triagem")
     .select("sku, modelo")
-    .eq("sku", sku.trim())
+    .eq("sku", skuLimpo)
     .limit(1)
     .single();
   return data?.modelo || null;
@@ -110,9 +153,7 @@ export async function buscarDescricaoPorSku(sku) {
 
 // ════════════════════════════════════════════════════════
 // SUGESTÃO FIFO (visão Oracle via estoque_subinv)
-// Reutilizável para Trocas B2C e B2C em geral.
-// Chama a RPC buscar_fifo_sku, que faz o JOIN triagem + estoque_subinv,
-// ordena por data_subinv ASC (mais antigo primeiro) e classifica o status.
+// Passa a grade_alvo de cada SKU para a RPC, que destaca/filtra.
 // ════════════════════════════════════════════════════════
 export async function buscarSugestoesFIFO(skus, limite = 5) {
   if (!skus?.length) return {};
@@ -123,29 +164,36 @@ export async function buscarSugestoesFIFO(skus, limite = 5) {
     const sku = skuObj.sku?.trim();
     if (!sku) continue;
 
+    // grade_alvo já gravada na troca; se vier vazia, deriva do sufixo
+    const gradeAlvo = skuObj.grade_alvo || parseSkuGrade(sku).gradeAlvo || null;
+    const { sku: skuLimpo } = parseSkuGrade(sku);
+
     const { data, error } = await supabase
-      .rpc("buscar_fifo_sku", { p_sku: sku, p_limite: limite });
+      .rpc("buscar_fifo_sku", {
+        p_sku:        skuLimpo,
+        p_grade_alvo: gradeAlvo,
+        p_limite:     limite,
+      });
 
     if (error) {
-      resultado[sku] = { erro: error.message, candidatos: [], gradeDesejada: skuObj.grade || null };
+      resultado[skuLimpo] = { erro: error.message, candidatos: [], gradeAlvo };
       continue;
     }
 
-    resultado[sku] = {
-      erro:          null,
-      gradeDesejada: skuObj.grade || null,
-      observacao:    skuObj.observacao || null,
-      candidatos:    data || [],
+    resultado[skuLimpo] = {
+      erro:       null,
+      gradeAlvo,
+      observacao: skuObj.observacao || null,
+      candidatos: data || [],
     };
   }
 
   return resultado;
 }
 
-// Mantida para retrocompatibilidade — agora delega para o FIFO Oracle
+// Retrocompatibilidade
 export async function buscarSugestoesPorSku(skus) {
   const fifo = await buscarSugestoesFIFO(skus, 5);
-  // Converte para o formato antigo (array por sku) caso algo ainda use
   const legado = {};
   for (const [sku, info] of Object.entries(fifo)) {
     legado[sku] = info.candidatos || [];
@@ -158,7 +206,7 @@ export async function validarImeiTroca(imei, skusAceitos) {
 
   const { data: triagem } = await supabase
     .from("assurant_triagem")
-    .select("imei, sku, modelo, local, grade, status_atual, criado_em")
+    .select("imei, sku, modelo, local, grade, status_atual, status_bateria, criado_em")
     .eq("imei", imeiTrim)
     .order("criado_em", { ascending: false })
     .limit(1)
@@ -166,15 +214,17 @@ export async function validarImeiTroca(imei, skusAceitos) {
 
   if (!triagem) return { ok: false, erro: "IMEI não encontrado na base Assurant." };
 
-  const skusAceitosLista = skusAceitos.map(s => s.sku?.trim()).filter(Boolean);
-  if (!skusAceitosLista.includes(triagem.sku)) {
+  // Compara contra os SKUs aceitos já limpos
+  const skusAceitosLimpos = skusAceitos
+    .map(s => parseSkuGrade(s.sku?.trim() || "").sku)
+    .filter(Boolean);
+  if (!skusAceitosLimpos.includes(triagem.sku)) {
     return {
       ok: false,
       erro: `SKU do aparelho (${triagem.sku}) não está na lista de SKUs aceitos para esta troca.`,
     };
   }
 
-  // Precisa estar fisicamente no estoque Oracle
   const { data: subinv } = await supabase
     .from("estoque_subinv")
     .select("imei, data_subinv")

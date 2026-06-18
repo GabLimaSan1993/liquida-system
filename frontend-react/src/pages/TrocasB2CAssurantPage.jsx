@@ -365,7 +365,7 @@ function FormNovaSolicitacao() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 max-w-2xl">
+    <form onSubmit={handleSubmit} className="space-y-4 max-w-2xl mx-auto">
       {/* Dados do pedido */}
       <Card>
         <h3 className="font-black text-slate-700 text-sm mb-4">📋 Dados do Pedido</h3>
