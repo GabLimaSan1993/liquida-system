@@ -2,10 +2,10 @@ import { useState, useEffect, useRef } from "react";
 import {
   Search, CheckCircle, AlertTriangle, Package,
   ChevronDown, ChevronUp, X, ScanLine, FileText,
-  Truck, RefreshCw, MapPin, Clock,
+  Truck, RefreshCw, MapPin, Clock, Wrench,
 } from "lucide-react";
 import {
-  listarTrocas, buscarSugestoesPorSku, validarImeiTroca,
+  listarTrocas, buscarSugestoesFIFO, validarImeiTroca,
   registrarSeparacao, registrarFaturamento, moverParaReembolso,
   atualizarStatusTroca,
 } from "../services/trocasB2CService.js";
@@ -47,6 +47,30 @@ function StatusBadge({ status }) {
   return <span className={`text-xs font-semibold px-2.5 py-1 rounded-lg ring-1 ${s.cls}`}>{s.label}</span>;
 }
 
+// Badge de status do aparelho no estoque (Gaia)
+function EstoqueStatusBadge({ status, classe }) {
+  const reparo = status === "Reservado para reparo";
+  const cls = classe === "disponivel"
+    ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+    : reparo
+      ? "bg-orange-50 text-orange-700 ring-orange-200"
+      : "bg-amber-50 text-amber-700 ring-amber-200";
+  return (
+    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ring-1 flex items-center gap-1 ${cls}`}>
+      {reparo && <Wrench className="h-2.5 w-2.5" />}
+      {status}
+    </span>
+  );
+}
+
+// Badge de aging
+function AgingBadge({ dias }) {
+  const cls = dias >= 180 ? "bg-red-50 text-red-700 ring-red-200"
+    : dias >= 90 ? "bg-orange-50 text-orange-700 ring-orange-200"
+    : "bg-slate-50 text-slate-600 ring-slate-200";
+  return <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ring-1 ${cls}`}>{dias}d</span>;
+}
+
 // ══════════════════════════════════════════════════════════
 // ABA SEPARAÇÃO — card de troca
 // ══════════════════════════════════════════════════════════
@@ -68,7 +92,7 @@ function CardSeparacao({ troca, onAtualizar }) {
     if (!skus.length) return;
     setLoadingSug(true);
     try {
-      const data = await buscarSugestoesPorSku(skus);
+      const data = await buscarSugestoesFIFO(skus, 5);
       setSugestoes(data);
     } catch (e) { console.error(e); }
     finally { setLoadingSug(false); }
@@ -92,7 +116,6 @@ function CardSeparacao({ troca, onAtualizar }) {
       const val = await validarImeiTroca(imeiInput.trim(), skus);
       if (!val.ok) return setFeedback({ tipo: "erro", msg: val.erro });
 
-      // Verifica se o SKU do IMEI bate com o escolhido
       if (val.item.sku !== skuEscolhido) {
         return setFeedback({
           tipo: "erro",
@@ -101,7 +124,8 @@ function CardSeparacao({ troca, onAtualizar }) {
       }
 
       await registrarSeparacao(troca.id, imeiInput.trim(), skuEscolhido, user.id);
-      setFeedback({ tipo: "ok", msg: `✓ IMEI ${imeiInput.trim()} registrado! ${val.item.modelo} · ${val.item.local}` });
+      const agingMsg = val.item.aging_oracle != null ? ` · ${val.item.aging_oracle}d` : "";
+      setFeedback({ tipo: "ok", msg: `✓ IMEI ${imeiInput.trim()} registrado! ${val.item.modelo}${agingMsg}` });
       setImeiInput("");
       setTimeout(() => { onAtualizar?.(); }, 1500);
     } catch (e) {
@@ -117,6 +141,11 @@ function CardSeparacao({ troca, onAtualizar }) {
     setSkuEscolhido(sku);
     inputRef.current?.focus();
   }
+
+  const infoSku       = sugestoes[skuEscolhido] || null;
+  const candidatos    = infoSku?.candidatos || [];
+  const gradeDesejada = infoSku?.gradeDesejada || null;
+  const obsSku        = infoSku?.observacao || null;
 
   return (
     <Card className={`ring-1 ${jaSeparado ? "ring-emerald-200" : "ring-slate-200"}`}>
@@ -147,13 +176,25 @@ function CardSeparacao({ troca, onAtualizar }) {
 
           {/* SKU a usar */}
           <div>
-            <label className="block text-xs font-bold text-slate-600 mb-2">SKU a separar</label>
-            <div className="flex gap-2 flex-wrap">
+            <label className="block text-xs font-bold text-slate-600 mb-2">SKU a separar (em ordem de preferência)</label>
+            <div className="flex flex-col gap-2">
               {skus.map(s => (
                 <button key={s.id} onClick={() => setSkuEscolhido(s.sku)}
-                  className={`text-xs px-3 py-1.5 rounded-xl font-semibold transition-all ring-1 ${skuEscolhido === s.sku ? "bg-[#7F2D92] text-white ring-[#7F2D92]" : "bg-slate-100 text-slate-600 ring-slate-200 hover:bg-slate-200"}`}>
-                  {s.sku}
-                  {s.descricao && <span className="ml-1 opacity-70 font-normal">· {s.descricao}</span>}
+                  className={`text-left px-3 py-2 rounded-xl font-semibold transition-all ring-1 ${skuEscolhido === s.sku ? "bg-[#7F2D92] text-white ring-[#7F2D92]" : "bg-slate-50 text-slate-600 ring-slate-200 hover:bg-slate-100"}`}>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-mono">{s.sku}</span>
+                    {s.grade && (
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-bold ${skuEscolhido === s.sku ? "bg-white/20 text-white" : "bg-purple-100 text-purple-700"}`}>
+                        {s.grade}
+                      </span>
+                    )}
+                  </div>
+                  {s.descricao && <div className={`text-[11px] font-normal mt-0.5 ${skuEscolhido === s.sku ? "text-white/80" : "text-slate-500"}`}>{s.descricao}</div>}
+                  {s.observacao && (
+                    <div className={`text-[11px] font-semibold mt-0.5 flex items-center gap-1 ${skuEscolhido === s.sku ? "text-amber-200" : "text-amber-600"}`}>
+                      <AlertTriangle className="h-2.5 w-2.5" /> {s.observacao}
+                    </div>
+                  )}
                 </button>
               ))}
             </div>
@@ -164,33 +205,54 @@ function CardSeparacao({ troca, onAtualizar }) {
             <div>
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-bold text-slate-500 flex items-center gap-1">
-                  <Clock className="h-3 w-3" /> Sugestões FIFO — {skuEscolhido}
+                  <Clock className="h-3 w-3" /> Sugestões FIFO (visão Oracle) — {skuEscolhido}
+                  {gradeDesejada && <span className="text-purple-600">· grade alvo: {gradeDesejada}</span>}
                 </p>
                 <button onClick={carregarSugestoes} className="text-xs text-slate-400 hover:text-purple-700">↻</button>
               </div>
+              {obsSku && (
+                <div className="bg-amber-50 ring-1 ring-amber-200 rounded-lg px-3 py-1.5 mb-2 text-[11px] text-amber-700 font-semibold flex items-center gap-1">
+                  <AlertTriangle className="h-3 w-3 shrink-0" /> {obsSku}
+                </div>
+              )}
               {loadingSug ? (
                 <div className="flex items-center gap-2 text-xs text-slate-400 py-2">
                   <div className="h-3 w-3 border-2 border-purple-200 border-t-purple-600 rounded-full animate-spin" />
-                  Buscando...
+                  Buscando no estoque Oracle...
                 </div>
-              ) : (sugestoes[skuEscolhido] || []).length === 0 ? (
-                <p className="text-xs text-slate-400 py-2">Nenhum aparelho disponível para este SKU.</p>
+              ) : candidatos.length === 0 ? (
+                <p className="text-xs text-slate-400 py-2">Nenhum aparelho disponível no estoque Oracle para este SKU.</p>
               ) : (
                 <div className="space-y-1.5">
-                  {(sugestoes[skuEscolhido] || []).map((item, idx) => (
-                    <button key={item.imei} onClick={() => usarSugestao(item, skuEscolhido)}
-                      className="w-full flex items-center gap-3 bg-purple-50 hover:bg-purple-100 rounded-xl px-3 py-2 transition text-left">
-                      <span className="h-5 w-5 rounded-lg bg-[#7F2D92] text-white text-xs font-black flex items-center justify-center shrink-0">{idx + 1}</span>
-                      <div className="flex-1 min-w-0">
-                        <span className="text-xs font-bold text-purple-800 font-mono">{item.imei}</span>
-                        <span className="text-xs text-purple-600 ml-2 truncate">{item.modelo}</span>
-                      </div>
-                      <div className="flex items-center gap-3 shrink-0 text-xs text-purple-600">
-                        <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{item.local || "—"}</span>
-                        <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{fmtData(item.data_alocacao)}</span>
-                      </div>
-                    </button>
-                  ))}
+                  {candidatos.map((item, idx) => {
+                    const gradeBate = gradeDesejada && item.grade === gradeDesejada;
+                    return (
+                      <button key={item.imei} onClick={() => usarSugestao(item, skuEscolhido)}
+                        className={`w-full flex items-start gap-3 rounded-xl px-3 py-2 transition text-left ring-1 ${gradeBate ? "bg-emerald-50 hover:bg-emerald-100 ring-emerald-200" : "bg-slate-50 hover:bg-slate-100 ring-slate-100"}`}>
+                        <span className={`h-5 w-5 rounded-lg text-white text-xs font-black flex items-center justify-center shrink-0 mt-0.5 ${idx === 0 ? "bg-[#7F2D92]" : "bg-slate-400"}`}>{idx + 1}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-bold text-slate-800 font-mono">{item.imei}</span>
+                            <AgingBadge dias={item.aging_oracle} />
+                            {item.grade && (
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-bold ${gradeBate ? "bg-emerald-200 text-emerald-800" : "bg-slate-200 text-slate-600"}`}>
+                                {item.grade}{gradeBate && " ✓"}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-slate-500 truncate mt-0.5">{item.modelo}</div>
+                          <div className="flex items-center gap-2 flex-wrap mt-1">
+                            <EstoqueStatusBadge status={item.status_atual} classe={item.classe_status} />
+                            <span className="text-[10px] text-slate-400 flex items-center gap-0.5"><MapPin className="h-2.5 w-2.5" />{item.local || "sem local"}</span>
+                            <span className="text-[10px] text-slate-400">subinv: {fmtData(item.data_subinv)}</span>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                  <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
+                    <Clock className="h-2.5 w-2.5" /> Ordenado por aging (mais antigo primeiro). Verde = grade bate com a desejada.
+                  </p>
                 </div>
               )}
             </div>
@@ -368,7 +430,6 @@ export default function TrocasB2CFurbtechPage() {
     { key: "faturamento", label: "Faturamento", icon: FileText },
   ];
 
-  // Filtros por aba
   const trocasFiltradas = trocas.filter(t => {
     const matchBusca = !busca
       || t.id_anymarket?.includes(busca)
@@ -401,7 +462,6 @@ export default function TrocasB2CFurbtechPage() {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <span className="text-2xl">🔄</span>
@@ -413,7 +473,6 @@ export default function TrocasB2CFurbtechPage() {
         <button onClick={carregar} className="text-xs text-slate-500 hover:text-purple-700 font-semibold">↻ Atualizar</button>
       </div>
 
-      {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiMini label="Em aberto"    value={contadores.emAberto}    color="bg-blue-50 ring-blue-200 text-blue-700" />
         <KpiMini label="P/ separar"   value={contadores.separacao}   color="bg-yellow-50 ring-yellow-200 text-yellow-700" />
@@ -421,7 +480,6 @@ export default function TrocasB2CFurbtechPage() {
         <KpiMini label="Concluídos"   value={contadores.concluidos}  color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
       </div>
 
-      {/* Abas */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1">
         {ABAS.map(a => {
           const Icon = a.icon;
@@ -441,7 +499,6 @@ export default function TrocasB2CFurbtechPage() {
         })}
       </div>
 
-      {/* Busca */}
       <div className="relative">
         <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
         <input value={busca} onChange={e => setBusca(e.target.value)}
@@ -449,7 +506,6 @@ export default function TrocasB2CFurbtechPage() {
           className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#7F2D92] bg-white" />
       </div>
 
-      {/* Conteúdo */}
       {loading ? (
         <div className="flex items-center justify-center h-32">
           <div className="h-8 w-8 border-4 border-purple-200 border-t-[#7F2D92] rounded-full animate-spin" />
@@ -462,7 +518,7 @@ export default function TrocasB2CFurbtechPage() {
       ) : (
         <div className="space-y-3">
           {aba === "trocas" && trocasFiltradas.map(t => (
-            <Card key={t.id} className={`ring-1 ${STATUS_MAP[t.status]?.cls?.replace("bg-", "ring-").replace(" text-", " ") || "ring-slate-200"}`}>
+            <Card key={t.id} className="ring-1 ring-slate-200">
               <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
@@ -475,7 +531,9 @@ export default function TrocasB2CFurbtechPage() {
                   {t.trocas_b2c_skus?.length > 0 && (
                     <div className="flex gap-1 flex-wrap mt-2">
                       {t.trocas_b2c_skus.sort((a, b) => a.ordem - b.ordem).map(s => (
-                        <span key={s.id} className="text-xs bg-purple-50 text-purple-700 px-2 py-0.5 rounded-lg font-semibold">{s.sku}</span>
+                        <span key={s.id} className="text-xs bg-purple-50 text-purple-700 px-2 py-0.5 rounded-lg font-semibold">
+                          {s.sku}{s.grade && ` · ${s.grade}`}
+                        </span>
                       ))}
                     </div>
                   )}

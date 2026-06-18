@@ -31,10 +31,12 @@ export async function criarTroca(dados, skus, userId) {
       .from("trocas_b2c_skus")
       .insert(
         skus.map((s, idx) => ({
-          troca_id:  troca.id,
-          sku:       s.sku,
-          descricao: s.descricao,
-          ordem:     idx,
+          troca_id:   troca.id,
+          sku:        s.sku,
+          descricao:  s.descricao,
+          grade:      s.grade || null,
+          observacao: s.observacao || null,
+          ordem:      idx,
         }))
       );
     if (errSkus) throw new Error(errSkus.message);
@@ -106,23 +108,14 @@ export async function buscarDescricaoPorSku(sku) {
   return data?.modelo || null;
 }
 
-export async function buscarSugestoesPorSku(skus) {
+// ════════════════════════════════════════════════════════
+// SUGESTÃO FIFO (visão Oracle via estoque_subinv)
+// Reutilizável para Trocas B2C e B2C em geral.
+// Chama a RPC buscar_fifo_sku, que faz o JOIN triagem + estoque_subinv,
+// ordena por data_subinv ASC (mais antigo primeiro) e classifica o status.
+// ════════════════════════════════════════════════════════
+export async function buscarSugestoesFIFO(skus, limite = 5) {
   if (!skus?.length) return {};
-
-  const { data: imeisEmTroca } = await supabase
-    .from("trocas_b2c_operacao")
-    .select("imei")
-    .not("imei", "is", null)
-    .in("status_furbtech", ["em_separacao", "faturado", "postado"]);
-
-  const imeisOcupadosTroca = new Set((imeisEmTroca || []).map(i => i.imei).filter(Boolean));
-
-  const { data: imeisB2B } = await supabase
-    .from("b2b_itens")
-    .select("imei")
-    .in("status", ["pendente", "bipado"]);
-
-  const imeisOcupadosB2B = new Set((imeisB2B || []).map(i => i.imei).filter(Boolean));
 
   const resultado = {};
 
@@ -130,24 +123,34 @@ export async function buscarSugestoesPorSku(skus) {
     const sku = skuObj.sku?.trim();
     if (!sku) continue;
 
-    const { data: candidatos } = await supabase
-      .from("assurant_triagem")
-      .select("imei, sku, modelo, local, data_alocacao, grade, status_atual")
-      .eq("sku", sku)
-      .not("imei", "is", null)
-      .order("data_alocacao", { ascending: true })
-      .limit(50);
+    const { data, error } = await supabase
+      .rpc("buscar_fifo_sku", { p_sku: sku, p_limite: limite });
 
-    const disponiveis = (candidatos || []).filter(c =>
-      c.imei &&
-      !imeisOcupadosTroca.has(c.imei) &&
-      !imeisOcupadosB2B.has(c.imei)
-    ).slice(0, 5);
+    if (error) {
+      resultado[sku] = { erro: error.message, candidatos: [], gradeDesejada: skuObj.grade || null };
+      continue;
+    }
 
-    resultado[sku] = disponiveis;
+    resultado[sku] = {
+      erro:          null,
+      gradeDesejada: skuObj.grade || null,
+      observacao:    skuObj.observacao || null,
+      candidatos:    data || [],
+    };
   }
 
   return resultado;
+}
+
+// Mantida para retrocompatibilidade — agora delega para o FIFO Oracle
+export async function buscarSugestoesPorSku(skus) {
+  const fifo = await buscarSugestoesFIFO(skus, 5);
+  // Converte para o formato antigo (array por sku) caso algo ainda use
+  const legado = {};
+  for (const [sku, info] of Object.entries(fifo)) {
+    legado[sku] = info.candidatos || [];
+  }
+  return legado;
 }
 
 export async function validarImeiTroca(imei, skusAceitos) {
@@ -155,8 +158,10 @@ export async function validarImeiTroca(imei, skusAceitos) {
 
   const { data: triagem } = await supabase
     .from("assurant_triagem")
-    .select("imei, sku, modelo, local, data_alocacao, grade")
+    .select("imei, sku, modelo, local, grade, status_atual, criado_em")
     .eq("imei", imeiTrim)
+    .order("criado_em", { ascending: false })
+    .limit(1)
     .single();
 
   if (!triagem) return { ok: false, erro: "IMEI não encontrado na base Assurant." };
@@ -168,6 +173,15 @@ export async function validarImeiTroca(imei, skusAceitos) {
       erro: `SKU do aparelho (${triagem.sku}) não está na lista de SKUs aceitos para esta troca.`,
     };
   }
+
+  // Precisa estar fisicamente no estoque Oracle
+  const { data: subinv } = await supabase
+    .from("estoque_subinv")
+    .select("imei, data_subinv")
+    .eq("imei", imeiTrim)
+    .single();
+
+  if (!subinv) return { ok: false, erro: "IMEI não está no estoque Oracle (subinventory) — indisponível." };
 
   const { data: b2bItem } = await supabase
     .from("b2b_itens")
@@ -187,7 +201,11 @@ export async function validarImeiTroca(imei, skusAceitos) {
 
   if (trocaAtiva) return { ok: false, erro: "IMEI já está sendo usado em outra troca B2C." };
 
-  return { ok: true, item: triagem };
+  const agingOracle = Math.floor(
+    (new Date() - new Date(subinv.data_subinv)) / (1000 * 60 * 60 * 24)
+  );
+
+  return { ok: true, item: { ...triagem, data_subinv: subinv.data_subinv, aging_oracle: agingOracle } };
 }
 
 export async function registrarSeparacao(trocaId, imei, skuEscolhido, userId) {
