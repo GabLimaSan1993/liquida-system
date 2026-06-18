@@ -116,6 +116,39 @@ export async function fecharCaixa(caixaId, userId) {
   if (error) throw new Error(error.message);
 }
 
+// ── Reabrir caixa fechada ─────────────────────────────────
+export async function reabrirCaixa(caixaId, userId) {
+  const { data, error } = await supabase
+    .from("b2b_caixas")
+    .update({ status: "aberta", fechado_em: null, fechado_por: null, reaberto_por: userId, reaberto_em: new Date().toISOString() })
+    .eq("id", caixaId)
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+// ── Remover item de uma caixa ─────────────────────────────
+export async function removerItemCaixa(itemId, caixaId) {
+  // Desvincula o item da caixa — volta a ficar "bipado" disponível para reembalar
+  const { error: errItem } = await supabase
+    .from("b2b_itens")
+    .update({ caixa_id: null, embalado_em: null, embalado_por: null })
+    .eq("id", itemId);
+  if (errItem) throw new Error(errItem.message);
+
+  // Recalcula o total da caixa pela contagem real (evita divergência)
+  const { count } = await supabase
+    .from("b2b_itens")
+    .select("id", { count: "exact", head: true })
+    .eq("caixa_id", caixaId);
+
+  const novoTotal = count || 0;
+  await supabase.from("b2b_caixas").update({ total_itens: novoTotal }).eq("id", caixaId);
+
+  return { novoTotal };
+}
+
 // ── Romaneio por Caixa ────────────────────────────────────
 export async function gerarRomaneio(caixaId, pedido) {
   // Verifica se há NFs importadas para este pedido
