@@ -149,6 +149,25 @@ export async function removerItemCaixa(itemId, caixaId) {
   return { novoTotal };
 }
 
+// ── Excluir caixa (devolve itens para reembalagem) ────────
+export async function excluirCaixa(caixaId) {
+  // Devolve todos os itens da caixa para "bipado disponível"
+  const { error: errItens } = await supabase
+    .from("b2b_itens")
+    .update({ caixa_id: null, embalado_em: null, embalado_por: null })
+    .eq("caixa_id", caixaId);
+  if (errItens) throw new Error(errItens.message);
+
+  // Exclui a caixa
+  const { error: errCaixa } = await supabase
+    .from("b2b_caixas")
+    .delete()
+    .eq("id", caixaId);
+  if (errCaixa) throw new Error(errCaixa.message);
+
+  return { ok: true };
+}
+
 // ── Romaneio por Caixa ────────────────────────────────────
 export async function gerarRomaneio(caixaId, pedido) {
   // Verifica se há NFs importadas para este pedido

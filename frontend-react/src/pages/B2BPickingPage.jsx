@@ -16,7 +16,7 @@ import {
   criarCaixa, listarCaixas, listarItensCaixa,
   embalarImei, fecharCaixa, gerarRomaneio,
   gerarEtiqueta, gerarRomaneioPedido, verificarNFsPedido,
-  reabrirCaixa, removerItemCaixa,
+  reabrirCaixa, removerItemCaixa, excluirCaixa,
 } from "../services/b2bEmbalagemService.js";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../AuthContext.jsx";
@@ -217,6 +217,32 @@ function ModalRemoverItem({ item, caixaNumero, onConfirmar, onCancelar }) {
         </div>
         <div className="flex gap-3">
           <button onClick={onConfirmar} className="flex-1 rounded-2xl bg-red-600 py-3 text-sm font-bold text-white hover:bg-red-700 transition">Remover da caixa</button>
+          <button onClick={onCancelar} className="flex-1 rounded-2xl bg-slate-100 py-3 text-sm font-bold text-slate-600 hover:bg-slate-200 transition">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModalExcluirCaixa({ caixa, qtdItens, onConfirmar, onCancelar }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="w-full max-w-md rounded-[28px] bg-white p-8 shadow-2xl">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="h-10 w-10 rounded-2xl bg-red-100 flex items-center justify-center shrink-0"><Trash2 className="h-5 w-5 text-red-600" /></div>
+          <div><h2 className="text-lg font-black text-slate-800">Excluir Caixa {caixa.numero}</h2><p className="text-xs text-slate-500">Esta ação não pode ser desfeita</p></div>
+        </div>
+        <div className="bg-amber-50 ring-1 ring-amber-200 rounded-2xl p-4 mb-6">
+          {qtdItens > 0 ? (
+            <p className="text-sm text-amber-700 font-semibold">
+              Esta caixa tem <span className="font-black">{qtdItens} {qtdItens === 1 ? "item" : "itens"}</span>. Ao excluir, {qtdItens === 1 ? "ele voltará" : "eles voltarão"} para a lista de aparelhos disponíveis para serem embalados em outra caixa.
+            </p>
+          ) : (
+            <p className="text-sm text-amber-700 font-semibold">Esta caixa está vazia e será removida permanentemente.</p>
+          )}
+        </div>
+        <div className="flex gap-3">
+          <button onClick={onConfirmar} className="flex-1 rounded-2xl bg-red-600 py-3 text-sm font-bold text-white hover:bg-red-700 transition">Excluir caixa</button>
           <button onClick={onCancelar} className="flex-1 rounded-2xl bg-slate-100 py-3 text-sm font-bold text-slate-600 hover:bg-slate-200 transition">Cancelar</button>
         </div>
       </div>
@@ -790,6 +816,7 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
   const [itensCaixaDet, setItensCaixaDet]     = useState([]);
   const [nfsPedido, setNfsPedido]             = useState([]);
   const [modalRemover, setModalRemover]       = useState(null); // { item, caixaId, caixaNumero }
+  const [modalExcluir, setModalExcluir]       = useState(null); // { caixa, qtdItens }
   const inputRef                    = useRef(null);
   const CAPACIDADE                  = 30;
 
@@ -886,6 +913,24 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
     finally { setModalRemover(null); }
   }
 
+  // ── Excluir caixa ───────────────────────────────────────
+  async function handleConfirmarExcluir() {
+    if (!modalExcluir) return;
+    const { caixa } = modalExcluir;
+    setLoading(true);
+    try {
+      await excluirCaixa(caixa.id);
+      setCaixas(prev => prev.filter(c => c.id !== caixa.id));
+      if (caixaAtiva?.id === caixa.id) { setCaixaAtiva(null); setItensCaixa([]); }
+      if (caixaDetalhes?.id === caixa.id) { setCaixaDetalhes(null); setItensCaixaDet([]); }
+      // Recarrega o pedido para refletir os itens que voltaram a "bipado disponível"
+      await atualizarPedidos();
+      setFeedback({ tipo: "ok", msg: `✓ Caixa ${caixa.numero} excluída. Itens liberados para reembalar.` });
+      setTimeout(() => setFeedback(null), 3500);
+    } catch (e) { setFeedback({ tipo: "erro", msg: e.message }); }
+    finally { setLoading(false); setModalExcluir(null); }
+  }
+
   async function handleBipar(e) {
     e.preventDefault();
     if (!imeiInput.trim() || !caixaAtiva || !pedidoSel) return;
@@ -962,6 +1007,7 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
   return (
     <>
       {modalRemover && <ModalRemoverItem item={modalRemover.item} caixaNumero={modalRemover.caixaNumero} onConfirmar={handleConfirmarRemover} onCancelar={() => setModalRemover(null)} />}
+      {modalExcluir && <ModalExcluirCaixa caixa={modalExcluir.caixa} qtdItens={modalExcluir.qtdItens} onConfirmar={handleConfirmarExcluir} onCancelar={() => setModalExcluir(null)} />}
       <div className="space-y-4">
         <div className="flex items-center gap-3 flex-wrap">
           <button onClick={() => { setPedido(null); setCaixaAtiva(null); setCaixas([]); setItensCaixa([]); setNfsPedido([]); setCaixaDetalhes(null); }} className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1"><X className="h-3 w-3" /> Trocar pedido</button>
@@ -1107,6 +1153,10 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
                         className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-orange-50 text-orange-700 ring-1 ring-orange-200 hover:bg-orange-100 transition disabled:opacity-40">
                         {gerando === caixa.id + "_etq" ? <div className="h-3 w-3 border-2 border-orange-300 border-t-orange-700 rounded-full animate-spin" /> : <Tag className="h-3 w-3" />} Etiqueta
                       </button>
+                      <button onClick={() => setModalExcluir({ caixa, qtdItens: caixa.total_itens || 0 })} disabled={loading}
+                        className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-red-50 text-red-600 ring-1 ring-red-200 hover:bg-red-100 transition disabled:opacity-40">
+                        <Trash2 className="h-3 w-3" /> Excluir
+                      </button>
                     </div>
                   </div>
                   {caixaDetalhes?.id === caixa.id && (
@@ -1146,7 +1196,7 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
                       </table>
                       {caixa.status === "fechada" && (
                         <div className="px-3 py-2 bg-amber-50 text-xs text-amber-700 font-semibold flex items-center gap-1.5">
-                          <AlertTriangle className="h-3 w-3" /> Reabra a caixa para remover itens.
+                          <AlertTriangle className="h-3 w-3" /> Reabra a caixa para remover itens individualmente.
                         </div>
                       )}
                     </div>
