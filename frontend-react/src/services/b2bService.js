@@ -50,12 +50,22 @@ export async function importarPedidoB2B(file, userId) {
         if (errPedido) throw new Error(errPedido.message);
 
         const imeisLista = rows.map(r => String(r["IMEI"] || r["NUM_IMEI"] || "").trim()).filter(i => i.length > 5);
-        const { data: triagem } = await supabase.from("assurant_triagem").select("imei, local, voucher").in("imei", imeisLista);
 
+        // Busca triagem ordenada por criado_em DESC — a última entrada de cada IMEI vem primeiro
+        const { data: triagem } = await supabase
+          .from("assurant_triagem")
+          .select("imei, local, voucher, criado_em")
+          .in("imei", imeisLista)
+          .order("criado_em", { ascending: false });
+
+        // Como vem ordenado por criado_em DESC, a primeira ocorrência de cada IMEI é a mais recente.
+        // Para local: pula entradas com local nulo e pega a primeira (mais recente) que tenha local.
+        // Para voucher: pega o voucher da entrada mais recente que tenha voucher.
         const localMap = {}, voucherMap = {};
         (triagem || []).forEach(t => {
-          if (t.imei && t.local)   localMap[t.imei]   = t.local;
-          if (t.imei && t.voucher) voucherMap[t.imei] = t.voucher;
+          if (!t.imei) return;
+          if (t.local   && !localMap[t.imei])   localMap[t.imei]   = t.local;
+          if (t.voucher && !voucherMap[t.imei]) voucherMap[t.imei] = t.voucher;
         });
 
         const itens = rows.map((r, rowIdx) => {
@@ -71,7 +81,7 @@ export async function importarPedidoB2B(file, userId) {
           }
           return {
             pedido_id: pedido.id, imei,
-            voucher:       voucherMap[imei] || String(r["NUM_IMEI"] || "").trim(),
+            voucher:       voucherMap[imei] || null,
             modelo:        r["MODELO"]  || r["CNN"]  || null,
             grade:         r["GRADE"]   || null,
             grade2:        r["GRADE2"]  || null,
