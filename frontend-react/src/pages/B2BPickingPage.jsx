@@ -4,7 +4,7 @@ import {
   Package, X, BarChart3, Box, FileText,
   Tag, Plus, Lock, MapPin, TrendingUp,
   ChevronDown, ChevronUp, Calendar, Upload, AlertCircle,
-  ClipboardList,
+  ClipboardList, Trash2, Unlock,
 } from "lucide-react";
 import {
   listarPedidosB2B, listarItensComStatusGaia,
@@ -16,6 +16,7 @@ import {
   criarCaixa, listarCaixas, listarItensCaixa,
   embalarImei, fecharCaixa, gerarRomaneio,
   gerarEtiqueta, gerarRomaneioPedido, verificarNFsPedido,
+  reabrirCaixa, removerItemCaixa,
 } from "../services/b2bEmbalagemService.js";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../AuthContext.jsx";
@@ -193,6 +194,29 @@ function ModalNaoFaturar({ item, onConfirmar, onCancelar }) {
         {erro && <div className="bg-red-50 ring-1 ring-red-200 rounded-xl px-4 py-2 mb-4 text-xs font-semibold text-red-600">{erro}</div>}
         <div className="flex gap-3">
           <button onClick={handleConfirmar} className="flex-1 rounded-2xl bg-red-600 py-3 text-sm font-bold text-white hover:bg-red-700 transition">Confirmar — Não Faturar</button>
+          <button onClick={onCancelar} className="flex-1 rounded-2xl bg-slate-100 py-3 text-sm font-bold text-slate-600 hover:bg-slate-200 transition">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModalRemoverItem({ item, caixaNumero, onConfirmar, onCancelar }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="w-full max-w-md rounded-[28px] bg-white p-8 shadow-2xl">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="h-10 w-10 rounded-2xl bg-red-100 flex items-center justify-center shrink-0"><Trash2 className="h-5 w-5 text-red-600" /></div>
+          <div><h2 className="text-lg font-black text-slate-800">Remover da caixa</h2><p className="text-xs text-slate-500">O item volta a ficar disponível para embalar</p></div>
+        </div>
+        <div className="bg-slate-50 ring-1 ring-slate-200 rounded-2xl p-4 mb-6 space-y-1">
+          <p className="text-xs font-bold text-slate-500">Aparelho</p>
+          <p className="text-sm font-semibold text-slate-800">{item.modelo}</p>
+          <p className="text-xs text-slate-500 font-mono">{item.imei}</p>
+          <p className="text-xs text-slate-400">Caixa atual: <span className="font-semibold">{caixaNumero}</span></p>
+        </div>
+        <div className="flex gap-3">
+          <button onClick={onConfirmar} className="flex-1 rounded-2xl bg-red-600 py-3 text-sm font-bold text-white hover:bg-red-700 transition">Remover da caixa</button>
           <button onClick={onCancelar} className="flex-1 rounded-2xl bg-slate-100 py-3 text-sm font-bold text-slate-600 hover:bg-slate-200 transition">Cancelar</button>
         </div>
       </div>
@@ -765,6 +789,7 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
   const [caixaDetalhes, setCaixaDetalhes]     = useState(null);
   const [itensCaixaDet, setItensCaixaDet]     = useState([]);
   const [nfsPedido, setNfsPedido]             = useState([]);
+  const [modalRemover, setModalRemover]       = useState(null); // { item, caixaId, caixaNumero }
   const inputRef                    = useRef(null);
   const CAPACIDADE                  = 30;
 
@@ -824,6 +849,41 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
       setCaixaAtiva(null); setItensCaixa([]);
     } catch (e) { setFeedback({ tipo: "erro", msg: e.message }); }
     finally { setLoading(false); }
+  }
+
+  // ── Reabrir caixa fechada ───────────────────────────────
+  async function handleReabrirCaixa(caixa) {
+    setLoading(true);
+    try {
+      const reaberta = await reabrirCaixa(caixa.id, user.id);
+      setCaixas(prev => prev.map(c => c.id === caixa.id ? { ...c, status: "aberta", fechado_em: null } : c));
+      setCaixaAtiva(reaberta);
+      setItensCaixa(await listarItensCaixa(caixa.id));
+      setCaixaDetalhes(null);
+      setFeedback({ tipo: "ok", msg: `✓ Caixa ${caixa.numero} reaberta — pode adicionar ou remover itens.` });
+      setTimeout(() => setFeedback(null), 3500);
+    } catch (e) { setFeedback({ tipo: "erro", msg: e.message }); }
+    finally { setLoading(false); }
+  }
+
+  // ── Remover item da caixa ───────────────────────────────
+  async function handleConfirmarRemover() {
+    if (!modalRemover) return;
+    const { item, caixaId } = modalRemover;
+    try {
+      const { novoTotal } = await removerItemCaixa(item.id, caixaId);
+      setCaixas(prev => prev.map(c => c.id === caixaId ? { ...c, total_itens: novoTotal } : c));
+      if (caixaAtiva?.id === caixaId) {
+        setCaixaAtiva(prev => ({ ...prev, total_itens: novoTotal }));
+        setItensCaixa(prev => prev.filter(i => i.id !== item.id));
+      }
+      if (caixaDetalhes?.id === caixaId) {
+        setItensCaixaDet(prev => prev.filter(i => i.id !== item.id));
+      }
+      setFeedback({ tipo: "ok", msg: `✓ ${item.imei} removido da caixa — disponível para reembalar.` });
+      setTimeout(() => setFeedback(null), 3500);
+    } catch (e) { setFeedback({ tipo: "erro", msg: e.message }); }
+    finally { setModalRemover(null); }
   }
 
   async function handleBipar(e) {
@@ -900,166 +960,204 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3 flex-wrap">
-        <button onClick={() => { setPedido(null); setCaixaAtiva(null); setCaixas([]); setItensCaixa([]); setNfsPedido([]); }} className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1"><X className="h-3 w-3" /> Trocar pedido</button>
-        <div className="flex-1"><h3 className="font-black text-slate-800 text-sm">{pedidoSel.lote}</h3><p className="text-xs text-slate-500">{pedidoSel.cliente}</p></div>
-        <div className="flex items-center gap-2">
-          {!temNFs && <span className="text-xs text-amber-600 font-semibold flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Importe as NFs para gerar romaneios</span>}
-          <button onClick={handleRomaneioPedido} disabled={gerandoRomaneio || caixas.length === 0 || !temNFs}
-            title={!temNFs ? "Importe as NFs primeiro" : ""}
-            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-purple-50 text-purple-700 ring-1 ring-purple-200 hover:bg-purple-100 transition disabled:opacity-40">
-            {gerandoRomaneio ? <div className="h-3 w-3 border-2 border-purple-300 border-t-purple-700 rounded-full animate-spin" /> : <FileText className="h-3 w-3" />}
-            Romaneio do Pedido
-          </button>
+    <>
+      {modalRemover && <ModalRemoverItem item={modalRemover.item} caixaNumero={modalRemover.caixaNumero} onConfirmar={handleConfirmarRemover} onCancelar={() => setModalRemover(null)} />}
+      <div className="space-y-4">
+        <div className="flex items-center gap-3 flex-wrap">
+          <button onClick={() => { setPedido(null); setCaixaAtiva(null); setCaixas([]); setItensCaixa([]); setNfsPedido([]); setCaixaDetalhes(null); }} className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1"><X className="h-3 w-3" /> Trocar pedido</button>
+          <div className="flex-1"><h3 className="font-black text-slate-800 text-sm">{pedidoSel.lote}</h3><p className="text-xs text-slate-500">{pedidoSel.cliente}</p></div>
+          <div className="flex items-center gap-2">
+            {!temNFs && <span className="text-xs text-amber-600 font-semibold flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Importe as NFs para gerar romaneios</span>}
+            <button onClick={handleRomaneioPedido} disabled={gerandoRomaneio || caixas.length === 0 || !temNFs}
+              title={!temNFs ? "Importe as NFs primeiro" : ""}
+              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-purple-50 text-purple-700 ring-1 ring-purple-200 hover:bg-purple-100 transition disabled:opacity-40">
+              {gerandoRomaneio ? <div className="h-3 w-3 border-2 border-purple-300 border-t-purple-700 rounded-full animate-spin" /> : <FileText className="h-3 w-3" />}
+              Romaneio do Pedido
+            </button>
+          </div>
         </div>
-      </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiMini label="Bipados (disponíveis)" value={fmtN(totalBipados)} color="bg-purple-50 ring-purple-200 text-purple-700" />
-        <KpiMini label="Embalados" value={fmtN(totalEmbalados)} sub={`${Math.round((totalEmbalados / (totalBipados || 1)) * 100)}%`} color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
-        <KpiMini label="A embalar" value={fmtN(totalBipados - totalEmbalados)} color="bg-orange-50 ring-orange-200 text-orange-700" />
-        <KpiMini label="Caixas" value={fmtN(caixas.length)} sub={`${caixas.filter(c => c.status === "fechada").length} fechadas`} color="bg-blue-50 ring-blue-200 text-blue-700" />
-      </div>
-      {temNFs && (
-        <div className="bg-emerald-50 ring-1 ring-emerald-200 rounded-xl px-4 py-2.5 flex items-center gap-2 text-xs text-emerald-700 font-semibold">
-          <CheckCircle className="h-3.5 w-3.5 shrink-0" />
-          NFs vinculadas: {nfsPedido.map(n => n.numero_nf).join(", ")} — romaneios liberados
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <KpiMini label="Bipados (disponíveis)" value={fmtN(totalBipados)} color="bg-purple-50 ring-purple-200 text-purple-700" />
+          <KpiMini label="Embalados" value={fmtN(totalEmbalados)} sub={`${Math.round((totalEmbalados / (totalBipados || 1)) * 100)}%`} color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
+          <KpiMini label="A embalar" value={fmtN(totalBipados - totalEmbalados)} color="bg-orange-50 ring-orange-200 text-orange-700" />
+          <KpiMini label="Caixas" value={fmtN(caixas.length)} sub={`${caixas.filter(c => c.status === "fechada").length} fechadas`} color="bg-blue-50 ring-blue-200 text-blue-700" />
         </div>
-      )}
-      <Card><p className="text-xs font-semibold text-slate-500 mb-2">Progresso da embalagem</p><ProgressBar value={totalEmbalados} total={totalBipados} color="#F97316" /></Card>
-      {caixaAtiva && caixaAtiva.status === "aberta" ? (
-        <Card>
-          <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-            <div>
-              <h3 className="font-black text-slate-800 text-sm flex items-center gap-2"><Box className="h-4 w-4 text-[#7F2D92]" /> Caixa {caixaAtiva.numero} — Em uso</h3>
-              <p className="text-xs text-slate-500 mt-0.5">{caixaAtiva.total_itens || 0}/{CAPACIDADE} unidades</p>
+        {temNFs && (
+          <div className="bg-emerald-50 ring-1 ring-emerald-200 rounded-xl px-4 py-2.5 flex items-center gap-2 text-xs text-emerald-700 font-semibold">
+            <CheckCircle className="h-3.5 w-3.5 shrink-0" />
+            NFs vinculadas: {nfsPedido.map(n => n.numero_nf).join(", ")} — romaneios liberados
+          </div>
+        )}
+        <Card><p className="text-xs font-semibold text-slate-500 mb-2">Progresso da embalagem</p><ProgressBar value={totalEmbalados} total={totalBipados} color="#F97316" /></Card>
+        {caixaAtiva && caixaAtiva.status === "aberta" ? (
+          <Card>
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+              <div>
+                <h3 className="font-black text-slate-800 text-sm flex items-center gap-2"><Box className="h-4 w-4 text-[#7F2D92]" /> Caixa {caixaAtiva.numero} — Em uso</h3>
+                <p className="text-xs text-slate-500 mt-0.5">{caixaAtiva.total_itens || 0}/{CAPACIDADE} unidades</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="text-right"><div className="text-2xl font-black text-[#7F2D92]">{caixaAtiva.total_itens || 0}/{CAPACIDADE}</div><div className="text-xs text-slate-400">unidades</div></div>
+                <button onClick={handleFecharCaixa} disabled={loading || !caixaAtiva.total_itens}
+                  className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-slate-100 text-slate-600 ring-1 ring-slate-200 hover:bg-slate-200 transition disabled:opacity-40">
+                  <Lock className="h-3 w-3" /> Fechar caixa
+                </button>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="text-right"><div className="text-2xl font-black text-[#7F2D92]">{caixaAtiva.total_itens || 0}/{CAPACIDADE}</div><div className="text-xs text-slate-400">unidades</div></div>
-              <button onClick={handleFecharCaixa} disabled={loading || !caixaAtiva.total_itens}
-                className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-slate-100 text-slate-600 ring-1 ring-slate-200 hover:bg-slate-200 transition disabled:opacity-40">
-                <Lock className="h-3 w-3" /> Fechar caixa
+            <div className="mb-4">
+              <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+                <div className="h-full rounded-full transition-all duration-300" style={{ width: `${Math.round(((caixaAtiva.total_itens || 0) / CAPACIDADE) * 100)}%`, background: (caixaAtiva.total_itens || 0) >= CAPACIDADE ? "#1D9E75" : "#7F2D92" }} />
+              </div>
+            </div>
+            <form onSubmit={handleBipar} className="flex gap-3">
+              <input ref={inputRef} type="text" value={imeiInput} onChange={e => setImei(e.target.value)}
+                placeholder="Bipe o IMEI para embalar..."
+                className="flex-1 rounded-xl border border-slate-200 px-4 py-3 text-sm font-mono font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7F2D92]"
+                autoComplete="off" />
+              <button type="submit" disabled={!imeiInput.trim()}
+                className="flex items-center gap-2 bg-[#7F2D92] text-white px-6 py-3 rounded-xl text-sm font-semibold hover:bg-[#5B1E74] transition disabled:opacity-50">
+                <CheckCircle className="h-4 w-4" /> Confirmar
+              </button>
+            </form>
+            {feedback && (
+              <div className={`mt-3 flex items-start gap-2 text-sm rounded-xl px-4 py-3 ring-1 ${feedback.tipo === "ok" || feedback.tipo === "fechou" ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : feedback.tipo === "erro" ? "bg-red-50 text-red-700 ring-red-200" : "bg-amber-50 text-amber-700 ring-amber-200"}`}>
+                {feedback.tipo !== "erro" ? <CheckCircle className="h-4 w-4 shrink-0 mt-0.5" /> : <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />}
+                <p className="font-semibold">{feedback.msg}</p>
+              </div>
+            )}
+            {itensCaixa.length > 0 && (
+              <div className="mt-4 overflow-x-auto">
+                <p className="text-xs font-bold text-slate-500 mb-2">Itens nesta caixa ({itensCaixa.length})</p>
+                <table className="min-w-full text-xs">
+                  <thead><tr className="bg-slate-50">
+                    <th className="px-3 py-2 text-left font-bold text-slate-500">#</th>
+                    <th className="px-3 py-2 text-left font-bold text-slate-500">IMEI</th>
+                    <th className="px-3 py-2 text-left font-bold text-slate-500">Modelo</th>
+                    <th className="px-3 py-2 text-left font-bold text-slate-500">Grade</th>
+                    <th className="px-3 py-2 text-left font-bold text-slate-500">SKU</th>
+                    <th className="px-3 py-2 text-center font-bold text-slate-500">Ação</th>
+                  </tr></thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {itensCaixa.map((item, idx) => (
+                      <tr key={item.id} className="hover:bg-slate-50">
+                        <td className="px-3 py-2 text-slate-400 font-semibold">{idx + 1}</td>
+                        <td className="px-3 py-2 font-mono font-semibold text-slate-800">{item.imei}</td>
+                        <td className="px-3 py-2 text-slate-600 max-w-[160px] truncate">{item.modelo}</td>
+                        <td className="px-3 py-2"><span className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded-lg font-semibold">{item.grade}</span></td>
+                        <td className="px-3 py-2 text-slate-500 font-mono">{item.cod_item || "—"}</td>
+                        <td className="px-3 py-2 text-center">
+                          <button onClick={() => setModalRemover({ item, caixaId: caixaAtiva.id, caixaNumero: caixaAtiva.numero })}
+                            className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-lg bg-red-50 text-red-600 ring-1 ring-red-200 hover:bg-red-100 transition">
+                            <Trash2 className="h-3 w-3" /> Remover
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+        ) : (
+          <Card>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-bold text-slate-700 text-sm">Nenhuma caixa aberta</p>
+                <p className="text-xs text-slate-400 mt-0.5">{caixas.filter(c => c.status === "fechada").length > 0 ? "Todas as caixas foram fechadas. Abra uma nova ou reabra uma existente." : "Abra a primeira caixa para iniciar a embalagem."}</p>
+              </div>
+              <button onClick={handleNovaCaixa} disabled={loading}
+                className="flex items-center gap-2 bg-[#7F2D92] text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-[#5B1E74] transition disabled:opacity-50">
+                <Plus className="h-4 w-4" /> {loading ? "Criando..." : "Nova caixa"}
               </button>
             </div>
-          </div>
-          <div className="mb-4">
-            <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
-              <div className="h-full rounded-full transition-all duration-300" style={{ width: `${Math.round(((caixaAtiva.total_itens || 0) / CAPACIDADE) * 100)}%`, background: (caixaAtiva.total_itens || 0) >= CAPACIDADE ? "#1D9E75" : "#7F2D92" }} />
-            </div>
-          </div>
-          <form onSubmit={handleBipar} className="flex gap-3">
-            <input ref={inputRef} type="text" value={imeiInput} onChange={e => setImei(e.target.value)}
-              placeholder="Bipe o IMEI para embalar..."
-              className="flex-1 rounded-xl border border-slate-200 px-4 py-3 text-sm font-mono font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7F2D92]"
-              autoComplete="off" />
-            <button type="submit" disabled={!imeiInput.trim()}
-              className="flex items-center gap-2 bg-[#7F2D92] text-white px-6 py-3 rounded-xl text-sm font-semibold hover:bg-[#5B1E74] transition disabled:opacity-50">
-              <CheckCircle className="h-4 w-4" /> Confirmar
-            </button>
-          </form>
-          {feedback && (
-            <div className={`mt-3 flex items-start gap-2 text-sm rounded-xl px-4 py-3 ring-1 ${feedback.tipo === "ok" || feedback.tipo === "fechou" ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-red-50 text-red-700 ring-red-200"}`}>
-              {feedback.tipo !== "erro" ? <CheckCircle className="h-4 w-4 shrink-0 mt-0.5" /> : <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />}
-              <p className="font-semibold">{feedback.msg}</p>
-            </div>
-          )}
-          {itensCaixa.length > 0 && (
-            <div className="mt-4 overflow-x-auto">
-              <p className="text-xs font-bold text-slate-500 mb-2">Itens nesta caixa ({itensCaixa.length})</p>
-              <table className="min-w-full text-xs">
-                <thead><tr className="bg-slate-50">
-                  <th className="px-3 py-2 text-left font-bold text-slate-500">#</th>
-                  <th className="px-3 py-2 text-left font-bold text-slate-500">IMEI</th>
-                  <th className="px-3 py-2 text-left font-bold text-slate-500">Modelo</th>
-                  <th className="px-3 py-2 text-left font-bold text-slate-500">Grade</th>
-                  <th className="px-3 py-2 text-left font-bold text-slate-500">SKU</th>
-                </tr></thead>
-                <tbody className="divide-y divide-slate-100">
-                  {itensCaixa.map((item, idx) => (
-                    <tr key={item.id} className="hover:bg-slate-50">
-                      <td className="px-3 py-2 text-slate-400 font-semibold">{idx + 1}</td>
-                      <td className="px-3 py-2 font-mono font-semibold text-slate-800">{item.imei}</td>
-                      <td className="px-3 py-2 text-slate-600 max-w-[160px] truncate">{item.modelo}</td>
-                      <td className="px-3 py-2"><span className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded-lg font-semibold">{item.grade}</span></td>
-                      <td className="px-3 py-2 text-slate-500 font-mono">{item.cod_item || "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
-      ) : (
-        <Card>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-bold text-slate-700 text-sm">Nenhuma caixa aberta</p>
-              <p className="text-xs text-slate-400 mt-0.5">{caixas.filter(c => c.status === "fechada").length > 0 ? "Todas as caixas foram fechadas. Abra uma nova para continuar." : "Abra a primeira caixa para iniciar a embalagem."}</p>
-            </div>
-            <button onClick={handleNovaCaixa} disabled={loading}
-              className="flex items-center gap-2 bg-[#7F2D92] text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-[#5B1E74] transition disabled:opacity-50">
-              <Plus className="h-4 w-4" /> {loading ? "Criando..." : "Nova caixa"}
-            </button>
-          </div>
-        </Card>
-      )}
-      {caixas.length > 0 && (
-        <Card>
-          <h3 className="font-black text-slate-800 text-sm flex items-center gap-2 mb-4"><Box className="h-4 w-4 text-[#7F2D92]" /> Todas as caixas ({caixas.length})</h3>
-          <div className="space-y-3">
-            {caixas.map(caixa => (
-              <div key={caixa.id}>
-                <div className={`flex items-center justify-between gap-3 p-3 rounded-xl ring-1 ${caixa.status === "aberta" ? "bg-purple-50 ring-purple-200" : "bg-slate-50 ring-slate-200"}`}>
-                  <div className="flex items-center gap-3">
-                    <div className={`h-8 w-8 rounded-xl flex items-center justify-center font-black text-sm shrink-0 ${caixa.status === "aberta" ? "bg-[#7F2D92] text-white" : "bg-slate-300 text-white"}`}>{caixa.numero}</div>
-                    <div><div className="text-sm font-bold text-slate-800">Caixa {caixa.numero}</div><div className="text-xs text-slate-500">{caixa.total_itens || 0}/{CAPACIDADE} unidades</div></div>
-                  </div>
-                  <div className="flex items-center gap-2 flex-wrap justify-end">
-                    <StatusBadge status={caixa.status} />
-                    <button onClick={() => verDetalhesCaixa(caixa)} className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50 transition">{caixaDetalhes?.id === caixa.id ? "Ocultar" : "Ver itens"}</button>
-                    <button onClick={() => handleRomaneio(caixa)} disabled={gerando === caixa.id + "_rom" || !caixa.total_itens || !temNFs}
-                      title={!temNFs ? "Importe as NFs primeiro" : ""}
-                      className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-purple-50 text-purple-700 ring-1 ring-purple-200 hover:bg-purple-100 transition disabled:opacity-40">
-                      {gerando === caixa.id + "_rom" ? <div className="h-3 w-3 border-2 border-purple-300 border-t-purple-700 rounded-full animate-spin" /> : <FileText className="h-3 w-3" />} Romaneio
-                    </button>
-                    <button onClick={() => handleEtiqueta(caixa)} disabled={gerando === caixa.id + "_etq" || !caixa.total_itens}
-                      className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-orange-50 text-orange-700 ring-1 ring-orange-200 hover:bg-orange-100 transition disabled:opacity-40">
-                      {gerando === caixa.id + "_etq" ? <div className="h-3 w-3 border-2 border-orange-300 border-t-orange-700 rounded-full animate-spin" /> : <Tag className="h-3 w-3" />} Etiqueta
-                    </button>
-                  </div>
-                </div>
-                {caixaDetalhes?.id === caixa.id && (
-                  <div className="mt-2 overflow-x-auto rounded-xl border border-slate-100">
-                    <table className="min-w-full text-xs">
-                      <thead><tr className="bg-slate-50">
-                        <th className="px-3 py-2 text-left font-bold text-slate-500">#</th>
-                        <th className="px-3 py-2 text-left font-bold text-slate-500">IMEI</th>
-                        <th className="px-3 py-2 text-left font-bold text-slate-500">Modelo</th>
-                        <th className="px-3 py-2 text-left font-bold text-slate-500">Grade</th>
-                        <th className="px-3 py-2 text-left font-bold text-slate-500">SKU</th>
-                        <th className="px-3 py-2 text-right font-bold text-slate-500">Valor</th>
-                      </tr></thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {itensCaixaDet.map((item, idx) => (
-                          <tr key={item.id} className="hover:bg-slate-50">
-                            <td className="px-3 py-2 text-slate-400">{idx + 1}</td>
-                            <td className="px-3 py-2 font-mono font-semibold text-slate-800">{item.imei}</td>
-                            <td className="px-3 py-2 text-slate-600 max-w-[160px] truncate">{item.modelo}</td>
-                            <td className="px-3 py-2"><span className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded-lg font-semibold">{item.grade}</span></td>
-                            <td className="px-3 py-2 text-slate-500 font-mono">{item.cod_item || "—"}</td>
-                            <td className="px-3 py-2 text-right font-semibold text-slate-700">{fmtR(item.valor)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+            {feedback && (
+              <div className={`mt-3 flex items-start gap-2 text-sm rounded-xl px-4 py-3 ring-1 ${feedback.tipo === "ok" || feedback.tipo === "fechou" ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : feedback.tipo === "erro" ? "bg-red-50 text-red-700 ring-red-200" : "bg-amber-50 text-amber-700 ring-amber-200"}`}>
+                {feedback.tipo !== "erro" ? <CheckCircle className="h-4 w-4 shrink-0 mt-0.5" /> : <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />}
+                <p className="font-semibold">{feedback.msg}</p>
               </div>
-            ))}
-          </div>
-        </Card>
-      )}
-    </div>
+            )}
+          </Card>
+        )}
+        {caixas.length > 0 && (
+          <Card>
+            <h3 className="font-black text-slate-800 text-sm flex items-center gap-2 mb-4"><Box className="h-4 w-4 text-[#7F2D92]" /> Todas as caixas ({caixas.length})</h3>
+            <div className="space-y-3">
+              {caixas.map(caixa => (
+                <div key={caixa.id}>
+                  <div className={`flex items-center justify-between gap-3 p-3 rounded-xl ring-1 ${caixa.status === "aberta" ? "bg-purple-50 ring-purple-200" : "bg-slate-50 ring-slate-200"}`}>
+                    <div className="flex items-center gap-3">
+                      <div className={`h-8 w-8 rounded-xl flex items-center justify-center font-black text-sm shrink-0 ${caixa.status === "aberta" ? "bg-[#7F2D92] text-white" : "bg-slate-300 text-white"}`}>{caixa.numero}</div>
+                      <div><div className="text-sm font-bold text-slate-800">Caixa {caixa.numero}</div><div className="text-xs text-slate-500">{caixa.total_itens || 0}/{CAPACIDADE} unidades</div></div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap justify-end">
+                      <StatusBadge status={caixa.status} />
+                      {caixa.status === "fechada" && (
+                        <button onClick={() => handleReabrirCaixa(caixa)} disabled={loading}
+                          className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-amber-50 text-amber-700 ring-1 ring-amber-200 hover:bg-amber-100 transition disabled:opacity-40">
+                          <Unlock className="h-3 w-3" /> Reabrir
+                        </button>
+                      )}
+                      <button onClick={() => verDetalhesCaixa(caixa)} className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50 transition">{caixaDetalhes?.id === caixa.id ? "Ocultar" : "Ver itens"}</button>
+                      <button onClick={() => handleRomaneio(caixa)} disabled={gerando === caixa.id + "_rom" || !caixa.total_itens || !temNFs}
+                        title={!temNFs ? "Importe as NFs primeiro" : ""}
+                        className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-purple-50 text-purple-700 ring-1 ring-purple-200 hover:bg-purple-100 transition disabled:opacity-40">
+                        {gerando === caixa.id + "_rom" ? <div className="h-3 w-3 border-2 border-purple-300 border-t-purple-700 rounded-full animate-spin" /> : <FileText className="h-3 w-3" />} Romaneio
+                      </button>
+                      <button onClick={() => handleEtiqueta(caixa)} disabled={gerando === caixa.id + "_etq" || !caixa.total_itens}
+                        className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-orange-50 text-orange-700 ring-1 ring-orange-200 hover:bg-orange-100 transition disabled:opacity-40">
+                        {gerando === caixa.id + "_etq" ? <div className="h-3 w-3 border-2 border-orange-300 border-t-orange-700 rounded-full animate-spin" /> : <Tag className="h-3 w-3" />} Etiqueta
+                      </button>
+                    </div>
+                  </div>
+                  {caixaDetalhes?.id === caixa.id && (
+                    <div className="mt-2 overflow-x-auto rounded-xl border border-slate-100">
+                      <table className="min-w-full text-xs">
+                        <thead><tr className="bg-slate-50">
+                          <th className="px-3 py-2 text-left font-bold text-slate-500">#</th>
+                          <th className="px-3 py-2 text-left font-bold text-slate-500">IMEI</th>
+                          <th className="px-3 py-2 text-left font-bold text-slate-500">Modelo</th>
+                          <th className="px-3 py-2 text-left font-bold text-slate-500">Grade</th>
+                          <th className="px-3 py-2 text-left font-bold text-slate-500">SKU</th>
+                          <th className="px-3 py-2 text-right font-bold text-slate-500">Valor</th>
+                          <th className="px-3 py-2 text-center font-bold text-slate-500">Ação</th>
+                        </tr></thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {itensCaixaDet.map((item, idx) => (
+                            <tr key={item.id} className="hover:bg-slate-50">
+                              <td className="px-3 py-2 text-slate-400">{idx + 1}</td>
+                              <td className="px-3 py-2 font-mono font-semibold text-slate-800">{item.imei}</td>
+                              <td className="px-3 py-2 text-slate-600 max-w-[160px] truncate">{item.modelo}</td>
+                              <td className="px-3 py-2"><span className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded-lg font-semibold">{item.grade}</span></td>
+                              <td className="px-3 py-2 text-slate-500 font-mono">{item.cod_item || "—"}</td>
+                              <td className="px-3 py-2 text-right font-semibold text-slate-700">{fmtR(item.valor)}</td>
+                              <td className="px-3 py-2 text-center">
+                                {caixa.status === "aberta" ? (
+                                  <button onClick={() => setModalRemover({ item, caixaId: caixa.id, caixaNumero: caixa.numero })}
+                                    className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-lg bg-red-50 text-red-600 ring-1 ring-red-200 hover:bg-red-100 transition">
+                                    <Trash2 className="h-3 w-3" /> Remover
+                                  </button>
+                                ) : (
+                                  <span className="text-xs text-slate-300">—</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {caixa.status === "fechada" && (
+                        <div className="px-3 py-2 bg-amber-50 text-xs text-amber-700 font-semibold flex items-center gap-1.5">
+                          <AlertTriangle className="h-3 w-3" /> Reabra a caixa para remover itens.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -1155,7 +1253,6 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
     const separacaoCompleta = total > 0 && (qtdBipados + qtdNaoFaturar) >= total;
 
     if (nfsPedido?.length > 0) {
-      // Só "faturado" se a separação acabou E as NFs cobrem todos os bipados
       if (separacaoCompleta && qtdFaturada >= qtdBipados) return "faturado";
       return "faturamento_parcial";
     }
