@@ -71,6 +71,15 @@ function AgingBadge({ dias }) {
   return <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ring-1 ${cls}`}>{dias}d</span>;
 }
 
+// Badge de bateria
+function BateriaBadge({ status }) {
+  if (!status) return null;
+  const txt = status.replace("Saúde da bateria ", "");
+  const outlet = status === "Saúde da bateria entre 70 e 79%";
+  const cls = outlet ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500";
+  return <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-semibold ${cls}`}>🔋 {txt}</span>;
+}
+
 // ══════════════════════════════════════════════════════════
 // ABA SEPARAÇÃO — card de troca
 // ══════════════════════════════════════════════════════════
@@ -93,8 +102,9 @@ function CardSeparacao({ troca, onAtualizar }) {
     setLoadingSug(true);
     try {
       const data = await buscarSugestoesFIFO(skus, 5);
+      console.log("SUGESTOES:", data, "| SKUs da troca:", skus.map(s => s.sku));
       setSugestoes(data);
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error("Erro buscarSugestoesFIFO:", e); }
     finally { setLoadingSug(false); }
   }
 
@@ -142,10 +152,10 @@ function CardSeparacao({ troca, onAtualizar }) {
     inputRef.current?.focus();
   }
 
-  const infoSku       = sugestoes[skuEscolhido] || null;
-  const candidatos    = infoSku?.candidatos || [];
-  const gradeDesejada = infoSku?.gradeDesejada || null;
-  const obsSku        = infoSku?.observacao || null;
+  const infoSku    = sugestoes[skuEscolhido] || null;
+  const candidatos = infoSku?.candidatos || [];
+  const gradeAlvo  = infoSku?.gradeAlvo || null;
+  const obsSku     = infoSku?.observacao || null;
 
   return (
     <Card className={`ring-1 ${jaSeparado ? "ring-emerald-200" : "ring-slate-200"}`}>
@@ -183,9 +193,9 @@ function CardSeparacao({ troca, onAtualizar }) {
                   className={`text-left px-3 py-2 rounded-xl font-semibold transition-all ring-1 ${skuEscolhido === s.sku ? "bg-[#7F2D92] text-white ring-[#7F2D92]" : "bg-slate-50 text-slate-600 ring-slate-200 hover:bg-slate-100"}`}>
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs font-mono">{s.sku}</span>
-                    {s.grade && (
+                    {(s.grade_alvo || s.grade) && (
                       <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-bold ${skuEscolhido === s.sku ? "bg-white/20 text-white" : "bg-purple-100 text-purple-700"}`}>
-                        {s.grade}
+                        {s.grade_alvo || s.grade}
                       </span>
                     )}
                   </div>
@@ -206,7 +216,7 @@ function CardSeparacao({ troca, onAtualizar }) {
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-bold text-slate-500 flex items-center gap-1">
                   <Clock className="h-3 w-3" /> Sugestões FIFO (visão Oracle) — {skuEscolhido}
-                  {gradeDesejada && <span className="text-purple-600">· grade alvo: {gradeDesejada}</span>}
+                  {gradeAlvo && <span className="text-purple-600">· grade alvo: {gradeAlvo}</span>}
                 </p>
                 <button onClick={carregarSugestoes} className="text-xs text-slate-400 hover:text-purple-700">↻</button>
               </div>
@@ -225,7 +235,7 @@ function CardSeparacao({ troca, onAtualizar }) {
               ) : (
                 <div className="space-y-1.5">
                   {candidatos.map((item, idx) => {
-                    const gradeBate = gradeDesejada && item.grade === gradeDesejada;
+                    const gradeBate = item.grade_bate;
                     return (
                       <button key={item.imei} onClick={() => usarSugestao(item, skuEscolhido)}
                         className={`w-full flex items-start gap-3 rounded-xl px-3 py-2 transition text-left ring-1 ${gradeBate ? "bg-emerald-50 hover:bg-emerald-100 ring-emerald-200" : "bg-slate-50 hover:bg-slate-100 ring-slate-100"}`}>
@@ -239,6 +249,7 @@ function CardSeparacao({ troca, onAtualizar }) {
                                 {item.grade}{gradeBate && " ✓"}
                               </span>
                             )}
+                            <BateriaBadge status={item.status_bateria} />
                           </div>
                           <div className="text-[11px] text-slate-500 truncate mt-0.5">{item.modelo}</div>
                           <div className="flex items-center gap-2 flex-wrap mt-1">
@@ -532,7 +543,7 @@ export default function TrocasB2CFurbtechPage() {
                     <div className="flex gap-1 flex-wrap mt-2">
                       {t.trocas_b2c_skus.sort((a, b) => a.ordem - b.ordem).map(s => (
                         <span key={s.id} className="text-xs bg-purple-50 text-purple-700 px-2 py-0.5 rounded-lg font-semibold">
-                          {s.sku}{s.grade && ` · ${s.grade}`}
+                          {s.sku}{(s.grade_alvo || s.grade) && ` · ${s.grade_alvo || s.grade}`}
                         </span>
                       ))}
                     </div>
