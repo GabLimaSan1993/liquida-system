@@ -156,7 +156,6 @@ export async function registrarBipagem(imeiDigitado, pedidoId, userId) {
     .eq("id", item.id);
   if (errUpdate) return { ok: false, erro: errUpdate.message };
   await supabase.rpc("b2b_atualizar_contador", { p_pedido_id: pedidoId });
-  // Bipar o último item pendente pode completar o pedido — reavalia conclusão
   await verificarEConcluirPedido(pedidoId);
   return { ok: true, item };
 }
@@ -197,7 +196,6 @@ export async function marcarLocalizado(itemId, novaLocalizacao, userId) {
     .eq("id", itemId);
   if (error) throw new Error(error.message);
 
-  // Busca pedido_id e atualiza contador + reavalia conclusão
   const { data: item } = await supabase.from("b2b_itens").select("pedido_id").eq("id", itemId).single();
   if (item?.pedido_id) {
     await supabase.rpc("b2b_atualizar_contador", { p_pedido_id: item.pedido_id });
@@ -217,7 +215,6 @@ export async function marcarNaoFaturar(itemId, motivo, observacao, userId) {
     .eq("id", itemId);
   if (error) throw new Error(error.message);
 
-  // Marcar não_faturar pode ser o último item pendente — reavalia conclusão
   const { data: item } = await supabase.from("b2b_itens").select("pedido_id").eq("id", itemId).single();
   if (item?.pedido_id) await verificarEConcluirPedido(item.pedido_id);
 }
@@ -289,7 +286,7 @@ export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
     "LOCAL":     i.local_estoque,
     "VALOR":     i.valor != null ? i.valor.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "",
     "BIPADO_EM": i.bipado_em ? new Date(i.bipado_em).toLocaleString("pt-BR") : "",
-    "NF":        "",
+    "NF":        i.nf || "",
   }));
 
   const wb = XLSX.utils.book_new();
@@ -370,14 +367,23 @@ export async function importarNFPlanilha(file, pedidoId, userId) {
           nfMap[nf].valorTotal += valor;
         }
 
+        // Busca NFs já cadastradas para este pedido
         const { data: nfsExistentes } = await supabase
           .from("b2b_nfs").select("numero_nf").eq("pedido_id", pedidoId);
         const nfsJaCadastradas = new Set((nfsExistentes || []).map(n => String(n.numero_nf)));
 
-        const nfsParaInserir = Object.entries(nfMap).filter(([nf]) => !nfsJaCadastradas.has(nf));
-        if (!nfsParaInserir.length) throw new Error("Todas as NFs desta planilha já foram importadas.");
+        const nfsParaInserir   = Object.entries(nfMap).filter(([nf]) => !nfsJaCadastradas.has(nf));
+        const nfsParaRelinkar  = Object.entries(nfMap).filter(([nf]) =>  nfsJaCadastradas.has(nf));
 
-        const nfsInseridas = [];
+        // Se não há NFs novas nem NFs para relinkar itens, nada a fazer
+        if (!nfsParaInserir.length && !nfsParaRelinkar.length) {
+          throw new Error("Nenhuma NF encontrada na planilha.");
+        }
+
+        const nfsInseridas  = [];
+        const nfsRelinkadas = [];
+
+        // Insere NFs novas e linka os itens
         for (const [numeroNf, dados] of nfsParaInserir) {
           const { data: nfInserida, error: errNF } = await supabase
             .from("b2b_nfs")
@@ -407,13 +413,38 @@ export async function importarNFPlanilha(file, pedidoId, userId) {
           }
         }
 
+        // Para NFs já existentes — apenas atualiza o link nos itens (preserva log original)
+        for (const [numeroNf, dados] of nfsParaRelinkar) {
+          const imeisNF = dados.itens.filter(i => i.length > 5);
+          if (imeisNF.length > 0) {
+            const CHUNK = 500;
+            for (let i = 0; i < imeisNF.length; i += CHUNK) {
+              await supabase
+                .from("b2b_itens")
+                .update({ nf: numeroNf })
+                .eq("pedido_id", pedidoId)
+                .in("imei", imeisNF.slice(i, i + CHUNK));
+            }
+          }
+          nfsRelinkadas.push(numeroNf);
+        }
+
         await verificarEConcluirPedido(pedidoId);
+
+        const totalNFs    = nfsInseridas.length + nfsRelinkadas.length;
+        const todasAsNFs  = [
+          ...nfsInseridas.map(n => n.numero_nf),
+          ...nfsRelinkadas,
+        ];
+
+        if (totalNFs === 0) throw new Error("Nenhuma NF foi processada.");
 
         resolve({
           ok:         true,
-          totalNFs:   nfsInseridas.length,
+          totalNFs,
           totalItens: linhasComNF.length,
-          nfs:        nfsInseridas.map(n => n.numero_nf),
+          nfs:        todasAsNFs,
+          relinkadas: nfsRelinkadas.length,
         });
       } catch (err) { reject(err); }
     };
