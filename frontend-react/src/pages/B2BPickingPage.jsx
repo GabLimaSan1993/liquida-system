@@ -800,6 +800,9 @@ function TabAnalise({ pedidosIniciais, onAtualizarSilencioso, itensAnalise }) {
 // ══════════════════════════════════════════════════════════
 // ABA EMBALAGEM
 // ══════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════
+// ABA EMBALAGEM
+// ══════════════════════════════════════════════════════════
 function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
   const { user }                    = useAuth();
   const [pedidos, setPedidos]       = useState(pedidosIniciais);
@@ -817,12 +820,38 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
   const [nfsPedido, setNfsPedido]             = useState([]);
   const [modalRemover, setModalRemover]       = useState(null); // { item, caixaId, caixaNumero }
   const [modalExcluir, setModalExcluir]       = useState(null); // { caixa, qtdItens }
+  const [progressoEmbalagem, setProgressoEmbalagem] = useState({}); // { pedidoId: { bipados, embalados } }
+  const [verConcluidosEmbalagem, setVerConcluidosEmbalagem] = useState(false);
   const inputRef                    = useRef(null);
   const CAPACIDADE                  = 30;
 
   useEffect(() => {
     if (pedidosIniciais.length > 0 && pedidos.length === 0) setPedidos(pedidosIniciais);
   }, [pedidosIniciais]);
+
+  // Carrega progresso de embalagem (bipados vs embalados) por pedido
+  useEffect(() => { if (!pedidoSel) carregarProgresso(); }, [pedidos, pedidoSel]);
+
+  async function carregarProgresso() {
+    try {
+      const idsComBipados = pedidos.filter(p => (p.total_bipados || 0) > 0).map(p => p.id);
+      if (!idsComBipados.length) { setProgressoEmbalagem({}); return; }
+
+      const { data } = await supabase
+        .from("b2b_itens")
+        .select("pedido_id, caixa_id, status")
+        .in("pedido_id", idsComBipados)
+        .eq("status", "bipado");
+
+      const mapa = {};
+      (data || []).forEach(i => {
+        if (!mapa[i.pedido_id]) mapa[i.pedido_id] = { bipados: 0, embalados: 0 };
+        mapa[i.pedido_id].bipados++;
+        if (i.caixa_id) mapa[i.pedido_id].embalados++;
+      });
+      setProgressoEmbalagem(mapa);
+    } catch { setProgressoEmbalagem({}); }
+  }
 
   async function atualizarPedidos() {
     const data = await listarPedidosB2B();
@@ -923,7 +952,6 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
       setCaixas(prev => prev.filter(c => c.id !== caixa.id));
       if (caixaAtiva?.id === caixa.id) { setCaixaAtiva(null); setItensCaixa([]); }
       if (caixaDetalhes?.id === caixa.id) { setCaixaDetalhes(null); setItensCaixaDet([]); }
-      // Recarrega o pedido para refletir os itens que voltaram a "bipado disponível"
       await atualizarPedidos();
       setFeedback({ tipo: "ok", msg: `✓ Caixa ${caixa.numero} excluída. Itens liberados para reembalar.` });
       setTimeout(() => setFeedback(null), 3500);
@@ -977,27 +1005,66 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
   const totalBipados   = pedidoSel?.total_bipados || 0;
   const temNFs         = nfsPedido.length > 0;
 
+  // Decide se um pedido está com embalagem concluída (todos os bipados em caixa)
+  function embalagemConcluida(pedidoId) {
+    const p = progressoEmbalagem[pedidoId];
+    if (!p || p.bipados === 0) return false;
+    return p.embalados >= p.bipados;
+  }
+
   if (!pedidoSel) {
-    const pedidosDisponiveis = pedidos.filter(p => p.total_bipados > 0);
+    const pedidosComBipados = pedidos.filter(p => (p.total_bipados || 0) > 0);
+    const emAberto    = pedidosComBipados.filter(p => !embalagemConcluida(p.id));
+    const concluidos  = pedidosComBipados.filter(p => embalagemConcluida(p.id));
+    const lista       = verConcluidosEmbalagem ? concluidos : emAberto;
+
     return (
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-slate-500">Selecione um pedido para iniciar a embalagem:</p>
-          <button onClick={atualizarPedidos} className="text-xs text-slate-500 hover:text-purple-700 font-semibold">↻ Atualizar</button>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <p className="text-sm text-slate-500">Selecione um pedido para a embalagem:</p>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setVerConcluidosEmbalagem(false)}
+              className={`text-xs px-3 py-1.5 rounded-xl font-semibold transition-all ${!verConcluidosEmbalagem ? "bg-[#7F2D92] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
+              Em aberto ({emAberto.length})
+            </button>
+            <button onClick={() => setVerConcluidosEmbalagem(true)}
+              className={`text-xs px-3 py-1.5 rounded-xl font-semibold transition-all ${verConcluidosEmbalagem ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
+              Concluídos ({concluidos.length})
+            </button>
+            <button onClick={atualizarPedidos} className="text-xs text-slate-500 hover:text-purple-700 font-semibold">↻</button>
+          </div>
         </div>
-        {pedidosDisponiveis.length === 0 ? (
-          <div className="text-center py-12 text-slate-400"><Box className="h-8 w-8 mx-auto mb-2 opacity-30" /><p className="text-sm">Nenhum pedido com itens bipados ainda.</p></div>
+        {lista.length === 0 ? (
+          <div className="text-center py-12 text-slate-400">
+            <Box className="h-8 w-8 mx-auto mb-2 opacity-30" />
+            <p className="text-sm">{verConcluidosEmbalagem ? "Nenhum pedido com embalagem concluída." : "Nenhum pedido com itens a embalar."}</p>
+          </div>
         ) : (
           <div className="grid gap-3">
-            {pedidosDisponiveis.map(p => (
-              <button key={p.id} onClick={() => setPedido(p)} className="bg-white rounded-2xl p-4 ring-1 ring-slate-200 text-left hover:ring-purple-300 hover:bg-purple-50 transition-all">
-                <div className="flex items-start justify-between gap-3 mb-3">
-                  <div><div className="font-bold text-slate-800 text-sm">{p.lote}</div><div className="text-xs text-slate-500 mt-0.5">{p.cliente}</div></div>
-                  <StatusBadge status={p.status} />
-                </div>
-                <ProgressBar value={p.total_bipados || 0} total={p.total_itens || 0} />
-              </button>
-            ))}
+            {lista.map(p => {
+              const prog = progressoEmbalagem[p.id] || { bipados: p.total_bipados || 0, embalados: 0 };
+              const concl = embalagemConcluida(p.id);
+              return (
+                <button key={p.id} onClick={() => setPedido(p)}
+                  className={`bg-white rounded-2xl p-4 ring-1 text-left transition-all ${concl ? "ring-emerald-200 hover:bg-emerald-50" : "ring-slate-200 hover:ring-purple-300 hover:bg-purple-50"}`}>
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div>
+                      <div className="font-bold text-slate-800 text-sm">{p.lote}</div>
+                      <div className="text-xs text-slate-500 mt-0.5">{p.cliente}</div>
+                    </div>
+                    {concl ? (
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-lg ring-1 bg-emerald-50 text-emerald-700 ring-emerald-200 flex items-center gap-1">
+                        <CheckCircle className="h-3 w-3" /> Embalado
+                      </span>
+                    ) : (
+                      <StatusBadge status={p.status} />
+                    )}
+                  </div>
+                  <ProgressBar value={prog.embalados} total={prog.bipados} color={concl ? "#1D9E75" : "#F97316"} />
+                  <p className="text-xs text-slate-400 mt-1">{fmtN(prog.embalados)} de {fmtN(prog.bipados)} bipados embalados</p>
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
@@ -1010,7 +1077,7 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
       {modalExcluir && <ModalExcluirCaixa caixa={modalExcluir.caixa} qtdItens={modalExcluir.qtdItens} onConfirmar={handleConfirmarExcluir} onCancelar={() => setModalExcluir(null)} />}
       <div className="space-y-4">
         <div className="flex items-center gap-3 flex-wrap">
-          <button onClick={() => { setPedido(null); setCaixaAtiva(null); setCaixas([]); setItensCaixa([]); setNfsPedido([]); setCaixaDetalhes(null); }} className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1"><X className="h-3 w-3" /> Trocar pedido</button>
+          <button onClick={() => { setPedido(null); setCaixaAtiva(null); setCaixas([]); setItensCaixa([]); setNfsPedido([]); setCaixaDetalhes(null); carregarProgresso(); }} className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1"><X className="h-3 w-3" /> Trocar pedido</button>
           <div className="flex-1"><h3 className="font-black text-slate-800 text-sm">{pedidoSel.lote}</h3><p className="text-xs text-slate-500">{pedidoSel.cliente}</p></div>
           <div className="flex items-center gap-2">
             {!temNFs && <span className="text-xs text-amber-600 font-semibold flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Importe as NFs para gerar romaneios</span>}
