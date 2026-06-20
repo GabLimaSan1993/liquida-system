@@ -166,8 +166,6 @@ export async function excluirCaixa(caixaId) {
 
 // ── Romaneio por Caixa ────────────────────────────────────
 export async function gerarRomaneio(caixaId, pedido) {
-  console.log("DEBUG romaneio:", { caixaId, pedidoId: pedido?.id });
-
   // Verifica se há NFs importadas para este pedido
   const nfsPedido = await verificarNFsPedido(pedido.id);
   if (!nfsPedido.length) {
@@ -175,41 +173,38 @@ export async function gerarRomaneio(caixaId, pedido) {
   }
 
   const itens = await listarItensCaixa(caixaId);
-  console.log("DEBUG itens da caixa:", itens.length, itens.map(i => ({ imei: i.imei, nf: i.nf, caixa_id: i.caixa_id })));
 
   const { data: caixa } = await supabase
     .from("b2b_caixas").select("*").eq("id", caixaId).single();
 
   const { data: itensComNF } = await supabase
     .from("b2b_itens").select("nf").eq("caixa_id", caixaId).not("nf", "is", null);
-  console.log("DEBUG itensComNF:", itensComNF);
 
   const nfContagem = {};
   (itensComNF || []).forEach(i => {
     if (!i.nf) return;
-    nfContagem[i.nf] = (nfContagem[i.nf] || 0) + 1;
+    const nfKey = String(i.nf);
+    nfContagem[nfKey] = (nfContagem[nfKey] || 0) + 1;
   });
-  console.log("DEBUG nfContagem:", nfContagem);
 
   // Busca NFs da tabela b2b_nfs como fonte principal
   const nfsTabela = nfsPedido.map(n => String(n.numero_nf));
 
-  // Monta contagem por NF usando b2b_nfs
+  // Monta contagem por NF — força String() em todas as chaves para garantir o lookup
   const { data: itensPedidoNF } = await supabase
     .from("b2b_itens").select("nf, caixa_id")
     .eq("pedido_id", pedido.id).not("nf", "is", null);
-  console.log("DEBUG itensPedidoNF:", itensPedidoNF);
 
   const nfTotalItens  = {};
   const nfCaixasTotal = {};
   (itensPedidoNF || []).forEach(i => {
     if (!i.nf) return;
-    nfTotalItens[i.nf] = (nfTotalItens[i.nf] || 0) + 1;
-    if (!nfCaixasTotal[i.nf]) nfCaixasTotal[i.nf] = new Set();
-    if (i.caixa_id) nfCaixasTotal[i.nf].add(i.caixa_id);
+    const nfKey = String(i.nf);
+    nfTotalItens[nfKey] = (nfTotalItens[nfKey] || 0) + 1;
+    if (!nfCaixasTotal[nfKey]) nfCaixasTotal[nfKey] = new Set();
+    if (i.caixa_id) nfCaixasTotal[nfKey].add(i.caixa_id);
   });
 
-  // Se nfContagem vazio, usa NFs do pedido como referência
   const nfsParaRomaneio = Object.keys(nfContagem).length > 0
     ? nfContagem
     : Object.fromEntries(nfsTabela.map(nf => [nf, "—"]));
@@ -331,9 +326,10 @@ export async function gerarRomaneioPedido(pedido) {
   const nfCaixasTotal = {};
   (itensNF || []).forEach(i => {
     if (!i.nf) return;
-    nfTotalItens[i.nf] = (nfTotalItens[i.nf] || 0) + 1;
-    if (!nfCaixasTotal[i.nf]) nfCaixasTotal[i.nf] = new Set();
-    if (i.caixa_id) nfCaixasTotal[i.nf].add(i.caixa_id);
+    const nfKey = String(i.nf);
+    nfTotalItens[nfKey] = (nfTotalItens[nfKey] || 0) + 1;
+    if (!nfCaixasTotal[nfKey]) nfCaixasTotal[nfKey] = new Set();
+    if (i.caixa_id) nfCaixasTotal[nfKey].add(i.caixa_id);
   });
 
   const nfsTabela = await supabase
