@@ -367,15 +367,13 @@ export async function importarNFPlanilha(file, pedidoId, userId) {
           nfMap[nf].valorTotal += valor;
         }
 
-        // Busca NFs já cadastradas para este pedido
         const { data: nfsExistentes } = await supabase
           .from("b2b_nfs").select("numero_nf").eq("pedido_id", pedidoId);
         const nfsJaCadastradas = new Set((nfsExistentes || []).map(n => String(n.numero_nf)));
 
-        const nfsParaInserir   = Object.entries(nfMap).filter(([nf]) => !nfsJaCadastradas.has(nf));
-        const nfsParaRelinkar  = Object.entries(nfMap).filter(([nf]) =>  nfsJaCadastradas.has(nf));
+        const nfsParaInserir  = Object.entries(nfMap).filter(([nf]) => !nfsJaCadastradas.has(nf));
+        const nfsParaRelinkar = Object.entries(nfMap).filter(([nf]) =>  nfsJaCadastradas.has(nf));
 
-        // Se não há NFs novas nem NFs para relinkar itens, nada a fazer
         if (!nfsParaInserir.length && !nfsParaRelinkar.length) {
           throw new Error("Nenhuma NF encontrada na planilha.");
         }
@@ -383,7 +381,6 @@ export async function importarNFPlanilha(file, pedidoId, userId) {
         const nfsInseridas  = [];
         const nfsRelinkadas = [];
 
-        // Insere NFs novas e linka os itens
         for (const [numeroNf, dados] of nfsParaInserir) {
           const { data: nfInserida, error: errNF } = await supabase
             .from("b2b_nfs")
@@ -413,7 +410,6 @@ export async function importarNFPlanilha(file, pedidoId, userId) {
           }
         }
 
-        // Para NFs já existentes — apenas atualiza o link nos itens (preserva log original)
         for (const [numeroNf, dados] of nfsParaRelinkar) {
           const imeisNF = dados.itens.filter(i => i.length > 5);
           if (imeisNF.length > 0) {
@@ -431,11 +427,8 @@ export async function importarNFPlanilha(file, pedidoId, userId) {
 
         await verificarEConcluirPedido(pedidoId);
 
-        const totalNFs    = nfsInseridas.length + nfsRelinkadas.length;
-        const todasAsNFs  = [
-          ...nfsInseridas.map(n => n.numero_nf),
-          ...nfsRelinkadas,
-        ];
+        const totalNFs   = nfsInseridas.length + nfsRelinkadas.length;
+        const todasAsNFs = [...nfsInseridas.map(n => n.numero_nf), ...nfsRelinkadas];
 
         if (totalNFs === 0) throw new Error("Nenhuma NF foi processada.");
 
@@ -497,19 +490,32 @@ export async function buscarResumoValorPedido(pedidoId) {
   const qtdFaturada   = nfs.reduce((s, n) => s + (n.total_itens || 0), 0);
 
   return {
-    totalValor,
-    valorBipado,
-    qtdBipados,
-    valorFaturado,
-    qtdFaturada,
-    valorNaoFaturar,
-    qtdNaoFaturar,
-    qtdEmAnalise,
+    totalValor, valorBipado, qtdBipados,
+    valorFaturado, qtdFaturada,
+    valorNaoFaturar, qtdNaoFaturar, qtdEmAnalise,
   };
 }
 
 export async function listarNFsPedido(pedidoId) {
-  const { data } = await supabase.from("b2b_nfs").select("*").eq("pedido_id", pedidoId).order("importado_em", { ascending: true });
+  // Busca NFs com nome de quem importou via user_profiles
+  const { data: nfs } = await supabase
+    .from("b2b_nfs")
+    .select("*, user_profiles!importado_por(nome)")
+    .eq("pedido_id", pedidoId)
+    .order("importado_em", { ascending: true });
+
+  return (nfs || []).map(n => ({
+    ...n,
+    nome_importador: n.user_profiles?.nome || n.importado_por || "—",
+  }));
+}
+
+export async function listarExportacoesPedido(pedidoId) {
+  const { data } = await supabase
+    .from("b2b_exportacoes")
+    .select("*")
+    .eq("pedido_id", pedidoId)
+    .order("exportado_em", { ascending: true });
   return data || [];
 }
 
