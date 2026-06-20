@@ -294,24 +294,36 @@ export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
 
 async function verificarEConcluirPedido(pedidoId) {
   const { data: itens } = await supabase
-    .from("b2b_itens").select("status")
+    .from("b2b_itens").select("status, nf")
     .eq("pedido_id", pedidoId);
 
   const { data: todasNFs } = await supabase
     .from("b2b_nfs").select("total_itens")
     .eq("pedido_id", pedidoId);
 
-  const todos          = itens || [];
-  const totalBipados   = todos.filter(i => i.status === "bipado").length;
-  const totalPendentes = todos.filter(i => i.status === "pendente").length;
-  const totalAnalise   = todos.filter(i => ["nao_localizado", "em_analise"].includes(i.status)).length;
-  const totalComNF     = (todasNFs || []).reduce((s, n) => s + (n.total_itens || 0), 0);
+  const todos           = itens || [];
+  const total           = todos.length;
+  const totalBipados    = todos.filter(i => i.status === "bipado").length;
+  const totalPendentes  = todos.filter(i => i.status === "pendente").length;
+  const totalAnalise    = todos.filter(i => ["nao_localizado", "em_analise"].includes(i.status)).length;
+  const totalNaoFaturar = todos.filter(i => i.status === "nao_faturar").length;
+  const bipadosComNF    = todos.filter(i => i.status === "bipado" && i.nf).length;
+  const totalComNF      = (todasNFs || []).reduce((s, n) => s + (n.total_itens || 0), 0);
 
-  // Só conclui se: não há pendentes, não há itens em análise,
-  // e as NFs cobrem todos os itens bipados.
-  const separacaoResolvida = totalPendentes === 0 && totalAnalise === 0;
+  // Todo item precisa ter um destino terminal: bipado ou não_faturar.
+  // Nada pode estar pendente nem em análise — senão a separação não acabou.
+  const todosResolvidos = total > 0
+    && totalPendentes === 0
+    && totalAnalise === 0
+    && (totalBipados + totalNaoFaturar) === total;
 
-  if (totalBipados > 0 && separacaoResolvida && totalComNF >= totalBipados) {
+  // Todos os itens bipados precisam ter NF (campo nf preenchido),
+  // e a soma das NFs cobre os bipados.
+  const todosBipadosFaturados = totalBipados > 0
+    && bipadosComNF >= totalBipados
+    && totalComNF >= totalBipados;
+
+  if (todosResolvidos && todosBipadosFaturados) {
     await supabase.from("b2b_pedidos").update({ status: "concluido" }).eq("id", pedidoId);
     return true;
   }
