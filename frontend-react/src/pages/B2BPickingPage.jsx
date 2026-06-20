@@ -1370,8 +1370,6 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
                     )}
                   </div>
                 ) : null}
-
-                {/* ── Histórico de NFs importadas ── */}
                 {nfsPedido.length > 0 && (
                   <div className="mb-3">
                     <button onClick={() => setPainelImp(prev => ({ ...prev, [p.id]: !prev[p.id] }))}
@@ -1392,9 +1390,7 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
                               <span className="text-slate-400">{nf.nome_importador}</span>
-                              <span className="text-xs font-semibold px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 flex items-center gap-1">
-                                <CheckCircle className="h-3 w-3" /> Importada
-                              </span>
+                              <span className="text-xs font-semibold px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 flex items-center gap-1"><CheckCircle className="h-3 w-3" /> Importada</span>
                             </div>
                           </div>
                         ))}
@@ -1402,8 +1398,6 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
                     )}
                   </div>
                 )}
-
-                {/* ── Histórico de exportações ── */}
                 {expPedido.length > 0 && (
                   <div className="mb-3">
                     <button onClick={() => setPainelExp(prev => ({ ...prev, [p.id]: !prev[p.id] }))}
@@ -1428,7 +1422,6 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
                     )}
                   </div>
                 )}
-
                 <div className="flex gap-2 flex-wrap items-center">
                   <button onClick={() => handleExportar(p)} disabled={exportando === p.id || !p.total_bipados}
                     className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100 transition disabled:opacity-40">
@@ -1460,14 +1453,15 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
 }
 
 // ══════════════════════════════════════════════════════════
-// ABA CONCLUÍDOS
+// ABA CONCLUÍDOS — com histórico de NFs e exportações
 // ══════════════════════════════════════════════════════════
 function TabConcluidos({ onVoltar }) {
   const [pedidos, setPedidos]           = useState([]);
   const [loading, setLoading]           = useState(true);
   const [filtroAno, setFiltroAno]       = useState("todos");
   const [filtroMes, setFiltroMes]       = useState("todos");
-  const [painelAberto, setPainelAberto] = useState({});
+  const [painelNFs, setPainelNFs]       = useState({});
+  const [painelExp, setPainelExp]       = useState({});
 
   useEffect(() => { carregar(); }, []);
 
@@ -1568,24 +1562,56 @@ function TabConcluidos({ onVoltar }) {
                   <span className="text-sm font-black text-emerald-700">{fmtR(p.valorFat)}</span>
                 </div>
               </div>
+
+              {/* ── NFs com importador ── */}
               {p.nfs?.length > 0 && (
-                <div>
-                  <button onClick={() => setPainelAberto(prev => ({ ...prev, [p.id]: !prev[p.id] }))}
+                <div className="mb-3">
+                  <button onClick={() => setPainelNFs(prev => ({ ...prev, [p.id]: !prev[p.id] }))}
                     className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-purple-700 transition mb-2">
-                    <FileText className="h-3 w-3" /> Notas Fiscais ({p.nfs.length})
-                    {painelAberto[p.id] ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                    <Upload className="h-3 w-3" /> NFs Importadas ({p.nfs.length})
+                    {painelNFs[p.id] ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                   </button>
-                  {painelAberto[p.id] && (
+                  {painelNFs[p.id] && (
                     <div className="space-y-2 bg-slate-50 rounded-xl p-3">
                       {p.nfs.map(nf => (
                         <div key={nf.id} className="flex items-center justify-between text-xs bg-white rounded-xl px-3 py-2 ring-1 ring-slate-200">
-                          <div className="flex items-center gap-2">
-                            <FileText className="h-3.5 w-3.5 text-emerald-500" />
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <FileText className="h-3.5 w-3.5 text-purple-500 shrink-0" />
                             <span className="font-bold text-slate-700">NF {nf.numero_nf}</span>
                             <span className="text-slate-400">· {fmtN(nf.total_itens)} itens</span>
                             {nf.valor_total > 0 && <span className="font-semibold text-emerald-600">· {fmtR(nf.valor_total)}</span>}
+                            {nf.data_faturamento && <span className="text-slate-400">· {new Date(nf.data_faturamento).toLocaleDateString("pt-BR")}</span>}
                           </div>
-                          {nf.data_faturamento && <span className="text-slate-400">{new Date(nf.data_faturamento).toLocaleDateString("pt-BR")}</span>}
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-slate-400">{nf.nome_importador || "—"}</span>
+                            <span className="text-xs font-semibold px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 flex items-center gap-1"><CheckCircle className="h-3 w-3" /> Importada</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── Histórico de exportações ── */}
+              {p.exportacoes?.length > 0 && (
+                <div>
+                  <button onClick={() => setPainelExp(prev => ({ ...prev, [p.id]: !prev[p.id] }))}
+                    className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-emerald-700 transition mb-2">
+                    <History className="h-3 w-3" /> Histórico de Exportações ({p.exportacoes.length})
+                    {painelExp[p.id] ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                  </button>
+                  {painelExp[p.id] && (
+                    <div className="space-y-2 bg-slate-50 rounded-xl p-3">
+                      {p.exportacoes.map((exp, idx) => (
+                        <div key={exp.id} className="flex items-center justify-between text-xs bg-white rounded-xl px-3 py-2 ring-1 ring-slate-200">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Download className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                            <span className="font-bold text-slate-700">v{idx + 1}</span>
+                            <span className="text-slate-400">· {fmtN(exp.total_itens)} itens</span>
+                            <span className="text-slate-400">· {new Date(exp.exportado_em).toLocaleString("pt-BR")}</span>
+                          </div>
+                          <span className="text-slate-500 font-semibold shrink-0">{exp.nome_usuario}</span>
                         </div>
                       ))}
                     </div>

@@ -497,7 +497,6 @@ export async function buscarResumoValorPedido(pedidoId) {
 }
 
 export async function listarNFsPedido(pedidoId) {
-  // Busca NFs com nome de quem importou via user_profiles
   const { data: nfs } = await supabase
     .from("b2b_nfs")
     .select("*, user_profiles!importado_por(nome)")
@@ -520,17 +519,42 @@ export async function listarExportacoesPedido(pedidoId) {
 }
 
 export async function listarPedidosConcluidos() {
-  const { data: pedidos, error } = await supabase.from("b2b_pedidos").select("*").eq("status", "concluido").order("criado_em", { ascending: false });
+  const { data: pedidos, error } = await supabase
+    .from("b2b_pedidos").select("*").eq("status", "concluido").order("criado_em", { ascending: false });
   if (error) throw new Error(error.message);
   if (!pedidos?.length) return [];
 
-  const { data: nfs } = await supabase.from("b2b_nfs").select("*").in("pedido_id", pedidos.map(p => p.id)).order("data_faturamento", { ascending: true });
-  const { data: itens } = await supabase.from("b2b_itens").select("pedido_id, valor, status").in("pedido_id", pedidos.map(p => p.id));
+  const pedidoIds = pedidos.map(p => p.id);
+
+  // Busca NFs com nome do importador
+  const { data: nfsRaw } = await supabase
+    .from("b2b_nfs")
+    .select("*, user_profiles!importado_por(nome)")
+    .in("pedido_id", pedidoIds)
+    .order("data_faturamento", { ascending: true });
+
+  const nfs = (nfsRaw || []).map(n => ({
+    ...n,
+    nome_importador: n.user_profiles?.nome || n.importado_por || "—",
+  }));
+
+  // Busca exportações
+  const { data: exportacoesRaw } = await supabase
+    .from("b2b_exportacoes")
+    .select("*")
+    .in("pedido_id", pedidoIds)
+    .order("exportado_em", { ascending: true });
+
+  const { data: itens } = await supabase
+    .from("b2b_itens").select("pedido_id, valor, status")
+    .in("pedido_id", pedidoIds);
 
   return pedidos.map(p => {
-    const nfsPedido   = (nfs || []).filter(n => n.pedido_id === p.id);
-    const itensPedido = (itens || []).filter(i => i.pedido_id === p.id);
-    const valorFat    = nfsPedido.length > 0
+    const nfsPedido        = nfs.filter(n => n.pedido_id === p.id);
+    const exportacoesPedido = (exportacoesRaw || []).filter(e => e.pedido_id === p.id);
+    const itensPedido      = (itens || []).filter(i => i.pedido_id === p.id);
+
+    const valorFat = nfsPedido.length > 0
       ? nfsPedido.reduce((s, n) => s + (n.valor_total || 0), 0)
       : itensPedido.filter(i => i.status === "bipado").reduce((s, i) => s + (i.valor || 0), 0);
 
@@ -543,6 +567,7 @@ export async function listarPedidosConcluidos() {
     return {
       ...p,
       nfs:        nfsPedido,
+      exportacoes: exportacoesPedido,
       valorFat,
       tempoMedio: tempoMedio ? Math.round(tempoMedio) : null,
       anoPedido:  dataPedido.getFullYear(),
