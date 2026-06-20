@@ -51,16 +51,12 @@ export async function importarPedidoB2B(file, userId) {
 
         const imeisLista = rows.map(r => String(r["IMEI"] || r["NUM_IMEI"] || "").trim()).filter(i => i.length > 5);
 
-        // Busca triagem ordenada por criado_em DESC — a última entrada de cada IMEI vem primeiro
         const { data: triagem } = await supabase
           .from("assurant_triagem")
           .select("imei, local, voucher, criado_em")
           .in("imei", imeisLista)
           .order("criado_em", { ascending: false });
 
-        // Como vem ordenado por criado_em DESC, a primeira ocorrência de cada IMEI é a mais recente.
-        // Para local: pula entradas com local nulo e pega a primeira (mais recente) que tenha local.
-        // Para voucher: pega o voucher da entrada mais recente que tenha voucher.
         const localMap = {}, voucherMap = {};
         (triagem || []).forEach(t => {
           if (!t.imei) return;
@@ -160,6 +156,8 @@ export async function registrarBipagem(imeiDigitado, pedidoId, userId) {
     .eq("id", item.id);
   if (errUpdate) return { ok: false, erro: errUpdate.message };
   await supabase.rpc("b2b_atualizar_contador", { p_pedido_id: pedidoId });
+  // Bipar o último item pendente pode completar o pedido — reavalia conclusão
+  await verificarEConcluirPedido(pedidoId);
   return { ok: true, item };
 }
 
@@ -199,9 +197,12 @@ export async function marcarLocalizado(itemId, novaLocalizacao, userId) {
     .eq("id", itemId);
   if (error) throw new Error(error.message);
 
-  // Resolver um item pode completar o pedido — reavalia conclusão
+  // Busca pedido_id e atualiza contador + reavalia conclusão
   const { data: item } = await supabase.from("b2b_itens").select("pedido_id").eq("id", itemId).single();
-  if (item?.pedido_id) await verificarEConcluirPedido(item.pedido_id);
+  if (item?.pedido_id) {
+    await supabase.rpc("b2b_atualizar_contador", { p_pedido_id: item.pedido_id });
+    await verificarEConcluirPedido(item.pedido_id);
+  }
 }
 
 export async function marcarNaoFaturar(itemId, motivo, observacao, userId) {
@@ -318,22 +319,16 @@ async function verificarEConcluirPedido(pedidoId) {
   const bipadosComNF    = todos.filter(i => i.status === "bipado" && i.nf).length;
   const totalComNF      = (todasNFs || []).reduce((s, n) => s + (n.total_itens || 0), 0);
 
-  // Todo item precisa ter um destino terminal: bipado ou não_faturar.
-  // Nada pode estar pendente nem em análise — senão a separação não acabou.
   const todosResolvidos = total > 0
     && totalPendentes === 0
     && totalAnalise === 0
     && (totalBipados + totalNaoFaturar) === total;
 
-  // Caso 1: pedido tem itens a faturar — todos os bipados precisam ter NF.
-  // Caso 2: pedido inteiro é não_faturar (0 bipados) — conclui sem exigir NF.
   let podeConcluir = false;
   if (todosResolvidos) {
     if (totalBipados === 0) {
-      // Nada a faturar — todos os itens foram marcados não_faturar
       podeConcluir = true;
     } else {
-      // Há itens a faturar — exige NF cobrindo todos os bipados
       podeConcluir = bipadosComNF >= totalBipados && totalComNF >= totalBipados;
     }
   }
@@ -399,7 +394,6 @@ export async function importarNFPlanilha(file, pedidoId, userId) {
           if (errNF) throw new Error(`Erro ao inserir NF ${numeroNf}: ${errNF.message}`);
           nfsInseridas.push(nfInserida);
 
-          // Atualiza o campo nf nos itens correspondentes
           const imeisNF = dados.itens.filter(i => i.length > 5);
           if (imeisNF.length > 0) {
             const CHUNK = 500;
@@ -451,7 +445,6 @@ export async function importarNFPedido(pedidoId, numeroNf, totalItens, totalCaix
 }
 
 export async function buscarResumoValorPedido(pedidoId) {
-  // Busca itens e NFs em paralelo
   const [{ data: itensData }, { data: nfsData }] = await Promise.all([
     supabase.from("b2b_itens").select("status, valor, nf").eq("pedido_id", pedidoId),
     supabase.from("b2b_nfs").select("total_itens, valor_total").eq("pedido_id", pedidoId),
@@ -469,7 +462,6 @@ export async function buscarResumoValorPedido(pedidoId) {
   const qtdNaoFaturar   = itensNaoFaturar.length;
   const qtdEmAnalise    = itens.filter(i => ["nao_localizado", "em_analise"].includes(i.status)).length;
 
-  // Faturado calculado a partir da b2b_nfs (fonte de verdade)
   const valorFaturado = nfs.reduce((s, n) => s + (n.valor_total || 0), 0);
   const qtdFaturada   = nfs.reduce((s, n) => s + (n.total_itens || 0), 0);
 
