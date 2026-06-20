@@ -4,13 +4,14 @@ import {
   Package, X, BarChart3, Box, FileText,
   Tag, Plus, Lock, MapPin, TrendingUp,
   ChevronDown, ChevronUp, Calendar, Upload, AlertCircle,
-  ClipboardList, Trash2, Unlock,
+  ClipboardList, Trash2, Unlock, History,
 } from "lucide-react";
 import {
   listarPedidosB2B, listarItensComStatusGaia,
   registrarBipagem, exportarFaturamento, importarNFPlanilha,
   marcarEmAnalise, marcarLocalizado, marcarNaoFaturar,
   buscarResumoValorPedido, listarNFsPedido, listarPedidosConcluidos,
+  listarExportacoesPedido,
 } from "../services/b2bService.js";
 import {
   criarCaixa, listarCaixas, listarItensCaixa,
@@ -552,18 +553,12 @@ function TabAnalise({ pedidosIniciais, onAtualizarSilencioso, itensAnalise }) {
     setItens([]);
     try {
       const { data, error } = await supabase
-        .from("b2b_itens")
-        .select("*")
-        .eq("pedido_id", pedidoSel.id)
-        .in("status", ["nao_localizado", "em_analise"])
-        .order("nao_localizado_em", { ascending: true });
+        .from("b2b_itens").select("*").eq("pedido_id", pedidoSel.id)
+        .in("status", ["nao_localizado", "em_analise"]).order("nao_localizado_em", { ascending: true });
       if (error) throw new Error(error.message);
       setItens(data || []);
-    } catch (e) {
-      setFeedback({ tipo: "erro", msg: e.message });
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { setFeedback({ tipo: "erro", msg: e.message }); }
+    finally { setLoading(false); }
   }
 
   async function carregarHistorico() {
@@ -571,18 +566,12 @@ function TabAnalise({ pedidosIniciais, onAtualizarSilencioso, itensAnalise }) {
     setItens([]);
     try {
       const { data, error } = await supabase
-        .from("b2b_itens")
-        .select("*")
-        .eq("pedido_id", pedidoSel.id)
-        .not("nao_localizado_em", "is", null)
-        .order("nao_localizado_em", { ascending: true });
+        .from("b2b_itens").select("*").eq("pedido_id", pedidoSel.id)
+        .not("nao_localizado_em", "is", null).order("nao_localizado_em", { ascending: true });
       if (error) throw new Error(error.message);
       setItens(data || []);
-    } catch (e) {
-      setFeedback({ tipo: "erro", msg: e.message });
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { setFeedback({ tipo: "erro", msg: e.message }); }
+    finally { setLoading(false); }
   }
 
   useEffect(() => {
@@ -624,7 +613,6 @@ function TabAnalise({ pedidosIniciais, onAtualizarSilencioso, itensAnalise }) {
   const pedidosComHistorico = pedidos.filter(p => itensAnalise[p.id] !== undefined);
   const qtdPendentes  = pedidosComHistorico.filter(p => (itensAnalise[p.id] || 0) > 0).length;
   const qtdResolvidos = pedidosComHistorico.filter(p => (itensAnalise[p.id] || 0) === 0).length;
-
   const pedidosFiltrados = mostrarResolvidos
     ? pedidosComHistorico.filter(p => (itensAnalise[p.id] || 0) === 0)
     : pedidosComHistorico.filter(p => (itensAnalise[p.id] || 0) > 0);
@@ -665,13 +653,9 @@ function TabAnalise({ pedidosIniciais, onAtualizarSilencioso, itensAnalise }) {
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       {qtdAnalise > 0 ? (
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded-lg ring-1 bg-orange-50 text-orange-700 ring-orange-200">
-                          {qtdAnalise} em análise
-                        </span>
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-lg ring-1 bg-orange-50 text-orange-700 ring-orange-200">{qtdAnalise} em análise</span>
                       ) : (
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded-lg ring-1 bg-emerald-50 text-emerald-700 ring-emerald-200 flex items-center gap-1">
-                          <CheckCircle className="h-3 w-3" /> Resolvido
-                        </span>
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-lg ring-1 bg-emerald-50 text-emerald-700 ring-emerald-200 flex items-center gap-1"><CheckCircle className="h-3 w-3" /> Resolvido</span>
                       )}
                       <StatusBadge status={p.status} />
                     </div>
@@ -698,9 +682,7 @@ function TabAnalise({ pedidosIniciais, onAtualizarSilencioso, itensAnalise }) {
           <div className="flex-1"><h3 className="font-black text-slate-800 text-sm">{pedidoSel.lote}</h3><p className="text-xs text-slate-500">{pedidoSel.cliente}</p></div>
           <div className="flex items-center gap-2">
             {pedidoResolvido && (
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-lg ring-1 bg-emerald-50 text-emerald-700 ring-emerald-200 flex items-center gap-1">
-                <CheckCircle className="h-3 w-3" /> Todos resolvidos
-              </span>
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-lg ring-1 bg-emerald-50 text-emerald-700 ring-emerald-200 flex items-center gap-1"><CheckCircle className="h-3 w-3" /> Todos resolvidos</span>
             )}
             <StatusBadge status={pedidoSel.status} />
           </div>
@@ -758,14 +740,8 @@ function TabAnalise({ pedidosIniciais, onAtualizarSilencioso, itensAnalise }) {
                         </div>
                         <p className="text-xs text-slate-600 truncate">{item.modelo}{item.grade ? ` · ${item.grade}` : ""}</p>
                         <p className="text-xs text-slate-400 font-mono">Local original: {item.local_estoque || "—"}</p>
-                        {item.nao_localizado_em && (
-                          <p className="text-xs text-slate-400">Não localizado em: {new Date(item.nao_localizado_em).toLocaleString("pt-BR")}</p>
-                        )}
-                        {item.status === "bipado" && item.localizado_em && (
-                          <p className="text-xs text-emerald-600 font-semibold">
-                            ✓ Localizado em {new Date(item.localizado_em).toLocaleString("pt-BR")} → {item.localizado_local}
-                          </p>
-                        )}
+                        {item.nao_localizado_em && <p className="text-xs text-slate-400">Não localizado em: {new Date(item.nao_localizado_em).toLocaleString("pt-BR")}</p>}
+                        {item.status === "bipado" && item.localizado_em && <p className="text-xs text-emerald-600 font-semibold">✓ Localizado em {new Date(item.localizado_em).toLocaleString("pt-BR")} → {item.localizado_local}</p>}
                         {item.status === "nao_faturar" && (
                           <p className="text-xs text-red-500 font-semibold">
                             ✗ Não faturar: {MOTIVOS_NAO_FATURAR.find(m => m.value === item.motivo_nao_faturar)?.label || item.motivo_nao_faturar}
@@ -775,14 +751,8 @@ function TabAnalise({ pedidosIniciais, onAtualizarSilencioso, itensAnalise }) {
                       </div>
                       {!resolvido && (
                         <div className="flex gap-2 shrink-0 flex-wrap">
-                          <button onClick={() => setModalLocalizado(item)}
-                            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100 transition">
-                            <MapPin className="h-3 w-3" /> Localizado
-                          </button>
-                          <button onClick={() => setModalNaoFaturar(item)}
-                            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-red-50 text-red-700 ring-1 ring-red-200 hover:bg-red-100 transition">
-                            <X className="h-3 w-3" /> Não Faturar
-                          </button>
+                          <button onClick={() => setModalLocalizado(item)} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100 transition"><MapPin className="h-3 w-3" /> Localizado</button>
+                          <button onClick={() => setModalNaoFaturar(item)} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-red-50 text-red-700 ring-1 ring-red-200 hover:bg-red-100 transition"><X className="h-3 w-3" /> Não Faturar</button>
                         </div>
                       )}
                     </div>
@@ -797,9 +767,6 @@ function TabAnalise({ pedidosIniciais, onAtualizarSilencioso, itensAnalise }) {
   );
 }
 
-// ══════════════════════════════════════════════════════════
-// ABA EMBALAGEM
-// ══════════════════════════════════════════════════════════
 // ══════════════════════════════════════════════════════════
 // ABA EMBALAGEM
 // ══════════════════════════════════════════════════════════
@@ -818,31 +785,24 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
   const [caixaDetalhes, setCaixaDetalhes]     = useState(null);
   const [itensCaixaDet, setItensCaixaDet]     = useState([]);
   const [nfsPedido, setNfsPedido]             = useState([]);
-  const [modalRemover, setModalRemover]       = useState(null); // { item, caixaId, caixaNumero }
-  const [modalExcluir, setModalExcluir]       = useState(null); // { caixa, qtdItens }
-  const [progressoEmbalagem, setProgressoEmbalagem] = useState({}); // { pedidoId: { bipados, embalados } }
+  const [modalRemover, setModalRemover]       = useState(null);
+  const [modalExcluir, setModalExcluir]       = useState(null);
+  const [progressoEmbalagem, setProgressoEmbalagem] = useState({});
   const [verConcluidosEmbalagem, setVerConcluidosEmbalagem] = useState(false);
-  const inputRef                    = useRef(null);
-  const CAPACIDADE                  = 30;
+  const inputRef = useRef(null);
+  const CAPACIDADE = 30;
 
   useEffect(() => {
     if (pedidosIniciais.length > 0 && pedidos.length === 0) setPedidos(pedidosIniciais);
   }, [pedidosIniciais]);
 
-  // Carrega progresso de embalagem (bipados vs embalados) por pedido
   useEffect(() => { if (!pedidoSel) carregarProgresso(); }, [pedidos, pedidoSel]);
 
   async function carregarProgresso() {
     try {
       const idsComBipados = pedidos.filter(p => (p.total_bipados || 0) > 0).map(p => p.id);
       if (!idsComBipados.length) { setProgressoEmbalagem({}); return; }
-
-      const { data } = await supabase
-        .from("b2b_itens")
-        .select("pedido_id, caixa_id, status")
-        .in("pedido_id", idsComBipados)
-        .eq("status", "bipado");
-
+      const { data } = await supabase.from("b2b_itens").select("pedido_id, caixa_id, status").in("pedido_id", idsComBipados).eq("status", "bipado");
       const mapa = {};
       (data || []).forEach(i => {
         if (!mapa[i.pedido_id]) mapa[i.pedido_id] = { bipados: 0, embalados: 0 };
@@ -856,20 +816,12 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
   async function atualizarPedidos() {
     const data = await listarPedidosB2B();
     setPedidos(data);
-    if (pedidoSel) {
-      const atualizado = data.find(p => p.id === pedidoSel.id);
-      if (atualizado) setPedido(atualizado);
-    }
+    if (pedidoSel) { const atualizado = data.find(p => p.id === pedidoSel.id); if (atualizado) setPedido(atualizado); }
     onAtualizarSilencioso?.(data);
   }
 
-  useEffect(() => {
-    if (pedidoSel) { carregarCaixas(); carregarNFs(); }
-  }, [pedidoSel]);
-
-  useEffect(() => {
-    if (caixaAtiva) { carregarItensCaixa(); setTimeout(() => inputRef.current?.focus(), 100); }
-  }, [caixaAtiva]);
+  useEffect(() => { if (pedidoSel) { carregarCaixas(); carregarNFs(); } }, [pedidoSel]);
+  useEffect(() => { if (caixaAtiva) { carregarItensCaixa(); setTimeout(() => inputRef.current?.focus(), 100); } }, [caixaAtiva]);
 
   async function carregarCaixas() {
     setLoading(true);
@@ -907,7 +859,6 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
     finally { setLoading(false); }
   }
 
-  // ── Reabrir caixa fechada ───────────────────────────────
   async function handleReabrirCaixa(caixa) {
     setLoading(true);
     try {
@@ -922,27 +873,20 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
     finally { setLoading(false); }
   }
 
-  // ── Remover item da caixa ───────────────────────────────
   async function handleConfirmarRemover() {
     if (!modalRemover) return;
     const { item, caixaId } = modalRemover;
     try {
       const { novoTotal } = await removerItemCaixa(item.id, caixaId);
       setCaixas(prev => prev.map(c => c.id === caixaId ? { ...c, total_itens: novoTotal } : c));
-      if (caixaAtiva?.id === caixaId) {
-        setCaixaAtiva(prev => ({ ...prev, total_itens: novoTotal }));
-        setItensCaixa(prev => prev.filter(i => i.id !== item.id));
-      }
-      if (caixaDetalhes?.id === caixaId) {
-        setItensCaixaDet(prev => prev.filter(i => i.id !== item.id));
-      }
+      if (caixaAtiva?.id === caixaId) { setCaixaAtiva(prev => ({ ...prev, total_itens: novoTotal })); setItensCaixa(prev => prev.filter(i => i.id !== item.id)); }
+      if (caixaDetalhes?.id === caixaId) { setItensCaixaDet(prev => prev.filter(i => i.id !== item.id)); }
       setFeedback({ tipo: "ok", msg: `✓ ${item.imei} removido da caixa — disponível para reembalar.` });
       setTimeout(() => setFeedback(null), 3500);
     } catch (e) { setFeedback({ tipo: "erro", msg: e.message }); }
     finally { setModalRemover(null); }
   }
 
-  // ── Excluir caixa ───────────────────────────────────────
   async function handleConfirmarExcluir() {
     if (!modalExcluir) return;
     const { caixa } = modalExcluir;
@@ -1005,7 +949,6 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
   const totalBipados   = pedidoSel?.total_bipados || 0;
   const temNFs         = nfsPedido.length > 0;
 
-  // Decide se um pedido está com embalagem concluída (todos os bipados em caixa)
   function embalagemConcluida(pedidoId) {
     const p = progressoEmbalagem[pedidoId];
     if (!p || p.bipados === 0) return false;
@@ -1014,51 +957,32 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
 
   if (!pedidoSel) {
     const pedidosComBipados = pedidos.filter(p => (p.total_bipados || 0) > 0);
-    const emAberto    = pedidosComBipados.filter(p => !embalagemConcluida(p.id));
-    const concluidos  = pedidosComBipados.filter(p => embalagemConcluida(p.id));
-    const lista       = verConcluidosEmbalagem ? concluidos : emAberto;
+    const emAberto   = pedidosComBipados.filter(p => !embalagemConcluida(p.id));
+    const concluidos = pedidosComBipados.filter(p => embalagemConcluida(p.id));
+    const lista      = verConcluidosEmbalagem ? concluidos : emAberto;
 
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <p className="text-sm text-slate-500">Selecione um pedido para a embalagem:</p>
           <div className="flex items-center gap-2">
-            <button onClick={() => setVerConcluidosEmbalagem(false)}
-              className={`text-xs px-3 py-1.5 rounded-xl font-semibold transition-all ${!verConcluidosEmbalagem ? "bg-[#7F2D92] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
-              Em aberto ({emAberto.length})
-            </button>
-            <button onClick={() => setVerConcluidosEmbalagem(true)}
-              className={`text-xs px-3 py-1.5 rounded-xl font-semibold transition-all ${verConcluidosEmbalagem ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
-              Concluídos ({concluidos.length})
-            </button>
+            <button onClick={() => setVerConcluidosEmbalagem(false)} className={`text-xs px-3 py-1.5 rounded-xl font-semibold transition-all ${!verConcluidosEmbalagem ? "bg-[#7F2D92] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>Em aberto ({emAberto.length})</button>
+            <button onClick={() => setVerConcluidosEmbalagem(true)} className={`text-xs px-3 py-1.5 rounded-xl font-semibold transition-all ${verConcluidosEmbalagem ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>Concluídos ({concluidos.length})</button>
             <button onClick={atualizarPedidos} className="text-xs text-slate-500 hover:text-purple-700 font-semibold">↻</button>
           </div>
         </div>
         {lista.length === 0 ? (
-          <div className="text-center py-12 text-slate-400">
-            <Box className="h-8 w-8 mx-auto mb-2 opacity-30" />
-            <p className="text-sm">{verConcluidosEmbalagem ? "Nenhum pedido com embalagem concluída." : "Nenhum pedido com itens a embalar."}</p>
-          </div>
+          <div className="text-center py-12 text-slate-400"><Box className="h-8 w-8 mx-auto mb-2 opacity-30" /><p className="text-sm">{verConcluidosEmbalagem ? "Nenhum pedido com embalagem concluída." : "Nenhum pedido com itens a embalar."}</p></div>
         ) : (
           <div className="grid gap-3">
             {lista.map(p => {
               const prog = progressoEmbalagem[p.id] || { bipados: p.total_bipados || 0, embalados: 0 };
               const concl = embalagemConcluida(p.id);
               return (
-                <button key={p.id} onClick={() => setPedido(p)}
-                  className={`bg-white rounded-2xl p-4 ring-1 text-left transition-all ${concl ? "ring-emerald-200 hover:bg-emerald-50" : "ring-slate-200 hover:ring-purple-300 hover:bg-purple-50"}`}>
+                <button key={p.id} onClick={() => setPedido(p)} className={`bg-white rounded-2xl p-4 ring-1 text-left transition-all ${concl ? "ring-emerald-200 hover:bg-emerald-50" : "ring-slate-200 hover:ring-purple-300 hover:bg-purple-50"}`}>
                   <div className="flex items-start justify-between gap-3 mb-3">
-                    <div>
-                      <div className="font-bold text-slate-800 text-sm">{p.lote}</div>
-                      <div className="text-xs text-slate-500 mt-0.5">{p.cliente}</div>
-                    </div>
-                    {concl ? (
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded-lg ring-1 bg-emerald-50 text-emerald-700 ring-emerald-200 flex items-center gap-1">
-                        <CheckCircle className="h-3 w-3" /> Embalado
-                      </span>
-                    ) : (
-                      <StatusBadge status={p.status} />
-                    )}
+                    <div><div className="font-bold text-slate-800 text-sm">{p.lote}</div><div className="text-xs text-slate-500 mt-0.5">{p.cliente}</div></div>
+                    {concl ? <span className="text-xs font-semibold px-2 py-0.5 rounded-lg ring-1 bg-emerald-50 text-emerald-700 ring-emerald-200 flex items-center gap-1"><CheckCircle className="h-3 w-3" /> Embalado</span> : <StatusBadge status={p.status} />}
                   </div>
                   <ProgressBar value={prog.embalados} total={prog.bipados} color={concl ? "#1D9E75" : "#F97316"} />
                   <p className="text-xs text-slate-400 mt-1">{fmtN(prog.embalados)} de {fmtN(prog.bipados)} bipados embalados</p>
@@ -1081,9 +1005,7 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
           <div className="flex-1"><h3 className="font-black text-slate-800 text-sm">{pedidoSel.lote}</h3><p className="text-xs text-slate-500">{pedidoSel.cliente}</p></div>
           <div className="flex items-center gap-2">
             {!temNFs && <span className="text-xs text-amber-600 font-semibold flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Importe as NFs para gerar romaneios</span>}
-            <button onClick={handleRomaneioPedido} disabled={gerandoRomaneio || caixas.length === 0 || !temNFs}
-              title={!temNFs ? "Importe as NFs primeiro" : ""}
-              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-purple-50 text-purple-700 ring-1 ring-purple-200 hover:bg-purple-100 transition disabled:opacity-40">
+            <button onClick={handleRomaneioPedido} disabled={gerandoRomaneio || caixas.length === 0 || !temNFs} title={!temNFs ? "Importe as NFs primeiro" : ""} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-purple-50 text-purple-700 ring-1 ring-purple-200 hover:bg-purple-100 transition disabled:opacity-40">
               {gerandoRomaneio ? <div className="h-3 w-3 border-2 border-purple-300 border-t-purple-700 rounded-full animate-spin" /> : <FileText className="h-3 w-3" />}
               Romaneio do Pedido
             </button>
@@ -1111,10 +1033,7 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
               </div>
               <div className="flex items-center gap-2">
                 <div className="text-right"><div className="text-2xl font-black text-[#7F2D92]">{caixaAtiva.total_itens || 0}/{CAPACIDADE}</div><div className="text-xs text-slate-400">unidades</div></div>
-                <button onClick={handleFecharCaixa} disabled={loading || !caixaAtiva.total_itens}
-                  className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-slate-100 text-slate-600 ring-1 ring-slate-200 hover:bg-slate-200 transition disabled:opacity-40">
-                  <Lock className="h-3 w-3" /> Fechar caixa
-                </button>
+                <button onClick={handleFecharCaixa} disabled={loading || !caixaAtiva.total_itens} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-slate-100 text-slate-600 ring-1 ring-slate-200 hover:bg-slate-200 transition disabled:opacity-40"><Lock className="h-3 w-3" /> Fechar caixa</button>
               </div>
             </div>
             <div className="mb-4">
@@ -1123,14 +1042,8 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
               </div>
             </div>
             <form onSubmit={handleBipar} className="flex gap-3">
-              <input ref={inputRef} type="text" value={imeiInput} onChange={e => setImei(e.target.value)}
-                placeholder="Bipe o IMEI para embalar..."
-                className="flex-1 rounded-xl border border-slate-200 px-4 py-3 text-sm font-mono font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7F2D92]"
-                autoComplete="off" />
-              <button type="submit" disabled={!imeiInput.trim()}
-                className="flex items-center gap-2 bg-[#7F2D92] text-white px-6 py-3 rounded-xl text-sm font-semibold hover:bg-[#5B1E74] transition disabled:opacity-50">
-                <CheckCircle className="h-4 w-4" /> Confirmar
-              </button>
+              <input ref={inputRef} type="text" value={imeiInput} onChange={e => setImei(e.target.value)} placeholder="Bipe o IMEI para embalar..." className="flex-1 rounded-xl border border-slate-200 px-4 py-3 text-sm font-mono font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7F2D92]" autoComplete="off" />
+              <button type="submit" disabled={!imeiInput.trim()} className="flex items-center gap-2 bg-[#7F2D92] text-white px-6 py-3 rounded-xl text-sm font-semibold hover:bg-[#5B1E74] transition disabled:opacity-50"><CheckCircle className="h-4 w-4" /> Confirmar</button>
             </form>
             {feedback && (
               <div className={`mt-3 flex items-start gap-2 text-sm rounded-xl px-4 py-3 ring-1 ${feedback.tipo === "ok" || feedback.tipo === "fechou" ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : feedback.tipo === "erro" ? "bg-red-50 text-red-700 ring-red-200" : "bg-amber-50 text-amber-700 ring-amber-200"}`}>
@@ -1159,10 +1072,7 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
                         <td className="px-3 py-2"><span className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded-lg font-semibold">{item.grade}</span></td>
                         <td className="px-3 py-2 text-slate-500 font-mono">{item.cod_item || "—"}</td>
                         <td className="px-3 py-2 text-center">
-                          <button onClick={() => setModalRemover({ item, caixaId: caixaAtiva.id, caixaNumero: caixaAtiva.numero })}
-                            className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-lg bg-red-50 text-red-600 ring-1 ring-red-200 hover:bg-red-100 transition">
-                            <Trash2 className="h-3 w-3" /> Remover
-                          </button>
+                          <button onClick={() => setModalRemover({ item, caixaId: caixaAtiva.id, caixaNumero: caixaAtiva.numero })} className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-lg bg-red-50 text-red-600 ring-1 ring-red-200 hover:bg-red-100 transition"><Trash2 className="h-3 w-3" /> Remover</button>
                         </td>
                       </tr>
                     ))}
@@ -1178,10 +1088,7 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
                 <p className="font-bold text-slate-700 text-sm">Nenhuma caixa aberta</p>
                 <p className="text-xs text-slate-400 mt-0.5">{caixas.filter(c => c.status === "fechada").length > 0 ? "Todas as caixas foram fechadas. Abra uma nova ou reabra uma existente." : "Abra a primeira caixa para iniciar a embalagem."}</p>
               </div>
-              <button onClick={handleNovaCaixa} disabled={loading}
-                className="flex items-center gap-2 bg-[#7F2D92] text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-[#5B1E74] transition disabled:opacity-50">
-                <Plus className="h-4 w-4" /> {loading ? "Criando..." : "Nova caixa"}
-              </button>
+              <button onClick={handleNovaCaixa} disabled={loading} className="flex items-center gap-2 bg-[#7F2D92] text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-[#5B1E74] transition disabled:opacity-50"><Plus className="h-4 w-4" /> {loading ? "Criando..." : "Nova caixa"}</button>
             </div>
             {feedback && (
               <div className={`mt-3 flex items-start gap-2 text-sm rounded-xl px-4 py-3 ring-1 ${feedback.tipo === "ok" || feedback.tipo === "fechou" ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : feedback.tipo === "erro" ? "bg-red-50 text-red-700 ring-red-200" : "bg-amber-50 text-amber-700 ring-amber-200"}`}>
@@ -1205,25 +1112,16 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
                     <div className="flex items-center gap-2 flex-wrap justify-end">
                       <StatusBadge status={caixa.status} />
                       {caixa.status === "fechada" && (
-                        <button onClick={() => handleReabrirCaixa(caixa)} disabled={loading}
-                          className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-amber-50 text-amber-700 ring-1 ring-amber-200 hover:bg-amber-100 transition disabled:opacity-40">
-                          <Unlock className="h-3 w-3" /> Reabrir
-                        </button>
+                        <button onClick={() => handleReabrirCaixa(caixa)} disabled={loading} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-amber-50 text-amber-700 ring-1 ring-amber-200 hover:bg-amber-100 transition disabled:opacity-40"><Unlock className="h-3 w-3" /> Reabrir</button>
                       )}
                       <button onClick={() => verDetalhesCaixa(caixa)} className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50 transition">{caixaDetalhes?.id === caixa.id ? "Ocultar" : "Ver itens"}</button>
-                      <button onClick={() => handleRomaneio(caixa)} disabled={gerando === caixa.id + "_rom" || !caixa.total_itens || !temNFs}
-                        title={!temNFs ? "Importe as NFs primeiro" : ""}
-                        className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-purple-50 text-purple-700 ring-1 ring-purple-200 hover:bg-purple-100 transition disabled:opacity-40">
+                      <button onClick={() => handleRomaneio(caixa)} disabled={gerando === caixa.id + "_rom" || !caixa.total_itens || !temNFs} title={!temNFs ? "Importe as NFs primeiro" : ""} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-purple-50 text-purple-700 ring-1 ring-purple-200 hover:bg-purple-100 transition disabled:opacity-40">
                         {gerando === caixa.id + "_rom" ? <div className="h-3 w-3 border-2 border-purple-300 border-t-purple-700 rounded-full animate-spin" /> : <FileText className="h-3 w-3" />} Romaneio
                       </button>
-                      <button onClick={() => handleEtiqueta(caixa)} disabled={gerando === caixa.id + "_etq" || !caixa.total_itens}
-                        className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-orange-50 text-orange-700 ring-1 ring-orange-200 hover:bg-orange-100 transition disabled:opacity-40">
+                      <button onClick={() => handleEtiqueta(caixa)} disabled={gerando === caixa.id + "_etq" || !caixa.total_itens} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-orange-50 text-orange-700 ring-1 ring-orange-200 hover:bg-orange-100 transition disabled:opacity-40">
                         {gerando === caixa.id + "_etq" ? <div className="h-3 w-3 border-2 border-orange-300 border-t-orange-700 rounded-full animate-spin" /> : <Tag className="h-3 w-3" />} Etiqueta
                       </button>
-                      <button onClick={() => setModalExcluir({ caixa, qtdItens: caixa.total_itens || 0 })} disabled={loading}
-                        className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-red-50 text-red-600 ring-1 ring-red-200 hover:bg-red-100 transition disabled:opacity-40">
-                        <Trash2 className="h-3 w-3" /> Excluir
-                      </button>
+                      <button onClick={() => setModalExcluir({ caixa, qtdItens: caixa.total_itens || 0 })} disabled={loading} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-red-50 text-red-600 ring-1 ring-red-200 hover:bg-red-100 transition disabled:opacity-40"><Trash2 className="h-3 w-3" /> Excluir</button>
                     </div>
                   </div>
                   {caixaDetalhes?.id === caixa.id && (
@@ -1249,22 +1147,15 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
                               <td className="px-3 py-2 text-right font-semibold text-slate-700">{fmtR(item.valor)}</td>
                               <td className="px-3 py-2 text-center">
                                 {caixa.status === "aberta" ? (
-                                  <button onClick={() => setModalRemover({ item, caixaId: caixa.id, caixaNumero: caixa.numero })}
-                                    className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-lg bg-red-50 text-red-600 ring-1 ring-red-200 hover:bg-red-100 transition">
-                                    <Trash2 className="h-3 w-3" /> Remover
-                                  </button>
-                                ) : (
-                                  <span className="text-xs text-slate-300">—</span>
-                                )}
+                                  <button onClick={() => setModalRemover({ item, caixaId: caixa.id, caixaNumero: caixa.numero })} className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-lg bg-red-50 text-red-600 ring-1 ring-red-200 hover:bg-red-100 transition"><Trash2 className="h-3 w-3" /> Remover</button>
+                                ) : <span className="text-xs text-slate-300">—</span>}
                               </td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
                       {caixa.status === "fechada" && (
-                        <div className="px-3 py-2 bg-amber-50 text-xs text-amber-700 font-semibold flex items-center gap-1.5">
-                          <AlertTriangle className="h-3 w-3" /> Reabra a caixa para remover itens individualmente.
-                        </div>
+                        <div className="px-3 py-2 bg-amber-50 text-xs text-amber-700 font-semibold flex items-center gap-1.5"><AlertTriangle className="h-3 w-3" /> Reabra a caixa para remover itens individualmente.</div>
                       )}
                     </div>
                   )}
@@ -1289,7 +1180,9 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
   const [feedbackExp, setFeedbackExp]   = useState({});
   const [resumos, setResumos]           = useState({});
   const [nfs, setNfs]                   = useState({});
-  const [painelAberto, setPainelAberto] = useState({});
+  const [exportacoes, setExportacoes]   = useState({});
+  const [painelNFs, setPainelNFs]       = useState({});
+  const [painelExp, setPainelExp]       = useState({});
   const [loadingResumo, setLoadingResumo] = useState({});
   const inputNFRefs = useRef({});
 
@@ -1302,6 +1195,7 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
     setPedidos(data);
     setResumos({});
     setNfs({});
+    setExportacoes({});
     onAtualizarSilencioso?.(data);
   }
 
@@ -1310,9 +1204,14 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
   async function carregarResumo(pedidoId) {
     if (resumos[pedidoId]) return;
     setLoadingResumo(prev => ({ ...prev, [pedidoId]: true }));
-    const [resumo, nfsPedido] = await Promise.all([buscarResumoValorPedido(pedidoId), listarNFsPedido(pedidoId)]);
+    const [resumo, nfsPedido, expPedido] = await Promise.all([
+      buscarResumoValorPedido(pedidoId),
+      listarNFsPedido(pedidoId),
+      listarExportacoesPedido(pedidoId),
+    ]);
     setResumos(prev => ({ ...prev, [pedidoId]: resumo }));
     setNfs(prev => ({ ...prev, [pedidoId]: nfsPedido }));
+    setExportacoes(prev => ({ ...prev, [pedidoId]: expPedido }));
     setLoadingResumo(prev => ({ ...prev, [pedidoId]: false }));
   }
 
@@ -1327,6 +1226,7 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
       } else {
         setFeedbackExp(prev => ({ ...prev, [pedido.id]: { tipo: "ok", msg: `✓ Exportação v${res.numeroExportacao} — ${fmtN(res.total)} itens — ${res.nomeArquivo}` } }));
         setResumos(prev => ({ ...prev, [pedido.id]: null }));
+        setExportacoes(prev => ({ ...prev, [pedido.id]: null }));
         carregarResumo(pedido.id);
         atualizarPedidos();
       }
@@ -1341,12 +1241,13 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
     setFeedbackExp(prev => ({ ...prev, [pedido.id]: null }));
     try {
       const res = await importarNFPlanilha(file, pedido.id, user.id);
-      setFeedbackExp(prev => ({
-        ...prev,
-        [pedido.id]: { tipo: "ok", msg: `✓ ${res.totalNFs} NF${res.totalNFs > 1 ? "s" : ""} importada${res.totalNFs > 1 ? "s" : ""} (${res.nfs.join(", ")}) — ${fmtN(res.totalItens)} itens` },
-      }));
+      const msg = res.relinkadas > 0
+        ? `✓ ${res.totalNFs} NF${res.totalNFs > 1 ? "s" : ""} processada${res.totalNFs > 1 ? "s" : ""} (${res.nfs.join(", ")}) — ${fmtN(res.totalItens)} itens · ${res.relinkadas} NF${res.relinkadas > 1 ? "s" : ""} relinkada${res.relinkadas > 1 ? "s" : ""}`
+        : `✓ ${res.totalNFs} NF${res.totalNFs > 1 ? "s" : ""} importada${res.totalNFs > 1 ? "s" : ""} (${res.nfs.join(", ")}) — ${fmtN(res.totalItens)} itens`;
+      setFeedbackExp(prev => ({ ...prev, [pedido.id]: { tipo: "ok", msg } }));
       setResumos(prev => ({ ...prev, [pedido.id]: null }));
       setNfs(prev => ({ ...prev, [pedido.id]: null }));
+      setExportacoes(prev => ({ ...prev, [pedido.id]: null }));
       carregarResumo(pedido.id);
       atualizarPedidos();
     } catch (e) {
@@ -1368,7 +1269,6 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
     const qtdBipados    = resumo?.qtdBipados    || 0;
     const total         = p.total_itens         || 0;
     const separacaoCompleta = total > 0 && (qtdBipados + qtdNaoFaturar) >= total;
-
     if (nfsPedido?.length > 0) {
       if (separacaoCompleta && qtdFaturada >= qtdBipados) return "faturado";
       return "faturamento_parcial";
@@ -1404,6 +1304,7 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
           {pedidosAbertos.map(p => {
             const resumo          = resumos[p.id];
             const nfsPedido       = nfs[p.id] || [];
+            const expPedido       = exportacoes[p.id] || [];
             const isLoading       = loadingResumo[p.id];
             const fb              = feedbackExp[p.id];
             const statusFat       = getStatusFat(p, resumo, nfsPedido);
@@ -1436,11 +1337,7 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
                 <div className="mb-4">
                   <p className="text-xs font-semibold text-slate-400 mb-1">Separação</p>
                   <ProgressBar value={qtdSeparados} total={p.total_itens || 0} />
-                  {qtdNaoFaturar > 0 && (
-                    <p className="text-xs text-red-500 font-semibold mt-1">
-                      {fmtN(qtdNaoFaturar)} não serão faturados · {fmtN(qtdBipados)} aptos para faturamento
-                    </p>
-                  )}
+                  {qtdNaoFaturar > 0 && <p className="text-xs text-red-500 font-semibold mt-1">{fmtN(qtdNaoFaturar)} não serão faturados · {fmtN(qtdBipados)} aptos para faturamento</p>}
                 </div>
                 {isLoading ? (
                   <div className="flex items-center justify-center h-12"><div className="h-4 w-4 border-2 border-purple-200 border-t-[#7F2D92] rounded-full animate-spin" /></div>
@@ -1472,33 +1369,63 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
                     )}
                   </div>
                 ) : null}
+
+                {/* ── NFs Importadas ── */}
                 {nfsPedido.length > 0 && (
-                  <div className="mb-4">
-                    <button onClick={() => setPainelAberto(prev => ({ ...prev, [p.id]: !prev[p.id] }))}
+                  <div className="mb-3">
+                    <button onClick={() => setPainelNFs(prev => ({ ...prev, [p.id]: !prev[p.id] }))}
                       className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-purple-700 transition mb-2">
-                      <FileText className="h-3 w-3" /> Notas Fiscais ({nfsPedido.length})
-                      {painelAberto[p.id] ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                      <Upload className="h-3 w-3" /> NFs Importadas ({nfsPedido.length})
+                      {painelNFs[p.id] ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                     </button>
-                    {painelAberto[p.id] && (
+                    {painelNFs[p.id] && (
                       <div className="space-y-2 bg-slate-50 rounded-xl p-3">
                         {nfsPedido.map(nf => (
                           <div key={nf.id} className="flex items-center justify-between text-xs bg-white rounded-xl px-3 py-2 ring-1 ring-slate-200">
-                            <div className="flex items-center gap-2">
-                              <FileText className="h-3.5 w-3.5 text-purple-500" />
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <FileText className="h-3.5 w-3.5 text-purple-500 shrink-0" />
                               <span className="font-bold text-slate-700">NF {nf.numero_nf}</span>
                               <span className="text-slate-400">· {fmtN(nf.total_itens)} itens</span>
                               {nf.valor_total > 0 && <span className="font-semibold text-emerald-600">· {fmtR(nf.valor_total)}</span>}
                               {nf.data_faturamento && <span className="text-slate-400">· {new Date(nf.data_faturamento).toLocaleDateString("pt-BR")}</span>}
                             </div>
-                            <span className="text-xs font-semibold px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 flex items-center gap-1">
-                              <CheckCircle className="h-3 w-3" /> Importada
-                            </span>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="text-slate-400">{nf.nome_importador}</span>
+                              <span className="text-xs font-semibold px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 flex items-center gap-1"><CheckCircle className="h-3 w-3" /> Importada</span>
+                            </div>
                           </div>
                         ))}
                       </div>
                     )}
                   </div>
                 )}
+
+                {/* ── Histórico de Exportações ── */}
+                {expPedido.length > 0 && (
+                  <div className="mb-3">
+                    <button onClick={() => setPainelExp(prev => ({ ...prev, [p.id]: !prev[p.id] }))}
+                      className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-emerald-700 transition mb-2">
+                      <History className="h-3 w-3" /> Histórico de Exportações ({expPedido.length})
+                      {painelExp[p.id] ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                    </button>
+                    {painelExp[p.id] && (
+                      <div className="space-y-2 bg-slate-50 rounded-xl p-3">
+                        {expPedido.map((exp, idx) => (
+                          <div key={exp.id} className="flex items-center justify-between text-xs bg-white rounded-xl px-3 py-2 ring-1 ring-slate-200">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Download className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                              <span className="font-bold text-slate-700">v{idx + 1}</span>
+                              <span className="text-slate-400">· {fmtN(exp.total_itens)} itens</span>
+                              <span className="text-slate-400">· {new Date(exp.exportado_em).toLocaleString("pt-BR")}</span>
+                            </div>
+                            <span className="text-slate-500 font-semibold shrink-0">{exp.nome_usuario}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="flex gap-2 flex-wrap items-center">
                   <button onClick={() => handleExportar(p)} disabled={exportando === p.id || !p.total_bipados}
                     className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100 transition disabled:opacity-40">
@@ -1537,7 +1464,7 @@ function TabConcluidos({ onVoltar }) {
   const [loading, setLoading]           = useState(true);
   const [filtroAno, setFiltroAno]       = useState("todos");
   const [filtroMes, setFiltroMes]       = useState("todos");
-  const [painelAberto, setPainelAberto] = useState({});
+  const [painelNFs, setPainelNFs]       = useState({});
 
   useEffect(() => { carregar(); }, []);
 
@@ -1634,30 +1561,34 @@ function TabConcluidos({ onVoltar }) {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-xs font-semibold px-2.5 py-1 rounded-lg ring-1 bg-emerald-100 text-emerald-700 ring-emerald-200 flex items-center gap-1">
-                    <CheckCircle className="h-3 w-3" /> Faturado
-                  </span>
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-lg ring-1 bg-emerald-100 text-emerald-700 ring-emerald-200 flex items-center gap-1"><CheckCircle className="h-3 w-3" /> Faturado</span>
                   <span className="text-sm font-black text-emerald-700">{fmtR(p.valorFat)}</span>
                 </div>
               </div>
+
+              {/* ── NFs com qtd de itens e importador ── */}
               {p.nfs?.length > 0 && (
                 <div>
-                  <button onClick={() => setPainelAberto(prev => ({ ...prev, [p.id]: !prev[p.id] }))}
+                  <button onClick={() => setPainelNFs(prev => ({ ...prev, [p.id]: !prev[p.id] }))}
                     className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-purple-700 transition mb-2">
-                    <FileText className="h-3 w-3" /> Notas Fiscais ({p.nfs.length})
-                    {painelAberto[p.id] ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                    <Upload className="h-3 w-3" /> NFs Importadas ({p.nfs.length})
+                    {painelNFs[p.id] ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                   </button>
-                  {painelAberto[p.id] && (
+                  {painelNFs[p.id] && (
                     <div className="space-y-2 bg-slate-50 rounded-xl p-3">
                       {p.nfs.map(nf => (
                         <div key={nf.id} className="flex items-center justify-between text-xs bg-white rounded-xl px-3 py-2 ring-1 ring-slate-200">
-                          <div className="flex items-center gap-2">
-                            <FileText className="h-3.5 w-3.5 text-emerald-500" />
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <FileText className="h-3.5 w-3.5 text-purple-500 shrink-0" />
                             <span className="font-bold text-slate-700">NF {nf.numero_nf}</span>
                             <span className="text-slate-400">· {fmtN(nf.total_itens)} itens</span>
                             {nf.valor_total > 0 && <span className="font-semibold text-emerald-600">· {fmtR(nf.valor_total)}</span>}
+                            {nf.data_faturamento && <span className="text-slate-400">· {new Date(nf.data_faturamento).toLocaleDateString("pt-BR")}</span>}
                           </div>
-                          {nf.data_faturamento && <span className="text-slate-400">{new Date(nf.data_faturamento).toLocaleDateString("pt-BR")}</span>}
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-slate-400">{nf.nome_importador || "—"}</span>
+                            <span className="text-xs font-semibold px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 flex items-center gap-1"><CheckCircle className="h-3 w-3" /> Importada</span>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1708,23 +1639,11 @@ export default function B2BPickingPage({ abaInicial = "picking" }) {
 
   async function carregarItensAnalise() {
     try {
-      const { data: pendentes } = await supabase
-        .from("b2b_itens")
-        .select("pedido_id")
-        .in("status", ["nao_localizado", "em_analise"]);
-
-      const { data: historico } = await supabase
-        .from("b2b_itens")
-        .select("pedido_id")
-        .not("nao_localizado_em", "is", null);
-
+      const { data: pendentes } = await supabase.from("b2b_itens").select("pedido_id").in("status", ["nao_localizado", "em_analise"]);
+      const { data: historico } = await supabase.from("b2b_itens").select("pedido_id").not("nao_localizado_em", "is", null);
       const mapa = {};
-      (historico || []).forEach(i => {
-        if (mapa[i.pedido_id] === undefined) mapa[i.pedido_id] = 0;
-      });
-      (pendentes || []).forEach(i => {
-        mapa[i.pedido_id] = (mapa[i.pedido_id] || 0) + 1;
-      });
+      (historico || []).forEach(i => { if (mapa[i.pedido_id] === undefined) mapa[i.pedido_id] = 0; });
+      (pendentes || []).forEach(i => { mapa[i.pedido_id] = (mapa[i.pedido_id] || 0) + 1; });
       setItensAnalise(mapa);
     } catch { setItensAnalise({}); }
   }
@@ -1758,14 +1677,12 @@ export default function B2BPickingPage({ abaInicial = "picking" }) {
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           {ctx.aberto > 0 && (
-            <button onClick={() => setVerConcluidos(false)}
-              className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-orange-50 text-orange-700 ring-1 ring-orange-200 hover:bg-orange-100 transition">
+            <button onClick={() => setVerConcluidos(false)} className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-orange-50 text-orange-700 ring-1 ring-orange-200 hover:bg-orange-100 transition">
               {ctx.aberto} {ctx.labelAberto}
             </button>
           )}
           {ctx.concluido > 0 && (
-            <button onClick={ctx.aoConcluido}
-              className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100 transition">
+            <button onClick={ctx.aoConcluido} className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100 transition">
               {ctx.concluido} {ctx.labelConcluido}{ctx.concluido > 1 ? "s" : ""}
             </button>
           )}
