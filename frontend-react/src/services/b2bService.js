@@ -198,6 +198,10 @@ export async function marcarLocalizado(itemId, novaLocalizacao, userId) {
     })
     .eq("id", itemId);
   if (error) throw new Error(error.message);
+
+  // Resolver um item pode completar o pedido — reavalia conclusão
+  const { data: item } = await supabase.from("b2b_itens").select("pedido_id").eq("id", itemId).single();
+  if (item?.pedido_id) await verificarEConcluirPedido(item.pedido_id);
 }
 
 export async function marcarNaoFaturar(itemId, motivo, observacao, userId) {
@@ -211,6 +215,10 @@ export async function marcarNaoFaturar(itemId, motivo, observacao, userId) {
     })
     .eq("id", itemId);
   if (error) throw new Error(error.message);
+
+  // Marcar não_faturar pode ser o último item pendente — reavalia conclusão
+  const { data: item } = await supabase.from("b2b_itens").select("pedido_id").eq("id", itemId).single();
+  if (item?.pedido_id) await verificarEConcluirPedido(item.pedido_id);
 }
 
 export async function reverterNaoLocalizado(itemId, novoLocal) {
@@ -317,13 +325,20 @@ async function verificarEConcluirPedido(pedidoId) {
     && totalAnalise === 0
     && (totalBipados + totalNaoFaturar) === total;
 
-  // Todos os itens bipados precisam ter NF (campo nf preenchido),
-  // e a soma das NFs cobre os bipados.
-  const todosBipadosFaturados = totalBipados > 0
-    && bipadosComNF >= totalBipados
-    && totalComNF >= totalBipados;
+  // Caso 1: pedido tem itens a faturar — todos os bipados precisam ter NF.
+  // Caso 2: pedido inteiro é não_faturar (0 bipados) — conclui sem exigir NF.
+  let podeConcluir = false;
+  if (todosResolvidos) {
+    if (totalBipados === 0) {
+      // Nada a faturar — todos os itens foram marcados não_faturar
+      podeConcluir = true;
+    } else {
+      // Há itens a faturar — exige NF cobrindo todos os bipados
+      podeConcluir = bipadosComNF >= totalBipados && totalComNF >= totalBipados;
+    }
+  }
 
-  if (todosResolvidos && todosBipadosFaturados) {
+  if (podeConcluir) {
     await supabase.from("b2b_pedidos").update({ status: "concluido" }).eq("id", pedidoId);
     return true;
   }
