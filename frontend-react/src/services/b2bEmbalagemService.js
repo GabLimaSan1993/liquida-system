@@ -130,14 +130,12 @@ export async function reabrirCaixa(caixaId, userId) {
 
 // ── Remover item de uma caixa ─────────────────────────────
 export async function removerItemCaixa(itemId, caixaId) {
-  // Desvincula o item da caixa — volta a ficar "bipado" disponível para reembalar
   const { error: errItem } = await supabase
     .from("b2b_itens")
     .update({ caixa_id: null, embalado_em: null, embalado_por: null })
     .eq("id", itemId);
   if (errItem) throw new Error(errItem.message);
 
-  // Recalcula o total da caixa pela contagem real (evita divergência)
   const { count } = await supabase
     .from("b2b_itens")
     .select("id", { count: "exact", head: true })
@@ -151,14 +149,12 @@ export async function removerItemCaixa(itemId, caixaId) {
 
 // ── Excluir caixa (devolve itens para reembalagem) ────────
 export async function excluirCaixa(caixaId) {
-  // Devolve todos os itens da caixa para "bipado disponível"
   const { error: errItens } = await supabase
     .from("b2b_itens")
     .update({ caixa_id: null, embalado_em: null, embalado_por: null })
     .eq("caixa_id", caixaId);
   if (errItens) throw new Error(errItens.message);
 
-  // Exclui a caixa
   const { error: errCaixa } = await supabase
     .from("b2b_caixas")
     .delete()
@@ -170,6 +166,8 @@ export async function excluirCaixa(caixaId) {
 
 // ── Romaneio por Caixa ────────────────────────────────────
 export async function gerarRomaneio(caixaId, pedido) {
+  console.log("DEBUG romaneio:", { caixaId, pedidoId: pedido?.id });
+
   // Verifica se há NFs importadas para este pedido
   const nfsPedido = await verificarNFsPedido(pedido.id);
   if (!nfsPedido.length) {
@@ -177,18 +175,21 @@ export async function gerarRomaneio(caixaId, pedido) {
   }
 
   const itens = await listarItensCaixa(caixaId);
+  console.log("DEBUG itens da caixa:", itens.length, itens.map(i => ({ imei: i.imei, nf: i.nf, caixa_id: i.caixa_id })));
 
   const { data: caixa } = await supabase
     .from("b2b_caixas").select("*").eq("id", caixaId).single();
 
   const { data: itensComNF } = await supabase
     .from("b2b_itens").select("nf").eq("caixa_id", caixaId).not("nf", "is", null);
+  console.log("DEBUG itensComNF:", itensComNF);
 
   const nfContagem = {};
   (itensComNF || []).forEach(i => {
     if (!i.nf) return;
     nfContagem[i.nf] = (nfContagem[i.nf] || 0) + 1;
   });
+  console.log("DEBUG nfContagem:", nfContagem);
 
   // Busca NFs da tabela b2b_nfs como fonte principal
   const nfsTabela = nfsPedido.map(n => String(n.numero_nf));
@@ -197,6 +198,7 @@ export async function gerarRomaneio(caixaId, pedido) {
   const { data: itensPedidoNF } = await supabase
     .from("b2b_itens").select("nf, caixa_id")
     .eq("pedido_id", pedido.id).not("nf", "is", null);
+  console.log("DEBUG itensPedidoNF:", itensPedidoNF);
 
   const nfTotalItens  = {};
   const nfCaixasTotal = {};
@@ -243,7 +245,6 @@ export async function gerarRomaneio(caixaId, pedido) {
 
   let currentY = 66;
 
-  // Seção de NFs — sempre mostra (já garantimos que existe)
   doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(127, 45, 146);
@@ -313,7 +314,6 @@ export async function gerarRomaneio(caixaId, pedido) {
 
 // ── Romaneio do Pedido Completo ───────────────────────────
 export async function gerarRomaneioPedido(pedido) {
-  // Verifica se há NFs importadas para este pedido
   const nfsPedidoCheck = await verificarNFsPedido(pedido.id);
   if (!nfsPedidoCheck.length) {
     throw new Error("Não é possível gerar o romaneio sem NFs importadas. Importe as NFs primeiro.");
@@ -336,7 +336,6 @@ export async function gerarRomaneioPedido(pedido) {
     if (i.caixa_id) nfCaixasTotal[i.nf].add(i.caixa_id);
   });
 
-  // NFs da tabela b2b_nfs
   const nfsTabela = await supabase
     .from("b2b_nfs").select("numero_nf")
     .eq("pedido_id", pedido.id)
@@ -368,7 +367,6 @@ export async function gerarRomaneioPedido(pedido) {
   doc.setDrawColor(0, 0, 0);
   doc.setLineWidth(0.5);
 
-  // ── Header ────────────────────────────────────────────────
   const headerH = 22;
   doc.rect(margL, y, col1W, headerH);
   doc.setFillColor(30, 30, 30);
@@ -405,7 +403,6 @@ export async function gerarRomaneioPedido(pedido) {
 
   y += headerH;
 
-  // ── Funções auxiliares ────────────────────────────────────
   function calcRowH(text, maxW, fontSize = 9) {
     doc.setFontSize(fontSize);
     const linhas = doc.splitTextToSize(String(text), maxW - 6);
@@ -450,11 +447,9 @@ export async function gerarRomaneioPedido(pedido) {
     y += h;
   }
 
-  // DATA em branco para preenchimento manual
   drawRow("DATA :", "");
   drawRow("CLIENTE :", pedido.cliente);
 
-  // ── NOTA FISCAL ──────────────────────────────────────────
   drawFullRow("NOTA FISCAL", rowH, 9, "bold");
   nfs.forEach(nf => drawFullRow(String(nf), rowH, 10, "bold"));
 
