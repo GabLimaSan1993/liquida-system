@@ -265,7 +265,7 @@ function FormNovaSolicitacao() {
     nome_cliente:          "",
     cpf:                   "",
     produto_nome:          "",
-    produto_condicao:      "Usado",
+    produto_condicao:      "Usado",  // fixo — todos entram como Usado
     produto_grade:         "",
     endereco_cep:          "",
     endereco_rua:          "",
@@ -378,18 +378,7 @@ function FormNovaSolicitacao() {
 
           <div>
             <label className={labelCls}>Produto Comprado Originalmente *</label>
-            <div className="flex gap-2 mb-2">
-              {["Usado", "Novo"].map(c => (
-                <button key={c} type="button" onClick={() => setField("produto_condicao", c)}
-                  className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ring-1 ${
-                    form.produto_condicao === c
-                      ? "bg-[#7F2D92] text-white ring-[#7F2D92]"
-                      : "bg-slate-50 text-slate-600 ring-slate-200 hover:bg-slate-100"
-                  }`}>
-                  {c}
-                </button>
-              ))}
-            </div>
+            {/* ── Botões Usado/Novo removidos — todos entram como Usado ── */}
             <input
               value={form.produto_nome}
               onChange={e => setField("produto_nome", e.target.value)}
@@ -499,7 +488,6 @@ const ETAPA_LABEL = {
   concluido:    "Concluído",
 };
 
-// Calcula a etapa efetiva da troca a partir de status + operação
 function etapaEfetiva(troca) {
   const op = troca.trocas_b2c_operacao?.[0] || {};
   if (troca.status === "concluido" || op.status_furbtech === "postado" || op.rastreio) return "postado";
@@ -508,13 +496,12 @@ function etapaEfetiva(troca) {
   return "em_aberto";
 }
 
-// SLA D+2 em dias corridos sobre data_solicitacao (fallback criado_em)
 function calcularSLA(troca) {
   const base = troca.data_solicitacao || troca.criado_em;
   if (!base) return { dias: null, prazo: null, vencido: false, venceHoje: false };
   const dataBase = new Date(base);
   const prazo = new Date(dataBase);
-  prazo.setDate(prazo.getDate() + 2); // D+2
+  prazo.setDate(prazo.getDate() + 2);
 
   const hoje = new Date();
   hoje.setHours(0, 0, 0, 0);
@@ -524,7 +511,7 @@ function calcularSLA(troca) {
   const diffDias = Math.round((prazoZ - hoje) / (1000 * 60 * 60 * 24));
   return {
     prazo,
-    diasRestantes: diffDias,        // negativo = atrasado
+    diasRestantes: diffDias,
     vencido: diffDias < 0,
     venceHoje: diffDias === 0,
   };
@@ -532,18 +519,17 @@ function calcularSLA(troca) {
 
 function StatusBadge({ status }) {
   const map = {
-    em_aberto:        { label: "Em aberto",       cls: "bg-blue-50 text-blue-700 ring-blue-200"       },
-    em_separacao:     { label: "Em separação",    cls: "bg-yellow-50 text-yellow-700 ring-yellow-200" },
-    faturado:         { label: "Faturado",        cls: "bg-purple-50 text-purple-700 ring-purple-200" },
-    postado:          { label: "Postado",         cls: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
-    movido_reembolso: { label: "Reembolso",       cls: "bg-red-50 text-red-700 ring-red-200"          },
-    concluido:        { label: "Concluído",       cls: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
+    em_aberto:        { label: "Em aberto",    cls: "bg-blue-50 text-blue-700 ring-blue-200"          },
+    em_separacao:     { label: "Em separação", cls: "bg-yellow-50 text-yellow-700 ring-yellow-200"    },
+    faturado:         { label: "Faturado",     cls: "bg-purple-50 text-purple-700 ring-purple-200"    },
+    postado:          { label: "Postado",      cls: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
+    movido_reembolso: { label: "Reembolso",    cls: "bg-red-50 text-red-700 ring-red-200"             },
+    concluido:        { label: "Concluído",    cls: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
   };
   const s = map[status] || { label: status, cls: "bg-slate-50 text-slate-500 ring-slate-200" };
   return <span className={`text-xs font-semibold px-2.5 py-1 rounded-lg ring-1 ${s.cls}`}>{s.label}</span>;
 }
 
-// Timeline horizontal de etapas
 function Timeline({ etapaAtual, reembolso }) {
   if (reembolso) {
     return (
@@ -582,17 +568,16 @@ function Timeline({ etapaAtual, reembolso }) {
 
 function CardAcompanhamento({ troca }) {
   const [aberto, setAberto] = useState(false);
-  const op = troca.trocas_b2c_operacao?.[0] || {};
-  const skus = (troca.trocas_b2c_skus || []).sort((a, b) => a.ordem - b.ordem);
-  const etapa = etapaEfetiva(troca);
+  const op     = troca.trocas_b2c_operacao?.[0] || {};
+  const skus   = (troca.trocas_b2c_skus || []).sort((a, b) => a.ordem - b.ordem);
+  const etapa  = etapaEfetiva(troca);
   const reembolso = troca.status === "movido_reembolso";
   const concluido = etapa === "postado" || troca.status === "concluido";
-  const sla = calcularSLA(troca);
+  const sla    = calcularSLA(troca);
 
-  // Destaque de SLA só faz sentido enquanto não concluiu/reembolsou
   const mostrarSLA = !concluido && !reembolso;
   const slaCls = !mostrarSLA ? "" :
-    sla.vencido ? "bg-red-50 text-red-700 ring-red-200" :
+    sla.vencido   ? "bg-red-50 text-red-700 ring-red-200" :
     sla.venceHoje ? "bg-amber-50 text-amber-700 ring-amber-200" :
     "bg-slate-50 text-slate-600 ring-slate-200";
 
@@ -624,12 +609,10 @@ function CardAcompanhamento({ troca }) {
         </button>
       </div>
 
-      {/* Timeline */}
       <Timeline etapaAtual={etapa} reembolso={reembolso} />
 
       {aberto && (
         <div className="mt-4 border-t border-slate-100 pt-4 space-y-3">
-          {/* SKUs aceitos */}
           {skus.length > 0 && (
             <div>
               <p className="text-xs font-bold text-slate-500 mb-1.5">SKUs aceitos</p>
@@ -644,7 +627,6 @@ function CardAcompanhamento({ troca }) {
             </div>
           )}
 
-          {/* Dados da operação (Furb) */}
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div className="bg-slate-50 rounded-xl px-3 py-2">
               <p className="text-slate-400 font-semibold mb-0.5">IMEI separado</p>
@@ -666,14 +648,12 @@ function CardAcompanhamento({ troca }) {
             </div>
           </div>
 
-          {/* Rastreio */}
           {op.rastreio && (
             <div className="bg-emerald-50 ring-1 ring-emerald-200 rounded-xl px-3 py-2 text-xs text-emerald-700 font-semibold flex items-center gap-1.5">
               <Truck className="h-3.5 w-3.5" /> Rastreio: {op.rastreio}
             </div>
           )}
 
-          {/* Endereço */}
           {troca.endereco && (
             <div>
               <p className="text-xs font-bold text-slate-500 mb-1 flex items-center gap-1"><MapPin className="h-3 w-3" /> Endereço de entrega</p>
@@ -690,7 +670,7 @@ function AbaAcompanhamento() {
   const [trocas, setTrocas]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [busca, setBusca]     = useState("");
-  const [filtro, setFiltro]   = useState("todas"); // todas | em_andamento | atrasadas | concluidas | reembolso
+  const [filtro, setFiltro]   = useState("todas");
 
   useEffect(() => { carregar(); }, []);
 
@@ -704,11 +684,11 @@ function AbaAcompanhamento() {
   }
 
   const enriquecidas = trocas.map(t => {
-    const etapa = etapaEfetiva(t);
+    const etapa     = etapaEfetiva(t);
     const reembolso = t.status === "movido_reembolso";
     const concluido = etapa === "postado" || t.status === "concluido";
-    const sla = calcularSLA(t);
-    const atrasada = !concluido && !reembolso && sla.vencido;
+    const sla       = calcularSLA(t);
+    const atrasada  = !concluido && !reembolso && sla.vencido;
     return { ...t, _etapa: etapa, _reembolso: reembolso, _concluido: concluido, _atrasada: atrasada };
   });
 
@@ -725,7 +705,6 @@ function AbaAcompanhamento() {
       || t.nome_cliente?.toLowerCase().includes(busca.toLowerCase())
       || t.cpf?.includes(busca);
     if (!matchBusca) return false;
-
     if (filtro === "em_andamento") return !t._concluido && !t._reembolso;
     if (filtro === "atrasadas")    return t._atrasada;
     if (filtro === "concluidas")   return t._concluido;
@@ -734,16 +713,15 @@ function AbaAcompanhamento() {
   });
 
   const FILTROS = [
-    { key: "todas",        label: "Todas",          cor: "bg-[#7F2D92]" },
-    { key: "em_andamento", label: "Em andamento",   cor: "bg-blue-600" },
-    { key: "atrasadas",    label: "Atrasadas",      cor: "bg-red-600" },
-    { key: "concluidas",   label: "Concluídas",     cor: "bg-emerald-600" },
-    { key: "reembolso",    label: "Reembolso",      cor: "bg-red-500" },
+    { key: "todas",        label: "Todas",        cor: "bg-[#7F2D92]"  },
+    { key: "em_andamento", label: "Em andamento", cor: "bg-blue-600"   },
+    { key: "atrasadas",    label: "Atrasadas",    cor: "bg-red-600"    },
+    { key: "concluidas",   label: "Concluídas",   cor: "bg-emerald-600"},
+    { key: "reembolso",    label: "Reembolso",    cor: "bg-red-500"    },
   ];
 
   return (
     <div className="space-y-4">
-      {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="rounded-xl p-4 ring-1 bg-purple-50 ring-purple-200 text-purple-700">
           <div className="text-2xl font-black">{kpis.total}</div>
@@ -763,7 +741,6 @@ function AbaAcompanhamento() {
         </div>
       </div>
 
-      {/* Filtros + busca */}
       <div className="flex items-center gap-2 flex-wrap">
         {FILTROS.map(f => (
           <button key={f.key} onClick={() => setFiltro(f.key)}
@@ -784,7 +761,6 @@ function AbaAcompanhamento() {
           className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#7F2D92] bg-white" />
       </div>
 
-      {/* Lista */}
       {loading ? (
         <div className="flex items-center justify-center h-32">
           <div className="h-8 w-8 border-4 border-purple-200 border-t-[#7F2D92] rounded-full animate-spin" />
@@ -810,8 +786,8 @@ export default function TrocasB2CAssurantPage() {
   const [aba, setAba] = useState("nova");
 
   const ABAS = [
-    { key: "nova",          label: "Nova Solicitação", icon: FilePlus  },
-    { key: "acompanhamento", label: "Acompanhamento",  icon: ListChecks },
+    { key: "nova",           label: "Nova Solicitação", icon: FilePlus   },
+    { key: "acompanhamento", label: "Acompanhamento",   icon: ListChecks },
   ];
 
   return (
@@ -837,8 +813,8 @@ export default function TrocasB2CAssurantPage() {
         })}
       </div>
 
-      {aba === "nova"           && <FormNovaSolicitacao />}
-      {aba === "acompanhamento" && <AbaAcompanhamento />}
+      {aba === "nova"            && <FormNovaSolicitacao />}
+      {aba === "acompanhamento"  && <AbaAcompanhamento />}
     </div>
   );
 }
