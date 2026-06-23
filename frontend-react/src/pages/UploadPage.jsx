@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { FileSpreadsheet, Upload, Landmark, Package, GitBranch, ScanLine } from "lucide-react";
+import { FileSpreadsheet, Upload, Landmark, Package, GitBranch, ScanLine, ShoppingCart } from "lucide-react";
 import {
   previewFile,
   uploadAgingFile,
@@ -16,6 +16,7 @@ import {
 } from "../services/assurantMovimentacaoService.js";
 import { importarPedidoB2B } from "../services/b2bService.js";
 import { importarNFs }        from "../services/b2bNfService.js";
+import { uploadAnymarketZip } from "../services/anymarketService.js";
 import { supabase }           from "../lib/supabase.js";
 import { useAuth }            from "../AuthContext.jsx";
 
@@ -139,7 +140,6 @@ function UploadBox({
 export default function UploadPage() {
   const { profile, user } = useAuth();
   const isMaster   = profile?.is_master;
-  const isAssurant = profile?.area_tecnica === "assurant" && !isMaster;
 
   const [agingFile, setAgingFile]                               = useState(null);
   const [faturamentoFile, setFaturamentoFile]                   = useState(null);
@@ -166,18 +166,24 @@ export default function UploadPage() {
   const [loadingMovPreview, setLoadingMovPreview]               = useState(false);
   const [loadingMovUpload, setLoadingMovUpload]                 = useState(false);
 
-  // ── Estados Pedido B2B ────────────────────────────────
+  // ── Pedido B2B ────────────────────────────────────────
   const [b2bFile, setB2bFile]                                   = useState(null);
   const [b2bPreview, setB2bPreview]                             = useState(null);
   const [loadingB2bUpload, setLoadingB2bUpload]                 = useState(false);
   const [b2bCondicaoPagamento, setB2bCondicaoPagamento]         = useState("");
   const [b2bCnpjAgregado, setB2bCnpjAgregado]                   = useState("");
 
+  // ── NF B2B ────────────────────────────────────────────
   const [nfFile, setNfFile]                                     = useState(null);
   const [nfPedidoId, setNfPedidoId]                             = useState("");
   const [nfPreview, setNfPreview]                               = useState(null);
   const [loadingNfUpload, setLoadingNfUpload]                   = useState(false);
   const [pedidosB2B, setPedidosB2B]                             = useState([]);
+
+  // ── AnyMarket ─────────────────────────────────────────
+  const [anyFile, setAnyFile]                                   = useState(null);
+  const [anyPreview, setAnyPreview]                             = useState(null);
+  const [loadingAnyUpload, setLoadingAnyUpload]                 = useState(false);
 
   const [status, setStatus]     = useState("");
   const [progress, setProgress] = useState(0);
@@ -192,6 +198,7 @@ export default function UploadPage() {
     { type: "Movimentação Assurant", name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
     { type: "Pedido B2B",            name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
     { type: "NF B2B",                name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+    { type: "AnyMarket",             name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
   ]);
 
   useEffect(() => {
@@ -211,6 +218,7 @@ export default function UploadPage() {
     );
   }
 
+  // ── Handlers master ───────────────────────────────────
   async function handlePreviewAging() {
     try {
       if (!agingFile) { setStatus("Selecione um arquivo de Aging."); return; }
@@ -315,6 +323,7 @@ export default function UploadPage() {
     }
   }
 
+  // ── Handlers Assurant ─────────────────────────────────
   async function handlePreviewTriagem() {
     try {
       if (!triagemFile) { setStatus("Selecione um arquivo de Triagem."); return; }
@@ -402,6 +411,7 @@ export default function UploadPage() {
     }
   }
 
+  // ── Handler B2B ───────────────────────────────────────
   async function handleUploadB2B() {
     try {
       if (!b2bFile) { setStatus("Selecione uma planilha de Pedido B2B."); return; }
@@ -460,6 +470,32 @@ export default function UploadPage() {
     }
   }
 
+  // ── Handler AnyMarket ─────────────────────────────────
+  async function handleUploadAnymarket() {
+    try {
+      if (!anyFile) { setStatus("Selecione um arquivo .zip do AnyMarket."); return; }
+      setLoadingAnyUpload(true);
+      setProgress(0);
+      setStatus("Processando exportação AnyMarket...");
+      updateHistoryCard("AnyMarket", { name: anyFile.name, status: "Enviando", progress: 5 });
+      const result = await uploadAnymarketZip(anyFile, user.id, ({ inserted, total }) => {
+        const pct = total ? Math.round(inserted / total * 100) : 0;
+        setProgress(pct);
+        updateHistoryCard("AnyMarket", { name: anyFile.name, status: "Enviando", rows: total.toLocaleString("pt-BR"), progress: pct });
+        setStatus(`AnyMarket: ${inserted.toLocaleString("pt-BR")} de ${total.toLocaleString("pt-BR")} pedidos processados.`);
+      });
+      updateHistoryCard("AnyMarket", { name: anyFile.name, status: "Concluído", rows: result.total.toLocaleString("pt-BR"), progress: 100 });
+      setProgress(100);
+      setAnyPreview({ mensagem: `✓ ${result.total.toLocaleString("pt-BR")} pedidos importados com sucesso!` });
+      setStatus(`AnyMarket importado! ${result.total.toLocaleString("pt-BR")} pedidos processados.`);
+    } catch (error) {
+      setStatus(`Erro ao importar AnyMarket: ${error.message}`);
+      updateHistoryCard("AnyMarket", { status: "Erro" });
+    } finally {
+      setLoadingAnyUpload(false);
+    }
+  }
+
   const inputCls = "w-full rounded-xl border border-[#D8B4FE] px-3 py-2 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-400 disabled:opacity-50 bg-white";
 
   return (
@@ -472,6 +508,7 @@ export default function UploadPage() {
 
         <div className="mt-4 grid gap-4 xl:grid-cols-2">
 
+          {/* ── Blocos só para Master ── */}
           {isMaster && (
             <>
               <UploadBox
@@ -517,6 +554,7 @@ export default function UploadPage() {
             </>
           )}
 
+          {/* ── Triagem Assurant ── */}
           <UploadBox
             title="Triagem Assurant — Diária"
             description="Importe a planilha de triagem, recebimento e expedição do Warehouse."
@@ -543,6 +581,7 @@ export default function UploadPage() {
             }
           />
 
+          {/* ── Movimentação Assurant ── */}
           <UploadBox
             title="Movimentação Assurant — Histórico"
             description="Importe o histórico de etapas por voucher para análise de SLA e rastreabilidade."
@@ -562,7 +601,7 @@ export default function UploadPage() {
             }
           />
 
-          {/* ── Pedido B2B — com Condição de Pagamento e CNPJ do Agregado ── */}
+          {/* ── Pedido B2B ── */}
           <div className="rounded-[24px] border border-dashed border-[#D8B4FE] bg-[#FCFAFF] p-5">
             <div className="flex items-start justify-between">
               <div>
@@ -580,7 +619,6 @@ export default function UploadPage() {
               📋 Formato: planilha PICKING_*.xlsx recebida por e-mail · Após importar, acesse Picking B2B para separação
             </div>
 
-            {/* Campos extras */}
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label className="block text-xs font-bold text-slate-600 mb-1">Condição de Pagamento</label>
@@ -637,7 +675,7 @@ export default function UploadPage() {
             )}
           </div>
 
-          {/* NF B2B */}
+          {/* ── NF B2B ── */}
           <div className="rounded-[24px] border border-dashed border-[#D8B4FE] bg-[#FCFAFF] p-5">
             <div className="flex items-start justify-between">
               <div>
@@ -715,6 +753,52 @@ export default function UploadPage() {
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+          </div>
+
+          {/* ── AnyMarket ── */}
+          <div className="rounded-[24px] border border-dashed border-[#D8B4FE] bg-[#FCFAFF] p-5">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="text-lg font-bold text-[#6B1F87]">AnyMarket — Pedidos</div>
+                <div className="mt-1 text-sm text-slate-500">
+                  Importe o arquivo .zip exportado do AnyMarket com os pedidos do marketplace.
+                </div>
+              </div>
+              <div className="rounded-2xl bg-[linear-gradient(135deg,#F97316_0%,#F59E0B_100%)] p-3 text-white shadow-lg shrink-0 ml-3">
+                <ShoppingCart className="h-5 w-5" />
+              </div>
+            </div>
+
+            <div className="mt-4 text-xs text-slate-500 bg-emerald-50 ring-1 ring-emerald-200 rounded-xl px-3 py-2">
+              📋 Arquivo .zip exportado direto do AnyMarket · Pedidos são atualizados automaticamente (upsert por ID)
+            </div>
+
+            <div className="mt-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-[#E9D5FF]">
+              <input
+                type="file"
+                accept=".zip"
+                onChange={e => { setAnyFile(e.target.files?.[0] || null); setAnyPreview(null); }}
+                className="block w-full text-sm text-slate-600"
+              />
+              <div className="mt-3 text-sm font-medium">
+                {anyFile ? anyFile.name : "Nenhum arquivo selecionado"}
+              </div>
+              <div className="mt-1 text-xs text-slate-500">
+                {anyFile ? "Arquivo pronto para envio" : "Selecione um arquivo .zip"}
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <Button onClick={handleUploadAnymarket} disabled={!anyFile || loadingAnyUpload}>
+                {loadingAnyUpload ? "Importando..." : "Enviar arquivo"}
+              </Button>
+            </div>
+
+            {anyPreview && (
+              <div className="mt-4 rounded-2xl bg-white p-4 ring-1 ring-[#E9D5FF]">
+                <div className="text-sm font-bold text-emerald-700">{anyPreview.mensagem}</div>
               </div>
             )}
           </div>

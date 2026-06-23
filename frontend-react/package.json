@@ -16,6 +16,7 @@
     "jsbarcode": "^3.11.6",
     "jspdf": "^2.5.1",
     "jspdf-autotable": "^3.8.2",
+    "jszip": "^3.10.1",
     "lucide-react": "^1.8.0",
     "papaparse": "^5.5.3",
     "react": "^19.2.4",
