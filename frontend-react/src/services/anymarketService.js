@@ -29,7 +29,7 @@ const COLUMN_MAP = {
   "FORMA DE PAGAMENTO":                    "forma_de_pagamento",
   "TÍTULO PRODUTO":                        "titulo_produto",
   "QUANTIDADE":                            "quantidade",
-  "VALOR UNITÁRIO":                        "valor_unitario",
+  "VALOR UNITARIO":                        "valor_unitario",
   "SKU PRODUTO":                           "sku_produto",
   "EAN PRODUTO":                           "ean_produto",
   "CONTA":                                 "conta",
@@ -52,7 +52,7 @@ const COLUMN_MAP = {
   "DATA ENTREGA":                          "data_entrega",
   "DATA ENTREGA NA TRANSPORTADORA":        "data_entrega_na_transportadora",
   "INSCRIÇÃO ESTADUAL":                    "inscricao_estadual",
-  "MOTIVO DO CANCELAMENTO":               "motivo_do_cancelamento",
+  "MOTIVO DO CANCELAMENTO":                "motivo_do_cancelamento",
   "BANDEIRA":                              "bandeira",
   "NOME DA LOJA OFICIAL":                  "nome_da_loja_oficial",
   "ORIGEM CANCELAMENTO":                   "origem_cancelamento",
@@ -69,7 +69,7 @@ const COLUMN_MAP = {
   "DESCONTO DO PRODUTO":                   "desconto_do_produto",
   "ID DE PAGAMENTO DO MARKETPLACE":        "id_de_pagamento_do_marketplace",
   "JUROS":                                 "juros",
-  "DESCONTO DO MARKETPLACE (METADATA)":   "desconto_do_marketplace_metadata",
+  "DESCONTO DO MARKETPLACE (METADATA)":    "desconto_do_marketplace_metadata",
   "SKU DO PRODUTO NO MARKETPLACE":         "sku_do_produto_no_marketplace",
   "PRODUTO É CATÁLOGO":                    "produto_e_catalogo",
   "SKU QUE ORIGINOU O CATÁLOGO":           "sku_que_originou_o_catalogo",
@@ -127,7 +127,6 @@ function mapRow(rawHeaders, values, userId) {
 }
 
 export async function uploadAnymarketZip(file, userId, onProgress) {
-  // Extrai o xlsx do zip
   const JSZip = (await import("jszip")).default;
   const zipData = await file.arrayBuffer();
   const zip = await JSZip.loadAsync(zipData);
@@ -145,31 +144,23 @@ export async function uploadAnymarketZip(file, userId, onProgress) {
   if (!allRows.length) throw new Error("Planilha vazia.");
 
   const headers = allRows[0];
-  const dataRows = allRows.slice(1).filter(r => r.some(v => v !== null));
+  const rows = allRows
+    .slice(1)
+    .filter(r => r.some(v => v !== null))
+    .map(r => mapRow(headers, r, userId))
+    .filter(r => r.id_anymarket != null);
 
-  if (!dataRows.length) throw new Error("Nenhuma linha de dados encontrada.");
+  if (!rows.length) throw new Error("Nenhum registro válido encontrado.");
 
-  // Coleta IDs já existentes para upsert inteligente
-  const ids = dataRows
-    .map(r => {
-      const idIdx = headers.indexOf("ID ANYMARKET");
-      return idIdx >= 0 ? parseFloat(r[idIdx]) : null;
-    })
-    .filter(Boolean);
-
-  const rows = dataRows.map(r => mapRow(headers, r, userId));
-
-  // Upsert em chunks de 500
+  // Insert simples em chunks de 500 — sem upsert pois id_anymarket não é mais único
   const CHUNK = 500;
   let inserted = 0;
-  let atualizados = 0;
 
   for (let i = 0; i < rows.length; i += CHUNK) {
     const chunk = rows.slice(i, i + CHUNK);
-    const { error, data } = await supabase
+    const { error } = await supabase
       .from("anymarket_pedidos")
-      .upsert(chunk, { onConflict: "id_anymarket", ignoreDuplicates: false })
-      .select("id_anymarket");
+      .insert(chunk);
 
     if (error) throw new Error(`Erro ao inserir lote ${i / CHUNK + 1}: ${error.message}`);
 
@@ -185,6 +176,7 @@ export async function buscarPedidoAnymarket(idAnymarket) {
     .from("anymarket_pedidos")
     .select("*")
     .eq("id_anymarket", idAnymarket)
+    .limit(1)
     .single();
   if (error) return null;
   return data;
