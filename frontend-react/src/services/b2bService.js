@@ -496,16 +496,29 @@ export async function buscarResumoValorPedido(pedidoId) {
   };
 }
 
+// ── CORRIGIDO: sem join, query separada para user_profiles ──
 export async function listarNFsPedido(pedidoId) {
   const { data: nfs } = await supabase
     .from("b2b_nfs")
-    .select("*, user_profiles!importado_por(nome)")
+    .select("*")
     .eq("pedido_id", pedidoId)
-    .order("importado_em", { ascending: true });
+    .order("data_faturamento", { ascending: true });
 
-  return (nfs || []).map(n => ({
+  if (!nfs?.length) return [];
+
+  const userIds = [...new Set(nfs.map(n => n.importado_por).filter(Boolean))];
+  let nomeMap = {};
+  if (userIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from("user_profiles")
+      .select("id, nome")
+      .in("id", userIds);
+    (profiles || []).forEach(p => { nomeMap[p.id] = p.nome; });
+  }
+
+  return nfs.map(n => ({
     ...n,
-    nome_importador: n.user_profiles?.nome || n.importado_por || "—",
+    nome_importador: nomeMap[n.importado_por] || "—",
   }));
 }
 
@@ -518,6 +531,7 @@ export async function listarExportacoesPedido(pedidoId) {
   return data || [];
 }
 
+// ── CORRIGIDO: sem join, query separada para user_profiles ──
 export async function listarPedidosConcluidos() {
   const { data: pedidos, error } = await supabase
     .from("b2b_pedidos").select("*").eq("status", "concluido").order("criado_em", { ascending: false });
@@ -526,19 +540,27 @@ export async function listarPedidosConcluidos() {
 
   const pedidoIds = pedidos.map(p => p.id);
 
-  // Busca NFs com nome do importador
   const { data: nfsRaw } = await supabase
     .from("b2b_nfs")
-    .select("*, user_profiles!importado_por(nome)")
+    .select("*")
     .in("pedido_id", pedidoIds)
     .order("data_faturamento", { ascending: true });
 
+  const nfUserIds = [...new Set((nfsRaw || []).map(n => n.importado_por).filter(Boolean))];
+  let nfNomeMap = {};
+  if (nfUserIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from("user_profiles")
+      .select("id, nome")
+      .in("id", nfUserIds);
+    (profiles || []).forEach(p => { nfNomeMap[p.id] = p.nome; });
+  }
+
   const nfs = (nfsRaw || []).map(n => ({
     ...n,
-    nome_importador: n.user_profiles?.nome || n.importado_por || "—",
+    nome_importador: nfNomeMap[n.importado_por] || "—",
   }));
 
-  // Busca exportações
   const { data: exportacoesRaw } = await supabase
     .from("b2b_exportacoes")
     .select("*")
@@ -550,9 +572,9 @@ export async function listarPedidosConcluidos() {
     .in("pedido_id", pedidoIds);
 
   return pedidos.map(p => {
-    const nfsPedido        = nfs.filter(n => n.pedido_id === p.id);
+    const nfsPedido         = nfs.filter(n => n.pedido_id === p.id);
     const exportacoesPedido = (exportacoesRaw || []).filter(e => e.pedido_id === p.id);
-    const itensPedido      = (itens || []).filter(i => i.pedido_id === p.id);
+    const itensPedido       = (itens || []).filter(i => i.pedido_id === p.id);
 
     const valorFat = nfsPedido.length > 0
       ? nfsPedido.reduce((s, n) => s + (n.valor_total || 0), 0)
@@ -566,12 +588,12 @@ export async function listarPedidosConcluidos() {
 
     return {
       ...p,
-      nfs:        nfsPedido,
+      nfs:         nfsPedido,
       exportacoes: exportacoesPedido,
       valorFat,
-      tempoMedio: tempoMedio ? Math.round(tempoMedio) : null,
-      anoPedido:  dataPedido.getFullYear(),
-      mesPedido:  dataPedido.getMonth() + 1,
+      tempoMedio:  tempoMedio ? Math.round(tempoMedio) : null,
+      anoPedido:   dataPedido.getFullYear(),
+      mesPedido:   dataPedido.getMonth() + 1,
     };
   });
 }
