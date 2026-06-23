@@ -141,7 +141,6 @@ export default function UploadPage() {
   const isMaster   = profile?.is_master;
   const isAssurant = profile?.area_tecnica === "assurant" && !isMaster;
 
-  // ── Estados existentes ────────────────────────────────
   const [agingFile, setAgingFile]                               = useState(null);
   const [faturamentoFile, setFaturamentoFile]                   = useState(null);
   const [ofxFile, setOfxFile]                                   = useState(null);
@@ -153,7 +152,6 @@ export default function UploadPage() {
   const [loadingFaturamentoUpload, setLoadingFaturamentoUpload] = useState(false);
   const [loadingOfxUpload, setLoadingOfxUpload]                 = useState(false);
 
-  // ── Estados Triagem Assurant ──────────────────────────
   const [triagemFile, setTriagemFile]                           = useState(null);
   const [triagemPreview, setTriagemPreview]                     = useState(null);
   const [loadingTriagemPreview, setLoadingTriagemPreview]       = useState(false);
@@ -163,7 +161,6 @@ export default function UploadPage() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   });
 
-  // ── Estados Movimentação Assurant ─────────────────────
   const [movFile, setMovFile]                                   = useState(null);
   const [movPreview, setMovPreview]                             = useState(null);
   const [loadingMovPreview, setLoadingMovPreview]               = useState(false);
@@ -173,15 +170,15 @@ export default function UploadPage() {
   const [b2bFile, setB2bFile]                                   = useState(null);
   const [b2bPreview, setB2bPreview]                             = useState(null);
   const [loadingB2bUpload, setLoadingB2bUpload]                 = useState(false);
+  const [b2bCondicaoPagamento, setB2bCondicaoPagamento]         = useState("");
+  const [b2bCnpjAgregado, setB2bCnpjAgregado]                   = useState("");
 
-  // ── Estados NF B2B ────────────────────────────────────
   const [nfFile, setNfFile]                                     = useState(null);
   const [nfPedidoId, setNfPedidoId]                             = useState("");
   const [nfPreview, setNfPreview]                               = useState(null);
   const [loadingNfUpload, setLoadingNfUpload]                   = useState(false);
   const [pedidosB2B, setPedidosB2B]                             = useState([]);
 
-  // ── Status global ─────────────────────────────────────
   const [status, setStatus]     = useState("");
   const [progress, setProgress] = useState(0);
 
@@ -197,7 +194,6 @@ export default function UploadPage() {
     { type: "NF B2B",                name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
   ]);
 
-  // ── Carregar pedidos B2B ──────────────────────────────
   useEffect(() => {
     async function carregarPedidos() {
       const { data } = await supabase
@@ -215,7 +211,6 @@ export default function UploadPage() {
     );
   }
 
-  // ── Handlers master ───────────────────────────────────
   async function handlePreviewAging() {
     try {
       if (!agingFile) { setStatus("Selecione um arquivo de Aging."); return; }
@@ -320,7 +315,6 @@ export default function UploadPage() {
     }
   }
 
-  // ── Handlers Assurant ─────────────────────────────────
   async function handlePreviewTriagem() {
     try {
       if (!triagemFile) { setStatus("Selecione um arquivo de Triagem."); return; }
@@ -415,7 +409,10 @@ export default function UploadPage() {
       setProgress(0);
       setStatus("Importando pedido B2B...");
       updateHistoryCard("Pedido B2B", { name: b2bFile.name, status: "Enviando", progress: 10 });
-      const result = await importarPedidoB2B(b2bFile, user.id);
+      const result = await importarPedidoB2B(b2bFile, user.id, {
+        condicao_pagamento: b2bCondicaoPagamento.trim() || null,
+        cnpj_agregado:      b2bCnpjAgregado.trim()      || null,
+      });
       setB2bPreview({
         lote:     result.lote,
         cliente:  result.cliente,
@@ -425,6 +422,8 @@ export default function UploadPage() {
       updateHistoryCard("Pedido B2B", { name: b2bFile.name, status: "Concluído", rows: result.total.toLocaleString("pt-BR"), progress: 100 });
       setProgress(100);
       setStatus(`Pedido B2B importado! ${result.total.toLocaleString("pt-BR")} itens — Lote: ${result.lote}`);
+      setB2bCondicaoPagamento("");
+      setB2bCnpjAgregado("");
       const { data } = await supabase.from("b2b_pedidos").select("id, lote").order("criado_em", { ascending: false });
       setPedidosB2B(data || []);
     } catch (error) {
@@ -461,7 +460,8 @@ export default function UploadPage() {
     }
   }
 
-  // ── Render ────────────────────────────────────────────
+  const inputCls = "w-full rounded-xl border border-[#D8B4FE] px-3 py-2 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-400 disabled:opacity-50 bg-white";
+
   return (
     <SectionCard>
       <div className="p-6">
@@ -472,7 +472,6 @@ export default function UploadPage() {
 
         <div className="mt-4 grid gap-4 xl:grid-cols-2">
 
-          {/* ── Blocos só para Master ── */}
           {isMaster && (
             <>
               <UploadBox
@@ -518,7 +517,6 @@ export default function UploadPage() {
             </>
           )}
 
-          {/* ── Blocos Assurant (master + operador assurant) ── */}
           <UploadBox
             title="Triagem Assurant — Diária"
             description="Importe a planilha de triagem, recebimento e expedição do Warehouse."
@@ -539,7 +537,7 @@ export default function UploadPage() {
                   value={mesRefTriagem}
                   onChange={e => setMesRefTriagem(e.target.value)}
                   disabled={loadingTriagemUpload || loadingTriagemPreview}
-                  className="rounded-xl border border-[#D8B4FE] px-3 py-2 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-400 disabled:opacity-50 bg-white"
+                  className={inputCls}
                 />
               </div>
             }
@@ -564,24 +562,80 @@ export default function UploadPage() {
             }
           />
 
-          <UploadBox
-            title="Pedido B2B — Picking"
-            description="Importe a planilha de picking B2B recebida por e-mail da Assurant para iniciar a separação."
-            icon={ScanLine}
-            accept=".xlsx,.xls"
-            file={b2bFile}
-            onChangeFile={file => { setB2bFile(file); setB2bPreview(null); }}
-            onUpload={handleUploadB2B}
-            preview={b2bPreview}
-            loadingPreview={false}
-            loadingUpload={loadingB2bUpload}
-            showPreview={false}
-            extra={
-              <div className="text-xs text-slate-500 bg-purple-50 ring-1 ring-purple-200 rounded-xl px-3 py-2">
-                📋 Formato: planilha PICKING_*.xlsx recebida por e-mail · Após importar, acesse Picking B2B para separação
+          {/* ── Pedido B2B — com Condição de Pagamento e CNPJ do Agregado ── */}
+          <div className="rounded-[24px] border border-dashed border-[#D8B4FE] bg-[#FCFAFF] p-5">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="text-lg font-bold text-[#6B1F87]">Pedido B2B — Picking</div>
+                <div className="mt-1 text-sm text-slate-500">
+                  Importe a planilha de picking B2B recebida por e-mail da Assurant para iniciar a separação.
+                </div>
               </div>
-            }
-          />
+              <div className="rounded-2xl bg-[linear-gradient(135deg,#F97316_0%,#F59E0B_100%)] p-3 text-white shadow-lg shrink-0 ml-3">
+                <ScanLine className="h-5 w-5" />
+              </div>
+            </div>
+
+            <div className="mt-4 text-xs text-slate-500 bg-purple-50 ring-1 ring-purple-200 rounded-xl px-3 py-2">
+              📋 Formato: planilha PICKING_*.xlsx recebida por e-mail · Após importar, acesse Picking B2B para separação
+            </div>
+
+            {/* Campos extras */}
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Condição de Pagamento</label>
+                <input
+                  type="text"
+                  value={b2bCondicaoPagamento}
+                  onChange={e => setB2bCondicaoPagamento(e.target.value)}
+                  disabled={loadingB2bUpload}
+                  placeholder="Ex: 30/60/90 dias"
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">CNPJ do Agregado</label>
+                <input
+                  type="text"
+                  value={b2bCnpjAgregado}
+                  onChange={e => setB2bCnpjAgregado(e.target.value)}
+                  disabled={loadingB2bUpload}
+                  placeholder="Ex: 00.000.000/0001-00"
+                  className={inputCls}
+                />
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-[#E9D5FF]">
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={e => { setB2bFile(e.target.files?.[0] || null); setB2bPreview(null); }}
+                className="block w-full text-sm text-slate-600"
+              />
+              <div className="mt-3 text-sm font-medium">
+                {b2bFile ? b2bFile.name : "Nenhum arquivo selecionado"}
+              </div>
+              <div className="mt-1 text-xs text-slate-500">
+                {b2bFile ? "Arquivo pronto para envio" : "Selecione um arquivo .xlsx"}
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <Button onClick={handleUploadB2B} disabled={!b2bFile || loadingB2bUpload}>
+                {loadingB2bUpload ? "Importando..." : "Enviar arquivo"}
+              </Button>
+            </div>
+
+            {b2bPreview && (
+              <div className="mt-4 rounded-2xl bg-white p-4 ring-1 ring-[#E9D5FF] space-y-1 text-xs text-slate-600">
+                <div className="text-sm font-bold text-emerald-700">✓ {b2bPreview.mensagem}</div>
+                <p><span className="font-semibold">Lote:</span> {b2bPreview.lote}</p>
+                <p><span className="font-semibold">Cliente:</span> {b2bPreview.cliente}</p>
+                <p><span className="font-semibold">Itens:</span> {b2bPreview.total?.toLocaleString("pt-BR")}</p>
+              </div>
+            )}
+          </div>
 
           {/* NF B2B */}
           <div className="rounded-[24px] border border-dashed border-[#D8B4FE] bg-[#FCFAFF] p-5">
@@ -607,7 +661,7 @@ export default function UploadPage() {
                 value={nfPedidoId}
                 onChange={e => setNfPedidoId(e.target.value)}
                 disabled={loadingNfUpload}
-                className="w-full rounded-xl border border-[#D8B4FE] px-3 py-2 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-400 disabled:opacity-50 bg-white"
+                className={inputCls}
               >
                 <option value="">Selecione o pedido...</option>
                 {pedidosB2B.map(p => (

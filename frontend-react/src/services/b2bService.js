@@ -12,7 +12,7 @@ async function resolverCliente(ganhador) {
   return data2?.nome || ganhador;
 }
 
-export async function importarPedidoB2B(file, userId) {
+export async function importarPedidoB2B(file, userId, extras = {}) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -46,7 +46,16 @@ export async function importarPedidoB2B(file, userId) {
         if (existing) throw new Error(`Pedido "${lote}" já foi importado.`);
 
         const { data: pedido, error: errPedido } = await supabase
-          .from("b2b_pedidos").insert({ lote, cliente, total_itens: rows.length, criado_por: userId }).select().single();
+          .from("b2b_pedidos")
+          .insert({
+            lote,
+            cliente,
+            total_itens:        rows.length,
+            criado_por:         userId,
+            condicao_pagamento: extras.condicao_pagamento || null,
+            cnpj_agregado:      extras.cnpj_agregado      || null,
+          })
+          .select().single();
         if (errPedido) throw new Error(errPedido.message);
 
         const imeisLista = rows.map(r => String(r["IMEI"] || r["NUM_IMEI"] || "").trim()).filter(i => i.length > 5);
