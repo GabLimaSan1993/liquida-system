@@ -1,4 +1,3 @@
-// src/App.jsx
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./AuthContext.jsx";
 
@@ -29,6 +28,7 @@ import AssurantLayoutPage from "./pages/assurant/AssurantLayoutPage.jsx";
 import B2BPickingPage from "./pages/B2BPickingPage.jsx";
 import TrocasB2CAssurantPage from "./pages/TrocasB2CAssurantPage.jsx";
 import TrocasB2CFurbtechPage from "./pages/TrocasB2CFurbtechPage.jsx";
+import PedidosB2CPage from "./pages/PedidosB2CPage.jsx";
 
 function ProtectedRoute({ tela, children }) {
   const { user, loading, hasAccess } = useAuth();
@@ -46,7 +46,6 @@ function DefaultRedirect() {
   if (profile.area_tecnica === "assurant_trocas")                               return <Navigate to="/trocas-b2c/nova" replace />;
   if (profile.area_tecnica === "refrigeracao")                                  return <Navigate to="/linha-branca/triagem" replace />;
   if (["climatizacao", "lavadoras", "diversos"].includes(profile.area_tecnica)) return <Navigate to="/linha-branca/triagem-reparos" replace />;
-  // Operador Assurant → cai na primeira tela permitida
   if (profile.area_tecnica === "assurant") {
     const primeira = profile.telas_permitidas?.[0];
     return <Navigate to={primeira || "/sem-acesso"} replace />;
@@ -108,14 +107,17 @@ export default function App() {
         <Route path="/assurant/sla"       element={<ProtectedRoute tela="/assurant/sla"><AssurantSLAPage /></ProtectedRoute>} />
         <Route path="/assurant/layout"    element={<ProtectedRoute tela="/assurant/layout"><AssurantLayoutPage /></ProtectedRoute>} />
 
-        {/* B2B — mesma página, rotas por função */}
+        {/* B2B */}
         <Route path="/b2b/picking"     element={<ProtectedRoute tela="/b2b/picking"><B2BPickingPage abaInicial="picking" /></ProtectedRoute>} />
         <Route path="/b2b/embalagem"   element={<ProtectedRoute tela="/b2b/embalagem"><B2BPickingPage abaInicial="embalagem" /></ProtectedRoute>} />
         <Route path="/b2b/faturamento" element={<ProtectedRoute tela="/b2b/faturamento"><B2BPickingPage abaInicial="pedidos" /></ProtectedRoute>} />
 
-        {/* Trocas B2C */}
+        {/* Trocas B2C Assurant */}
         <Route path="/trocas-b2c/nova"   element={<ProtectedRoute tela="/trocas-b2c/nova"><TrocasB2CAssurantPage /></ProtectedRoute>} />
         <Route path="/trocas-b2c/gestao" element={<ProtectedRoute tela="/trocas-b2c/gestao"><TrocasB2CFurbtechPage /></ProtectedRoute>} />
+
+        {/* Pedidos B2C — novo módulo */}
+        <Route path="/b2c/pedidos" element={<ProtectedRoute tela="/b2c/pedidos"><PedidosB2CPage /></ProtectedRoute>} />
       </Route>
     </Routes>
   );
