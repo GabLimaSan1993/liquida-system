@@ -251,7 +251,7 @@ async function sincronizarPedidosB2C(rows, horaCorte, userId) {
 }
 
 export async function uploadAnymarketZip(file, userId, horaCorte, onProgress) {
-  const JSZip = (await import("jszip")).default;
+  import JSZip from "jszip";
   const zipData = await file.arrayBuffer();
   const zip = await JSZip.loadAsync(zipData);
 
