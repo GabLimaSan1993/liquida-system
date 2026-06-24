@@ -1,6 +1,5 @@
 import { supabase } from "../lib/supabase";
 
-// ── Hierarquia de grades (menor número = melhor) ──────────
 const GRADE_HIERARQUIA = {
   "like new":           1,
   "excelente":          2,
@@ -19,12 +18,10 @@ function gradeOrdem(grade) {
   return GRADE_HIERARQUIA[normalizeGrade(grade)] ?? 99;
 }
 
-// Retorna true se gradeDisponivel é igual ou melhor que gradePedido
 function gradeAceita(gradeDisponivel, gradePedido) {
   return gradeOrdem(gradeDisponivel) <= gradeOrdem(gradePedido);
 }
 
-// ── Extrai grade do titulo_produto ────────────────────────
 export function extrairGrade(tituloProduto) {
   if (!tituloProduto) return null;
   const partes = tituloProduto.split(" - ");
@@ -37,24 +34,19 @@ export function extrairGrade(tituloProduto) {
 // ══════════════════════════════════════════════════════════
 
 export async function listarPedidosAguardandoAlocacao(horaCorte) {
-  // Filtra pedidos pagos até a hora de corte
-  // data_de_pagamento vem no formato "DD/MM/YYYY HH:MM:SS"
-  let query = supabase
+  const { data, error } = await supabase
     .from("pedidos_b2c")
     .select("*")
     .eq("status", "aguardando_alocacao")
     .eq("status_anymarket", "Pago")
     .order("data_de_pagamento", { ascending: true });
 
-  const { data, error } = await query;
   if (error) throw new Error(error.message);
 
-  // Filtra por hora de corte no frontend (data_de_pagamento é texto DD/MM/YYYY HH:MM:SS)
   if (horaCorte) {
     const [hCorte, mCorte] = horaCorte.split(":").map(Number);
     return (data || []).filter(p => {
       if (!p.data_de_pagamento) return false;
-      // Extrai hora da string DD/MM/YYYY HH:MM:SS
       const match = p.data_de_pagamento.match(/(\d{2}):(\d{2}):\d{2}$/);
       if (!match) return false;
       const h = parseInt(match[1]);
@@ -96,16 +88,6 @@ export async function listarPedidosEmAnalise() {
   return data || [];
 }
 
-export async function listarPedidosEmbalagem() {
-  const { data, error } = await supabase
-    .from("pedidos_b2c")
-    .select("*")
-    .eq("status", "alocado")
-    .order("alocado_em", { ascending: true });
-  if (error) throw new Error(error.message);
-  return data || [];
-}
-
 export async function listarPedidosFaturamento() {
   const { data, error } = await supabase
     .from("pedidos_b2c")
@@ -131,7 +113,6 @@ export async function listarPedidosConcluidos() {
 // ══════════════════════════════════════════════════════════
 
 export async function buscarSugestaoFifo(skuProduto, gradePedido) {
-  // 1. Busca IMEIs disponíveis na assurant_triagem com o SKU correto
   const { data: disponiveis, error } = await supabase
     .from("assurant_triagem")
     .select("imei, sku, grade, local, voucher")
@@ -141,14 +122,12 @@ export async function buscarSugestaoFifo(skuProduto, gradePedido) {
   if (error) throw new Error(error.message);
   if (!disponiveis?.length) return [];
 
-  // 2. Filtra por grade igual ou superior
   const imeisValidos = disponiveis.filter(item =>
     gradeAceita(item.grade, gradePedido)
   );
 
   if (!imeisValidos.length) return [];
 
-  // 3. Cruza com estoque_subinv para pegar data_subinv (FIFO)
   const imeisList = imeisValidos.map(i => i.imei);
   const { data: subinv } = await supabase
     .from("estoque_subinv")
@@ -158,13 +137,8 @@ export async function buscarSugestaoFifo(skuProduto, gradePedido) {
   const subinvMap = {};
   (subinv || []).forEach(s => { subinvMap[s.imei] = s.data_subinv; });
 
-  // 4. Ordena por data_subinv ASC (mais antigo primeiro = FIFO)
-  //    IMEIs sem data_subinv ficam por último
   const ordenados = imeisValidos
-    .map(item => ({
-      ...item,
-      data_subinv: subinvMap[item.imei] || null,
-    }))
+    .map(item => ({ ...item, data_subinv: subinvMap[item.imei] || null }))
     .sort((a, b) => {
       if (!a.data_subinv && !b.data_subinv) return 0;
       if (!a.data_subinv) return 1;
@@ -175,17 +149,80 @@ export async function buscarSugestaoFifo(skuProduto, gradePedido) {
   return ordenados;
 }
 
+// ── Verifica e cria grupos automaticamente ────────────────
+async function verificarECriarGrupo(userId) {
+  const TAMANHO = 20;
+
+  // Busca pedidos alocados sem grupo
+  const { data: semGrupo, error } = await supabase
+    .from("pedidos_b2c")
+    .select("id")
+    .eq("status", "alocado")
+    .is("grupo_id", null)
+    .order("alocado_em", { ascending: true });
+
+  if (error || !semGrupo?.length) return null;
+
+  // Só cria grupo se tiver 20 ou mais
+  if (semGrupo.length < TAMANHO) return null;
+
+  // Pega os primeiros 20
+  const lote = semGrupo.slice(0, TAMANHO);
+
+  return await _criarGrupo(lote.map(p => p.id), userId);
+}
+
+async function _criarGrupo(pedidoIds, userId) {
+  // Busca o próximo número de grupo
+  const { data: ultimoGrupo } = await supabase
+    .from("pedidos_b2c_grupos")
+    .select("numero")
+    .order("numero", { ascending: false })
+    .limit(1)
+    .single();
+
+  const proximoNumero = (ultimoGrupo?.numero || 0) + 1;
+
+  // Cria o grupo
+  const { data: grupo, error: errGrupo } = await supabase
+    .from("pedidos_b2c_grupos")
+    .insert({
+      numero:        proximoNumero,
+      status:        "aberto",
+      total_pedidos: pedidoIds.length,
+      criado_por:    userId,
+    })
+    .select()
+    .single();
+
+  if (errGrupo) throw new Error(errGrupo.message);
+
+  // Vincula os pedidos ao grupo e muda status para em_picking
+  for (const id of pedidoIds) {
+    await supabase
+      .from("pedidos_b2c")
+      .update({
+        grupo_id:      grupo.id,
+        status:        "em_picking",
+        atualizado_em: new Date().toISOString(),
+      })
+      .eq("id", id);
+  }
+
+  return grupo;
+}
+
 export async function alocarPedido(pedidoId, imei, sku, grade, userId) {
-  // 1. Atualiza o pedido
+  // 1. Atualiza o pedido para alocado
   const { error: errPedido } = await supabase
     .from("pedidos_b2c")
     .update({
-      status:       "alocado",
-      imei_alocado: imei,
-      sku_alocado:  sku,
+      status:        "alocado",
+      imei_alocado:  imei,
+      sku_alocado:   sku,
       grade_alocada: grade,
-      alocado_em:   new Date().toISOString(),
-      alocado_por:  userId,
+      alocado_em:    new Date().toISOString(),
+      alocado_por:   userId,
       atualizado_em: new Date().toISOString(),
     })
     .eq("id", pedidoId);
@@ -198,87 +235,25 @@ export async function alocarPedido(pedidoId, imei, sku, grade, userId) {
     .eq("imei", imei);
   if (errTriagem) throw new Error(errTriagem.message);
 
-  return { ok: true };
+  // 3. Verifica se formou grupo de 20
+  const grupoFormado = await verificarECriarGrupo(userId);
+
+  return { ok: true, grupoFormado };
 }
 
-export async function alocarLote(pedidos, userId) {
-  // Aloca múltiplos pedidos de uma vez, evitando alocar o mesmo IMEI
-  const imeisUsados = new Set();
-  const resultados = [];
+// ── Fechar grupos pendentes (sobras < 20) ─────────────────
+export async function fecharGruposPendentes(userId) {
+  const { data: semGrupo, error } = await supabase
+    .from("pedidos_b2c")
+    .select("id")
+    .eq("status", "alocado")
+    .is("grupo_id", null)
+    .order("alocado_em", { ascending: true });
 
-  for (const pedido of pedidos) {
-    const sugestoes = await buscarSugestaoFifo(pedido.sku_produto, pedido.grade_produto);
+  if (error) throw new Error(error.message);
+  if (!semGrupo?.length) return null;
 
-    // Pega a primeira sugestão que não foi usada nesta rodada
-    const sugestao = sugestoes.find(s => !imeisUsados.has(s.imei));
-
-    if (!sugestao) {
-      resultados.push({ pedidoId: pedido.id, ok: false, erro: "Sem estoque disponível" });
-      continue;
-    }
-
-    try {
-      await alocarPedido(pedido.id, sugestao.imei, sugestao.sku, sugestao.grade, userId);
-      imeisUsados.add(sugestao.imei);
-      resultados.push({ pedidoId: pedido.id, ok: true, imei: sugestao.imei });
-    } catch (e) {
-      resultados.push({ pedidoId: pedido.id, ok: false, erro: e.message });
-    }
-  }
-
-  return resultados;
-}
-
-// ══════════════════════════════════════════════════════════
-// GRUPOS DE PICKING
-// ══════════════════════════════════════════════════════════
-
-export async function criarGruposPicking(pedidosAlocados, userId) {
-  // Agrupa os pedidos alocados em grupos de 20
-  const TAMANHO_GRUPO = 20;
-  const grupos = [];
-
-  // Busca o último número de grupo para continuar a sequência
-  const { data: ultimoGrupo } = await supabase
-    .from("pedidos_b2c_grupos")
-    .select("numero")
-    .order("numero", { ascending: false })
-    .limit(1)
-    .single();
-
-  let proximoNumero = (ultimoGrupo?.numero || 0) + 1;
-
-  for (let i = 0; i < pedidosAlocados.length; i += TAMANHO_GRUPO) {
-    const lote = pedidosAlocados.slice(i, i + TAMANHO_GRUPO);
-
-    // Cria o grupo
-    const { data: grupo, error: errGrupo } = await supabase
-      .from("pedidos_b2c_grupos")
-      .insert({
-        numero:        proximoNumero,
-        status:        "aberto",
-        total_pedidos: lote.length,
-        criado_por:    userId,
-      })
-      .select()
-      .single();
-
-    if (errGrupo) throw new Error(errGrupo.message);
-
-    // Vincula os pedidos ao grupo
-    const updates = lote.map(p => ({ id: p.id, grupo_id: grupo.id }));
-    for (const upd of updates) {
-      await supabase
-        .from("pedidos_b2c")
-        .update({ grupo_id: upd.grupo_id, status: "em_picking", atualizado_em: new Date().toISOString() })
-        .eq("id", upd.id);
-    }
-
-    grupos.push({ ...grupo, pedidos: lote });
-    proximoNumero++;
-  }
-
-  return grupos;
+  return await _criarGrupo(semGrupo.map(p => p.id), userId);
 }
 
 // ══════════════════════════════════════════════════════════
@@ -288,7 +263,6 @@ export async function criarGruposPicking(pedidosAlocados, userId) {
 export async function registrarBipagem(pedidoId, imeiDigitado, userId) {
   const imei = String(imeiDigitado).trim();
 
-  // Busca o pedido
   const { data: pedido, error } = await supabase
     .from("pedidos_b2c")
     .select("*")
@@ -304,19 +278,18 @@ export async function registrarBipagem(pedidoId, imeiDigitado, userId) {
   const { error: errUpdate } = await supabase
     .from("pedidos_b2c")
     .update({
-      status:       "embalado",
-      imei_bipado:  imei,
-      bipado_em:    new Date().toISOString(),
-      bipado_por:   userId,
-      embalado_em:  new Date().toISOString(),
-      embalado_por: userId,
+      status:        "embalado",
+      imei_bipado:   imei,
+      bipado_em:     new Date().toISOString(),
+      bipado_por:    userId,
+      embalado_em:   new Date().toISOString(),
+      embalado_por:  userId,
       atualizado_em: new Date().toISOString(),
     })
     .eq("id", pedidoId);
 
   if (errUpdate) return { ok: false, erro: errUpdate.message };
 
-  // Verifica se o grupo foi concluído
   if (pedido.grupo_id) {
     await verificarConclusaoGrupo(pedido.grupo_id);
   }
@@ -340,7 +313,7 @@ async function verificarConclusaoGrupo(grupoId) {
       .from("pedidos_b2c_grupos")
       .update({ status: "concluido" })
       .eq("id", grupoId);
-  } else if (todos.some(p => p.status === "embalado")) {
+  } else {
     await supabase
       .from("pedidos_b2c_grupos")
       .update({ status: "em_picking" })
@@ -356,25 +329,23 @@ export async function marcarNaoLocalizado(pedidoId, motivo, userId) {
   const { error } = await supabase
     .from("pedidos_b2c")
     .update({
-      status:        "em_analise",
+      status:         "em_analise",
       motivo_analise: motivo || "Não localizado",
-      analise_em:    new Date().toISOString(),
-      analise_por:   userId,
-      atualizado_em: new Date().toISOString(),
+      analise_em:     new Date().toISOString(),
+      analise_por:    userId,
+      atualizado_em:  new Date().toISOString(),
     })
     .eq("id", pedidoId);
   if (error) throw new Error(error.message);
 }
 
 export async function resolverAnalise(pedidoId, novoImei, userId) {
-  // Busca o pedido para liberar o IMEI antigo
   const { data: pedido } = await supabase
     .from("pedidos_b2c")
     .select("imei_alocado")
     .eq("id", pedidoId)
     .single();
 
-  // Libera o IMEI antigo
   if (pedido?.imei_alocado) {
     await supabase
       .from("assurant_triagem")
@@ -382,7 +353,6 @@ export async function resolverAnalise(pedidoId, novoImei, userId) {
       .eq("imei", pedido.imei_alocado);
   }
 
-  // Reserva o novo IMEI
   if (novoImei) {
     await supabase
       .from("assurant_triagem")
