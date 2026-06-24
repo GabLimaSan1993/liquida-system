@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import JSZip from "jszip";
 import { supabase } from "../lib/supabase";
 
 const COLUMN_MAP = {
@@ -107,7 +108,6 @@ const NUMERIC_FIELDS = new Set([
   "taxas_do_meio_de_pagamento",
 ]);
 
-// Hierarquia de grades para o FIFO
 export const GRADE_ORDEM = {
   "like new":           1,
   "excelente":          2,
@@ -143,10 +143,7 @@ function mapRow(rawHeaders, values, userId) {
   return row;
 }
 
-// ── Sincroniza pedidos_b2c a partir das linhas do AnyMarket ──
 async function sincronizarPedidosB2C(rows, horaCorte, userId) {
-  // Agrupa por id_anymarket — pega apenas a primeira linha de cada pedido
-  // (dados do pedido são iguais em todas as linhas, só o produto muda)
   const pedidoMap = new Map();
   for (const row of rows) {
     const id = row.id_anymarket;
@@ -154,8 +151,6 @@ async function sincronizarPedidosB2C(rows, horaCorte, userId) {
     if (!pedidoMap.has(id)) {
       pedidoMap.set(id, row);
     } else {
-      // Se já existe, mantém o mais recente (maior data_de_pagamento)
-      // mas atualiza status se mudou
       const existing = pedidoMap.get(id);
       if (row.status && row.status !== existing.status) {
         pedidoMap.set(id, { ...existing, status: row.status });
@@ -165,7 +160,6 @@ async function sincronizarPedidosB2C(rows, horaCorte, userId) {
 
   const pedidos = Array.from(pedidoMap.values());
 
-  // Busca IDs já existentes em pedidos_b2c
   const ids = pedidos.map(p => p.id_anymarket);
   const { data: existentes } = await supabase
     .from("pedidos_b2c")
@@ -180,52 +174,49 @@ async function sincronizarPedidosB2C(rows, horaCorte, userId) {
   for (const pedido of pedidos) {
     const grade = extrairGrade(pedido.titulo_produto);
     const registro = {
-      id_anymarket:      pedido.id_anymarket,
-      hora_corte:        horaCorte || null,
-      cpf_cnpj:          pedido.cpf_cnpj,
-      cliente:           pedido.cliente,
-      telefone:          pedido.telefone,
-      email:             pedido.email,
-      marketplace:       pedido.marketplace,
-      data_pedido:       pedido.data_pedido,
-      data_de_pagamento: pedido.data_de_pagamento,
-      titulo_produto:    pedido.titulo_produto,
-      sku_produto:       pedido.sku_produto,
-      grade_produto:     grade,
-      valor_unitario:    pedido.valor_unitario,
-      total_do_pedido:   pedido.total_do_pedido,
+      id_anymarket:       pedido.id_anymarket,
+      hora_corte:         horaCorte || null,
+      cpf_cnpj:           pedido.cpf_cnpj,
+      cliente:            pedido.cliente,
+      telefone:           pedido.telefone,
+      email:              pedido.email,
+      marketplace:        pedido.marketplace,
+      data_pedido:        pedido.data_pedido,
+      data_de_pagamento:  pedido.data_de_pagamento,
+      titulo_produto:     pedido.titulo_produto,
+      sku_produto:        pedido.sku_produto,
+      grade_produto:      grade,
+      valor_unitario:     pedido.valor_unitario,
+      total_do_pedido:    pedido.total_do_pedido,
       codigo_de_rastreio: pedido.codigo_de_rastreio,
-      logradouro:        pedido.logradouro,
-      numero:            pedido.numero,
-      complemento:       pedido.complemento,
-      bairro:            pedido.bairro,
-      municipio:         pedido.municipio,
-      estado:            pedido.estado,
-      cep:               pedido.cep,
-      criado_por:        userId,
-      atualizado_em:     new Date().toISOString(),
+      logradouro:         pedido.logradouro,
+      numero:             pedido.numero,
+      complemento:        pedido.complemento,
+      bairro:             pedido.bairro,
+      municipio:          pedido.municipio,
+      estado:             pedido.estado,
+      cep:                pedido.cep,
+      criado_por:         userId,
+      atualizado_em:      new Date().toISOString(),
     };
 
     const existente = existentesMap.get(pedido.id_anymarket);
 
     if (existente) {
-      // Só atualiza status e dados voláteis — não sobrescreve dados operacionais
       paraAtualizar.push({
-        id:                existente.id,
-        status_anymarket:  pedido.status,
+        id:                 existente.id,
+        status_anymarket:   pedido.status,
         codigo_de_rastreio: pedido.codigo_de_rastreio,
-        data_entrega:      pedido.data_entrega,
-        atualizado_em:     new Date().toISOString(),
+        data_entrega:       pedido.data_entrega,
+        atualizado_em:      new Date().toISOString(),
       });
     } else {
-      // Novo pedido — define status inicial
-      registro.status = "aguardando_alocacao";
+      registro.status          = "aguardando_alocacao";
       registro.status_anymarket = pedido.status;
       paraInserir.push(registro);
     }
   }
 
-  // Insere novos em chunks
   const CHUNK = 500;
   let inseridos = 0;
   for (let i = 0; i < paraInserir.length; i += CHUNK) {
@@ -235,7 +226,6 @@ async function sincronizarPedidosB2C(rows, horaCorte, userId) {
     inseridos += chunk.length;
   }
 
-  // Atualiza existentes em chunks
   let atualizados = 0;
   for (const upd of paraAtualizar) {
     const { id, ...campos } = upd;
@@ -251,7 +241,6 @@ async function sincronizarPedidosB2C(rows, horaCorte, userId) {
 }
 
 export async function uploadAnymarketZip(file, userId, horaCorte, onProgress) {
-  import JSZip from "jszip";
   const zipData = await file.arrayBuffer();
   const zip = await JSZip.loadAsync(zipData);
 
@@ -276,11 +265,9 @@ export async function uploadAnymarketZip(file, userId, horaCorte, onProgress) {
 
   if (!rows.length) throw new Error("Nenhum registro válido encontrado.");
 
-  // Progresso: 50% inserção anymarket_pedidos, 50% sincronização pedidos_b2c
   const CHUNK = 500;
   let inserted = 0;
 
-  // 1. Insere em anymarket_pedidos (base histórica)
   for (let i = 0; i < rows.length; i += CHUNK) {
     const chunk = rows.slice(i, i + CHUNK);
     const { error } = await supabase
@@ -290,26 +277,16 @@ export async function uploadAnymarketZip(file, userId, horaCorte, onProgress) {
     if (error) throw new Error(`Erro ao inserir lote ${i / CHUNK + 1}: ${error.message}`);
 
     inserted += chunk.length;
-    if (onProgress) onProgress({
-      inserted,
-      total: rows.length,
-      fase: "anymarket",
-    });
+    if (onProgress) onProgress({ inserted, total: rows.length, fase: "anymarket" });
   }
 
-  // 2. Sincroniza pedidos_b2c
   if (onProgress) onProgress({ inserted: 0, total: 1, fase: "b2c" });
 
   const { inseridos, atualizados } = await sincronizarPedidosB2C(rows, horaCorte, userId);
 
   if (onProgress) onProgress({ inserted: 1, total: 1, fase: "b2c" });
 
-  return {
-    total:      rows.length,
-    arquivo:    xlsxEntry.name,
-    inseridos,
-    atualizados,
-  };
+  return { total: rows.length, arquivo: xlsxEntry.name, inseridos, atualizados };
 }
 
 export async function buscarPedidoAnymarket(idAnymarket) {
