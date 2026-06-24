@@ -139,51 +139,52 @@ function UploadBox({
 
 export default function UploadPage() {
   const { profile, user } = useAuth();
-  const isMaster   = profile?.is_master;
+  const isMaster = profile?.is_master;
 
-  const [agingFile, setAgingFile]                               = useState(null);
-  const [faturamentoFile, setFaturamentoFile]                   = useState(null);
-  const [ofxFile, setOfxFile]                                   = useState(null);
-  const [agingPreview, setAgingPreview]                         = useState(null);
-  const [faturamentoPreview, setFaturamentoPreview]             = useState(null);
-  const [loadingAgingPreview, setLoadingAgingPreview]           = useState(false);
-  const [loadingFaturamentoPreview, setLoadingFaturamentoPreview] = useState(false);
-  const [loadingAgingUpload, setLoadingAgingUpload]             = useState(false);
-  const [loadingFaturamentoUpload, setLoadingFaturamentoUpload] = useState(false);
-  const [loadingOfxUpload, setLoadingOfxUpload]                 = useState(false);
+  const [agingFile, setAgingFile]                                   = useState(null);
+  const [faturamentoFile, setFaturamentoFile]                       = useState(null);
+  const [ofxFile, setOfxFile]                                       = useState(null);
+  const [agingPreview, setAgingPreview]                             = useState(null);
+  const [faturamentoPreview, setFaturamentoPreview]                 = useState(null);
+  const [loadingAgingPreview, setLoadingAgingPreview]               = useState(false);
+  const [loadingFaturamentoPreview, setLoadingFaturamentoPreview]   = useState(false);
+  const [loadingAgingUpload, setLoadingAgingUpload]                 = useState(false);
+  const [loadingFaturamentoUpload, setLoadingFaturamentoUpload]     = useState(false);
+  const [loadingOfxUpload, setLoadingOfxUpload]                     = useState(false);
 
-  const [triagemFile, setTriagemFile]                           = useState(null);
-  const [triagemPreview, setTriagemPreview]                     = useState(null);
-  const [loadingTriagemPreview, setLoadingTriagemPreview]       = useState(false);
-  const [loadingTriagemUpload, setLoadingTriagemUpload]         = useState(false);
-  const [mesRefTriagem, setMesRefTriagem]                       = useState(() => {
+  const [triagemFile, setTriagemFile]                               = useState(null);
+  const [triagemPreview, setTriagemPreview]                         = useState(null);
+  const [loadingTriagemPreview, setLoadingTriagemPreview]           = useState(false);
+  const [loadingTriagemUpload, setLoadingTriagemUpload]             = useState(false);
+  const [mesRefTriagem, setMesRefTriagem]                           = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   });
 
-  const [movFile, setMovFile]                                   = useState(null);
-  const [movPreview, setMovPreview]                             = useState(null);
-  const [loadingMovPreview, setLoadingMovPreview]               = useState(false);
-  const [loadingMovUpload, setLoadingMovUpload]                 = useState(false);
+  const [movFile, setMovFile]                                       = useState(null);
+  const [movPreview, setMovPreview]                                 = useState(null);
+  const [loadingMovPreview, setLoadingMovPreview]                   = useState(false);
+  const [loadingMovUpload, setLoadingMovUpload]                     = useState(false);
 
   // ── Pedido B2B ────────────────────────────────────────
-  const [b2bFile, setB2bFile]                                   = useState(null);
-  const [b2bPreview, setB2bPreview]                             = useState(null);
-  const [loadingB2bUpload, setLoadingB2bUpload]                 = useState(false);
-  const [b2bCondicaoPagamento, setB2bCondicaoPagamento]         = useState("");
-  const [b2bCnpjAgregado, setB2bCnpjAgregado]                   = useState("");
+  const [b2bFile, setB2bFile]                                       = useState(null);
+  const [b2bPreview, setB2bPreview]                                 = useState(null);
+  const [loadingB2bUpload, setLoadingB2bUpload]                     = useState(false);
+  const [b2bCondicaoPagamento, setB2bCondicaoPagamento]             = useState("");
+  const [b2bCnpjAgregado, setB2bCnpjAgregado]                       = useState("");
 
   // ── NF B2B ────────────────────────────────────────────
-  const [nfFile, setNfFile]                                     = useState(null);
-  const [nfPedidoId, setNfPedidoId]                             = useState("");
-  const [nfPreview, setNfPreview]                               = useState(null);
-  const [loadingNfUpload, setLoadingNfUpload]                   = useState(false);
-  const [pedidosB2B, setPedidosB2B]                             = useState([]);
+  const [nfFile, setNfFile]                                         = useState(null);
+  const [nfPedidoId, setNfPedidoId]                                 = useState("");
+  const [nfPreview, setNfPreview]                                   = useState(null);
+  const [loadingNfUpload, setLoadingNfUpload]                       = useState(false);
+  const [pedidosB2B, setPedidosB2B]                                 = useState([]);
 
   // ── AnyMarket ─────────────────────────────────────────
-  const [anyFile, setAnyFile]                                   = useState(null);
-  const [anyPreview, setAnyPreview]                             = useState(null);
-  const [loadingAnyUpload, setLoadingAnyUpload]                 = useState(false);
+  const [anyFile, setAnyFile]                                       = useState(null);
+  const [anyPreview, setAnyPreview]                                 = useState(null);
+  const [loadingAnyUpload, setLoadingAnyUpload]                     = useState(false);
+  const [anyHoraCorte, setAnyHoraCorte]                             = useState("");
 
   const [status, setStatus]     = useState("");
   const [progress, setProgress] = useState(0);
@@ -474,20 +475,40 @@ export default function UploadPage() {
   async function handleUploadAnymarket() {
     try {
       if (!anyFile) { setStatus("Selecione um arquivo .zip do AnyMarket."); return; }
+      if (!anyHoraCorte) { setStatus("Informe a hora de corte antes de importar."); return; }
       setLoadingAnyUpload(true);
       setProgress(0);
       setStatus("Processando exportação AnyMarket...");
       updateHistoryCard("AnyMarket", { name: anyFile.name, status: "Enviando", progress: 5 });
-      const result = await uploadAnymarketZip(anyFile, user.id, ({ inserted, total }) => {
-        const pct = total ? Math.round(inserted / total * 100) : 0;
-        setProgress(pct);
-        updateHistoryCard("AnyMarket", { name: anyFile.name, status: "Enviando", rows: total.toLocaleString("pt-BR"), progress: pct });
-        setStatus(`AnyMarket: ${inserted.toLocaleString("pt-BR")} de ${total.toLocaleString("pt-BR")} pedidos processados.`);
-      });
+
+      const result = await uploadAnymarketZip(
+        anyFile,
+        user.id,
+        anyHoraCorte,
+        ({ inserted, total, fase }) => {
+          if (fase === "anymarket") {
+            const pct = total ? Math.round(inserted / total * 50) : 0; // 0-50%
+            setProgress(pct);
+            updateHistoryCard("AnyMarket", { name: anyFile.name, status: "Inserindo base...", rows: total.toLocaleString("pt-BR"), progress: pct });
+            setStatus(`AnyMarket: ${inserted.toLocaleString("pt-BR")} de ${total.toLocaleString("pt-BR")} linhas inseridas na base...`);
+          } else {
+            setProgress(75);
+            updateHistoryCard("AnyMarket", { name: anyFile.name, status: "Sincronizando pedidos B2C...", progress: 75 });
+            setStatus("Sincronizando pedidos B2C...");
+          }
+        }
+      );
+
       updateHistoryCard("AnyMarket", { name: anyFile.name, status: "Concluído", rows: result.total.toLocaleString("pt-BR"), progress: 100 });
       setProgress(100);
-      setAnyPreview({ mensagem: `✓ ${result.total.toLocaleString("pt-BR")} pedidos importados com sucesso!` });
-      setStatus(`AnyMarket importado! ${result.total.toLocaleString("pt-BR")} pedidos processados.`);
+      setAnyPreview({
+        mensagem:   `✓ ${result.total.toLocaleString("pt-BR")} linhas importadas`,
+        inseridos:  result.inseridos,
+        atualizados: result.atualizados,
+      });
+      setStatus(`AnyMarket importado! ${result.inseridos} pedidos B2C novos · ${result.atualizados} atualizados.`);
+      setAnyHoraCorte("");
+      setAnyFile(null);
     } catch (error) {
       setStatus(`Erro ao importar AnyMarket: ${error.message}`);
       updateHistoryCard("AnyMarket", { status: "Erro" });
@@ -761,9 +782,9 @@ export default function UploadPage() {
           <div className="rounded-[24px] border border-dashed border-[#D8B4FE] bg-[#FCFAFF] p-5">
             <div className="flex items-start justify-between">
               <div>
-                <div className="text-lg font-bold text-[#6B1F87]">AnyMarket — Pedidos</div>
+                <div className="text-lg font-bold text-[#6B1F87]">AnyMarket — Pedidos B2C</div>
                 <div className="mt-1 text-sm text-slate-500">
-                  Importe o arquivo .zip exportado do AnyMarket com os pedidos do marketplace.
+                  Importe o arquivo .zip exportado do AnyMarket. Pedidos pagos serão sincronizados para o fluxo B2C.
                 </div>
               </div>
               <div className="rounded-2xl bg-[linear-gradient(135deg,#F97316_0%,#F59E0B_100%)] p-3 text-white shadow-lg shrink-0 ml-3">
@@ -772,7 +793,24 @@ export default function UploadPage() {
             </div>
 
             <div className="mt-4 text-xs text-slate-500 bg-emerald-50 ring-1 ring-emerald-200 rounded-xl px-3 py-2">
-              📋 Arquivo .zip exportado direto do AnyMarket · Pedidos são atualizados automaticamente (upsert por ID)
+              📋 Arquivo .zip exportado direto do AnyMarket · Pedidos existentes têm o status atualizado automaticamente
+            </div>
+
+            {/* Hora de corte */}
+            <div className="mt-4">
+              <label className="block text-xs font-bold text-slate-600 mb-1">
+                Hora de corte <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="time"
+                value={anyHoraCorte}
+                onChange={e => setAnyHoraCorte(e.target.value)}
+                disabled={loadingAnyUpload}
+                className={inputCls}
+              />
+              <p className="text-xs text-slate-400 mt-1">
+                Apenas pedidos pagos até este horário entrarão para alocação B2C.
+              </p>
             </div>
 
             <div className="mt-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-[#E9D5FF]">
@@ -791,14 +829,18 @@ export default function UploadPage() {
             </div>
 
             <div className="mt-4">
-              <Button onClick={handleUploadAnymarket} disabled={!anyFile || loadingAnyUpload}>
+              <Button
+                onClick={handleUploadAnymarket}
+                disabled={!anyFile || !anyHoraCorte || loadingAnyUpload}>
                 {loadingAnyUpload ? "Importando..." : "Enviar arquivo"}
               </Button>
             </div>
 
             {anyPreview && (
-              <div className="mt-4 rounded-2xl bg-white p-4 ring-1 ring-[#E9D5FF]">
+              <div className="mt-4 rounded-2xl bg-white p-4 ring-1 ring-[#E9D5FF] space-y-1 text-xs text-slate-600">
                 <div className="text-sm font-bold text-emerald-700">{anyPreview.mensagem}</div>
+                <p>Pedidos B2C novos: <span className="font-bold text-emerald-700">{anyPreview.inseridos?.toLocaleString("pt-BR")}</span></p>
+                <p>Pedidos atualizados: <span className="font-bold text-blue-700">{anyPreview.atualizados?.toLocaleString("pt-BR")}</span></p>
               </div>
             )}
           </div>
