@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import {
   Search, CheckCircle, AlertTriangle, Package,
-  X, BarChart3, ChevronDown, ChevronUp, Clock,
-  MapPin, Truck, FileText, ShoppingBag, Layers,
-  ArrowRight, Loader, RefreshCw, Store,
+  X, ChevronDown, ChevronUp, Clock,
+  Layers, ArrowRight, Loader, RefreshCw,
+  FileText, Store,
 } from "lucide-react";
 import {
   listarPedidosAguardandoAlocacao,
@@ -11,10 +11,9 @@ import {
   listarPedidosGrupo,
   listarPedidosEmAnalise,
   listarPedidosFaturamento,
-  listarPedidosConcluidos,
   buscarSugestaoFifo,
   alocarPedido,
-  criarGruposPicking,
+  fecharGruposPendentes,
   registrarBipagem,
   marcarNaoLocalizado,
   resolverAnalise,
@@ -44,7 +43,7 @@ function KpiMini({ label, value, sub, color = "bg-purple-50 ring-purple-200 text
 function StatusBadge({ status }) {
   const map = {
     aguardando_alocacao: { label: "Aguardando Alocação", cls: "bg-slate-50 text-slate-600 ring-slate-200" },
-    alocado:             { label: "Alocado",             cls: "bg-blue-50 text-blue-700 ring-blue-200"   },
+    alocado:             { label: "Alocado",             cls: "bg-blue-50 text-blue-700 ring-blue-200"    },
     em_picking:          { label: "Em Picking",          cls: "bg-yellow-50 text-yellow-700 ring-yellow-200" },
     em_analise:          { label: "Em Análise",          cls: "bg-orange-50 text-orange-700 ring-orange-200" },
     embalado:            { label: "Embalado",            cls: "bg-purple-50 text-purple-700 ring-purple-200" },
@@ -70,16 +69,18 @@ function GradeBadge({ grade }) {
 // ══════════════════════════════════════════════════════════
 // ABA ALOCAÇÃO
 // ══════════════════════════════════════════════════════════
-function TabAlocacao() {
+function TabAlocacao({ onGrupoFormado }) {
   const { user } = useAuth();
-  const [pedidos, setPedidos]             = useState([]);
-  const [loading, setLoading]             = useState(true);
-  const [horaCorte, setHoraCorte]         = useState("");
-  const [busca, setBusca]                 = useState("");
-  const [alocandoId, setAlocandoId]       = useState(null);
-  const [sugestoes, setSugestoes]         = useState([]);
+  const [pedidos, setPedidos]               = useState([]);
+  const [loading, setLoading]               = useState(true);
+  const [horaCorte, setHoraCorte]           = useState("");
+  const [busca, setBusca]                   = useState("");
+  const [alocandoId, setAlocandoId]         = useState(null);
+  const [sugestoes, setSugestoes]           = useState([]);
   const [loadingSugestao, setLoadingSugestao] = useState(false);
-  const [feedback, setFeedback]           = useState(null);
+  const [feedback, setFeedback]             = useState(null);
+  const [pendentes, setPendentes]           = useState(0);
+  const [fechandoGrupo, setFechandoGrupo]   = useState(false);
 
   useEffect(() => { carregar(); }, [horaCorte]);
 
@@ -88,6 +89,12 @@ function TabAlocacao() {
     try {
       const data = await listarPedidosAguardandoAlocacao(horaCorte);
       setPedidos(data);
+      // Conta quantos estão alocados sem grupo
+      const { data: semGrupo } = await import("../lib/supabase").then(m =>
+        m.supabase.from("pedidos_b2c").select("id", { count: "exact" })
+          .eq("status", "alocado").is("grupo_id", null)
+      );
+      setPendentes(semGrupo?.length || 0);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   }
@@ -106,13 +113,37 @@ function TabAlocacao() {
 
   async function handleAlocar(pedido, sugestao) {
     try {
-      await alocarPedido(pedido.id, sugestao.imei, sugestao.sku, sugestao.grade, user.id);
-      setFeedback({ tipo: "ok", msg: `✓ ${pedido.id_anymarket} alocado — IMEI ${sugestao.imei}` });
+      const { grupoFormado } = await alocarPedido(pedido.id, sugestao.imei, sugestao.sku, sugestao.grade, user.id);
       setPedidos(prev => prev.filter(p => p.id !== pedido.id));
       setAlocandoId(null);
       setSugestoes([]);
-      setTimeout(() => setFeedback(null), 3000);
+
+      if (grupoFormado) {
+        setFeedback({ tipo: "ok", msg: `✓ Pedido alocado! Grupo #${grupoFormado.numero} criado com 20 pedidos.` });
+        setPendentes(0);
+        if (onGrupoFormado) onGrupoFormado();
+      } else {
+        setPendentes(prev => prev + 1);
+        setFeedback({ tipo: "ok", msg: `✓ Pedido #${pedido.id_anymarket} alocado — IMEI ${sugestao.imei}` });
+      }
+      setTimeout(() => setFeedback(null), 4000);
     } catch (e) { setFeedback({ tipo: "erro", msg: e.message }); }
+  }
+
+  async function handleFecharGrupo() {
+    setFechandoGrupo(true);
+    try {
+      const grupo = await fecharGruposPendentes(user.id);
+      if (grupo) {
+        setFeedback({ tipo: "ok", msg: `✓ Grupo #${grupo.numero} criado com ${grupo.total_pedidos} pedidos.` });
+        setPendentes(0);
+        if (onGrupoFormado) onGrupoFormado();
+      } else {
+        setFeedback({ tipo: "aviso", msg: "Nenhum pedido alocado aguardando grupo." });
+      }
+      setTimeout(() => setFeedback(null), 4000);
+    } catch (e) { setFeedback({ tipo: "erro", msg: e.message }); }
+    finally { setFechandoGrupo(false); }
   }
 
   const pedidosFiltrados = pedidos.filter(p =>
@@ -150,10 +181,29 @@ function TabAlocacao() {
             <RefreshCw className="h-3.5 w-3.5" /> Atualizar
           </button>
         </div>
+
+        {/* Banner de pendentes */}
+        {pendentes > 0 && (
+          <div className="mt-4 flex items-center justify-between gap-3 bg-amber-50 ring-1 ring-amber-200 rounded-xl px-4 py-3">
+            <div className="text-xs font-semibold text-amber-700">
+              ⚠ {pendentes} pedido{pendentes > 1 ? "s" : ""} alocado{pendentes > 1 ? "s" : ""} aguardando grupo (menos de 20)
+            </div>
+            <button
+              onClick={handleFecharGrupo}
+              disabled={fechandoGrupo}
+              className="text-xs font-bold px-3 py-1.5 rounded-xl bg-amber-500 text-white hover:bg-amber-600 transition disabled:opacity-50 shrink-0">
+              {fechandoGrupo ? "Criando..." : "Fechar grupo"}
+            </button>
+          </div>
+        )}
       </Card>
 
       {feedback && (
-        <div className={`flex items-center gap-2 rounded-2xl px-4 py-3 ring-1 text-sm ${feedback.tipo === "ok" ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-red-50 text-red-700 ring-red-200"}`}>
+        <div className={`flex items-center gap-2 rounded-2xl px-4 py-3 ring-1 text-sm ${
+          feedback.tipo === "ok"    ? "bg-emerald-50 text-emerald-700 ring-emerald-200" :
+          feedback.tipo === "aviso" ? "bg-amber-50 text-amber-700 ring-amber-200" :
+          "bg-red-50 text-red-700 ring-red-200"
+        }`}>
           {feedback.tipo === "ok" ? <CheckCircle className="h-4 w-4 shrink-0" /> : <AlertTriangle className="h-4 w-4 shrink-0" />}
           <span className="font-semibold">{feedback.msg}</span>
         </div>
@@ -206,7 +256,6 @@ function TabAlocacao() {
                 </div>
               </div>
 
-              {/* Painel FIFO */}
               {alocandoId === p.id && (
                 <div className="border-t border-slate-100 bg-slate-50 p-4">
                   {loadingSugestao ? (
@@ -259,13 +308,13 @@ function TabAlocacao() {
 // ══════════════════════════════════════════════════════════
 function TabPicking() {
   const { user } = useAuth();
-  const [grupos, setGrupos]           = useState([]);
-  const [grupoSel, setGrupoSel]       = useState(null);
-  const [pedidos, setPedidos]         = useState([]);
-  const [loading, setLoading]         = useState(true);
-  const [imeiInput, setImeiInput]     = useState("");
-  const [feedback, setFeedback]       = useState(null);
-  const [modalAnalise, setModalAnalise] = useState(null);
+  const [grupos, setGrupos]               = useState([]);
+  const [grupoSel, setGrupoSel]           = useState(null);
+  const [pedidos, setPedidos]             = useState([]);
+  const [loading, setLoading]             = useState(true);
+  const [imeiInput, setImeiInput]         = useState("");
+  const [feedback, setFeedback]           = useState(null);
+  const [modalAnalise, setModalAnalise]   = useState(null);
   const [motivoAnalise, setMotivoAnalise] = useState("");
   const inputRef = useRef(null);
 
@@ -275,10 +324,8 @@ function TabPicking() {
 
   async function carregarGrupos() {
     setLoading(true);
-    try {
-      const data = await listarGruposPicking();
-      setGrupos(data);
-    } catch (e) { console.error(e); }
+    try { setGrupos(await listarGruposPicking()); }
+    catch (e) { console.error(e); }
     finally { setLoading(false); }
   }
 
@@ -293,7 +340,6 @@ function TabPicking() {
     const imei = imeiInput.trim();
     setImeiInput("");
 
-    // Encontra o pedido pelo IMEI alocado
     const pedido = pedidos.find(p => p.imei_alocado === imei && p.status === "em_picking");
     if (!pedido) {
       setFeedback({ tipo: "erro", msg: `IMEI ${imei} não encontrado neste grupo ou já bipado.` });
@@ -324,16 +370,21 @@ function TabPicking() {
     finally { setModalAnalise(null); setMotivoAnalise(""); }
   }
 
-  const totalGrupo   = pedidos.length;
-  const bipados      = pedidos.filter(p => ["embalado", "faturado", "concluido"].includes(p.status)).length;
-  const emAnalise    = pedidos.filter(p => p.status === "em_analise").length;
-  const pendentes    = pedidos.filter(p => p.status === "em_picking").length;
-  const pct          = totalGrupo > 0 ? Math.round((bipados / totalGrupo) * 100) : 0;
+  const totalGrupo = pedidos.length;
+  const bipados    = pedidos.filter(p => ["embalado", "faturado", "concluido"].includes(p.status)).length;
+  const emAnalise  = pedidos.filter(p => p.status === "em_analise").length;
+  const pendentes  = pedidos.filter(p => p.status === "em_picking").length;
+  const pct        = totalGrupo > 0 ? Math.round((bipados / totalGrupo) * 100) : 0;
 
   if (!grupoSel) {
     return (
       <div className="space-y-4">
-        <p className="text-sm text-slate-500">Selecione um grupo de picking:</p>
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-slate-500">Selecione um grupo de picking:</p>
+          <button onClick={carregarGrupos} className="text-xs text-slate-500 hover:text-purple-700 font-semibold flex items-center gap-1">
+            <RefreshCw className="h-3.5 w-3.5" /> Atualizar
+          </button>
+        </div>
         {loading ? (
           <div className="flex items-center justify-center h-32">
             <div className="h-8 w-8 border-4 border-purple-200 border-t-[#7F2D92] rounded-full animate-spin" />
@@ -342,7 +393,7 @@ function TabPicking() {
           <div className="text-center py-12 text-slate-400">
             <Package className="h-8 w-8 mx-auto mb-2 opacity-30" />
             <p className="text-sm">Nenhum grupo de picking em aberto.</p>
-            <p className="text-xs mt-1 text-slate-400">Aloque pedidos na aba Alocação para criar grupos automaticamente.</p>
+            <p className="text-xs mt-1">Aloque 20 pedidos na aba Alocação para criar um grupo automaticamente.</p>
           </div>
         ) : (
           <div className="grid gap-3">
@@ -372,7 +423,6 @@ function TabPicking() {
 
   return (
     <>
-      {/* Modal não localizado */}
       {modalAnalise && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="w-full max-w-md rounded-[28px] bg-white p-8 shadow-2xl">
@@ -400,7 +450,8 @@ function TabPicking() {
               />
             </div>
             <div className="flex gap-3">
-              <button onClick={confirmarAnalise} className="flex-1 rounded-2xl bg-amber-500 py-3 text-sm font-bold text-white hover:bg-amber-600 transition">
+              <button onClick={confirmarAnalise}
+                className="flex-1 rounded-2xl bg-amber-500 py-3 text-sm font-bold text-white hover:bg-amber-600 transition">
                 Confirmar — Enviar para Análise
               </button>
               <button onClick={() => { setModalAnalise(null); setMotivoAnalise(""); inputRef.current?.focus(); }}
@@ -414,7 +465,8 @@ function TabPicking() {
 
       <div className="space-y-4">
         <div className="flex items-center gap-3 flex-wrap">
-          <button onClick={() => { setGrupoSel(null); setPedidos([]); }} className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1">
+          <button onClick={() => { setGrupoSel(null); setPedidos([]); carregarGrupos(); }}
+            className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1">
             <X className="h-3 w-3" /> Trocar grupo
           </button>
           <div className="flex-1">
@@ -425,9 +477,9 @@ function TabPicking() {
         </div>
 
         <div className="grid grid-cols-3 gap-3">
-          <KpiMini label="Bipados" value={fmtN(bipados)} sub={`${pct}%`} color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
-          <KpiMini label="Pendentes" value={fmtN(pendentes)} color="bg-yellow-50 ring-yellow-200 text-yellow-700" />
-          <KpiMini label="Em Análise" value={fmtN(emAnalise)} color="bg-orange-50 ring-orange-200 text-orange-700" />
+          <KpiMini label="Bipados"    value={fmtN(bipados)}   sub={`${pct}%`} color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
+          <KpiMini label="Pendentes"  value={fmtN(pendentes)}                 color="bg-yellow-50 ring-yellow-200 text-yellow-700" />
+          <KpiMini label="Em Análise" value={fmtN(emAnalise)}                 color="bg-orange-50 ring-orange-200 text-orange-700" />
         </div>
 
         <Card>
@@ -454,7 +506,7 @@ function TabPicking() {
           </form>
           {feedback && (
             <div className={`mt-3 flex items-center gap-2 text-sm rounded-xl px-4 py-3 ring-1 ${
-              feedback.tipo === "ok" ? "bg-emerald-50 text-emerald-700 ring-emerald-200" :
+              feedback.tipo === "ok"    ? "bg-emerald-50 text-emerald-700 ring-emerald-200" :
               feedback.tipo === "aviso" ? "bg-amber-50 text-amber-700 ring-amber-200" :
               "bg-red-50 text-red-700 ring-red-200"
             }`}>
@@ -464,7 +516,6 @@ function TabPicking() {
           )}
         </Card>
 
-        {/* Lista de pedidos do grupo */}
         <Card>
           <h3 className="font-black text-slate-800 text-sm mb-4">Pedidos do grupo ({totalGrupo})</h3>
           <div className="space-y-2">
@@ -472,7 +523,7 @@ function TabPicking() {
               const concluido = ["embalado", "faturado", "concluido"].includes(p.status);
               return (
                 <div key={p.id} className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 ring-1 ${
-                  concluido ? "bg-emerald-50 ring-emerald-200 opacity-60" :
+                  concluido       ? "bg-emerald-50 ring-emerald-200 opacity-60" :
                   p.status === "em_analise" ? "bg-orange-50 ring-orange-200" :
                   "bg-slate-50 ring-slate-200"
                 }`}>
@@ -508,12 +559,12 @@ function TabPicking() {
 // ══════════════════════════════════════════════════════════
 function TabAnalise() {
   const { user } = useAuth();
-  const [pedidos, setPedidos]         = useState([]);
-  const [loading, setLoading]         = useState(true);
-  const [busca, setBusca]             = useState("");
-  const [modalResolver, setModalResolver] = useState(null);
-  const [novoImei, setNovoImei]       = useState("");
-  const [feedback, setFeedback]       = useState(null);
+  const [pedidos, setPedidos]               = useState([]);
+  const [loading, setLoading]               = useState(true);
+  const [busca, setBusca]                   = useState("");
+  const [modalResolver, setModalResolver]   = useState(null);
+  const [novoImei, setNovoImei]             = useState("");
+  const [feedback, setFeedback]             = useState(null);
 
   useEffect(() => { carregar(); }, []);
 
@@ -620,12 +671,8 @@ function TabAnalise() {
                       <GradeBadge grade={p.grade_produto} />
                     </div>
                     <p className="text-xs text-slate-400 mt-0.5">{p.cliente}</p>
-                    {p.motivo_analise && (
-                      <p className="text-xs text-orange-600 font-semibold mt-1">⚠ {p.motivo_analise}</p>
-                    )}
-                    {p.analise_em && (
-                      <p className="text-xs text-slate-400 mt-0.5">Em análise desde: {fmtData(p.analise_em)}</p>
-                    )}
+                    {p.motivo_analise && <p className="text-xs text-orange-600 font-semibold mt-1">⚠ {p.motivo_analise}</p>}
+                    {p.analise_em && <p className="text-xs text-slate-400 mt-0.5">Em análise desde: {fmtData(p.analise_em)}</p>}
                   </div>
                   <button onClick={() => setModalResolver(p)}
                     className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100 transition shrink-0">
@@ -646,14 +693,14 @@ function TabAnalise() {
 // ══════════════════════════════════════════════════════════
 function TabFaturamento() {
   const { user } = useAuth();
-  const [pedidos, setPedidos]       = useState([]);
-  const [loading, setLoading]       = useState(true);
-  const [busca, setBusca]           = useState("");
-  const [modalNF, setModalNF]       = useState(null);
-  const [numeroNF, setNumeroNF]     = useState("");
-  const [chaveNF, setChaveNF]       = useState("");
-  const [feedback, setFeedback]     = useState(null);
-  const [faturando, setFaturando]   = useState(false);
+  const [pedidos, setPedidos]     = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [busca, setBusca]         = useState("");
+  const [modalNF, setModalNF]     = useState(null);
+  const [numeroNF, setNumeroNF]   = useState("");
+  const [chaveNF, setChaveNF]     = useState("");
+  const [feedback, setFeedback]   = useState(null);
+  const [faturando, setFaturando] = useState(false);
 
   useEffect(() => { carregar(); }, []);
 
@@ -676,13 +723,12 @@ function TabFaturamento() {
     finally { setFaturando(false); setModalNF(null); setNumeroNF(""); setChaveNF(""); }
   }
 
-  const filtrados = pedidos.filter(p =>
+  const filtrados  = pedidos.filter(p =>
     !busca ||
     String(p.id_anymarket).includes(busca) ||
     p.cliente?.toLowerCase().includes(busca.toLowerCase()) ||
     p.imei_bipado?.includes(busca)
   );
-
   const totalValor = filtrados.reduce((s, p) => s + (p.total_do_pedido || 0), 0);
 
   return (
@@ -749,7 +795,7 @@ function TabFaturamento() {
 
         <div className="grid grid-cols-2 gap-3">
           <KpiMini label="Aguardando NF" value={fmtN(filtrados.length)} color="bg-purple-50 ring-purple-200 text-purple-700" />
-          <KpiMini label="Valor total" value={fmtR(totalValor)} color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
+          <KpiMini label="Valor total"   value={fmtR(totalValor)}       color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
         </div>
 
         <div className="relative">
@@ -788,9 +834,7 @@ function TabFaturamento() {
                       <GradeBadge grade={p.grade_produto} />
                     </div>
                     <p className="text-xs text-slate-400 mt-0.5">{p.cliente}</p>
-                    {p.embalado_em && (
-                      <p className="text-xs text-slate-400 mt-0.5">Embalado em: {fmtData(p.embalado_em)}</p>
-                    )}
+                    {p.embalado_em && <p className="text-xs text-slate-400 mt-0.5">Embalado em: {fmtData(p.embalado_em)}</p>}
                   </div>
                   <button onClick={() => setModalNF(p)}
                     className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100 transition shrink-0">
@@ -810,18 +854,20 @@ function TabFaturamento() {
 // PÁGINA PRINCIPAL
 // ══════════════════════════════════════════════════════════
 export default function PedidosB2CPage() {
-  const [aba, setAba]       = useState("alocacao");
-  const [kpis, setKpis]     = useState(null);
+  const [aba, setAba]   = useState("alocacao");
+  const [kpis, setKpis] = useState(null);
 
-  useEffect(() => {
+  useEffect(() => { recarregarKpis(); }, []);
+
+  async function recarregarKpis() {
     buscarKpisPedidosB2C().then(setKpis).catch(console.error);
-  }, []);
+  }
 
   const ABAS = [
-    { key: "alocacao",   label: "Alocação",    icon: Layers    },
-    { key: "picking",    label: "Picking",     icon: Search    },
-    { key: "analise",    label: "Em Análise",  icon: AlertTriangle },
-    { key: "faturamento", label: "Faturamento", icon: FileText  },
+    { key: "alocacao",    label: "Alocação",    icon: Layers        },
+    { key: "picking",     label: "Picking",     icon: Search        },
+    { key: "analise",     label: "Em Análise",  icon: AlertTriangle },
+    { key: "faturamento", label: "Faturamento", icon: FileText      },
   ];
 
   return (
@@ -834,17 +880,15 @@ export default function PedidosB2CPage() {
         </div>
       </div>
 
-      {/* KPIs globais */}
       {kpis && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <KpiMini label="Aguard. Alocação" value={fmtN(kpis.aguardando_alocacao)} color="bg-slate-50 ring-slate-200 text-slate-700" />
-          <KpiMini label="Em Picking"       value={fmtN(kpis.em_picking)}          color="bg-yellow-50 ring-yellow-200 text-yellow-700" />
-          <KpiMini label="Em Análise"       value={fmtN(kpis.em_analise)}          color="bg-orange-50 ring-orange-200 text-orange-700" />
-          <KpiMini label="Faturados"        value={fmtN(kpis.faturado + kpis.concluido)} color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
+          <KpiMini label="Em Picking"        value={fmtN(kpis.em_picking)}          color="bg-yellow-50 ring-yellow-200 text-yellow-700" />
+          <KpiMini label="Em Análise"        value={fmtN(kpis.em_analise)}          color="bg-orange-50 ring-orange-200 text-orange-700" />
+          <KpiMini label="Faturados"         value={fmtN(kpis.faturado + kpis.concluido)} color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
         </div>
       )}
 
-      {/* Abas */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1">
         {ABAS.map(a => {
           const Icon = a.icon;
@@ -860,7 +904,7 @@ export default function PedidosB2CPage() {
         })}
       </div>
 
-      {aba === "alocacao"    && <TabAlocacao />}
+      {aba === "alocacao"    && <TabAlocacao onGrupoFormado={recarregarKpis} />}
       {aba === "picking"     && <TabPicking />}
       {aba === "analise"     && <TabAnalise />}
       {aba === "faturamento" && <TabFaturamento />}
