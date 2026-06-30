@@ -54,6 +54,8 @@ export async function importarPedidoB2B(file, userId, extras = {}) {
             criado_por:         userId,
             condicao_pagamento: extras.condicao_pagamento || null,
             cnpj_agregado:      extras.cnpj_agregado      || null,
+            status_picking:     "em_andamento",
+            status_faturamento: "pendente",
           })
           .select().single();
         if (errPedido) throw new Error(errPedido.message);
@@ -165,7 +167,8 @@ export async function registrarBipagem(imeiDigitado, pedidoId, userId) {
     .eq("id", item.id);
   if (errUpdate) return { ok: false, erro: errUpdate.message };
   await supabase.rpc("b2b_atualizar_contador", { p_pedido_id: pedidoId });
-  await verificarEConcluirPedido(pedidoId);
+  await verificarConclusaoPicking(pedidoId);
+  await verificarConclusaoFaturamento(pedidoId);
   return { ok: true, item };
 }
 
@@ -208,7 +211,8 @@ export async function marcarLocalizado(itemId, novaLocalizacao, userId) {
   const { data: item } = await supabase.from("b2b_itens").select("pedido_id").eq("id", itemId).single();
   if (item?.pedido_id) {
     await supabase.rpc("b2b_atualizar_contador", { p_pedido_id: item.pedido_id });
-    await verificarEConcluirPedido(item.pedido_id);
+    await verificarConclusaoPicking(item.pedido_id);
+    await verificarConclusaoFaturamento(item.pedido_id);
   }
 }
 
@@ -225,7 +229,10 @@ export async function marcarNaoFaturar(itemId, motivo, observacao, userId) {
   if (error) throw new Error(error.message);
 
   const { data: item } = await supabase.from("b2b_itens").select("pedido_id").eq("id", itemId).single();
-  if (item?.pedido_id) await verificarEConcluirPedido(item.pedido_id);
+  if (item?.pedido_id) {
+    await verificarConclusaoPicking(item.pedido_id);
+    await verificarConclusaoFaturamento(item.pedido_id);
+  }
 }
 
 export async function reverterNaoLocalizado(itemId, novoLocal) {
@@ -239,6 +246,10 @@ export async function reverterNaoLocalizado(itemId, novoLocal) {
     })
     .eq("id", itemId);
   if (error) throw new Error(error.message);
+
+  // Reverter pode "reabrir" o picking se ele estava concluído
+  const { data: item } = await supabase.from("b2b_itens").select("pedido_id").eq("id", itemId).single();
+  if (item?.pedido_id) await reabrirPickingSeNecessario(item.pedido_id);
 }
 
 export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
@@ -307,7 +318,45 @@ export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
   return { bloqueado: false, total: itensNovos.length, numeroExportacao, nomeArquivo };
 }
 
-async function verificarEConcluirPedido(pedidoId) {
+// ══════════════════════════════════════════════════════════
+// CONCLUSÃO DE PICKING — independente de NF
+// Conclui quando todos os itens estão em estado terminal
+// (bipado ou nao_faturar), sem pendentes nem em análise.
+// ══════════════════════════════════════════════════════════
+async function verificarConclusaoPicking(pedidoId) {
+  const { data: itens } = await supabase
+    .from("b2b_itens").select("status")
+    .eq("pedido_id", pedidoId);
+
+  const todos           = itens || [];
+  const total           = todos.length;
+  const totalPendentes  = todos.filter(i => i.status === "pendente").length;
+  const totalAnalise    = todos.filter(i => ["nao_localizado", "em_analise"].includes(i.status)).length;
+  const totalBipados    = todos.filter(i => i.status === "bipado").length;
+  const totalNaoFaturar = todos.filter(i => i.status === "nao_faturar").length;
+
+  const pickingCompleto = total > 0
+    && totalPendentes === 0
+    && totalAnalise === 0
+    && (totalBipados + totalNaoFaturar) === total;
+
+  if (pickingCompleto) {
+    await supabase
+      .from("b2b_pedidos")
+      .update({ status_picking: "concluido" })
+      .eq("id", pedidoId);
+    return true;
+  }
+  return false;
+}
+
+// ══════════════════════════════════════════════════════════
+// CONCLUSÃO DE FATURAMENTO — depende de NF
+// pendente  → nenhuma NF importada
+// parcial   → NFs cobrem parte dos bipados
+// concluido → NFs cobrem todos os bipados
+// ══════════════════════════════════════════════════════════
+async function verificarConclusaoFaturamento(pedidoId) {
   const { data: itens } = await supabase
     .from("b2b_itens").select("status, nf")
     .eq("pedido_id", pedidoId);
@@ -316,34 +365,59 @@ async function verificarEConcluirPedido(pedidoId) {
     .from("b2b_nfs").select("total_itens")
     .eq("pedido_id", pedidoId);
 
-  const todos           = itens || [];
-  const total           = todos.length;
-  const totalBipados    = todos.filter(i => i.status === "bipado").length;
-  const totalPendentes  = todos.filter(i => i.status === "pendente").length;
-  const totalAnalise    = todos.filter(i => ["nao_localizado", "em_analise"].includes(i.status)).length;
-  const totalNaoFaturar = todos.filter(i => i.status === "nao_faturar").length;
-  const bipadosComNF    = todos.filter(i => i.status === "bipado" && i.nf).length;
-  const totalComNF      = (todasNFs || []).reduce((s, n) => s + (n.total_itens || 0), 0);
+  const todos        = itens || [];
+  const total        = todos.length;
+  const totalBipados = todos.filter(i => i.status === "bipado").length;
+  const bipadosComNF = todos.filter(i => i.status === "bipado" && i.nf).length;
+  const totalComNF   = (todasNFs || []).reduce((s, n) => s + (n.total_itens || 0), 0);
 
-  const todosResolvidos = total > 0
-    && totalPendentes === 0
-    && totalAnalise === 0
-    && (totalBipados + totalNaoFaturar) === total;
+  // Cobertura por qualquer um dos dois sinais (item.nf OU total_itens da NF)
+  const cobertura = Math.max(bipadosComNF, totalComNF);
 
-  let podeConcluir = false;
-  if (todosResolvidos) {
-    if (totalBipados === 0) {
-      podeConcluir = true;
-    } else {
-      podeConcluir = bipadosComNF >= totalBipados && totalComNF >= totalBipados;
-    }
+  let statusFaturamento;
+  if (totalBipados === 0) {
+    // Pedido sem nenhum bipado (tudo nao_faturar) — faturamento não se aplica, conclui
+    statusFaturamento = "concluido";
+  } else if (cobertura === 0) {
+    statusFaturamento = "pendente";
+  } else if (cobertura >= totalBipados) {
+    statusFaturamento = "concluido";
+  } else {
+    statusFaturamento = "parcial";
   }
 
-  if (podeConcluir) {
+  await supabase
+    .from("b2b_pedidos")
+    .update({ status_faturamento: statusFaturamento })
+    .eq("id", pedidoId);
+
+  // Mantém o status legado sincronizado: concluído só quando ambas etapas fecham
+  const { data: pedido } = await supabase
+    .from("b2b_pedidos").select("status_picking").eq("id", pedidoId).single();
+  if (pedido?.status_picking === "concluido" && statusFaturamento === "concluido") {
     await supabase.from("b2b_pedidos").update({ status: "concluido" }).eq("id", pedidoId);
-    return true;
   }
-  return false;
+
+  return statusFaturamento;
+}
+
+// ══════════════════════════════════════════════════════════
+// REABRIR PICKING — quando um item volta para pendente/análise
+// ══════════════════════════════════════════════════════════
+async function reabrirPickingSeNecessario(pedidoId) {
+  const { data: itens } = await supabase
+    .from("b2b_itens").select("status")
+    .eq("pedido_id", pedidoId);
+
+  const todos          = itens || [];
+  const temNaoTerminal = todos.some(i => ["pendente", "nao_localizado", "em_analise"].includes(i.status));
+
+  if (temNaoTerminal) {
+    await supabase
+      .from("b2b_pedidos")
+      .update({ status_picking: "em_andamento", status: "aberto" })
+      .eq("id", pedidoId);
+  }
 }
 
 export async function importarNFPlanilha(file, pedidoId, userId) {
@@ -434,7 +508,7 @@ export async function importarNFPlanilha(file, pedidoId, userId) {
           nfsRelinkadas.push(numeroNf);
         }
 
-        await verificarEConcluirPedido(pedidoId);
+        await verificarConclusaoFaturamento(pedidoId);
 
         const totalNFs   = nfsInseridas.length + nfsRelinkadas.length;
         const todasAsNFs = [...nfsInseridas.map(n => n.numero_nf), ...nfsRelinkadas];
@@ -473,7 +547,7 @@ export async function importarNFPedido(pedidoId, numeroNf, totalItens, totalCaix
     .select().single();
   if (error) throw new Error(error.message);
 
-  await verificarEConcluirPedido(pedidoId);
+  await verificarConclusaoFaturamento(pedidoId);
   return data;
 }
 
@@ -505,7 +579,6 @@ export async function buscarResumoValorPedido(pedidoId) {
   };
 }
 
-// ── CORRIGIDO: sem join, query separada para user_profiles ──
 export async function listarNFsPedido(pedidoId) {
   const { data: nfs } = await supabase
     .from("b2b_nfs")
@@ -540,7 +613,6 @@ export async function listarExportacoesPedido(pedidoId) {
   return data || [];
 }
 
-// ── CORRIGIDO: sem join, query separada para user_profiles ──
 export async function listarPedidosConcluidos() {
   const { data: pedidos, error } = await supabase
     .from("b2b_pedidos").select("*").eq("status", "concluido").order("criado_em", { ascending: false });
