@@ -788,6 +788,7 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
   const [modalRemover, setModalRemover]       = useState(null);
   const [modalExcluir, setModalExcluir]       = useState(null);
   const [progressoEmbalagem, setProgressoEmbalagem] = useState({});
+  const [itensAEmbalar, setItensAEmbalar]     = useState([]);
   const [verConcluidosEmbalagem, setVerConcluidosEmbalagem] = useState(false);
   const inputRef = useRef(null);
   const CAPACIDADE = 30;
@@ -820,7 +821,7 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
     onAtualizarSilencioso?.(data);
   }
 
-  useEffect(() => { if (pedidoSel) { carregarCaixas(); carregarNFs(); } }, [pedidoSel]);
+  useEffect(() => { if (pedidoSel) { carregarCaixas(); carregarNFs(); carregarItensAEmbalar(); } }, [pedidoSel]);
   useEffect(() => { if (caixaAtiva) { carregarItensCaixa(); setTimeout(() => inputRef.current?.focus(), 100); } }, [caixaAtiva]);
 
   async function carregarCaixas() {
@@ -839,6 +840,18 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
   async function carregarItensCaixa() {
     if (!caixaAtiva) return;
     setItensCaixa(await listarItensCaixa(caixaAtiva.id));
+  }
+
+  async function carregarItensAEmbalar() {
+    if (!pedidoSel) return;
+    const { data } = await supabase
+      .from("b2b_itens")
+      .select("id, imei, modelo, grade, cod_item, local_estoque")
+      .eq("pedido_id", pedidoSel.id)
+      .eq("status", "bipado")
+      .is("caixa_id", null)
+      .order("local_estoque", { ascending: true });
+    setItensAEmbalar(data || []);
   }
 
   async function handleNovaCaixa() {
@@ -883,6 +896,7 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
       if (caixaDetalhes?.id === caixaId) { setItensCaixaDet(prev => prev.filter(i => i.id !== item.id)); }
       setFeedback({ tipo: "ok", msg: `✓ ${item.imei} removido da caixa — disponível para reembalar.` });
       setTimeout(() => setFeedback(null), 3500);
+      carregarItensAEmbalar();
     } catch (e) { setFeedback({ tipo: "erro", msg: e.message }); }
     finally { setModalRemover(null); }
   }
@@ -899,6 +913,7 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
       await atualizarPedidos();
       setFeedback({ tipo: "ok", msg: `✓ Caixa ${caixa.numero} excluída. Itens liberados para reembalar.` });
       setTimeout(() => setFeedback(null), 3500);
+      carregarItensAEmbalar();
     } catch (e) { setFeedback({ tipo: "erro", msg: e.message }); }
     finally { setLoading(false); setModalExcluir(null); }
   }
@@ -919,6 +934,7 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
       } else {
         setFeedback({ tipo: "ok", msg: `✓ ${imeiInput.trim()} embalado — Caixa ${caixaAtiva.numero}: ${res.totalCaixa}/${CAPACIDADE}` });
       }
+      carregarItensAEmbalar();
     } else { setFeedback({ tipo: "erro", msg: res.erro }); }
     setTimeout(() => setFeedback(null), 3000);
     inputRef.current?.focus();
@@ -1001,7 +1017,7 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
       {modalExcluir && <ModalExcluirCaixa caixa={modalExcluir.caixa} qtdItens={modalExcluir.qtdItens} onConfirmar={handleConfirmarExcluir} onCancelar={() => setModalExcluir(null)} />}
       <div className="space-y-4">
         <div className="flex items-center gap-3 flex-wrap">
-          <button onClick={() => { setPedido(null); setCaixaAtiva(null); setCaixas([]); setItensCaixa([]); setNfsPedido([]); setCaixaDetalhes(null); carregarProgresso(); }} className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1"><X className="h-3 w-3" /> Trocar pedido</button>
+          <button onClick={() => { setPedido(null); setCaixaAtiva(null); setCaixas([]); setItensCaixa([]); setNfsPedido([]); setCaixaDetalhes(null); setItensAEmbalar([]); carregarProgresso(); }} className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1"><X className="h-3 w-3" /> Trocar pedido</button>
           <div className="flex-1"><h3 className="font-black text-slate-800 text-sm">{pedidoSel.lote}</h3><p className="text-xs text-slate-500">{pedidoSel.cliente}</p></div>
           <div className="flex items-center gap-2">
             {!temNFs && <span className="text-xs text-amber-600 font-semibold flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Importe as NFs para gerar romaneios</span>}
@@ -1024,6 +1040,44 @@ function TabEmbalagem({ pedidosIniciais, onAtualizarSilencioso }) {
           </div>
         )}
         <Card><p className="text-xs font-semibold text-slate-500 mb-2">Progresso da embalagem</p><ProgressBar value={totalEmbalados} total={totalBipados} color="#F97316" /></Card>
+
+        {/* ── Aparelhos a embalar (bipados ainda sem caixa) ── */}
+        {itensAEmbalar.length > 0 && (
+          <Card>
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <h3 className="font-black text-slate-800 text-sm flex items-center gap-2">
+                <Package className="h-4 w-4 text-orange-500" /> Aparelhos a embalar ({fmtN(itensAEmbalar.length)})
+              </h3>
+              <span className="text-xs text-slate-400">bipados que ainda não entraram em caixa</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-xs">
+                <thead><tr className="bg-slate-50">
+                  <th className="px-3 py-2 text-left font-bold text-slate-500">Local</th>
+                  <th className="px-3 py-2 text-left font-bold text-slate-500">IMEI</th>
+                  <th className="px-3 py-2 text-left font-bold text-slate-500">Modelo</th>
+                  <th className="px-3 py-2 text-left font-bold text-slate-500">Grade</th>
+                  <th className="px-3 py-2 text-left font-bold text-slate-500">SKU</th>
+                </tr></thead>
+                <tbody className="divide-y divide-slate-100">
+                  {itensAEmbalar.slice(0, 200).map(item => (
+                    <tr key={item.id} className="hover:bg-orange-50/50">
+                      <td className="px-3 py-2 font-mono text-slate-600">{item.local_estoque || "—"}</td>
+                      <td className="px-3 py-2 font-mono font-semibold text-slate-800">{item.imei}</td>
+                      <td className="px-3 py-2 text-slate-600 max-w-[160px] truncate">{item.modelo}</td>
+                      <td className="px-3 py-2"><span className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded-lg font-semibold">{item.grade}</span></td>
+                      <td className="px-3 py-2 text-slate-500 font-mono">{item.cod_item || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {itensAEmbalar.length > 200 && (
+              <p className="text-xs text-center text-slate-400 mt-2">Mostrando 200 de {fmtN(itensAEmbalar.length)} aparelhos.</p>
+            )}
+          </Card>
+        )}
+
         {caixaAtiva && caixaAtiva.status === "aberta" ? (
           <Card>
             <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
