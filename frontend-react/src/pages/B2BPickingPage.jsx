@@ -11,7 +11,7 @@ import {
   registrarBipagem, exportarFaturamento, importarNFPlanilha,
   marcarEmAnalise, marcarLocalizado, marcarNaoFaturar,
   buscarResumoValorPedido, listarNFsPedido, listarPedidosConcluidos,
-  listarExportacoesPedido,
+  listarExportacoesPedido, marcarErroNFManual, limparErroNF,
 } from "../services/b2bService.js";
 import {
   criarCaixa, listarCaixas, listarItensCaixa,
@@ -1238,6 +1238,10 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
   const [painelNFs, setPainelNFs]       = useState({});
   const [painelExp, setPainelExp]       = useState({});
   const [loadingResumo, setLoadingResumo] = useState({});
+  const [formErro, setFormErro]         = useState({});
+  const [erroImei, setErroImei]         = useState({});
+  const [erroObs, setErroObs]           = useState({});
+  const [marcandoErro, setMarcandoErro] = useState(null);
   const inputNFRefs = useRef({});
 
   useEffect(() => {
@@ -1318,10 +1322,54 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
     }
   }
 
+  async function handleMarcarErro(pedido) {
+    const imei = (erroImei[pedido.id] || "").trim();
+    const obs  = (erroObs[pedido.id] || "").trim();
+    if (!imei) { setFeedbackExp(prev => ({ ...prev, [pedido.id]: { tipo: "erro", msg: "Informe o IMEI do item com erro." } })); return; }
+    setMarcandoErro(pedido.id);
+    setFeedbackExp(prev => ({ ...prev, [pedido.id]: null }));
+    try {
+      const res = await marcarErroNFManual(pedido.id, imei, obs, user.id);
+      if (!res.ok) {
+        setFeedbackExp(prev => ({ ...prev, [pedido.id]: { tipo: "erro", msg: res.erro } }));
+      } else {
+        setFeedbackExp(prev => ({ ...prev, [pedido.id]: { tipo: "bloqueado", msg: `Erro de NF registrado para o IMEI ${imei}.` } }));
+        setErroImei(prev => ({ ...prev, [pedido.id]: "" }));
+        setErroObs(prev => ({ ...prev, [pedido.id]: "" }));
+        setFormErro(prev => ({ ...prev, [pedido.id]: false }));
+        setResumos(prev => ({ ...prev, [pedido.id]: null }));
+        setNfs(prev => ({ ...prev, [pedido.id]: null }));
+        carregarResumo(pedido.id);
+        atualizarPedidos();
+      }
+    } catch (e) {
+      setFeedbackExp(prev => ({ ...prev, [pedido.id]: { tipo: "erro", msg: e.message } }));
+    } finally { setMarcandoErro(null); }
+  }
+
+  async function handleLimparErro(pedido, imei) {
+    setMarcandoErro(pedido.id);
+    try {
+      const res = await limparErroNF(pedido.id, imei, user.id);
+      if (!res.ok) {
+        setFeedbackExp(prev => ({ ...prev, [pedido.id]: { tipo: "erro", msg: res.erro } }));
+      } else {
+        setResumos(prev => ({ ...prev, [pedido.id]: null }));
+        setNfs(prev => ({ ...prev, [pedido.id]: null }));
+        carregarResumo(pedido.id);
+        atualizarPedidos();
+      }
+    } catch (e) {
+      setFeedbackExp(prev => ({ ...prev, [pedido.id]: { tipo: "erro", msg: e.message } }));
+    } finally { setMarcandoErro(null); }
+  }
+
   const pedidosAbertos      = pedidos.filter(p => p.status !== "concluido");
   const totalFaturadoGlobal = Object.values(resumos).reduce((s, r) => s + (r?.valorFaturado || 0), 0);
   const totalNaoFaturar     = Object.values(resumos).reduce((s, r) => s + (r?.valorNaoFaturar || 0), 0);
   const totalAguardando     = Object.values(resumos).reduce((s, r) => s + Math.max(0, (r?.valorBipado || 0) - (r?.valorFaturado || 0)), 0);
+  const totalPedidosErro    = pedidosAbertos.filter(p => p.status_faturamento === "erro_nf").length;
+  const totalItensErro      = Object.values(resumos).reduce((s, r) => s + (r?.qtdErro || 0), 0);
 
   function getStatusFat(p, resumo, nfsPedido) {
     const qtdFaturada   = resumo?.qtdFaturada   || 0;
@@ -1356,10 +1404,11 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
         <h3 className="font-black text-slate-800 flex items-center gap-2 text-sm"><BarChart3 className="h-4 w-4 text-[#7F2D92]" /> Faturamento B2B</h3>
         <button onClick={atualizarPedidos} className="text-xs text-slate-500 hover:text-purple-700 font-semibold">↻ Atualizar</button>
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
         <KpiMini label="Aguardando faturamento" value={fmtR(totalAguardando)} sub={`${fmtN(pedidosAbertos.length)} pedidos`} color="bg-orange-50 ring-orange-200 text-orange-700" />
         <KpiMini label="Faturado" value={fmtR(totalFaturadoGlobal)} sub={`${fmtN(Object.values(resumos).reduce((s, r) => s + (r?.qtdFaturada || 0), 0))} itens`} color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
         <KpiMini label="Não Faturar" value={fmtR(totalNaoFaturar)} sub={`${fmtN(Object.values(resumos).reduce((s, r) => s + (r?.qtdNaoFaturar || 0), 0))} itens`} color="bg-red-50 ring-red-200 text-red-700" />
+        <KpiMini label="Erro de NF" value={fmtN(totalPedidosErro)} sub={`${fmtN(totalItensErro)} itens`} color="bg-red-50 ring-red-300 text-red-700" />
       </div>
       {pedidosAbertos.length === 0 ? (
         <div className="text-center py-12 text-slate-400"><Package className="h-8 w-8 mx-auto mb-2 opacity-30" /><p className="text-sm">Nenhum pedido em aberto.</p></div>
@@ -1459,7 +1508,13 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
                               {it.obs && <p className="text-red-600 mt-0.5 break-words">{it.obs}</p>}
                             </div>
                           </div>
-                          {it.valor > 0 && <span className="font-semibold text-slate-500 shrink-0">{fmtR(it.valor)}</span>}
+                          <div className="flex items-center gap-2 shrink-0">
+                            {it.valor > 0 && <span className="font-semibold text-slate-500">{fmtR(it.valor)}</span>}
+                            <button onClick={() => handleLimparErro(p, it.imei)} disabled={marcandoErro === p.id}
+                              className="text-xs font-semibold px-2 py-1 rounded-lg bg-slate-50 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100 hover:text-slate-700 transition disabled:opacity-40">
+                              Limpar
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1537,7 +1592,35 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
                       disabled={importandoNF === p.id}
                       onChange={e => handleImportarNF(p, e.target.files?.[0])} />
                   </label>
+                  <button onClick={() => setFormErro(prev => ({ ...prev, [p.id]: !prev[p.id] }))}
+                    className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl ring-1 transition ${formErro[p.id] ? "bg-red-100 text-red-700 ring-red-300" : "bg-red-50 text-red-700 ring-red-200 hover:bg-red-100"}`}>
+                    <AlertTriangle className="h-3 w-3" /> Marcar erro de NF
+                  </button>
                 </div>
+                {formErro[p.id] && (
+                  <div className="mt-3 bg-red-50 ring-1 ring-red-200 rounded-xl p-3">
+                    <p className="text-xs font-bold text-red-700 mb-2 flex items-center gap-1.5"><AlertTriangle className="h-3.5 w-3.5" /> Marcar erro de emissão de NF</p>
+                    <div className="flex gap-2 flex-wrap items-end">
+                      <div className="flex-1" style={{ minWidth: "150px" }}>
+                        <label className="block text-xs text-slate-500 font-semibold mb-1">IMEI do item</label>
+                        <input type="text" value={erroImei[p.id] || ""} onChange={e => setErroImei(prev => ({ ...prev, [p.id]: e.target.value }))}
+                          placeholder="Ex: 356877115594740"
+                          className="w-full text-xs px-3 py-2 rounded-lg ring-1 ring-slate-200 focus:ring-red-300 focus:outline-none" />
+                      </div>
+                      <div className="flex-1" style={{ minWidth: "200px" }}>
+                        <label className="block text-xs text-slate-500 font-semibold mb-1">Observação</label>
+                        <input type="text" value={erroObs[p.id] || ""} onChange={e => setErroObs(prev => ({ ...prev, [p.id]: e.target.value }))}
+                          placeholder="Ex: Rejeição SEFAZ 539 — duplicidade"
+                          className="w-full text-xs px-3 py-2 rounded-lg ring-1 ring-slate-200 focus:ring-red-300 focus:outline-none" />
+                      </div>
+                      <button onClick={() => handleMarcarErro(p)} disabled={marcandoErro === p.id}
+                        className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition disabled:opacity-40">
+                        {marcandoErro === p.id ? <div className="h-3 w-3 border-2 border-red-200 border-t-white rounded-full animate-spin" /> : <AlertTriangle className="h-3 w-3" />}
+                        Marcar erro
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {fb && (
                   <div className={`mt-3 flex items-start gap-2 text-xs rounded-xl px-4 py-3 ring-1 ${fb.tipo === "ok" ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : fb.tipo === "bloqueado" ? "bg-amber-50 text-amber-700 ring-amber-200" : "bg-red-50 text-red-700 ring-red-200"}`}>
                     {fb.tipo === "ok" ? <CheckCircle className="h-4 w-4 shrink-0 mt-0.5" /> : <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />}
@@ -1757,7 +1840,7 @@ export default function B2BPickingPage({ abaInicial = "picking" }) {
     picking:   { aberto: pedidos.filter(p => p.status === "aberto").length,   concluido: pedidos.filter(p => p.status === "concluido").length, labelAberto: "em aberto",              labelConcluido: "concluído",  aoConcluido: () => setVerConcluidos(false) },
     analise:   { aberto: pedidosComAnalise.length,                             concluido: pedidosSemAnalise.length,                            labelAberto: "com itens pendentes",     labelConcluido: "resolvido",  aoConcluido: () => {} },
     embalagem: { aberto: pedidos.filter(p => (p.total_bipados || 0) > 0 && p.status !== "concluido").length, concluido: pedidos.filter(p => p.status === "concluido").length, labelAberto: "para embalar", labelConcluido: "embalado", aoConcluido: () => setVerConcluidos(false) },
-    pedidos:   { aberto: pedidos.filter(p => p.status !== "concluido").length, concluido: pedidos.filter(p => p.status === "concluido").length, labelAberto: "aguardando faturamento", labelConcluido: "faturado",   aoConcluido: () => { setAba("pedidos"); setVerConcluidos(true); } },
+    pedidos:   { aberto: pedidos.filter(p => p.status !== "concluido").length, concluido: pedidos.filter(p => p.status === "concluido").length, erro: pedidos.filter(p => p.status_faturamento === "erro_nf").length, labelAberto: "aguardando faturamento", labelConcluido: "faturado",   aoConcluido: () => { setAba("pedidos"); setVerConcluidos(true); } },
   };
 
   const ctx = contadores[aba] || contadores["picking"];
@@ -1781,6 +1864,11 @@ export default function B2BPickingPage({ abaInicial = "picking" }) {
           {ctx.concluido > 0 && (
             <button onClick={ctx.aoConcluido} className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100 transition">
               {ctx.concluido} {ctx.labelConcluido}{ctx.concluido > 1 ? "s" : ""}
+            </button>
+          )}
+          {ctx.erro > 0 && (
+            <button onClick={() => { setAba("pedidos"); setVerConcluidos(false); }} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-red-50 text-red-700 ring-1 ring-red-200 hover:bg-red-100 transition">
+              <AlertTriangle className="h-3.5 w-3.5" /> {ctx.erro} com erro de NF
             </button>
           )}
         </div>

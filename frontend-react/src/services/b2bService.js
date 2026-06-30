@@ -580,6 +580,50 @@ export async function importarNFPedido(pedidoId, numeroNf, totalItens, totalCaix
   return data;
 }
 
+// ══════════════════════════════════════════════════════════
+// MARCAR ERRO DE NF MANUALMENTE (pela tela, sem planilha)
+// Para casos em que a emissão falhou no outro sistema e o
+// pedido já está em andamento (não dá pra reexportar a planilha).
+// ══════════════════════════════════════════════════════════
+export async function marcarErroNFManual(pedidoId, imeiDigitado, observacao, userId) {
+  const imei = String(imeiDigitado || "").trim();
+  if (!imei) return { ok: false, erro: "Informe o IMEI do item." };
+
+  const { data: item, error: errItem } = await supabase
+    .from("b2b_itens").select("id, status")
+    .eq("pedido_id", pedidoId).eq("imei", imei).single();
+  if (errItem || !item) return { ok: false, erro: "IMEI não encontrado neste pedido." };
+  if (item.status !== "bipado") {
+    return { ok: false, erro: "Só é possível marcar erro de NF em item bipado." };
+  }
+
+  const { error: errUpd } = await supabase
+    .from("b2b_itens")
+    .update({ nf: null, nf_erro: true, obs_nf: (observacao || "").trim() || null })
+    .eq("id", item.id);
+  if (errUpd) return { ok: false, erro: errUpd.message };
+
+  await verificarConclusaoFaturamento(pedidoId);
+  return { ok: true };
+}
+
+// ══════════════════════════════════════════════════════════
+// LIMPAR ERRO DE NF de um item (desfaz a marcação)
+// ══════════════════════════════════════════════════════════
+export async function limparErroNF(pedidoId, imeiDigitado, userId) {
+  const imei = String(imeiDigitado || "").trim();
+  if (!imei) return { ok: false, erro: "IMEI inválido." };
+
+  const { error } = await supabase
+    .from("b2b_itens")
+    .update({ nf_erro: false, obs_nf: null })
+    .eq("pedido_id", pedidoId).eq("imei", imei);
+  if (error) return { ok: false, erro: error.message };
+
+  await verificarConclusaoFaturamento(pedidoId);
+  return { ok: true };
+}
+
 export async function buscarResumoValorPedido(pedidoId) {
   const [{ data: itensData }, { data: nfsData }] = await Promise.all([
     supabase.from("b2b_itens").select("status, valor, nf, nf_erro, obs_nf, imei").eq("pedido_id", pedidoId),
