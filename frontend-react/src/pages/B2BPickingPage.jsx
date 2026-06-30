@@ -11,7 +11,7 @@ import {
   registrarBipagem, exportarFaturamento, importarNFPlanilha,
   marcarEmAnalise, marcarLocalizado, marcarNaoFaturar,
   buscarResumoValorPedido, listarNFsPedido, listarPedidosConcluidos,
-  listarExportacoesPedido, marcarErroNFManual, limparErroNF,
+  listarExportacoesPedido, registrarNFErro, removerNFErro,
 } from "../services/b2bService.js";
 import {
   criarCaixa, listarCaixas, listarItensCaixa,
@@ -1239,8 +1239,9 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
   const [painelExp, setPainelExp]       = useState({});
   const [loadingResumo, setLoadingResumo] = useState({});
   const [formErro, setFormErro]         = useState({});
-  const [erroImei, setErroImei]         = useState({});
-  const [erroObs, setErroObs]           = useState({});
+  const [erroNf, setErroNf]             = useState({});
+  const [erroQtd, setErroQtd]           = useState({});
+  const [erroMotivo, setErroMotivo]     = useState({});
   const [marcandoErro, setMarcandoErro] = useState(null);
   const inputNFRefs = useRef({});
 
@@ -1299,16 +1300,11 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
     setFeedbackExp(prev => ({ ...prev, [pedido.id]: null }));
     try {
       const res = await importarNFPlanilha(file, pedido.id, user.id);
-      const baseMsg = res.totalNFs > 0
-        ? (res.relinkadas > 0
-            ? `✓ ${res.totalNFs} NF${res.totalNFs > 1 ? "s" : ""} processada${res.totalNFs > 1 ? "s" : ""} (${res.nfs.join(", ")}) — ${fmtN(res.totalItens)} itens · ${res.relinkadas} NF${res.relinkadas > 1 ? "s" : ""} relinkada${res.relinkadas > 1 ? "s" : ""}`
-            : `✓ ${res.totalNFs} NF${res.totalNFs > 1 ? "s" : ""} importada${res.totalNFs > 1 ? "s" : ""} (${res.nfs.join(", ")}) — ${fmtN(res.totalItens)} itens`)
-        : "";
-      const erroMsg = (res.totalErros || 0) > 0
-        ? `${baseMsg ? " · " : ""}${res.totalErros} item${res.totalErros > 1 ? "ns" : ""} marcado${res.totalErros > 1 ? "s" : ""} com erro de NF`
-        : "";
-      const msg = (baseMsg + erroMsg) || "Planilha processada.";
-      setFeedbackExp(prev => ({ ...prev, [pedido.id]: { tipo: (res.totalErros || 0) > 0 ? "bloqueado" : "ok", msg } }));
+      const partes = [];
+      if ((res.nfsOk || 0) > 0)  partes.push(`${res.nfsOk} NF${res.nfsOk > 1 ? "s" : ""} OK`);
+      if ((res.nfsErro || 0) > 0) partes.push(`${res.nfsErro} NF${res.nfsErro > 1 ? "s" : ""} com erro`);
+      const msg = partes.length ? `✓ ${res.totalNFs} NF${res.totalNFs > 1 ? "s" : ""} processada${res.totalNFs > 1 ? "s" : ""} (${partes.join(" · ")})` : "Planilha processada.";
+      setFeedbackExp(prev => ({ ...prev, [pedido.id]: { tipo: (res.nfsErro || 0) > 0 ? "bloqueado" : "ok", msg } }));
       setResumos(prev => ({ ...prev, [pedido.id]: null }));
       setNfs(prev => ({ ...prev, [pedido.id]: null }));
       setExportacoes(prev => ({ ...prev, [pedido.id]: null }));
@@ -1323,19 +1319,22 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
   }
 
   async function handleMarcarErro(pedido) {
-    const imei = (erroImei[pedido.id] || "").trim();
-    const obs  = (erroObs[pedido.id] || "").trim();
-    if (!imei) { setFeedbackExp(prev => ({ ...prev, [pedido.id]: { tipo: "erro", msg: "Informe o IMEI do item com erro." } })); return; }
+    const nf     = (erroNf[pedido.id] || "").trim();
+    const qtd    = (erroQtd[pedido.id] || "").trim();
+    const motivo = (erroMotivo[pedido.id] || "").trim();
+    if (!nf) { setFeedbackExp(prev => ({ ...prev, [pedido.id]: { tipo: "erro", msg: "Informe o número da NF com erro." } })); return; }
+    if (!qtd || parseInt(qtd, 10) < 1) { setFeedbackExp(prev => ({ ...prev, [pedido.id]: { tipo: "erro", msg: "Informe a quantidade de itens da NF." } })); return; }
     setMarcandoErro(pedido.id);
     setFeedbackExp(prev => ({ ...prev, [pedido.id]: null }));
     try {
-      const res = await marcarErroNFManual(pedido.id, imei, obs, user.id);
+      const res = await registrarNFErro(pedido.id, nf, qtd, motivo, user.id);
       if (!res.ok) {
         setFeedbackExp(prev => ({ ...prev, [pedido.id]: { tipo: "erro", msg: res.erro } }));
       } else {
-        setFeedbackExp(prev => ({ ...prev, [pedido.id]: { tipo: "bloqueado", msg: `Erro de NF registrado para o IMEI ${imei}.` } }));
-        setErroImei(prev => ({ ...prev, [pedido.id]: "" }));
-        setErroObs(prev => ({ ...prev, [pedido.id]: "" }));
+        setFeedbackExp(prev => ({ ...prev, [pedido.id]: { tipo: "bloqueado", msg: `NF ${nf} registrada com erro de emissão.` } }));
+        setErroNf(prev => ({ ...prev, [pedido.id]: "" }));
+        setErroQtd(prev => ({ ...prev, [pedido.id]: "" }));
+        setErroMotivo(prev => ({ ...prev, [pedido.id]: "" }));
         setFormErro(prev => ({ ...prev, [pedido.id]: false }));
         setResumos(prev => ({ ...prev, [pedido.id]: null }));
         setNfs(prev => ({ ...prev, [pedido.id]: null }));
@@ -1347,10 +1346,10 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
     } finally { setMarcandoErro(null); }
   }
 
-  async function handleLimparErro(pedido, imei) {
+  async function handleRemoverNF(pedido, numeroNf) {
     setMarcandoErro(pedido.id);
     try {
-      const res = await limparErroNF(pedido.id, imei, user.id);
+      const res = await removerNFErro(pedido.id, numeroNf, user.id);
       if (!res.ok) {
         setFeedbackExp(prev => ({ ...prev, [pedido.id]: { tipo: "erro", msg: res.erro } }));
       } else {
@@ -1369,18 +1368,19 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
   const totalNaoFaturar     = Object.values(resumos).reduce((s, r) => s + (r?.valorNaoFaturar || 0), 0);
   const totalAguardando     = Object.values(resumos).reduce((s, r) => s + Math.max(0, (r?.valorBipado || 0) - (r?.valorFaturado || 0)), 0);
   const totalPedidosErro    = pedidosAbertos.filter(p => p.status_faturamento === "erro_nf").length;
-  const totalItensErro      = Object.values(resumos).reduce((s, r) => s + (r?.qtdErro || 0), 0);
+  const totalNfsErro        = Object.values(resumos).reduce((s, r) => s + (r?.qtdNfsErro || 0), 0);
 
-  function getStatusFat(p, resumo, nfsPedido) {
+  function getStatusFat(p, resumo) {
     const qtdFaturada   = resumo?.qtdFaturada   || 0;
     const qtdNaoFaturar = resumo?.qtdNaoFaturar || 0;
     const qtdBipados    = resumo?.qtdBipados    || 0;
-    const qtdErro       = resumo?.qtdErro       || 0;
+    const qtdNfsErro    = resumo?.qtdNfsErro    || 0;
+    const qtdNfsOk      = resumo?.qtdNfsOk      || 0;
     const total         = p.total_itens         || 0;
     const separacaoCompleta = total > 0 && (qtdBipados + qtdNaoFaturar) >= total;
-    // Erro de NF prevalece: enquanto houver item com erro, o pedido fica sinalizado
-    if (qtdErro > 0) return "erro_nf";
-    if (nfsPedido?.length > 0) {
+    // Erro de NF prevalece: enquanto houver NF com erro, o pedido fica sinalizado
+    if (qtdNfsErro > 0) return "erro_nf";
+    if (qtdNfsOk > 0) {
       if (separacaoCompleta && qtdFaturada >= qtdBipados) return "faturado";
       return "faturamento_parcial";
     }
@@ -1408,7 +1408,7 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
         <KpiMini label="Aguardando faturamento" value={fmtR(totalAguardando)} sub={`${fmtN(pedidosAbertos.length)} pedidos`} color="bg-orange-50 ring-orange-200 text-orange-700" />
         <KpiMini label="Faturado" value={fmtR(totalFaturadoGlobal)} sub={`${fmtN(Object.values(resumos).reduce((s, r) => s + (r?.qtdFaturada || 0), 0))} itens`} color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
         <KpiMini label="Não Faturar" value={fmtR(totalNaoFaturar)} sub={`${fmtN(Object.values(resumos).reduce((s, r) => s + (r?.qtdNaoFaturar || 0), 0))} itens`} color="bg-red-50 ring-red-200 text-red-700" />
-        <KpiMini label="Erro de NF" value={fmtN(totalPedidosErro)} sub={`${fmtN(totalItensErro)} itens`} color="bg-red-50 ring-red-300 text-red-700" />
+        <KpiMini label="Erro de NF" value={fmtN(totalPedidosErro)} sub={`${fmtN(totalNfsErro)} NFs`} color="bg-red-50 ring-red-300 text-red-700" />
       </div>
       {pedidosAbertos.length === 0 ? (
         <div className="text-center py-12 text-slate-400"><Package className="h-8 w-8 mx-auto mb-2 opacity-30" /><p className="text-sm">Nenhum pedido em aberto.</p></div>
@@ -1417,10 +1417,11 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
           {pedidosAbertos.map(p => {
             const resumo          = resumos[p.id];
             const nfsPedido       = nfs[p.id] || [];
+            const nfsOk           = nfsPedido.filter(n => n.status !== "erro");
             const expPedido       = exportacoes[p.id] || [];
             const isLoading       = loadingResumo[p.id];
             const fb              = feedbackExp[p.id];
-            const statusFat       = getStatusFat(p, resumo, nfsPedido);
+            const statusFat       = getStatusFat(p, resumo);
             const cfgStatus       = STATUS_FAT[statusFat];
             const valorFaturado   = resumo?.valorFaturado   || 0;
             const valorBipado     = resumo?.valorBipado     || 0;
@@ -1429,8 +1430,9 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
             const qtdNaoFaturar   = resumo?.qtdNaoFaturar   || 0;
             const qtdBipados      = resumo?.qtdBipados      || 0;
             const qtdEmAnalise    = resumo?.qtdEmAnalise    || 0;
-            const itensErro       = resumo?.itensErro       || [];
+            const nfsErroList     = resumo?.nfsErro         || [];
             const qtdErro         = resumo?.qtdErro         || 0;
+            const qtdNfsErro      = resumo?.qtdNfsErro      || 0;
             const valorAguardando = Math.max(0, valorBipado - valorFaturado);
             const qtdAguardando   = Math.max(0, qtdBipados - qtdFaturada);
             const qtdSeparados    = qtdBipados + qtdNaoFaturar;
@@ -1492,47 +1494,44 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
                   </div>
                 ) : null}
 
-                {/* ── Erros de NF ── */}
-                {qtdErro > 0 && (
+                {/* ── NFs com erro ── */}
+                {qtdNfsErro > 0 && (
                   <div className="mb-3">
                     <div className="flex items-center gap-2 text-xs font-bold text-red-600 mb-2">
-                      <AlertTriangle className="h-3.5 w-3.5" /> Erros de emissão de NF ({qtdErro})
+                      <AlertTriangle className="h-3.5 w-3.5" /> NFs com erro de emissão ({qtdNfsErro})
                     </div>
                     <div className="space-y-2 bg-red-50 rounded-xl p-3 ring-1 ring-red-100">
-                      {itensErro.map((it, idx) => (
+                      {nfsErroList.map((nf, idx) => (
                         <div key={idx} className="flex items-start justify-between gap-2 text-xs bg-white rounded-xl px-3 py-2 ring-1 ring-red-200">
                           <div className="flex items-start gap-2 min-w-0">
-                            <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0 mt-0.5" />
+                            <FileText className="h-3.5 w-3.5 text-red-500 shrink-0 mt-0.5" />
                             <div className="min-w-0">
-                              <span className="font-bold text-slate-700">IMEI {it.imei}</span>
-                              {it.obs && <p className="text-red-600 mt-0.5 break-words">{it.obs}</p>}
+                              <span className="font-bold text-slate-700">NF {nf.numero} · {fmtN(nf.qtd)} {nf.qtd === 1 ? "item" : "itens"}</span>
+                              {nf.motivo && <p className="text-red-600 mt-0.5 break-words">{nf.motivo}</p>}
                             </div>
                           </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            {it.valor > 0 && <span className="font-semibold text-slate-500">{fmtR(it.valor)}</span>}
-                            <button onClick={() => handleLimparErro(p, it.imei)} disabled={marcandoErro === p.id}
-                              className="text-xs font-semibold px-2 py-1 rounded-lg bg-slate-50 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100 hover:text-slate-700 transition disabled:opacity-40">
-                              Limpar
-                            </button>
-                          </div>
+                          <button onClick={() => handleRemoverNF(p, nf.numero)} disabled={marcandoErro === p.id}
+                            className="text-xs font-semibold px-2 py-1 rounded-lg bg-slate-50 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100 hover:text-slate-700 transition disabled:opacity-40 shrink-0">
+                            Remover
+                          </button>
                         </div>
                       ))}
                     </div>
-                    <p className="text-xs text-slate-400 mt-1.5">Reimporte a planilha com o número da NF real nessas linhas para resolver.</p>
+                    <p className="text-xs text-slate-400 mt-1.5">Reimporte a NF correta (STATUS OK) ou use Remover quando reemitir.</p>
                   </div>
                 )}
 
                 {/* ── NFs Importadas ── */}
-                {nfsPedido.length > 0 && (
+                {nfsOk.length > 0 && (
                   <div className="mb-3">
                     <button onClick={() => setPainelNFs(prev => ({ ...prev, [p.id]: !prev[p.id] }))}
                       className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-purple-700 transition mb-2">
-                      <Upload className="h-3 w-3" /> NFs Importadas ({nfsPedido.length})
+                      <Upload className="h-3 w-3" /> NFs Importadas ({nfsOk.length})
                       {painelNFs[p.id] ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                     </button>
                     {painelNFs[p.id] && (
                       <div className="space-y-2 bg-slate-50 rounded-xl p-3">
-                        {nfsPedido.map(nf => (
+                        {nfsOk.map(nf => (
                           <div key={nf.id} className="flex items-center justify-between text-xs bg-white rounded-xl px-3 py-2 ring-1 ring-slate-200">
                             <div className="flex items-center gap-2 flex-wrap">
                               <FileText className="h-3.5 w-3.5 text-purple-500 shrink-0" />
@@ -1601,15 +1600,21 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
                   <div className="mt-3 bg-red-50 ring-1 ring-red-200 rounded-xl p-3">
                     <p className="text-xs font-bold text-red-700 mb-2 flex items-center gap-1.5"><AlertTriangle className="h-3.5 w-3.5" /> Marcar erro de emissão de NF</p>
                     <div className="flex gap-2 flex-wrap items-end">
-                      <div className="flex-1" style={{ minWidth: "150px" }}>
-                        <label className="block text-xs text-slate-500 font-semibold mb-1">IMEI do item</label>
-                        <input type="text" value={erroImei[p.id] || ""} onChange={e => setErroImei(prev => ({ ...prev, [p.id]: e.target.value }))}
-                          placeholder="Ex: 356877115594740"
+                      <div className="flex-1" style={{ minWidth: "120px" }}>
+                        <label className="block text-xs text-slate-500 font-semibold mb-1">Número da NF</label>
+                        <input type="text" value={erroNf[p.id] || ""} onChange={e => setErroNf(prev => ({ ...prev, [p.id]: e.target.value }))}
+                          placeholder="Ex: 51234"
                           className="w-full text-xs px-3 py-2 rounded-lg ring-1 ring-slate-200 focus:ring-red-300 focus:outline-none" />
                       </div>
-                      <div className="flex-1" style={{ minWidth: "200px" }}>
-                        <label className="block text-xs text-slate-500 font-semibold mb-1">Observação</label>
-                        <input type="text" value={erroObs[p.id] || ""} onChange={e => setErroObs(prev => ({ ...prev, [p.id]: e.target.value }))}
+                      <div style={{ width: "110px" }}>
+                        <label className="block text-xs text-slate-500 font-semibold mb-1">Qtd. itens</label>
+                        <input type="number" min="1" value={erroQtd[p.id] || ""} onChange={e => setErroQtd(prev => ({ ...prev, [p.id]: e.target.value }))}
+                          placeholder="Ex: 3"
+                          className="w-full text-xs px-3 py-2 rounded-lg ring-1 ring-slate-200 focus:ring-red-300 focus:outline-none" />
+                      </div>
+                      <div className="flex-1" style={{ minWidth: "180px" }}>
+                        <label className="block text-xs text-slate-500 font-semibold mb-1">Motivo</label>
+                        <input type="text" value={erroMotivo[p.id] || ""} onChange={e => setErroMotivo(prev => ({ ...prev, [p.id]: e.target.value }))}
                           placeholder="Ex: Rejeição SEFAZ 539 — duplicidade"
                           className="w-full text-xs px-3 py-2 rounded-lg ring-1 ring-slate-200 focus:ring-red-300 focus:outline-none" />
                       </div>

@@ -307,7 +307,8 @@ export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
     "VALOR":     i.valor != null ? i.valor.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "",
     "BIPADO_EM": i.bipado_em ? new Date(i.bipado_em).toLocaleString("pt-BR") : "",
     "NF":        i.nf || "",
-    "OBSERVAÇÕES": i.obs_nf || "",
+    "STATUS":    "OK",
+    "MOTIVO":    "",
   }));
 
   const wb = XLSX.utils.book_new();
@@ -359,29 +360,32 @@ async function verificarConclusaoPicking(pedidoId) {
 // ══════════════════════════════════════════════════════════
 async function verificarConclusaoFaturamento(pedidoId) {
   const { data: itens } = await supabase
-    .from("b2b_itens").select("status, nf, nf_erro")
+    .from("b2b_itens").select("status, nf")
     .eq("pedido_id", pedidoId);
 
   const { data: todasNFs } = await supabase
-    .from("b2b_nfs").select("total_itens")
+    .from("b2b_nfs").select("numero_nf, total_itens, status")
     .eq("pedido_id", pedidoId);
 
-  const todos          = itens || [];
-  const total          = todos.length;
-  const totalBipados   = todos.filter(i => i.status === "bipado").length;
-  const bipadosComNF   = todos.filter(i => i.status === "bipado" && i.nf && !i.nf_erro).length;
-  const bipadosComErro = todos.filter(i => i.status === "bipado" && i.nf_erro).length;
-  const totalComNF     = (todasNFs || []).reduce((s, n) => s + (n.total_itens || 0), 0);
+  const todos        = itens || [];
+  const nfs          = todasNFs || [];
+  const totalBipados = todos.filter(i => i.status === "bipado").length;
 
-  // Cobertura por qualquer um dos dois sinais (item.nf OU total_itens da NF)
-  const cobertura = Math.max(bipadosComNF, totalComNF);
+  // Erro é propriedade da NF: NF com status 'erro' segura o pedido e não conta como faturado
+  const nfsErro     = nfs.filter(n => n.status === "erro");
+  const numerosErro = new Set(nfsErro.map(n => String(n.numero_nf)));
+
+  // Cobertura considera só NFs OK (itens amarrados a NF OK OU soma de total_itens das NFs OK)
+  const bipadosComNFok = todos.filter(i => i.status === "bipado" && i.nf && !numerosErro.has(String(i.nf))).length;
+  const totalItensNFok = nfs.filter(n => n.status !== "erro").reduce((s, n) => s + (n.total_itens || 0), 0);
+  const cobertura      = Math.max(bipadosComNFok, totalItensNFok);
 
   let statusFaturamento;
   if (totalBipados === 0) {
     // Pedido sem nenhum bipado (tudo nao_faturar) — faturamento não se aplica, conclui
     statusFaturamento = "concluido";
-  } else if (bipadosComErro > 0) {
-    // Algum item bipado teve erro na emissão da NF — sinaliza e bloqueia a conclusão
+  } else if (nfsErro.length > 0) {
+    // Alguma NF teve erro na emissão — sinaliza e bloqueia a conclusão
     statusFaturamento = "erro_nf";
   } else if (cobertura === 0) {
     statusFaturamento = "pendente";
@@ -436,120 +440,95 @@ export async function importarNFPlanilha(file, pedidoId, userId) {
 
         if (!rows.length) throw new Error("Planilha vazia.");
 
-        // "Erro" na coluna NF marca o item com falha de emissão (sem NF real)
-        const ehErro = (v) => String(v ?? "").trim().toLowerCase() === "erro";
-        const lerObs = (r) =>
-          r["OBSERVAÇÕES"] ?? r["OBSERVACOES"] ?? r["Observações"] ?? r["OBS"] ?? null;
+        // Coluna STATUS (OK/ERRO) por linha marca a NF como erro. Erro é por NF, não por item.
+        const ehErro    = (v) => String(v ?? "").trim().toLowerCase() === "erro";
+        const lerMotivo = (r) =>
+          r["MOTIVO"] ?? r["Motivo"] ?? r["OBSERVAÇÕES"] ?? r["OBSERVACOES"] ?? null;
 
         const linhasComNF = rows.filter(r => r["NF"] && String(r["NF"]).trim() !== "");
         if (!linhasComNF.length) throw new Error("Nenhuma linha com NF preenchida encontrada.");
-
-        // Duas trilhas no mesmo arquivo: linhas com NF real e linhas marcadas como "Erro"
-        const linhasErro = linhasComNF.filter(r =>  ehErro(r["NF"]));
-        const linhasNF   = linhasComNF.filter(r => !ehErro(r["NF"]));
 
         const { data: pedido, error: errPedido } = await supabase
           .from("b2b_pedidos").select("*").eq("id", pedidoId).single();
         if (errPedido || !pedido) throw new Error("Pedido não encontrado.");
 
-        // ───── Trilha 1: linhas com número de NF real ─────
+        // Agrupa por número de NF; uma NF é 'erro' se qualquer linha dela vier marcada como ERRO
         const nfMap = {};
-        for (const row of linhasNF) {
+        for (const row of linhasComNF) {
           const nf       = String(row["NF"]).trim();
           const imei     = String(row["IMEI"] || "").trim();
           const valorRaw = row["VALOR"] ? String(row["VALOR"]).replace(/,/g, "") : "0";
           const valor    = parseFloat(valorRaw) || 0;
 
-          if (!nfMap[nf]) nfMap[nf] = { itens: [], valorTotal: 0 };
+          if (!nfMap[nf]) nfMap[nf] = { itens: [], valorTotal: 0, status: "ok", motivo: null };
           nfMap[nf].itens.push(imei);
           nfMap[nf].valorTotal += valor;
+          if (ehErro(row["STATUS"])) {
+            nfMap[nf].status = "erro";
+            const m = lerMotivo(row);
+            if (m && !nfMap[nf].motivo) nfMap[nf].motivo = String(m).trim();
+          }
         }
 
         const { data: nfsExistentes } = await supabase
-          .from("b2b_nfs").select("numero_nf").eq("pedido_id", pedidoId);
-        const nfsJaCadastradas = new Set((nfsExistentes || []).map(n => String(n.numero_nf)));
+          .from("b2b_nfs").select("id, numero_nf").eq("pedido_id", pedidoId);
+        const idPorNumero = {};
+        (nfsExistentes || []).forEach(n => { idPorNumero[String(n.numero_nf)] = n.id; });
 
-        const nfsParaInserir  = Object.entries(nfMap).filter(([nf]) => !nfsJaCadastradas.has(nf));
-        const nfsParaRelinkar = Object.entries(nfMap).filter(([nf]) =>  nfsJaCadastradas.has(nf));
+        let nfsOkCount = 0, nfsErroCount = 0;
+        const nfsProcessadas = [];
 
-        const nfsInseridas  = [];
-        const nfsRelinkadas = [];
+        for (const [numeroNf, dados] of Object.entries(nfMap)) {
+          const ehErroNf = dados.status === "erro";
+          const payload = {
+            total_itens:  dados.itens.length,
+            valor_total:  ehErroNf ? 0 : dados.valorTotal,
+            status:       dados.status,
+            motivo_erro:  ehErroNf ? (dados.motivo || null) : null,
+          };
 
-        for (const [numeroNf, dados] of nfsParaInserir) {
-          const { data: nfInserida, error: errNF } = await supabase
-            .from("b2b_nfs")
-            .insert({
+          if (idPorNumero[numeroNf]) {
+            await supabase.from("b2b_nfs").update(payload).eq("id", idPorNumero[numeroNf]);
+          } else {
+            await supabase.from("b2b_nfs").insert({
               pedido_id:        pedidoId,
               numero_nf:        numeroNf,
-              total_itens:      dados.itens.length,
               total_caixas:     0,
-              valor_total:      dados.valorTotal,
               data_faturamento: new Date().toISOString(),
               importado_por:    userId,
-            })
-            .select().single();
-          if (errNF) throw new Error(`Erro ao inserir NF ${numeroNf}: ${errNF.message}`);
-          nfsInseridas.push(nfInserida);
+              ...payload,
+            });
+          }
 
-          // NF real chegou: vincula e limpa qualquer erro anterior desses itens
+          // Amarra o número da NF aos IMEIs (mesmo NF com erro: fica o registro do vínculo)
           const imeisNF = dados.itens.filter(i => i.length > 5);
           if (imeisNF.length > 0) {
             const CHUNK = 500;
             for (let i = 0; i < imeisNF.length; i += CHUNK) {
               await supabase
                 .from("b2b_itens")
-                .update({ nf: numeroNf, nf_erro: false, obs_nf: null })
+                .update({ nf: numeroNf })
                 .eq("pedido_id", pedidoId)
                 .in("imei", imeisNF.slice(i, i + CHUNK));
             }
           }
+
+          nfsProcessadas.push(numeroNf);
+          if (ehErroNf) nfsErroCount++; else nfsOkCount++;
         }
 
-        for (const [numeroNf, dados] of nfsParaRelinkar) {
-          const imeisNF = dados.itens.filter(i => i.length > 5);
-          if (imeisNF.length > 0) {
-            const CHUNK = 500;
-            for (let i = 0; i < imeisNF.length; i += CHUNK) {
-              await supabase
-                .from("b2b_itens")
-                .update({ nf: numeroNf, nf_erro: false, obs_nf: null })
-                .eq("pedido_id", pedidoId)
-                .in("imei", imeisNF.slice(i, i + CHUNK));
-            }
-          }
-          nfsRelinkadas.push(numeroNf);
-        }
+        if (!nfsProcessadas.length) throw new Error("Nenhuma NF foi processada.");
 
-        // ───── Trilha 2: linhas marcadas como "Erro" (por item, via IMEI) ─────
-        let totalErros = 0;
-        for (const row of linhasErro) {
-          const imei = String(row["IMEI"] || "").trim();
-          if (imei.length <= 5) continue;
-          const { error: errErro } = await supabase
-            .from("b2b_itens")
-            .update({ nf: null, nf_erro: true, obs_nf: lerObs(row) })
-            .eq("pedido_id", pedidoId)
-            .eq("imei", imei);
-          if (!errErro) totalErros++;
-        }
-
-        const totalNFs = nfsInseridas.length + nfsRelinkadas.length;
-        if (totalNFs === 0 && totalErros === 0) {
-          throw new Error("Nenhuma NF nem erro foi processado.");
-        }
-
-        // Recalcula o status do faturamento do zero, olhando o estado real dos itens
+        // Recalcula o status do faturamento do zero
         await verificarConclusaoFaturamento(pedidoId);
-
-        const todasAsNFs = [...nfsInseridas.map(n => n.numero_nf), ...nfsRelinkadas];
 
         resolve({
           ok:         true,
-          totalNFs,
-          totalErros,
-          totalItens: linhasNF.length,
-          nfs:        todasAsNFs,
-          relinkadas: nfsRelinkadas.length,
+          totalNFs:   nfsProcessadas.length,
+          nfsOk:      nfsOkCount,
+          nfsErro:    nfsErroCount,
+          totalItens: linhasComNF.length,
+          nfs:        nfsProcessadas,
         });
       } catch (err) { reject(err); }
     };
@@ -581,43 +560,57 @@ export async function importarNFPedido(pedidoId, numeroNf, totalItens, totalCaix
 }
 
 // ══════════════════════════════════════════════════════════
-// MARCAR ERRO DE NF MANUALMENTE (pela tela, sem planilha)
+// REGISTRAR NF COM ERRO MANUALMENTE (pela tela, sem planilha)
 // Para casos em que a emissão falhou no outro sistema e o
 // pedido já está em andamento (não dá pra reexportar a planilha).
 // ══════════════════════════════════════════════════════════
-export async function marcarErroNFManual(pedidoId, imeiDigitado, observacao, userId) {
-  const imei = String(imeiDigitado || "").trim();
-  if (!imei) return { ok: false, erro: "Informe o IMEI do item." };
+export async function registrarNFErro(pedidoId, numeroNf, qtdItens, motivo, userId) {
+  const nf = String(numeroNf || "").trim();
+  if (!nf) return { ok: false, erro: "Informe o número da NF." };
+  const qtd = parseInt(qtdItens, 10);
+  if (!qtd || qtd < 1) return { ok: false, erro: "Informe a quantidade de itens da NF." };
 
-  const { data: item, error: errItem } = await supabase
-    .from("b2b_itens").select("id, status")
-    .eq("pedido_id", pedidoId).eq("imei", imei).single();
-  if (errItem || !item) return { ok: false, erro: "IMEI não encontrado neste pedido." };
-  if (item.status !== "bipado") {
-    return { ok: false, erro: "Só é possível marcar erro de NF em item bipado." };
+  const { data: existente } = await supabase
+    .from("b2b_nfs").select("id")
+    .eq("pedido_id", pedidoId).eq("numero_nf", nf).maybeSingle();
+
+  const payload = {
+    status:       "erro",
+    motivo_erro:  (motivo || "").trim() || null,
+    total_itens:  qtd,
+  };
+
+  if (existente) {
+    const { error } = await supabase.from("b2b_nfs").update(payload).eq("id", existente.id);
+    if (error) return { ok: false, erro: error.message };
+  } else {
+    const { error } = await supabase.from("b2b_nfs").insert({
+      pedido_id:        pedidoId,
+      numero_nf:        nf,
+      total_caixas:     0,
+      valor_total:      0,
+      data_faturamento: new Date().toISOString(),
+      importado_por:    userId,
+      ...payload,
+    });
+    if (error) return { ok: false, erro: error.message };
   }
-
-  const { error: errUpd } = await supabase
-    .from("b2b_itens")
-    .update({ nf: null, nf_erro: true, obs_nf: (observacao || "").trim() || null })
-    .eq("id", item.id);
-  if (errUpd) return { ok: false, erro: errUpd.message };
 
   await verificarConclusaoFaturamento(pedidoId);
   return { ok: true };
 }
 
 // ══════════════════════════════════════════════════════════
-// LIMPAR ERRO DE NF de um item (desfaz a marcação)
+// REMOVER NF COM ERRO (desfaz a marcação; remove o registro)
 // ══════════════════════════════════════════════════════════
-export async function limparErroNF(pedidoId, imeiDigitado, userId) {
-  const imei = String(imeiDigitado || "").trim();
-  if (!imei) return { ok: false, erro: "IMEI inválido." };
+export async function removerNFErro(pedidoId, numeroNf, userId) {
+  const nf = String(numeroNf || "").trim();
+  if (!nf) return { ok: false, erro: "NF inválida." };
 
   const { error } = await supabase
-    .from("b2b_itens")
-    .update({ nf_erro: false, obs_nf: null })
-    .eq("pedido_id", pedidoId).eq("imei", imei);
+    .from("b2b_nfs")
+    .delete()
+    .eq("pedido_id", pedidoId).eq("numero_nf", nf).eq("status", "erro");
   if (error) return { ok: false, erro: error.message };
 
   await verificarConclusaoFaturamento(pedidoId);
@@ -626,8 +619,8 @@ export async function limparErroNF(pedidoId, imeiDigitado, userId) {
 
 export async function buscarResumoValorPedido(pedidoId) {
   const [{ data: itensData }, { data: nfsData }] = await Promise.all([
-    supabase.from("b2b_itens").select("status, valor, nf, nf_erro, obs_nf, imei").eq("pedido_id", pedidoId),
-    supabase.from("b2b_nfs").select("total_itens, valor_total").eq("pedido_id", pedidoId),
+    supabase.from("b2b_itens").select("status, valor").eq("pedido_id", pedidoId),
+    supabase.from("b2b_nfs").select("numero_nf, total_itens, valor_total, status, motivo_erro").eq("pedido_id", pedidoId),
   ]);
 
   const itens = itensData || [];
@@ -642,21 +635,22 @@ export async function buscarResumoValorPedido(pedidoId) {
   const qtdNaoFaturar   = itensNaoFaturar.length;
   const qtdEmAnalise    = itens.filter(i => ["nao_localizado", "em_analise"].includes(i.status)).length;
 
-  // Itens bipados que tiveram erro na emissão da NF
-  const itensErro = itensBipados
-    .filter(i => i.nf_erro)
-    .map(i => ({ imei: i.imei, obs: i.obs_nf || "", valor: i.valor || 0 }));
-  const qtdErro   = itensErro.length;
-  const valorErro = itensErro.reduce((s, i) => s + (i.valor || 0), 0);
+  // Erro é por NF: só NFs OK contam como faturado; NFs com erro entram em nfsErro
+  const nfsOk      = nfs.filter(n => n.status !== "erro");
+  const nfsErroArr = nfs.filter(n => n.status === "erro");
+  const nfsErro    = nfsErroArr.map(n => ({ numero: n.numero_nf, qtd: n.total_itens || 0, motivo: n.motivo_erro || "" }));
+  const qtdNfsErro = nfsErro.length;
+  const qtdNfsOk   = nfsOk.length;
+  const qtdErro    = nfsErro.reduce((s, n) => s + (n.qtd || 0), 0);
 
-  const valorFaturado = nfs.reduce((s, n) => s + (n.valor_total || 0), 0);
-  const qtdFaturada   = nfs.reduce((s, n) => s + (n.total_itens || 0), 0);
+  const valorFaturado = nfsOk.reduce((s, n) => s + (n.valor_total || 0), 0);
+  const qtdFaturada   = nfsOk.reduce((s, n) => s + (n.total_itens || 0), 0);
 
   return {
     totalValor, valorBipado, qtdBipados,
     valorFaturado, qtdFaturada,
     valorNaoFaturar, qtdNaoFaturar, qtdEmAnalise,
-    itensErro, qtdErro, valorErro,
+    nfsErro, qtdNfsErro, qtdNfsOk, qtdErro,
   };
 }
 
