@@ -1295,10 +1295,16 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
     setFeedbackExp(prev => ({ ...prev, [pedido.id]: null }));
     try {
       const res = await importarNFPlanilha(file, pedido.id, user.id);
-      const msg = res.relinkadas > 0
-        ? `✓ ${res.totalNFs} NF${res.totalNFs > 1 ? "s" : ""} processada${res.totalNFs > 1 ? "s" : ""} (${res.nfs.join(", ")}) — ${fmtN(res.totalItens)} itens · ${res.relinkadas} NF${res.relinkadas > 1 ? "s" : ""} relinkada${res.relinkadas > 1 ? "s" : ""}`
-        : `✓ ${res.totalNFs} NF${res.totalNFs > 1 ? "s" : ""} importada${res.totalNFs > 1 ? "s" : ""} (${res.nfs.join(", ")}) — ${fmtN(res.totalItens)} itens`;
-      setFeedbackExp(prev => ({ ...prev, [pedido.id]: { tipo: "ok", msg } }));
+      const baseMsg = res.totalNFs > 0
+        ? (res.relinkadas > 0
+            ? `✓ ${res.totalNFs} NF${res.totalNFs > 1 ? "s" : ""} processada${res.totalNFs > 1 ? "s" : ""} (${res.nfs.join(", ")}) — ${fmtN(res.totalItens)} itens · ${res.relinkadas} NF${res.relinkadas > 1 ? "s" : ""} relinkada${res.relinkadas > 1 ? "s" : ""}`
+            : `✓ ${res.totalNFs} NF${res.totalNFs > 1 ? "s" : ""} importada${res.totalNFs > 1 ? "s" : ""} (${res.nfs.join(", ")}) — ${fmtN(res.totalItens)} itens`)
+        : "";
+      const erroMsg = (res.totalErros || 0) > 0
+        ? `${baseMsg ? " · " : ""}${res.totalErros} item${res.totalErros > 1 ? "ns" : ""} marcado${res.totalErros > 1 ? "s" : ""} com erro de NF`
+        : "";
+      const msg = (baseMsg + erroMsg) || "Planilha processada.";
+      setFeedbackExp(prev => ({ ...prev, [pedido.id]: { tipo: (res.totalErros || 0) > 0 ? "bloqueado" : "ok", msg } }));
       setResumos(prev => ({ ...prev, [pedido.id]: null }));
       setNfs(prev => ({ ...prev, [pedido.id]: null }));
       setExportacoes(prev => ({ ...prev, [pedido.id]: null }));
@@ -1321,8 +1327,11 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
     const qtdFaturada   = resumo?.qtdFaturada   || 0;
     const qtdNaoFaturar = resumo?.qtdNaoFaturar || 0;
     const qtdBipados    = resumo?.qtdBipados    || 0;
+    const qtdErro       = resumo?.qtdErro       || 0;
     const total         = p.total_itens         || 0;
     const separacaoCompleta = total > 0 && (qtdBipados + qtdNaoFaturar) >= total;
+    // Erro de NF prevalece: enquanto houver item com erro, o pedido fica sinalizado
+    if (qtdErro > 0) return "erro_nf";
     if (nfsPedido?.length > 0) {
       if (separacaoCompleta && qtdFaturada >= qtdBipados) return "faturado";
       return "faturamento_parcial";
@@ -1333,6 +1342,7 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
   }
 
   const STATUS_FAT = {
+    erro_nf:             { label: "Erro de NF",          cls: "bg-red-100 text-red-700 ring-red-200"             },
     faturado:            { label: "Faturado",            cls: "bg-emerald-100 text-emerald-700 ring-emerald-200" },
     faturamento_parcial: { label: "Faturamento Parcial", cls: "bg-blue-100 text-blue-700 ring-blue-200"         },
     em_faturamento:      { label: "Em Faturamento",      cls: "bg-purple-100 text-purple-700 ring-purple-200"   },
@@ -1370,10 +1380,12 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
             const qtdNaoFaturar   = resumo?.qtdNaoFaturar   || 0;
             const qtdBipados      = resumo?.qtdBipados      || 0;
             const qtdEmAnalise    = resumo?.qtdEmAnalise    || 0;
+            const itensErro       = resumo?.itensErro       || [];
+            const qtdErro         = resumo?.qtdErro         || 0;
             const valorAguardando = Math.max(0, valorBipado - valorFaturado);
             const qtdAguardando   = Math.max(0, qtdBipados - qtdFaturada);
             const qtdSeparados    = qtdBipados + qtdNaoFaturar;
-            const borderColor     = statusFat === "faturado" || statusFat === "faturamento_parcial" ? "ring-emerald-200" : statusFat === "em_faturamento" ? "ring-purple-200" : statusFat === "em_separacao" ? "ring-yellow-200" : "ring-slate-200";
+            const borderColor     = statusFat === "erro_nf" ? "ring-red-300" : statusFat === "faturado" || statusFat === "faturamento_parcial" ? "ring-emerald-200" : statusFat === "em_faturamento" ? "ring-purple-200" : statusFat === "em_separacao" ? "ring-yellow-200" : "ring-slate-200";
 
             return (
               <div key={p.id} className={`bg-white rounded-2xl p-5 ring-1 shadow-sm ${borderColor}`}>
@@ -1421,8 +1433,39 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
                         <p className="text-xs text-amber-500 mt-0.5">itens pendentes</p>
                       </div>
                     )}
+                    {qtdErro > 0 && (
+                      <div className="bg-red-50 ring-1 ring-red-100 rounded-xl p-3">
+                        <p className="text-xs text-red-600 font-semibold mb-1">⚠ Erro de NF</p>
+                        <p className="text-sm font-black text-red-700">{fmtN(qtdErro)}</p>
+                        <p className="text-xs text-red-500 mt-0.5">itens com erro</p>
+                      </div>
+                    )}
                   </div>
                 ) : null}
+
+                {/* ── Erros de NF ── */}
+                {qtdErro > 0 && (
+                  <div className="mb-3">
+                    <div className="flex items-center gap-2 text-xs font-bold text-red-600 mb-2">
+                      <AlertTriangle className="h-3.5 w-3.5" /> Erros de emissão de NF ({qtdErro})
+                    </div>
+                    <div className="space-y-2 bg-red-50 rounded-xl p-3 ring-1 ring-red-100">
+                      {itensErro.map((it, idx) => (
+                        <div key={idx} className="flex items-start justify-between gap-2 text-xs bg-white rounded-xl px-3 py-2 ring-1 ring-red-200">
+                          <div className="flex items-start gap-2 min-w-0">
+                            <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0 mt-0.5" />
+                            <div className="min-w-0">
+                              <span className="font-bold text-slate-700">IMEI {it.imei}</span>
+                              {it.obs && <p className="text-red-600 mt-0.5 break-words">{it.obs}</p>}
+                            </div>
+                          </div>
+                          {it.valor > 0 && <span className="font-semibold text-slate-500 shrink-0">{fmtR(it.valor)}</span>}
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1.5">Reimporte a planilha com o número da NF real nessas linhas para resolver.</p>
+                  </div>
+                )}
 
                 {/* ── NFs Importadas ── */}
                 {nfsPedido.length > 0 && (

@@ -307,6 +307,7 @@ export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
     "VALOR":     i.valor != null ? i.valor.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "",
     "BIPADO_EM": i.bipado_em ? new Date(i.bipado_em).toLocaleString("pt-BR") : "",
     "NF":        i.nf || "",
+    "OBSERVAÇÕES": i.obs_nf || "",
   }));
 
   const wb = XLSX.utils.book_new();
@@ -358,18 +359,19 @@ async function verificarConclusaoPicking(pedidoId) {
 // ══════════════════════════════════════════════════════════
 async function verificarConclusaoFaturamento(pedidoId) {
   const { data: itens } = await supabase
-    .from("b2b_itens").select("status, nf")
+    .from("b2b_itens").select("status, nf, nf_erro")
     .eq("pedido_id", pedidoId);
 
   const { data: todasNFs } = await supabase
     .from("b2b_nfs").select("total_itens")
     .eq("pedido_id", pedidoId);
 
-  const todos        = itens || [];
-  const total        = todos.length;
-  const totalBipados = todos.filter(i => i.status === "bipado").length;
-  const bipadosComNF = todos.filter(i => i.status === "bipado" && i.nf).length;
-  const totalComNF   = (todasNFs || []).reduce((s, n) => s + (n.total_itens || 0), 0);
+  const todos          = itens || [];
+  const total          = todos.length;
+  const totalBipados   = todos.filter(i => i.status === "bipado").length;
+  const bipadosComNF   = todos.filter(i => i.status === "bipado" && i.nf && !i.nf_erro).length;
+  const bipadosComErro = todos.filter(i => i.status === "bipado" && i.nf_erro).length;
+  const totalComNF     = (todasNFs || []).reduce((s, n) => s + (n.total_itens || 0), 0);
 
   // Cobertura por qualquer um dos dois sinais (item.nf OU total_itens da NF)
   const cobertura = Math.max(bipadosComNF, totalComNF);
@@ -378,6 +380,9 @@ async function verificarConclusaoFaturamento(pedidoId) {
   if (totalBipados === 0) {
     // Pedido sem nenhum bipado (tudo nao_faturar) — faturamento não se aplica, conclui
     statusFaturamento = "concluido";
+  } else if (bipadosComErro > 0) {
+    // Algum item bipado teve erro na emissão da NF — sinaliza e bloqueia a conclusão
+    statusFaturamento = "erro_nf";
   } else if (cobertura === 0) {
     statusFaturamento = "pendente";
   } else if (cobertura >= totalBipados) {
@@ -431,15 +436,25 @@ export async function importarNFPlanilha(file, pedidoId, userId) {
 
         if (!rows.length) throw new Error("Planilha vazia.");
 
+        // "Erro" na coluna NF marca o item com falha de emissão (sem NF real)
+        const ehErro = (v) => String(v ?? "").trim().toLowerCase() === "erro";
+        const lerObs = (r) =>
+          r["OBSERVAÇÕES"] ?? r["OBSERVACOES"] ?? r["Observações"] ?? r["OBS"] ?? null;
+
         const linhasComNF = rows.filter(r => r["NF"] && String(r["NF"]).trim() !== "");
         if (!linhasComNF.length) throw new Error("Nenhuma linha com NF preenchida encontrada.");
+
+        // Duas trilhas no mesmo arquivo: linhas com NF real e linhas marcadas como "Erro"
+        const linhasErro = linhasComNF.filter(r =>  ehErro(r["NF"]));
+        const linhasNF   = linhasComNF.filter(r => !ehErro(r["NF"]));
 
         const { data: pedido, error: errPedido } = await supabase
           .from("b2b_pedidos").select("*").eq("id", pedidoId).single();
         if (errPedido || !pedido) throw new Error("Pedido não encontrado.");
 
+        // ───── Trilha 1: linhas com número de NF real ─────
         const nfMap = {};
-        for (const row of linhasComNF) {
+        for (const row of linhasNF) {
           const nf       = String(row["NF"]).trim();
           const imei     = String(row["IMEI"] || "").trim();
           const valorRaw = row["VALOR"] ? String(row["VALOR"]).replace(/,/g, "") : "0";
@@ -456,10 +471,6 @@ export async function importarNFPlanilha(file, pedidoId, userId) {
 
         const nfsParaInserir  = Object.entries(nfMap).filter(([nf]) => !nfsJaCadastradas.has(nf));
         const nfsParaRelinkar = Object.entries(nfMap).filter(([nf]) =>  nfsJaCadastradas.has(nf));
-
-        if (!nfsParaInserir.length && !nfsParaRelinkar.length) {
-          throw new Error("Nenhuma NF encontrada na planilha.");
-        }
 
         const nfsInseridas  = [];
         const nfsRelinkadas = [];
@@ -480,13 +491,14 @@ export async function importarNFPlanilha(file, pedidoId, userId) {
           if (errNF) throw new Error(`Erro ao inserir NF ${numeroNf}: ${errNF.message}`);
           nfsInseridas.push(nfInserida);
 
+          // NF real chegou: vincula e limpa qualquer erro anterior desses itens
           const imeisNF = dados.itens.filter(i => i.length > 5);
           if (imeisNF.length > 0) {
             const CHUNK = 500;
             for (let i = 0; i < imeisNF.length; i += CHUNK) {
               await supabase
                 .from("b2b_itens")
-                .update({ nf: numeroNf })
+                .update({ nf: numeroNf, nf_erro: false, obs_nf: null })
                 .eq("pedido_id", pedidoId)
                 .in("imei", imeisNF.slice(i, i + CHUNK));
             }
@@ -500,7 +512,7 @@ export async function importarNFPlanilha(file, pedidoId, userId) {
             for (let i = 0; i < imeisNF.length; i += CHUNK) {
               await supabase
                 .from("b2b_itens")
-                .update({ nf: numeroNf })
+                .update({ nf: numeroNf, nf_erro: false, obs_nf: null })
                 .eq("pedido_id", pedidoId)
                 .in("imei", imeisNF.slice(i, i + CHUNK));
             }
@@ -508,17 +520,34 @@ export async function importarNFPlanilha(file, pedidoId, userId) {
           nfsRelinkadas.push(numeroNf);
         }
 
+        // ───── Trilha 2: linhas marcadas como "Erro" (por item, via IMEI) ─────
+        let totalErros = 0;
+        for (const row of linhasErro) {
+          const imei = String(row["IMEI"] || "").trim();
+          if (imei.length <= 5) continue;
+          const { error: errErro } = await supabase
+            .from("b2b_itens")
+            .update({ nf: null, nf_erro: true, obs_nf: lerObs(row) })
+            .eq("pedido_id", pedidoId)
+            .eq("imei", imei);
+          if (!errErro) totalErros++;
+        }
+
+        const totalNFs = nfsInseridas.length + nfsRelinkadas.length;
+        if (totalNFs === 0 && totalErros === 0) {
+          throw new Error("Nenhuma NF nem erro foi processado.");
+        }
+
+        // Recalcula o status do faturamento do zero, olhando o estado real dos itens
         await verificarConclusaoFaturamento(pedidoId);
 
-        const totalNFs   = nfsInseridas.length + nfsRelinkadas.length;
         const todasAsNFs = [...nfsInseridas.map(n => n.numero_nf), ...nfsRelinkadas];
-
-        if (totalNFs === 0) throw new Error("Nenhuma NF foi processada.");
 
         resolve({
           ok:         true,
           totalNFs,
-          totalItens: linhasComNF.length,
+          totalErros,
+          totalItens: linhasNF.length,
           nfs:        todasAsNFs,
           relinkadas: nfsRelinkadas.length,
         });
@@ -553,7 +582,7 @@ export async function importarNFPedido(pedidoId, numeroNf, totalItens, totalCaix
 
 export async function buscarResumoValorPedido(pedidoId) {
   const [{ data: itensData }, { data: nfsData }] = await Promise.all([
-    supabase.from("b2b_itens").select("status, valor, nf").eq("pedido_id", pedidoId),
+    supabase.from("b2b_itens").select("status, valor, nf, nf_erro, obs_nf, imei").eq("pedido_id", pedidoId),
     supabase.from("b2b_nfs").select("total_itens, valor_total").eq("pedido_id", pedidoId),
   ]);
 
@@ -569,6 +598,13 @@ export async function buscarResumoValorPedido(pedidoId) {
   const qtdNaoFaturar   = itensNaoFaturar.length;
   const qtdEmAnalise    = itens.filter(i => ["nao_localizado", "em_analise"].includes(i.status)).length;
 
+  // Itens bipados que tiveram erro na emissão da NF
+  const itensErro = itensBipados
+    .filter(i => i.nf_erro)
+    .map(i => ({ imei: i.imei, obs: i.obs_nf || "", valor: i.valor || 0 }));
+  const qtdErro   = itensErro.length;
+  const valorErro = itensErro.reduce((s, i) => s + (i.valor || 0), 0);
+
   const valorFaturado = nfs.reduce((s, n) => s + (n.valor_total || 0), 0);
   const qtdFaturada   = nfs.reduce((s, n) => s + (n.total_itens || 0), 0);
 
@@ -576,6 +612,7 @@ export async function buscarResumoValorPedido(pedidoId) {
     totalValor, valorBipado, qtdBipados,
     valorFaturado, qtdFaturada,
     valorNaoFaturar, qtdNaoFaturar, qtdEmAnalise,
+    itensErro, qtdErro, valorErro,
   };
 }
 
