@@ -29,6 +29,7 @@ import B2BPickingPage from "./pages/B2BPickingPage.jsx";
 import TrocasB2CAssurantPage from "./pages/TrocasB2CAssurantPage.jsx";
 import TrocasB2CFurbtechPage from "./pages/TrocasB2CFurbtechPage.jsx";
 import PedidosB2CPage from "./pages/PedidosB2CPage.jsx";
+import B2CEmbalagemMesaPage from "./pages/B2CEmbalagemMesaPage.jsx";
 
 function ProtectedRoute({ tela, children }) {
   const { user, loading, hasAccess } = useAuth();
@@ -117,7 +118,8 @@ export default function App() {
         <Route path="/trocas-b2c/gestao" element={<ProtectedRoute tela="/trocas-b2c/gestao"><TrocasB2CFurbtechPage /></ProtectedRoute>} />
 
         {/* Pedidos B2C — novo módulo */}
-        <Route path="/b2c/pedidos" element={<ProtectedRoute tela="/b2c/pedidos"><PedidosB2CPage /></ProtectedRoute>} />
+        <Route path="/b2c/pedidos"   element={<ProtectedRoute tela="/b2c/pedidos"><PedidosB2CPage /></ProtectedRoute>} />
+        <Route path="/b2c/embalagem" element={<ProtectedRoute tela="/b2c/embalagem"><B2CEmbalagemMesaPage /></ProtectedRoute>} />
       </Route>
     </Routes>
   );
