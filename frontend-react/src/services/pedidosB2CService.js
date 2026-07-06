@@ -480,17 +480,40 @@ export async function listarGruposFaturamento() {
 
   const ids = lista.map(g => g.id);
   const { data: pedidos } = await supabase
-    .from("pedidos_b2c").select("grupo_id, status").in("grupo_id", ids);
+    .from("pedidos_b2c")
+    .select("grupo_id, status, marketplace, total_do_pedido")
+    .in("grupo_id", ids);
 
   const cont = {};
   (pedidos || []).forEach(p => {
-    if (!cont[p.grupo_id]) cont[p.grupo_id] = { aFaturar: 0, emAnalise: 0, faturados: 0 };
-    if (p.status === "embalado") cont[p.grupo_id].aFaturar++;
-    else if (p.status === "em_analise") cont[p.grupo_id].emAnalise++;
-    else if (["faturado", "concluido"].includes(p.status)) cont[p.grupo_id].faturados++;
+    if (!cont[p.grupo_id]) cont[p.grupo_id] = { aFaturar: 0, emAnalise: 0, faturados: 0, valorAFaturar: 0, mp: {} };
+    const c = cont[p.grupo_id];
+    if (p.status === "embalado") {
+      c.aFaturar++;
+      c.valorAFaturar += (p.total_do_pedido || 0);
+      const nome = p.marketplace || "—";
+      c.mp[nome] = (c.mp[nome] || 0) + 1;
+    } else if (p.status === "em_analise") {
+      c.emAnalise++;
+    } else if (["faturado", "concluido"].includes(p.status)) {
+      c.faturados++;
+    }
   });
 
-  return lista.map(g => ({ ...g, ...(cont[g.id] || { aFaturar: 0, emAnalise: 0, faturados: 0 }) }));
+  return lista.map(g => {
+    const c = cont[g.id] || { aFaturar: 0, emAnalise: 0, faturados: 0, valorAFaturar: 0, mp: {} };
+    const marketplaces = Object.entries(c.mp)
+      .map(([nome, qtd]) => ({ nome, qtd }))
+      .sort((a, b) => b.qtd - a.qtd);
+    return {
+      ...g,
+      aFaturar: c.aFaturar,
+      emAnalise: c.emAnalise,
+      faturados: c.faturados,
+      valorAFaturar: c.valorAFaturar,
+      marketplaces,
+    };
+  });
 }
 
 // Gera e baixa a planilha do grupo com os pedidos prontos para faturar (status embalado).

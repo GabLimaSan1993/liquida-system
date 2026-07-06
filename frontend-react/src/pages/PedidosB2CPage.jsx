@@ -708,11 +708,14 @@ function TabAnalise() {
 // ══════════════════════════════════════════════════════════
 function TabFaturamento() {
   const { user } = useAuth();
-  const [grupos, setGrupos]     = useState([]);
-  const [loading, setLoading]   = useState(true);
-  const [baixando, setBaixando] = useState(null);
-  const [subindo, setSubindo]   = useState(null);
-  const [feedback, setFeedback] = useState({});
+  const [grupos, setGrupos]                 = useState([]);
+  const [loading, setLoading]               = useState(true);
+  const [baixando, setBaixando]             = useState(null);
+  const [subindo, setSubindo]               = useState(null);
+  const [feedback, setFeedback]             = useState({});
+  const [expandido, setExpandido]           = useState(null);
+  const [pedidosGrupo, setPedidosGrupo]     = useState({});
+  const [loadingPedidos, setLoadingPedidos] = useState(null);
   const inputRefs = useRef({});
 
   useEffect(() => { carregar(); }, []);
@@ -722,6 +725,19 @@ function TabFaturamento() {
     try { setGrupos(await listarGruposFaturamento()); }
     catch (e) { console.error(e); }
     finally { setLoading(false); }
+  }
+
+  async function handleVerPedidos(grupo) {
+    if (expandido === grupo.id) { setExpandido(null); return; }
+    setExpandido(grupo.id);
+    if (!pedidosGrupo[grupo.id]) {
+      setLoadingPedidos(grupo.id);
+      try {
+        const data = await listarPedidosGrupo(grupo.id);
+        setPedidosGrupo(prev => ({ ...prev, [grupo.id]: data }));
+      } catch (e) { console.error(e); }
+      finally { setLoadingPedidos(null); }
+    }
   }
 
   async function handleBaixar(grupo) {
@@ -750,6 +766,8 @@ function TabFaturamento() {
       if (res.ignorados > 0) partes.push(`${res.ignorados} ignorada${res.ignorados > 1 ? "s" : ""}`);
       const msg = (res.grupoConcluido ? "✓ Grupo concluído! " : "✓ ") + partes.join(" · ");
       setFeedback(prev => ({ ...prev, [grupo.id]: { tipo: res.grupoConcluido ? "ok" : "aviso", msg } }));
+      setPedidosGrupo(prev => { const n = { ...prev }; delete n[grupo.id]; return n; });
+      setExpandido(null);
       carregar();
     } catch (e) {
       setFeedback(prev => ({ ...prev, [grupo.id]: { tipo: "erro", msg: e.message } }));
@@ -782,16 +800,30 @@ function TabFaturamento() {
         <div className="space-y-3">
           {grupos.map(g => {
             const fb = feedback[g.id];
+            const aberto = expandido === g.id;
+            const lista = pedidosGrupo[g.id] || [];
+            const aFaturar = lista.filter(p => p.status === "embalado");
+            const emAnalise = lista.filter(p => p.status === "em_analise");
             return (
               <Card key={g.id}>
                 <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
-                  <div>
+                  <div className="min-w-0">
                     <div className="font-black text-slate-800">Grupo #{g.numero}</div>
                     <div className="text-xs text-slate-500 mt-0.5">
                       <span className="font-semibold text-slate-600">{g.aFaturar} a faturar</span>
+                      <span className="font-bold text-emerald-700"> · {fmtR(g.valorAFaturar)}</span>
                       {g.emAnalise > 0 && <span className="text-orange-600"> · {g.emAnalise} em análise</span>}
                       {g.faturados > 0 && <span className="text-emerald-600"> · {g.faturados} faturado{g.faturados > 1 ? "s" : ""}</span>}
                     </div>
+                    {g.marketplaces?.length > 0 && (
+                      <div className="flex items-center gap-1.5 flex-wrap mt-2">
+                        {g.marketplaces.map(mp => (
+                          <span key={mp.nome} className="inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-lg bg-purple-50 text-[#7F2D92] ring-1 ring-purple-200">
+                            {mp.nome} · {mp.qtd}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-yellow-50 text-yellow-700 ring-1 ring-yellow-200 shrink-0">Aguardando NF</span>
                 </div>
@@ -810,7 +842,52 @@ function TabFaturamento() {
                       disabled={subindo === g.id}
                       onChange={e => handleSubir(g, e.target.files?.[0])} />
                   </label>
+                  <button onClick={() => handleVerPedidos(g)}
+                    className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-slate-50 text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100 transition">
+                    {aberto ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                    Ver pedidos
+                  </button>
                 </div>
+
+                {aberto && (
+                  <div className="mt-3 border-t border-slate-100 pt-3">
+                    {loadingPedidos === g.id ? (
+                      <div className="flex items-center gap-2 text-xs text-slate-500">
+                        <Loader className="h-4 w-4 animate-spin text-purple-500" /> Carregando pedidos...
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-xs font-bold text-slate-500 mb-2">Pedidos a faturar ({aFaturar.length})</p>
+                        <div className="space-y-1.5">
+                          {aFaturar.map(p => (
+                            <div key={p.id} className="flex items-center justify-between gap-3 bg-slate-50 rounded-lg px-3 py-2">
+                              <div className="min-w-0">
+                                <div className="text-xs text-slate-700"><span className="font-bold">#{p.id_anymarket}</span> <span className="text-slate-400">· {p.marketplace}</span></div>
+                                <div className="text-xs text-slate-500 font-mono truncate">{p.imei_bipado || p.imei_alocado} · {p.cliente}</div>
+                              </div>
+                              <span className="text-xs font-bold text-emerald-700 shrink-0">{fmtR(p.total_do_pedido)}</span>
+                            </div>
+                          ))}
+                        </div>
+                        {emAnalise.length > 0 && (
+                          <>
+                            <p className="text-xs font-bold text-orange-600 mt-3 mb-2">Em análise — fora da planilha ({emAnalise.length})</p>
+                            <div className="space-y-1.5">
+                              {emAnalise.map(p => (
+                                <div key={p.id} className="flex items-center justify-between gap-3 bg-orange-50 ring-1 ring-orange-200 rounded-lg px-3 py-2">
+                                  <div className="min-w-0">
+                                    <div className="text-xs text-orange-700"><span className="font-bold">#{p.id_anymarket}</span> <span>· {p.marketplace}</span></div>
+                                    <div className="text-xs text-orange-600 font-mono truncate">{p.imei_alocado} · {p.motivo_analise || "não localizado"}</div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
 
                 {fb && (
                   <div className={`mt-3 flex items-center gap-2 text-sm rounded-xl px-4 py-3 ring-1 ${
