@@ -3,21 +3,22 @@ import {
   Search, CheckCircle, AlertTriangle, Package,
   X, ChevronDown, ChevronUp, Clock,
   Layers, ArrowRight, Loader, RefreshCw,
-  FileText, Store, MapPin, Ticket,
+  FileText, Store, MapPin, Ticket, Download, Upload,
 } from "lucide-react";
 import {
   listarPedidosAguardandoAlocacao,
   listarGruposPicking,
   listarPedidosGrupo,
   listarPedidosEmAnalise,
-  listarPedidosFaturamento,
+  listarGruposFaturamento,
+  gerarPlanilhaFaturamentoGrupo,
+  importarNFsGrupo,
   buscarSugestaoFifo,
   alocarPedido,
   fecharGruposPendentes,
   registrarBipagem,
   marcarNaoLocalizado,
   resolverAnalise,
-  registrarNF,
   buscarKpisPedidosB2C,
 } from "../services/pedidosB2CService.js";
 import { useAuth } from "../AuthContext.jsx";
@@ -707,160 +708,126 @@ function TabAnalise() {
 // ══════════════════════════════════════════════════════════
 function TabFaturamento() {
   const { user } = useAuth();
-  const [pedidos, setPedidos]     = useState([]);
-  const [loading, setLoading]     = useState(true);
-  const [busca, setBusca]         = useState("");
-  const [modalNF, setModalNF]     = useState(null);
-  const [numeroNF, setNumeroNF]   = useState("");
-  const [chaveNF, setChaveNF]     = useState("");
-  const [feedback, setFeedback]   = useState(null);
-  const [faturando, setFaturando] = useState(false);
+  const [grupos, setGrupos]     = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [baixando, setBaixando] = useState(null);
+  const [subindo, setSubindo]   = useState(null);
+  const [feedback, setFeedback] = useState({});
+  const inputRefs = useRef({});
 
   useEffect(() => { carregar(); }, []);
 
   async function carregar() {
     setLoading(true);
-    try { setPedidos(await listarPedidosFaturamento()); }
+    try { setGrupos(await listarGruposFaturamento()); }
     catch (e) { console.error(e); }
     finally { setLoading(false); }
   }
 
-  async function handleFaturar() {
-    if (!modalNF || !numeroNF.trim()) return;
-    setFaturando(true);
+  async function handleBaixar(grupo) {
+    setBaixando(grupo.id);
+    setFeedback(prev => ({ ...prev, [grupo.id]: null }));
     try {
-      await registrarNF(modalNF.id, numeroNF.trim(), chaveNF.trim() || null, user.id);
-      setPedidos(prev => prev.filter(p => p.id !== modalNF.id));
-      setFeedback({ tipo: "ok", msg: `✓ Pedido #${modalNF.id_anymarket} faturado — NF ${numeroNF.trim()}` });
-      setTimeout(() => setFeedback(null), 3000);
-    } catch (e) { setFeedback({ tipo: "erro", msg: e.message }); }
-    finally { setFaturando(false); setModalNF(null); setNumeroNF(""); setChaveNF(""); }
+      const res = await gerarPlanilhaFaturamentoGrupo(grupo.id);
+      if (!res.ok) {
+        setFeedback(prev => ({ ...prev, [grupo.id]: { tipo: "erro", msg: res.erro } }));
+      } else {
+        setFeedback(prev => ({ ...prev, [grupo.id]: { tipo: "ok", msg: `✓ Planilha gerada — ${res.total} linha${res.total > 1 ? "s" : ""} (${res.nomeArquivo})` } }));
+      }
+    } catch (e) {
+      setFeedback(prev => ({ ...prev, [grupo.id]: { tipo: "erro", msg: e.message } }));
+    } finally { setBaixando(null); }
   }
 
-  const filtrados  = pedidos.filter(p =>
-    !busca ||
-    String(p.id_anymarket).includes(busca) ||
-    p.cliente?.toLowerCase().includes(busca.toLowerCase()) ||
-    p.imei_bipado?.includes(busca)
-  );
-  const totalValor = filtrados.reduce((s, p) => s + (p.total_do_pedido || 0), 0);
+  async function handleSubir(grupo, file) {
+    if (!file) return;
+    setSubindo(grupo.id);
+    setFeedback(prev => ({ ...prev, [grupo.id]: null }));
+    try {
+      const res = await importarNFsGrupo(file, grupo.id, user.id);
+      const partes = [`${res.faturados} pedido${res.faturados !== 1 ? "s" : ""} faturado${res.faturados !== 1 ? "s" : ""}`];
+      if (res.semNF > 0)     partes.push(`${res.semNF} linha${res.semNF > 1 ? "s" : ""} sem NF`);
+      if (res.ignorados > 0) partes.push(`${res.ignorados} ignorada${res.ignorados > 1 ? "s" : ""}`);
+      const msg = (res.grupoConcluido ? "✓ Grupo concluído! " : "✓ ") + partes.join(" · ");
+      setFeedback(prev => ({ ...prev, [grupo.id]: { tipo: res.grupoConcluido ? "ok" : "aviso", msg } }));
+      carregar();
+    } catch (e) {
+      setFeedback(prev => ({ ...prev, [grupo.id]: { tipo: "erro", msg: e.message } }));
+    } finally {
+      setSubindo(null);
+      if (inputRefs.current[grupo.id]) inputRefs.current[grupo.id].value = "";
+    }
+  }
 
   return (
-    <>
-      {modalNF && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-[28px] bg-white p-8 shadow-2xl">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="h-10 w-10 rounded-2xl bg-emerald-100 flex items-center justify-center shrink-0">
-                <FileText className="h-5 w-5 text-emerald-600" />
-              </div>
-              <div>
-                <h2 className="text-lg font-black text-slate-800">Registrar NF</h2>
-                <p className="text-xs text-slate-500">Pedido #{modalNF.id_anymarket}</p>
-              </div>
-            </div>
-            <div className="bg-slate-50 ring-1 ring-slate-200 rounded-2xl p-4 mb-4 space-y-1">
-              <p className="text-xs font-bold text-slate-500">Produto</p>
-              <p className="text-sm font-semibold text-slate-800">{modalNF.titulo_produto}</p>
-              <p className="text-xs font-mono text-slate-500">IMEI: {modalNF.imei_bipado || modalNF.imei_alocado}</p>
-              <p className="text-xs font-bold text-emerald-700">{fmtR(modalNF.total_do_pedido)}</p>
-            </div>
-            <div className="space-y-3 mb-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">Número da NF *</label>
-                <input
-                  value={numeroNF}
-                  onChange={e => setNumeroNF(e.target.value)}
-                  placeholder="Ex: 51430"
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7F2D92]"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">Chave de Acesso (opcional)</label>
-                <input
-                  value={chaveNF}
-                  onChange={e => setChaveNF(e.target.value)}
-                  placeholder="44 dígitos..."
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-mono text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7F2D92]"
-                />
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <button onClick={handleFaturar} disabled={!numeroNF.trim() || faturando}
-                className="flex-1 rounded-2xl bg-emerald-600 py-3 text-sm font-bold text-white hover:bg-emerald-700 transition disabled:opacity-50">
-                {faturando ? "Registrando..." : "Confirmar NF"}
-              </button>
-              <button onClick={() => { setModalNF(null); setNumeroNF(""); setChaveNF(""); }}
-                className="flex-1 rounded-2xl bg-slate-100 py-3 text-sm font-bold text-slate-600 hover:bg-slate-200 transition">
-                Cancelar
-              </button>
-            </div>
-          </div>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <p className="text-sm text-slate-500">Baixe a planilha do grupo, preencha a coluna NUMERO_NF e suba de volta.</p>
+        <button onClick={carregar} className="text-xs text-slate-500 hover:text-purple-700 font-semibold flex items-center gap-1">
+          <RefreshCw className="h-3.5 w-3.5" /> Atualizar
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center h-32">
+          <div className="h-8 w-8 border-4 border-purple-200 border-t-[#7F2D92] rounded-full animate-spin" />
+        </div>
+      ) : grupos.length === 0 ? (
+        <div className="text-center py-12 text-slate-400">
+          <FileText className="h-8 w-8 mx-auto mb-2 opacity-30" />
+          <p className="text-sm">Nenhum grupo aguardando faturamento.</p>
+          <p className="text-xs mt-1">Os grupos aparecem aqui quando o picking é concluído.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {grupos.map(g => {
+            const fb = feedback[g.id];
+            return (
+              <Card key={g.id}>
+                <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
+                  <div>
+                    <div className="font-black text-slate-800">Grupo #{g.numero}</div>
+                    <div className="text-xs text-slate-500 mt-0.5">
+                      <span className="font-semibold text-slate-600">{g.aFaturar} a faturar</span>
+                      {g.emAnalise > 0 && <span className="text-orange-600"> · {g.emAnalise} em análise</span>}
+                      {g.faturados > 0 && <span className="text-emerald-600"> · {g.faturados} faturado{g.faturados > 1 ? "s" : ""}</span>}
+                    </div>
+                  </div>
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-yellow-50 text-yellow-700 ring-1 ring-yellow-200 shrink-0">Aguardando NF</span>
+                </div>
+
+                <div className="flex gap-2 flex-wrap items-center">
+                  <button onClick={() => handleBaixar(g)} disabled={baixando === g.id || g.aFaturar === 0}
+                    className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-[#7F2D92] text-white hover:bg-[#5B1E74] transition disabled:opacity-40">
+                    {baixando === g.id ? <div className="h-3 w-3 border-2 border-purple-200 border-t-white rounded-full animate-spin" /> : <Download className="h-3 w-3" />}
+                    Baixar planilha ({g.aFaturar})
+                  </button>
+                  <label className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl ring-1 transition cursor-pointer ${subindo === g.id ? "bg-blue-50 text-blue-400 ring-blue-200 opacity-60" : "bg-blue-50 text-blue-700 ring-blue-200 hover:bg-blue-100"}`}>
+                    {subindo === g.id ? <div className="h-3 w-3 border-2 border-blue-300 border-t-blue-700 rounded-full animate-spin" /> : <Upload className="h-3 w-3" />}
+                    Subir NFs
+                    <input type="file" accept=".xlsx,.xls" className="hidden"
+                      ref={el => inputRefs.current[g.id] = el}
+                      disabled={subindo === g.id}
+                      onChange={e => handleSubir(g, e.target.files?.[0])} />
+                  </label>
+                </div>
+
+                {fb && (
+                  <div className={`mt-3 flex items-center gap-2 text-sm rounded-xl px-4 py-3 ring-1 ${
+                    fb.tipo === "ok"    ? "bg-emerald-50 text-emerald-700 ring-emerald-200" :
+                    fb.tipo === "aviso" ? "bg-amber-50 text-amber-700 ring-amber-200" :
+                    "bg-red-50 text-red-700 ring-red-200"
+                  }`}>
+                    {fb.tipo === "ok" ? <CheckCircle className="h-4 w-4 shrink-0" /> : <AlertTriangle className="h-4 w-4 shrink-0" />}
+                    <span className="font-semibold">{fb.msg}</span>
+                  </div>
+                )}
+              </Card>
+            );
+          })}
         </div>
       )}
-
-      <div className="space-y-4">
-        {feedback && (
-          <div className={`flex items-center gap-2 rounded-2xl px-4 py-3 ring-1 text-sm ${feedback.tipo === "ok" ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-red-50 text-red-700 ring-red-200"}`}>
-            {feedback.tipo === "ok" ? <CheckCircle className="h-4 w-4 shrink-0" /> : <AlertTriangle className="h-4 w-4 shrink-0" />}
-            <span className="font-semibold">{feedback.msg}</span>
-          </div>
-        )}
-
-        <div className="grid grid-cols-2 gap-3">
-          <KpiMini label="Aguardando NF" value={fmtN(filtrados.length)} color="bg-purple-50 ring-purple-200 text-purple-700" />
-          <KpiMini label="Valor total"   value={fmtR(totalValor)}       color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
-        </div>
-
-        <div className="relative">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-          <input
-            value={busca}
-            onChange={e => setBusca(e.target.value)}
-            placeholder="Buscar por ID, cliente ou IMEI..."
-            className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#7F2D92] bg-white"
-          />
-        </div>
-
-        {loading ? (
-          <div className="flex items-center justify-center h-32">
-            <div className="h-8 w-8 border-4 border-purple-200 border-t-[#7F2D92] rounded-full animate-spin" />
-          </div>
-        ) : filtrados.length === 0 ? (
-          <div className="text-center py-12 text-slate-400">
-            <Package className="h-8 w-8 mx-auto mb-2 opacity-30" />
-            <p className="text-sm">Nenhum pedido aguardando faturamento.</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {filtrados.map(p => (
-              <Card key={p.id} className="ring-1 ring-purple-200">
-                <div className="flex items-start justify-between gap-3 flex-wrap">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <span className="font-black text-slate-800 text-sm">#{p.id_anymarket}</span>
-                      <span className="text-xs text-slate-400">{p.marketplace}</span>
-                      <span className="text-xs font-bold text-emerald-700">{fmtR(p.total_do_pedido)}</span>
-                    </div>
-                    <p className="text-sm font-semibold text-slate-700 truncate">{p.titulo_produto}</p>
-                    <div className="flex items-center gap-2 mt-1 flex-wrap">
-                      <span className="text-xs font-mono text-slate-500">IMEI: {p.imei_bipado || p.imei_alocado}</span>
-                      <GradeBadge grade={p.grade_produto} />
-                    </div>
-                    <p className="text-xs text-slate-400 mt-0.5">{p.cliente}</p>
-                    {p.embalado_em && <p className="text-xs text-slate-400 mt-0.5">Embalado em: {fmtData(p.embalado_em)}</p>}
-                  </div>
-                  <button onClick={() => setModalNF(p)}
-                    className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100 transition shrink-0">
-                    <FileText className="h-3.5 w-3.5" /> Registrar NF
-                  </button>
-                </div>
-              </Card>
-            ))}
-          </div>
-        )}
-      </div>
-    </>
+    </div>
   );
 }
 

@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase";
+import * as XLSX from "xlsx";
 
 const GRADE_HIERARQUIA = {
   "like new":           1,
@@ -395,7 +396,7 @@ export async function marcarNaoLocalizado(pedidoId, motivo, userId) {
 export async function resolverAnalise(pedidoId, novoImei, userId) {
   const { data: pedido } = await supabase
     .from("pedidos_b2c")
-    .select("imei_alocado")
+    .select("imei_alocado, grupo_id")
     .eq("id", pedidoId)
     .single();
 
@@ -424,6 +425,9 @@ export async function resolverAnalise(pedidoId, novoImei, userId) {
     })
     .eq("id", pedidoId);
   if (error) throw new Error(error.message);
+
+  // Voltou para picking: recalcula o status do grupo (reabre no picking se estava fechado)
+  if (pedido?.grupo_id) await verificarConclusaoGrupo(pedido.grupo_id);
 }
 
 // ══════════════════════════════════════════════════════════
@@ -454,6 +458,145 @@ export async function concluirPedido(pedidoId) {
     })
     .eq("id", pedidoId);
   if (error) throw new Error(error.message);
+}
+
+// ══════════════════════════════════════════════════════════
+// FATURAMENTO POR GRUPO (planilha)
+// ══════════════════════════════════════════════════════════
+
+// Lista os grupos com picking concluído e faturamento ainda pendente,
+// com contagem de quantos estão a faturar (embalado) e em análise.
+export async function listarGruposFaturamento() {
+  const { data: grupos, error } = await supabase
+    .from("pedidos_b2c_grupos")
+    .select("*")
+    .eq("status", "concluido")
+    .neq("status_faturamento", "concluido")
+    .order("numero", { ascending: true });
+  if (error) throw new Error(error.message);
+
+  const lista = grupos || [];
+  if (!lista.length) return [];
+
+  const ids = lista.map(g => g.id);
+  const { data: pedidos } = await supabase
+    .from("pedidos_b2c").select("grupo_id, status").in("grupo_id", ids);
+
+  const cont = {};
+  (pedidos || []).forEach(p => {
+    if (!cont[p.grupo_id]) cont[p.grupo_id] = { aFaturar: 0, emAnalise: 0, faturados: 0 };
+    if (p.status === "embalado") cont[p.grupo_id].aFaturar++;
+    else if (p.status === "em_analise") cont[p.grupo_id].emAnalise++;
+    else if (["faturado", "concluido"].includes(p.status)) cont[p.grupo_id].faturados++;
+  });
+
+  return lista.map(g => ({ ...g, ...(cont[g.id] || { aFaturar: 0, emAnalise: 0, faturados: 0 }) }));
+}
+
+// Gera e baixa a planilha do grupo com os pedidos prontos para faturar (status embalado).
+// Os que estão em análise ficam de fora — não têm peça para faturar.
+export async function gerarPlanilhaFaturamentoGrupo(grupoId) {
+  const { data: grupo } = await supabase
+    .from("pedidos_b2c_grupos").select("numero").eq("id", grupoId).single();
+
+  const { data: pedidos, error } = await supabase
+    .from("pedidos_b2c")
+    .select("*")
+    .eq("grupo_id", grupoId)
+    .eq("status", "embalado")
+    .order("id_anymarket", { ascending: true });
+  if (error) throw new Error(error.message);
+  if (!pedidos?.length) return { ok: false, erro: "Nenhum pedido pronto para faturar neste grupo." };
+
+  const rows = pedidos.map(p => ({
+    "ID_PEDIDO":   p.id,
+    "PEDIDO_ML":   p.id_anymarket,
+    "MARKETPLACE": p.marketplace || "",
+    "CLIENTE":     p.cliente || "",
+    "TITULO":      p.titulo_produto || "",
+    "SKU":         p.sku_alocado || p.sku_produto || "",
+    "GRADE":       p.grade_alocada || p.grade_produto || "",
+    "IMEI":        p.imei_bipado || p.imei_alocado || "",
+    "VALOR":       p.total_do_pedido != null ? Number(p.total_do_pedido).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "",
+    "NUMERO_NF":   "",
+  }));
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(rows);
+  XLSX.utils.book_append_sheet(wb, ws, "Faturamento");
+  const nomeArquivo = `faturamento_grupo_${grupo?.numero || grupoId}.xlsx`;
+  XLSX.writeFile(wb, nomeArquivo);
+
+  return { ok: true, total: rows.length, nomeArquivo };
+}
+
+// Lê a planilha de volta e fatura cada linha que tiver NUMERO_NF preenchido.
+// Casa pelo ID_PEDIDO (id interno único). Linha sem NF é ignorada (fica para a próxima leva).
+export async function importarNFsGrupo(file, grupoId, userId) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const wb   = XLSX.read(e.target.result, { type: "binary" });
+        const ws   = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { defval: null });
+        if (!rows.length) throw new Error("Planilha vazia.");
+
+        const comNF = rows.filter(r => r["NUMERO_NF"] != null && String(r["NUMERO_NF"]).trim() !== "");
+        if (!comNF.length) throw new Error("Nenhuma linha com NUMERO_NF preenchido.");
+
+        // Status atual dos pedidos do grupo — só faturamos os que estão embalado (aguardando NF)
+        const { data: pedidosGrupo } = await supabase
+          .from("pedidos_b2c").select("id, status").eq("grupo_id", grupoId);
+        const statusPorId = {};
+        (pedidosGrupo || []).forEach(p => { statusPorId[String(p.id)] = p.status; });
+
+        let faturados = 0;
+        let ignorados = 0;
+        for (const row of comNF) {
+          const idPedido = String(row["ID_PEDIDO"] ?? "").trim();
+          const numeroNf = String(row["NUMERO_NF"]).trim();
+          if (!idPedido || statusPorId[idPedido] !== "embalado") { ignorados++; continue; }
+
+          const { error: errUpd } = await supabase
+            .from("pedidos_b2c")
+            .update({
+              status:        "faturado",
+              numero_nf:     numeroNf,
+              faturado_em:   new Date().toISOString(),
+              faturado_por:  userId,
+              atualizado_em: new Date().toISOString(),
+            })
+            .eq("id", idPedido);
+          if (errUpd) { ignorados++; } else { faturados++; }
+        }
+
+        const grupoConcluido = await verificarConclusaoFaturamentoGrupo(grupoId);
+        const semNF = rows.length - comNF.length;
+
+        resolve({ ok: true, faturados, ignorados, semNF, grupoConcluido });
+      } catch (err) { reject(err); }
+    };
+    reader.onerror = () => reject(new Error("Erro ao ler o arquivo."));
+    reader.readAsBinaryString(file);
+  });
+}
+
+// Marca o faturamento do grupo como concluído quando não resta nada pendente
+// (nada embalado aguardando NF, nem em picking, nem em análise).
+async function verificarConclusaoFaturamentoGrupo(grupoId) {
+  const { data: pedidos } = await supabase
+    .from("pedidos_b2c").select("status").eq("grupo_id", grupoId);
+  const todos = pedidos || [];
+  const pendente = todos.some(p => ["embalado", "em_picking", "em_analise"].includes(p.status));
+  const concluido = todos.length > 0 && !pendente;
+
+  await supabase
+    .from("pedidos_b2c_grupos")
+    .update({ status_faturamento: concluido ? "concluido" : "pendente" })
+    .eq("id", grupoId);
+
+  return concluido;
 }
 
 // ══════════════════════════════════════════════════════════
