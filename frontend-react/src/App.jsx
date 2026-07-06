@@ -30,6 +30,7 @@ import TrocasB2CAssurantPage from "./pages/TrocasB2CAssurantPage.jsx";
 import TrocasB2CFurbtechPage from "./pages/TrocasB2CFurbtechPage.jsx";
 import PedidosB2CPage from "./pages/PedidosB2CPage.jsx";
 import B2CEmbalagemMesaPage from "./pages/B2CEmbalagemMesaPage.jsx";
+import B2CPainelGestorPage from "./pages/B2CPainelGestorPage.jsx";
 
 function ProtectedRoute({ tela, children }) {
   const { user, loading, hasAccess } = useAuth();
@@ -120,6 +121,7 @@ export default function App() {
         {/* Pedidos B2C — novo módulo */}
         <Route path="/b2c/pedidos"   element={<ProtectedRoute tela="/b2c/pedidos"><PedidosB2CPage /></ProtectedRoute>} />
         <Route path="/b2c/embalagem" element={<ProtectedRoute tela="/b2c/embalagem"><B2CEmbalagemMesaPage /></ProtectedRoute>} />
+        <Route path="/b2c/painel"    element={<ProtectedRoute tela="/b2c/painel"><B2CPainelGestorPage /></ProtectedRoute>} />
       </Route>
     </Routes>
   );
