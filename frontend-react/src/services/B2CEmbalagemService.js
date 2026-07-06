@@ -123,6 +123,78 @@ async function registrarEvento(pedidoId, imei, mesa, acao, userId, userNome) {
 }
 
 // ══════════════════════════════════════════════════════════
+// PENDENTES POR MESA — listagem agrupada pelas listas de picking
+// ══════════════════════════════════════════════════════════
+// Mesa 1  -> aparelhos bipados no picking e ainda sem etapa (etapa_embalagem null)
+// Mesa 2+ -> aparelhos cuja etapa atual é a mesa anterior (fila de entrada da mesa)
+// Retorna { ok, total, grupos: [{ grupo_id, numero, itens: [...] }] }
+export async function listarPendentesMesa(mesa) {
+  if (!SEQUENCIA.includes(mesa)) return { ok: false, erro: "Mesa inválida.", grupos: [], total: 0 };
+  const anterior = ETAPA_ANTERIOR[mesa]; // mesa_1 => null
+
+  let query = supabase
+    .from("pedidos_b2c")
+    .select("id, imei_bipado, imei_alocado, titulo_produto, grade_alocada, grade_produto, cliente, marketplace, status, etapa_embalagem, grupo_id")
+    .neq("status", "concluido"); // concluído = já saiu, não é pendente
+
+  if (anterior === null) {
+    // Aguardando a Mesa 1: bipado no picking mas ainda não entrou na esteira
+    query = query.is("etapa_embalagem", null).in("status", ["embalado", "faturado"]);
+  } else {
+    // Fila da mesa: itens que terminaram a etapa anterior
+    query = query.eq("etapa_embalagem", anterior);
+  }
+
+  const { data: pedidos, error } = await query;
+  if (error) return { ok: false, erro: error.message, grupos: [], total: 0 };
+
+  const lista = pedidos || [];
+  if (lista.length === 0) return { ok: true, grupos: [], total: 0 };
+
+  // Busca o número de cada lista de picking (pedidos_b2c_grupos.numero)
+  const gruposIds = [...new Set(lista.map(p => p.grupo_id).filter(Boolean))];
+  const numeroPorGrupo = {};
+  if (gruposIds.length) {
+    const { data: grupos } = await supabase
+      .from("pedidos_b2c_grupos")
+      .select("id, numero")
+      .in("id", gruposIds);
+    (grupos || []).forEach(g => { numeroPorGrupo[g.id] = g.numero; });
+  }
+
+  // Agrupa por lista de picking
+  const mapa = {};
+  lista.forEach(p => {
+    const chave = p.grupo_id || "sem_grupo";
+    if (!mapa[chave]) {
+      mapa[chave] = {
+        grupo_id: p.grupo_id || null,
+        numero:   p.grupo_id ? (numeroPorGrupo[p.grupo_id] ?? null) : null,
+        itens:    [],
+      };
+    }
+    mapa[chave].itens.push({
+      id:          p.id,
+      imei:        p.imei_bipado || p.imei_alocado,
+      modelo:      p.titulo_produto,
+      grade:       p.grade_alocada || p.grade_produto,
+      cliente:     p.cliente,
+      marketplace: p.marketplace,
+    });
+  });
+
+  // Ordena: listas com número primeiro (crescente), "sem grupo" por último
+  const grupos = Object.values(mapa).sort((a, b) => {
+    if (a.numero == null && b.numero == null) return 0;
+    if (a.numero == null) return 1;
+    if (b.numero == null) return -1;
+    return a.numero - b.numero;
+  });
+
+  return { ok: true, grupos, total: lista.length };
+}
+
+// ══════════════════════════════════════════════════════════
 // PAINEL DE ACOMPANHAMENTO
 // ══════════════════════════════════════════════════════════
 export async function listarPainelMesas() {

@@ -2,8 +2,9 @@ import { useState, useRef, useEffect } from "react";
 import {
   Search, CheckCircle, AlertTriangle,
   ArrowLeft, Lock, FileText, Package, Tag, Loader,
+  ListChecks, RefreshCw, Clock,
 } from "lucide-react";
-import { biparNaMesa, confirmarPassoMesa4 } from "../services/B2CEmbalagemService.js";
+import { biparNaMesa, confirmarPassoMesa4, listarPendentesMesa } from "../services/B2CEmbalagemService.js";
 import { useAuth } from "../AuthContext.jsx";
 
 const MESAS = [
@@ -15,6 +16,18 @@ const MESAS = [
 
 function mesaLabel(k) {
   return ({ mesa_1: "Mesa 1", mesa_2: "Mesa 2", mesa_3: "Mesa 3", mesa_4: "Mesa 4" })[k] || k;
+}
+
+function GradeBadge({ grade }) {
+  if (!grade) return <span className="text-slate-300 text-xs">—</span>;
+  const g = grade.toLowerCase();
+  const cls =
+    g.includes("like new")  ? "bg-emerald-50 text-emerald-700" :
+    g.includes("excelente") ? "bg-blue-50 text-blue-700"       :
+    g.includes("muito bom") ? "bg-purple-50 text-purple-700"   :
+    g.includes("bom")       ? "bg-yellow-50 text-yellow-700"   :
+    "bg-slate-50 text-slate-500";
+  return <span className={`text-xs font-semibold px-2 py-0.5 rounded-lg ${cls}`}>{grade}</span>;
 }
 
 function Card({ children, className = "" }) {
@@ -83,6 +96,71 @@ function Mesa4Panel({ ativo, proc, onPasso, onFechar }) {
   );
 }
 
+// Lista de pendentes da mesa, agrupada por lista de picking (grupo)
+function PendentesMesa({ mesa, dados, loading, onAtualizar }) {
+  const total = dados?.total || 0;
+  const grupos = dados?.grupos || [];
+  const titulo = mesa === "mesa_1" ? "Aguardando a Mesa 1" : `Aguardando a ${mesaLabel(mesa)}`;
+
+  return (
+    <Card>
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <ListChecks className="h-4 w-4 text-[#7F2D92]" />
+        <h3 className="font-black text-slate-800 text-sm">{titulo}</h3>
+        {total > 0 && (
+          <span className="text-xs font-semibold px-2 py-0.5 rounded-lg bg-purple-50 text-[#7F2D92] ring-1 ring-purple-200">
+            {total} aparelho{total > 1 ? "s" : ""} · {grupos.length} lista{grupos.length > 1 ? "s" : ""}
+          </span>
+        )}
+        <button onClick={onAtualizar} className="ml-auto text-xs text-slate-500 hover:text-purple-700 font-semibold flex items-center gap-1">
+          <RefreshCw className="h-3.5 w-3.5" /> Atualizar
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center gap-2 text-xs text-slate-500 py-4">
+          <Loader className="h-4 w-4 animate-spin text-purple-500" /> Carregando pendentes...
+        </div>
+      ) : total === 0 ? (
+        <div className="flex items-center gap-2 text-xs text-slate-400 py-4">
+          <Clock className="h-4 w-4 opacity-40" />
+          Nenhum aparelho aguardando esta mesa.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {grupos.map((g, gi) => (
+            <div key={g.grupo_id || `sem-grupo-${gi}`} className="rounded-xl ring-1 ring-slate-200 overflow-hidden">
+              <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border-b border-slate-200">
+                <ListChecks className="h-3.5 w-3.5 text-[#7F2D92]" />
+                <span className="text-xs font-black text-slate-700">
+                  {g.numero != null ? `Lista de picking · Grupo #${g.numero}` : "Sem grupo"}
+                </span>
+                <span className="ml-auto text-xs text-slate-500 font-semibold">
+                  {g.itens.length} aparelho{g.itens.length > 1 ? "s" : ""}
+                </span>
+              </div>
+              <div className="divide-y divide-slate-100">
+                {g.itens.map(it => (
+                  <div key={it.id} className="flex items-center gap-3 px-3 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono font-bold text-slate-800 text-xs">{it.imei || "—"}</span>
+                        <GradeBadge grade={it.grade} />
+                      </div>
+                      <p className="text-xs text-slate-500 truncate mt-0.5">{it.modelo}</p>
+                    </div>
+                    {it.cliente && <span className="text-xs text-slate-400 shrink-0 truncate max-w-[40%]">{it.cliente}</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 export default function B2CEmbalagemMesaPage() {
   const { user, profile } = useAuth();
   const [mesa, setMesa]           = useState(null);
@@ -90,12 +168,30 @@ export default function B2CEmbalagemMesaPage() {
   const [historico, setHistorico] = useState([]);
   const [ativo, setAtivo]         = useState(null);   // aparelho em finalização na mesa 4
   const [proc, setProc]           = useState(false);
+  const [pendentes, setPendentes]         = useState({ grupos: [], total: 0 });
+  const [loadingPend, setLoadingPend]     = useState(false);
   const inputRef = useRef(null);
 
   useEffect(() => { if (mesa) inputRef.current?.focus(); }, [mesa, ativo]);
+  useEffect(() => { if (mesa) carregarPendentes(); }, [mesa]);
 
   const nome   = profile?.nome || "Usuário";
   const feitos = historico.filter(h => h.ok).length;
+
+  async function carregarPendentes() {
+    if (!mesa) return;
+    setLoadingPend(true);
+    try {
+      const res = await listarPendentesMesa(mesa);
+      if (res.ok) setPendentes({ grupos: res.grupos, total: res.total });
+      else setPendentes({ grupos: [], total: 0 });
+    } catch (e) {
+      console.error(e);
+      setPendentes({ grupos: [], total: 0 });
+    } finally {
+      setLoadingPend(false);
+    }
+  }
 
   function addHist(item) {
     setHistorico(prev => [{ ...item, ts: Date.now() + Math.random() }, ...prev].slice(0, 30));
@@ -130,6 +226,7 @@ export default function B2CEmbalagemMesaPage() {
     } finally {
       setProc(false);
       inputRef.current?.focus();
+      carregarPendentes();
     }
   }
 
@@ -215,6 +312,8 @@ export default function B2CEmbalagemMesaPage() {
           <p className="text-xs text-slate-400 mt-2">Bipe o aparelho para abrir os 3 passos de finalização. Se faltar a NF, deixe para depois e rebipe quando a NF sair.</p>
         )}
       </Card>
+
+      <PendentesMesa mesa={mesa} dados={pendentes} loading={loadingPend} onAtualizar={carregarPendentes} />
 
       <Card>
         <h3 className="font-black text-slate-800 text-sm mb-3">Últimos bipes</h3>
