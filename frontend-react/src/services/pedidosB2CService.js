@@ -83,7 +83,27 @@ export async function listarPedidosGrupo(grupoId) {
     .eq("grupo_id", grupoId)
     .order("data_de_pagamento", { ascending: true });
   if (error) throw new Error(error.message);
-  return data || [];
+
+  const pedidos = data || [];
+
+  // Enriquece com local e voucher do estoque (para o picking saber onde buscar a peça).
+  // Busca ao vivo na triagem pelo imei_alocado — reflete a localização atual da peça.
+  const imeis = pedidos.map(p => p.imei_alocado).filter(Boolean);
+  if (imeis.length) {
+    const { data: estoque } = await supabase
+      .from("assurant_triagem")
+      .select("imei, local, voucher")
+      .in("imei", imeis);
+    const mapa = {};
+    (estoque || []).forEach(e => { mapa[e.imei] = e; });
+    pedidos.forEach(p => {
+      const e = mapa[p.imei_alocado];
+      p.local_estoque   = e?.local   || null;
+      p.voucher_estoque = e?.voucher || null;
+    });
+  }
+
+  return pedidos;
 }
 
 export async function listarPedidosEmAnalise() {

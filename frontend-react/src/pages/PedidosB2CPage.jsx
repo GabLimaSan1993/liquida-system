@@ -3,7 +3,7 @@ import {
   Search, CheckCircle, AlertTriangle, Package,
   X, ChevronDown, ChevronUp, Clock,
   Layers, ArrowRight, Loader, RefreshCw,
-  FileText, Store,
+  FileText, Store, MapPin, Ticket,
 } from "lucide-react";
 import {
   listarPedidosAguardandoAlocacao,
@@ -534,6 +534,20 @@ function TabPicking() {
                       <GradeBadge grade={p.grade_produto} />
                     </div>
                     <p className="text-xs text-slate-500 truncate mt-0.5">{p.titulo_produto}</p>
+                    {(p.local_estoque || p.voucher_estoque) && (
+                      <div className="flex items-center gap-2 flex-wrap mt-1.5">
+                        {p.local_estoque && (
+                          <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-lg bg-purple-50 text-[#7F2D92] ring-1 ring-purple-200">
+                            <MapPin className="h-3.5 w-3.5" /> {p.local_estoque}
+                          </span>
+                        )}
+                        {p.voucher_estoque && (
+                          <span className="inline-flex items-center gap-1.5 text-xs font-mono font-semibold px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 ring-1 ring-slate-200">
+                            <Ticket className="h-3.5 w-3.5" /> {p.voucher_estoque}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <StatusBadge status={p.status} />
