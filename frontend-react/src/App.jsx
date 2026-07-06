@@ -25,6 +25,7 @@ import AssurantDashboardPage from "./pages/assurant/AssurantDashboardPage.jsx";
 import AssurantSLAPage from "./pages/assurant/AssurantSLAPage.jsx";
 import AssurantLayoutPage from "./pages/assurant/AssurantLayoutPage.jsx";
 
+import RecebimentoPage from "./pages/RecebimentoPage.jsx";
 import B2BPickingPage from "./pages/B2BPickingPage.jsx";
 import TrocasB2CAssurantPage from "./pages/TrocasB2CAssurantPage.jsx";
 import TrocasB2CFurbtechPage from "./pages/TrocasB2CFurbtechPage.jsx";
@@ -109,6 +110,9 @@ export default function App() {
         <Route path="/assurant/dashboard" element={<ProtectedRoute tela="/assurant/dashboard"><AssurantDashboardPage /></ProtectedRoute>} />
         <Route path="/assurant/sla"       element={<ProtectedRoute tela="/assurant/sla"><AssurantSLAPage /></ProtectedRoute>} />
         <Route path="/assurant/layout"    element={<ProtectedRoute tela="/assurant/layout"><AssurantLayoutPage /></ProtectedRoute>} />
+
+        {/* Recebimento YBV — entrada do processo */}
+        <Route path="/recebimento" element={<ProtectedRoute tela="/recebimento"><RecebimentoPage /></ProtectedRoute>} />
 
         {/* B2B */}
         <Route path="/b2b/picking"     element={<ProtectedRoute tela="/b2b/picking"><B2BPickingPage abaInicial="picking" /></ProtectedRoute>} />
