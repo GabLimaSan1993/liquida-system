@@ -9,6 +9,14 @@ const GRADE_HIERARQUIA = {
   "outlet bateria 70%": 5,
 };
 
+// Sufixo -CCx do SKU do anúncio indica a grade vendida.
+// A triagem guarda só o SKU base (modelo), com a grade em coluna própria.
+const CC_GRADE = {
+  cc2: "Muito Bom",
+  cc3: "Bom",
+  cc4: "Outlet",
+};
+
 function normalizeGrade(grade) {
   if (!grade) return null;
   return grade.toLowerCase().trim();
@@ -113,10 +121,20 @@ export async function listarPedidosConcluidos() {
 // ══════════════════════════════════════════════════════════
 
 export async function buscarSugestaoFifo(skuProduto, gradePedido) {
+  // O SKU do anúncio vem como MODELO-CCx, onde -CCx codifica a grade vendida.
+  // A triagem guarda só o MODELO base. Então: corta o -CCx para achar o modelo
+  // no estoque, e usa o -CCx para definir a grade (mais confiável que o título).
+  const skuRaw  = String(skuProduto || "").trim();
+  const ccMatch = skuRaw.match(/-(CC\d+)$/i);
+  const skuBase = skuRaw.replace(/-CC\d+$/i, "").trim();
+  const ccCode  = ccMatch ? ccMatch[1].toLowerCase() : null;
+  // Grade vem do código -CCx; sem código conhecido (ex.: sem sufixo), usa a grade do título.
+  const gradeAlvo = (ccCode && CC_GRADE[ccCode]) ? CC_GRADE[ccCode] : gradePedido;
+
   const { data: disponiveis, error } = await supabase
     .from("assurant_triagem")
     .select("imei, sku, grade, local, voucher")
-    .eq("sku", skuProduto)
+    .eq("sku", skuBase)
     .eq("status_atual", "Produto disponível");
 
   if (error) throw new Error(error.message);
@@ -124,7 +142,7 @@ export async function buscarSugestaoFifo(skuProduto, gradePedido) {
 
   // Só grades aceitáveis: grade exata ou superior (nunca inferior à vendida)
   const imeisValidos = disponiveis.filter(item =>
-    gradeAceita(item.grade, gradePedido)
+    gradeAceita(item.grade, gradeAlvo)
   );
 
   if (!imeisValidos.length) return [];
@@ -141,7 +159,7 @@ export async function buscarSugestaoFifo(skuProduto, gradePedido) {
   // Distância de grade em relação ao pedido:
   //   0  = grade exata (prioridade máxima)
   //   >0 = grade superior (quanto menor, mais próxima da vendida — menos "desperdício")
-  const ordemPedido = gradeOrdem(gradePedido);
+  const ordemPedido = gradeOrdem(gradeAlvo);
 
   const ordenados = imeisValidos
     .map(item => ({
