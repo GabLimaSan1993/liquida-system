@@ -122,6 +122,7 @@ export async function buscarSugestaoFifo(skuProduto, gradePedido) {
   if (error) throw new Error(error.message);
   if (!disponiveis?.length) return [];
 
+  // Só grades aceitáveis: grade exata ou superior (nunca inferior à vendida)
   const imeisValidos = disponiveis.filter(item =>
     gradeAceita(item.grade, gradePedido)
   );
@@ -137,9 +138,23 @@ export async function buscarSugestaoFifo(skuProduto, gradePedido) {
   const subinvMap = {};
   (subinv || []).forEach(s => { subinvMap[s.imei] = s.data_subinv; });
 
+  // Distância de grade em relação ao pedido:
+  //   0  = grade exata (prioridade máxima)
+  //   >0 = grade superior (quanto menor, mais próxima da vendida — menos "desperdício")
+  const ordemPedido = gradeOrdem(gradePedido);
+
   const ordenados = imeisValidos
-    .map(item => ({ ...item, data_subinv: subinvMap[item.imei] || null }))
+    .map(item => ({
+      ...item,
+      data_subinv:     subinvMap[item.imei] || null,
+      distancia_grade: ordemPedido - gradeOrdem(item.grade),
+    }))
     .sort((a, b) => {
+      // 1º) grade exata primeiro; só depois sobe para grades superiores, por proximidade
+      if (a.distancia_grade !== b.distancia_grade) {
+        return a.distancia_grade - b.distancia_grade;
+      }
+      // 2º) dentro da mesma grade, FIFO puro (subinventário mais antigo primeiro)
       if (!a.data_subinv && !b.data_subinv) return 0;
       if (!a.data_subinv) return 1;
       if (!b.data_subinv) return -1;
