@@ -3,7 +3,7 @@ import {
   Search, CheckCircle, AlertTriangle, Package,
   X, ChevronDown, ChevronUp, Clock,
   Layers, ArrowRight, Loader, RefreshCw,
-  FileText, Store, MapPin, Ticket, Download, Upload,
+  FileText, Store, MapPin, Ticket, Download, Upload, Lock,
 } from "lucide-react";
 import {
   listarPedidosAguardandoAlocacao,
@@ -707,7 +707,7 @@ function TabAnalise() {
 // ABA FATURAMENTO
 // ══════════════════════════════════════════════════════════
 function TabFaturamento() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [grupos, setGrupos]                 = useState([]);
   const [loading, setLoading]               = useState(true);
   const [baixando, setBaixando]             = useState(null);
@@ -744,11 +744,15 @@ function TabFaturamento() {
     setBaixando(grupo.id);
     setFeedback(prev => ({ ...prev, [grupo.id]: null }));
     try {
-      const res = await gerarPlanilhaFaturamentoGrupo(grupo.id);
-      if (!res.ok) {
+      const res = await gerarPlanilhaFaturamentoGrupo(grupo.id, user.id, profile?.nome);
+      if (res.bloqueado) {
+        setFeedback(prev => ({ ...prev, [grupo.id]: { tipo: "erro", msg: `🔒 ${res.erro}` } }));
+        setGrupos(prev => prev.map(x => x.id === grupo.id ? { ...x, baixado_por: res.porId || "__outro__", baixado_por_nome: res.por, baixado_em: res.em || x.baixado_em } : x));
+      } else if (!res.ok) {
         setFeedback(prev => ({ ...prev, [grupo.id]: { tipo: "erro", msg: res.erro } }));
       } else {
         setFeedback(prev => ({ ...prev, [grupo.id]: { tipo: "ok", msg: `✓ Planilha gerada — ${res.total} linha${res.total > 1 ? "s" : ""} (${res.nomeArquivo})` } }));
+        setGrupos(prev => prev.map(x => x.id === grupo.id ? { ...x, baixado_por: user.id, baixado_por_nome: profile?.nome || "você", baixado_em: new Date().toISOString() } : x));
       }
     } catch (e) {
       setFeedback(prev => ({ ...prev, [grupo.id]: { tipo: "erro", msg: e.message } }));
@@ -804,6 +808,8 @@ function TabFaturamento() {
             const lista = pedidosGrupo[g.id] || [];
             const aFaturar = lista.filter(p => p.status === "embalado");
             const emAnalise = lista.filter(p => p.status === "em_analise");
+            const meuLock = g.baixado_por && g.baixado_por === user.id;
+            const outroLock = g.baixado_por && g.baixado_por !== user.id;
             return (
               <Card key={g.id}>
                 <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
@@ -824,22 +830,36 @@ function TabFaturamento() {
                         ))}
                       </div>
                     )}
+                    {outroLock && (
+                      <div className="inline-flex items-center gap-1.5 mt-2 text-xs font-semibold px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 ring-1 ring-amber-200">
+                        <Lock className="h-3 w-3" /> Baixado por {g.baixado_por_nome}{g.baixado_em ? ` · ${fmtData(g.baixado_em)}` : ""}
+                      </div>
+                    )}
+                    {meuLock && (
+                      <div className="inline-flex items-center gap-1.5 mt-2 text-xs font-semibold px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 ring-1 ring-blue-200">
+                        <Lock className="h-3 w-3" /> Baixado por você
+                      </div>
+                    )}
                   </div>
                   <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-yellow-50 text-yellow-700 ring-1 ring-yellow-200 shrink-0">Aguardando NF</span>
                 </div>
 
                 <div className="flex gap-2 flex-wrap items-center">
-                  <button onClick={() => handleBaixar(g)} disabled={baixando === g.id || g.aFaturar === 0}
+                  <button onClick={() => handleBaixar(g)} disabled={baixando === g.id || g.aFaturar === 0 || outroLock}
                     className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-[#7F2D92] text-white hover:bg-[#5B1E74] transition disabled:opacity-40">
                     {baixando === g.id ? <div className="h-3 w-3 border-2 border-purple-200 border-t-white rounded-full animate-spin" /> : <Download className="h-3 w-3" />}
                     Baixar planilha ({g.aFaturar})
                   </button>
-                  <label className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl ring-1 transition cursor-pointer ${subindo === g.id ? "bg-blue-50 text-blue-400 ring-blue-200 opacity-60" : "bg-blue-50 text-blue-700 ring-blue-200 hover:bg-blue-100"}`}>
+                  <label className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl ring-1 transition ${
+                    outroLock ? "bg-slate-50 text-slate-300 ring-slate-200 cursor-not-allowed" :
+                    subindo === g.id ? "bg-blue-50 text-blue-400 ring-blue-200 opacity-60 cursor-pointer" :
+                    "bg-blue-50 text-blue-700 ring-blue-200 hover:bg-blue-100 cursor-pointer"
+                  }`}>
                     {subindo === g.id ? <div className="h-3 w-3 border-2 border-blue-300 border-t-blue-700 rounded-full animate-spin" /> : <Upload className="h-3 w-3" />}
                     Subir NFs
                     <input type="file" accept=".xlsx,.xls" className="hidden"
                       ref={el => inputRefs.current[g.id] = el}
-                      disabled={subindo === g.id}
+                      disabled={subindo === g.id || outroLock}
                       onChange={e => handleSubir(g, e.target.files?.[0])} />
                   </label>
                   <button onClick={() => handleVerPedidos(g)}
