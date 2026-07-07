@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import {
-  Truck, Lock, X, ArrowRight, ArrowLeft, Scan, CheckCircle,
-  AlertTriangle, Printer, FileSpreadsheet, FileText, Loader, Trash2,
+  Search, CheckCircle, AlertTriangle,
+  ArrowLeft, ArrowRight, Lock, FileText, Package, Tag, Loader, Trash2,
+  Truck, X, Printer, FileSpreadsheet, Plus, PlayCircle, RefreshCw,
 } from "lucide-react";
 import JsBarcode from "jsbarcode";
 import * as XLSX from "xlsx";
@@ -9,7 +10,8 @@ import jsPDF from "jspdf";
 import "jspdf-autotable";
 import {
   criarRecebimento, biparVoucher, removerVoucher, listarVouchers,
-  concluirRecebimento, buscarRomaneio, TRANSPORTADORAS,
+  concluirRecebimento, buscarRomaneio, listarEmAndamento, buscarRecebimento,
+  TRANSPORTADORAS,
 } from "../services/recebimentoService.js";
 import { useAuth } from "../AuthContext.jsx";
 
@@ -32,6 +34,11 @@ function Header() {
 function fmtDataHora(d) {
   if (!d) return "—";
   return new Date(d).toLocaleString("pt-BR");
+}
+
+function fmtHora(d) {
+  if (!d) return "—";
+  return new Date(d).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 }
 
 // Gera o SVG do código de barras (Code 128) para um voucher
@@ -69,9 +76,111 @@ function imprimirEtiqueta(voucher) {
 }
 
 // ══════════════════════════════════════════════════════════
+// TELA 0 — LISTA DE CARGAS EM ANDAMENTO (retomar / novo)
+// ══════════════════════════════════════════════════════════
+function TelaLista({ onNovo, onContinuar }) {
+  const { user, profile } = useAuth();
+  const [cargas, setCargas]   = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => { carregar(); }, []);
+
+  async function carregar() {
+    setLoading(true);
+    try { setCargas(await listarEmAndamento()); }
+    catch (e) { console.error(e); }
+    finally { setLoading(false); }
+  }
+
+  const isMaster = !!profile?.is_master;
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center gap-3 flex-wrap">
+        <span className="text-2xl">🚚</span>
+        <div className="flex-1">
+          <h2 className="text-lg font-black text-slate-800">Recebimento YBV</h2>
+          <p className="text-xs text-slate-500">Retome uma carga em andamento ou inicie uma nova</p>
+        </div>
+        <button onClick={carregar} className="text-xs text-slate-500 hover:text-purple-700 font-semibold flex items-center gap-1">
+          <RefreshCw className="h-3.5 w-3.5" /> Atualizar
+        </button>
+        <button onClick={onNovo}
+          className="flex items-center gap-2 bg-[#7F2D92] text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-[#5B1E74] transition">
+          <Plus className="h-4 w-4" /> Novo recebimento
+        </button>
+      </div>
+
+      <div>
+        <h3 className="font-black text-slate-800 text-sm mb-3 flex items-center gap-2">
+          <PlayCircle className="h-4 w-4 text-emerald-600" /> Em andamento
+        </h3>
+
+        {loading ? (
+          <div className="flex items-center justify-center h-32">
+            <div className="h-8 w-8 border-4 border-purple-200 border-t-[#7F2D92] rounded-full animate-spin" />
+          </div>
+        ) : cargas.length === 0 ? (
+          <Card>
+            <div className="text-center py-8 text-slate-400">
+              <Package className="h-8 w-8 mx-auto mb-2 opacity-30" />
+              <p className="text-sm">Nenhuma carga em andamento.</p>
+              <p className="text-xs mt-1">Clique em "Novo recebimento" para começar.</p>
+            </div>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {cargas.map(c => {
+              const meu = c.iniciado_por === user.id;
+              const podeAbrir = meu || isMaster;
+              return (
+                <div key={c.id} className={`rounded-2xl ring-1 shadow-sm p-4 ${podeAbrir ? "bg-white ring-slate-200" : "bg-slate-50 ring-slate-200 opacity-90"}`}>
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                    <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-purple-50 text-[#7F2D92] ring-1 ring-purple-200">{c.transportadora}</span>
+                    {c.placa && <span className="text-xs font-mono text-slate-400">{c.placa}</span>}
+                    <span className="ml-auto">
+                      {meu ? (
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">você</span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-lg bg-amber-50 text-amber-700 ring-1 ring-amber-200">
+                          <Lock className="h-3 w-3" /> {c.iniciado_por_nome || "outro"}
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="text-sm font-semibold text-slate-700">{c.motorista_nome || "—"}</div>
+                  <div className="text-xs text-slate-500 mb-3">
+                    iniciado {fmtHora(c.iniciado_em)} · {c.total_vouchers || 0} vouchers · {c.lacres?.length || 0} lacres
+                  </div>
+                  {podeAbrir ? (
+                    <button onClick={() => onContinuar(c.id)}
+                      className="flex items-center gap-2 bg-[#7F2D92] text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-[#5B1E74] transition">
+                      <ArrowRight className="h-3.5 w-3.5" /> Continuar
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-2 bg-slate-100 text-slate-400 px-4 py-2 rounded-xl text-xs font-bold cursor-not-allowed w-fit">
+                      <Lock className="h-3.5 w-3.5" /> Em uso por {c.iniciado_por_nome || "outro operador"}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <p className="mt-3 text-xs text-slate-400 flex items-center gap-1.5">
+          <AlertTriangle className="h-3.5 w-3.5" />
+          Cards de outros operadores ficam visíveis, mas só quem abriu (ou um master) pode continuar.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════
 // TELA 1 — DADOS DA CARGA
 // ══════════════════════════════════════════════════════════
-function TelaCarga({ onIniciar }) {
+function TelaCarga({ onIniciar, onVoltar }) {
   const { user, profile } = useAuth();
   const [transportadora, setTransportadora] = useState("");
   const [motorista, setMotorista]           = useState("");
@@ -115,7 +224,12 @@ function TelaCarga({ onIniciar }) {
   return (
     <div className="space-y-5">
       <Header />
-      <p className="text-sm text-slate-500">Passo 1 de 2 — registre a chegada antes de bipar.</p>
+      <div className="flex items-center gap-3">
+        <button onClick={onVoltar} className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1">
+          <ArrowLeft className="h-3 w-3" /> Voltar
+        </button>
+        <p className="text-sm text-slate-500">Passo 1 de 2 — registre a chegada antes de bipar.</p>
+      </div>
 
       <Card>
         <div className="mb-4">
@@ -279,7 +393,7 @@ function TelaBipagem({ recebimento, onVoltar, onConcluir }) {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
         <Card>
           <h3 className="font-black text-slate-800 text-sm mb-3 flex items-center gap-2">
-            <Scan className="h-4 w-4 text-[#7F2D92]" /> Bipar voucher
+            <Search className="h-4 w-4 text-[#7F2D92]" /> Bipar voucher
             <span className="ml-auto text-xs font-semibold px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
               {vouchers.length} recebidos
             </span>
@@ -389,7 +503,6 @@ function TelaRomaneio({ recebimentoId, onNovo }) {
       `Total de vouchers: ${dados.vouchers.length}`,
     ];
     info.forEach((t, i) => doc.text(t, 14, 26 + i * 6));
-
     doc.autoTable({
       startY: 26 + info.length * 6 + 4,
       head: [["#", "Voucher", "Bipado em", "Colaborador"]],
@@ -469,25 +582,52 @@ function Info({ label, valor }) {
 // PÁGINA PRINCIPAL
 // ══════════════════════════════════════════════════════════
 export default function RecebimentoPage() {
-  const [etapa, setEtapa]             = useState("carga");   // carga | bipagem | romaneio
+  const [etapa, setEtapa]             = useState("lista");   // lista | carga | bipagem | romaneio
   const [recebimento, setRecebimento] = useState(null);
+  const [carregandoCarga, setCarregandoCarga] = useState(false);
+
+  async function continuarCarga(recId) {
+    setCarregandoCarga(true);
+    try {
+      const res = await buscarRecebimento(recId);
+      if (res.ok) { setRecebimento(res.recebimento); setEtapa("bipagem"); }
+    } catch (e) { console.error(e); }
+    finally { setCarregandoCarga(false); }
+  }
+
+  if (carregandoCarga) {
+    return (
+      <div className="flex items-center justify-center h-40">
+        <div className="h-8 w-8 border-4 border-purple-200 border-t-[#7F2D92] rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <>
+      {etapa === "lista" && (
+        <TelaLista
+          onNovo={() => setEtapa("carga")}
+          onContinuar={continuarCarga}
+        />
+      )}
       {etapa === "carga" && (
-        <TelaCarga onIniciar={rec => { setRecebimento(rec); setEtapa("bipagem"); }} />
+        <TelaCarga
+          onIniciar={rec => { setRecebimento(rec); setEtapa("bipagem"); }}
+          onVoltar={() => setEtapa("lista")}
+        />
       )}
       {etapa === "bipagem" && recebimento && (
         <TelaBipagem
           recebimento={recebimento}
-          onVoltar={() => setEtapa("carga")}
+          onVoltar={() => setEtapa("lista")}
           onConcluir={rec => { setRecebimento(rec); setEtapa("romaneio"); }}
         />
       )}
       {etapa === "romaneio" && recebimento && (
         <TelaRomaneio
           recebimentoId={recebimento.id}
-          onNovo={() => { setRecebimento(null); setEtapa("carga"); }}
+          onNovo={() => { setRecebimento(null); setEtapa("lista"); }}
         />
       )}
     </>

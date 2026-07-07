@@ -131,4 +131,27 @@ export async function listarRecebimentos(limite = 30) {
   return data || [];
 }
 
+// ── Listar apenas os EM ANDAMENTO (tela inicial de cards) ──
+// Traz iniciado_por para a trava de acesso (só o dono ou master continua).
+export async function listarEmAndamento() {
+  const { data, error } = await supabase
+    .from("recebimentos")
+    .select("id, transportadora, motorista_nome, placa, lacres, status, iniciado_em, total_vouchers, iniciado_por, iniciado_por_nome")
+    .eq("status", "em_andamento")
+    .order("iniciado_em", { ascending: false });
+  if (error) return [];
+  return data || [];
+}
+
+// ── Recarregar uma carga específica (ao clicar em Continuar) ──
+export async function buscarRecebimento(recebimentoId) {
+  const { data, error } = await supabase
+    .from("recebimentos")
+    .select("*")
+    .eq("id", recebimentoId)
+    .single();
+  if (error) return { ok: false, erro: error.message };
+  return { ok: true, recebimento: data };
+}
+
 export { TRANSPORTADORAS };
