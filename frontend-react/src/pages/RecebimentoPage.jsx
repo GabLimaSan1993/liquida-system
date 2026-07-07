@@ -6,7 +6,7 @@ import {
 import JsBarcode from "jsbarcode";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
-import { autoTable } from "jspdf-autotable";
+import "jspdf-autotable";
 import {
   criarRecebimento, biparVoucher, removerVoucher, listarVouchers,
   concluirRecebimento, buscarRomaneio, TRANSPORTADORAS,
@@ -390,7 +390,7 @@ function TelaRomaneio({ recebimentoId, onNovo }) {
     ];
     info.forEach((t, i) => doc.text(t, 14, 26 + i * 6));
 
-    autoTable(doc, {
+    doc.autoTable({
       startY: 26 + info.length * 6 + 4,
       head: [["#", "Voucher", "Bipado em", "Colaborador"]],
       body: dados.vouchers.map((v, i) => [i + 1, v.voucher, fmtDataHora(v.bipado_em), v.bipado_por_nome || "—"]),
