@@ -10,6 +10,7 @@ const TELAS = [
   { id: "/financeiro/fluxo-realizado",    label: "Financeiro — Fluxo Realizado",     grupo: "Financeiro" },
   { id: "/financeiro/contas-pagar",       label: "Financeiro — Contas a Pagar",      grupo: "Financeiro" },
   { id: "/financeiro/contas-receber",     label: "Financeiro — Contas a Receber",    grupo: "Financeiro" },
+  { id: "/financeiro/carga-historica",    label: "Financeiro — Carga Histórica",     grupo: "Financeiro" },
   { id: "/linha-branca/triagem",          label: "Linha Branca — Triagem",           grupo: "Linha Branca" },
   { id: "/linha-branca/reparo-mecanico",  label: "Linha Branca — Reparo Mecânico",   grupo: "Linha Branca" },
   { id: "/linha-branca/reparo-eletrico",  label: "Linha Branca — Reparo Elétrico",   grupo: "Linha Branca" },
@@ -17,12 +18,18 @@ const TELAS = [
   { id: "/linha-branca/bancada-testes",   label: "Linha Branca — Bancada de Testes", grupo: "Linha Branca" },
   { id: "/linha-branca/limpeza",          label: "Linha Branca — Limpeza",           grupo: "Linha Branca" },
   { id: "/linha-branca/qualidade",        label: "Linha Branca — Qualidade",         grupo: "Linha Branca" },
+  { id: "/recebimento",                   label: "Assurant — Recebimento YBV",       grupo: "Assurant" },
+  { id: "/recebimento/gestao",            label: "Assurant — Gestão de Recebimento", grupo: "Assurant" },
   { id: "/assurant/dashboard",            label: "Assurant — Dashboard",             grupo: "Assurant" },
   { id: "/assurant/sla",                  label: "Assurant — SLA & Rastreabilidade", grupo: "Assurant" },
   { id: "/assurant/layout",               label: "Assurant — Layout Warehouse",      grupo: "Assurant" },
   { id: "/b2b/picking",                   label: "Assurant — Picking B2B",           grupo: "Assurant" },
   { id: "/b2b/embalagem",                 label: "Assurant — Embalagem B2B",         grupo: "Assurant" },
   { id: "/b2b/faturamento",               label: "Assurant — Faturamento B2B",       grupo: "Assurant" },
+  { id: "/b2b/painel",                    label: "Assurant — Painel Gestor B2B",     grupo: "Assurant" },
+  { id: "/b2c/pedidos",                   label: "Assurant — Pedidos B2C",           grupo: "Assurant" },
+  { id: "/b2c/embalagem",                 label: "Assurant — Embalagem B2C",         grupo: "Assurant" },
+  { id: "/b2c/painel",                    label: "Assurant — Painel Gestor B2C",     grupo: "Assurant" },
   { id: "/trocas-b2c/gestao",             label: "Assurant — Trocas B2C (Gestão)",   grupo: "Assurant" },
   { id: "/trocas-b2c/nova",               label: "Assurant — Trocas B2C (Nova)",     grupo: "Assurant" },
 ];
@@ -37,7 +44,7 @@ const AREAS_TECNICAS = [
   { value: "diversos",        label: "Diversos"                 },
 ];
 
-const TELAS_ASSURANT_PADRAO = ["/upload", "/b2b/picking", "/b2b/embalagem", "/b2b/faturamento"];
+const TELAS_ASSURANT_PADRAO = [];
 const GRUPOS = [...new Set(TELAS.map(t => t.grupo))];
 
 function SectionCard({ children }) {
@@ -162,11 +169,7 @@ function ModalNovoUsuario({ onSave, onCancel }) {
 
   function handleAreaChange(value) {
     setAreaTecnica(value);
-    if (value === "assurant") {
-      setTelas(TELAS_ASSURANT_PADRAO);
-    } else {
-      setTelas([]);
-    }
+    setTelas([]);
   }
 
   async function handleSave() {
@@ -238,11 +241,6 @@ function ModalNovoUsuario({ onSave, onCancel }) {
                     <option key={a.value} value={a.value}>{a.label}</option>
                   ))}
                 </select>
-                {areaTecnica === "assurant" && (
-                  <p className="mt-1 text-xs text-purple-600 font-semibold">
-                    ✓ Telas padrão Assurant pré-selecionadas — ajuste se necessário
-                  </p>
-                )}
               </div>
 
               <div>
@@ -283,9 +281,6 @@ function ModalPermissoes({ usuario, onSave, onCancel }) {
 
   function handleAreaChange(value) {
     setAreaTecnica(value);
-    if (value === "assurant" && telas.length === 0) {
-      setTelas(TELAS_ASSURANT_PADRAO);
-    }
   }
 
   async function handleSave() {
