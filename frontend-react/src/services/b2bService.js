@@ -1,6 +1,18 @@
 import * as XLSX from "xlsx";
 import { supabase } from "../lib/supabase";
 
+// Extrai a data do pedido do INÍCIO do nome do arquivo (formato aaaammdd).
+// Ex: "20260701_GABRISCELL_QUEBRA.xlsx" -> "2026-07-01". Retorna null se não achar.
+function extrairDataDoNome(nomeArquivo) {
+  if (!nomeArquivo) return null;
+  const m = String(nomeArquivo).match(/^(\d{4})(\d{2})(\d{2})/);
+  if (!m) return null;
+  const [, ano, mes, dia] = m;
+  const a = parseInt(ano), mi = parseInt(mes), d = parseInt(dia);
+  if (mi < 1 || mi > 12 || d < 1 || d > 31 || a < 2020 || a > 2100) return null;
+  return `${ano}-${mes}-${dia}`;
+}
+
 async function resolverCliente(ganhador) {
   if (!ganhador) return "Cliente não identificado";
   const termo = ganhador.substring(0, 30).trim();
@@ -50,6 +62,7 @@ export async function importarPedidoB2B(file, userId, extras = {}) {
           .insert({
             lote,
             cliente,
+            data_pedido:        extrairDataDoNome(file.name),
             total_itens:        rows.length,
             criado_por:         userId,
             condicao_pagamento: extras.condicao_pagamento || null,
