@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import {
   Gauge, RefreshCw, Clock, AlertTriangle, TrendingUp,
-  Package, FileText,
+  Package, FileText, ScanLine, PackageCheck, Search, MapPin, Ban,
 } from "lucide-react";
 import { buscarPainelGestorB2B, fmtDuracao } from "../services/B2BPainelGestorService.js";
 
@@ -63,6 +63,23 @@ function MiniStat({ label, value, sub, cor = "slate" }) {
   );
 }
 
+function LinhaTempoPicking({ icon: Icon, cor, label, mediaMin, sub }) {
+  const map = {
+    purple: "text-[#534AB7]",
+    pink:   "text-[#993556]",
+  };
+  return (
+    <div className="bg-white ring-1 ring-slate-200 rounded-xl p-3">
+      <div className="flex items-center gap-2">
+        <Icon className={`h-4 w-4 ${map[cor] || "text-slate-500"}`} />
+        <span className="text-xs text-slate-500">{label}</span>
+        <span className="ml-auto text-lg font-black text-slate-800">{fmtDuracao(mediaMin)}</span>
+      </div>
+      {sub && <div className="text-[11px] text-slate-400 mt-0.5">{sub}</div>}
+    </div>
+  );
+}
+
 function Chip({ label, valor, cor = "slate" }) {
   const map = {
     slate:   "bg-white ring-slate-200 text-slate-600",
@@ -96,6 +113,7 @@ export default function B2BPainelGestorPage() {
 
   const kpis   = dados?.kpis;
   const etapas = dados?.etapas || [];
+  const picking = dados?.picking || {};
   const caixas = dados?.caixas || {};
   const nfs    = dados?.nfs || {};
   const wip    = dados?.wip || {};
@@ -161,8 +179,42 @@ export default function B2BPainelGestorPage() {
             </div>
           </Card>
 
-          {/* Dentro de cada etapa: caixas + NFs */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Dentro de cada etapa: picking + caixas + NFs */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Dentro do picking */}
+            <Card>
+              <h3 className="font-black text-slate-800 text-sm mb-4 flex items-center gap-2">
+                <ScanLine className="h-4 w-4 text-[#7F2D92]" /> Dentro do picking · tempos
+              </h3>
+              <div className="space-y-2.5">
+                <LinhaTempoPicking icon={PackageCheck} cor="purple"
+                  label="Separação" mediaMin={picking.separacaoMin}
+                  sub={`data do pedido → bipado · ${picking.qtdSeparacao || 0} itens`} />
+                <LinhaTempoPicking icon={Search} cor="pink"
+                  label="Até ir para análise" mediaMin={picking.ateAnaliseMin}
+                  sub={`pedido → não localizado · ${picking.qtdAnalise || 0} itens`} />
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className="bg-emerald-50 rounded-xl p-3">
+                    <div className="flex items-center gap-1.5">
+                      <MapPin className="h-3.5 w-3.5 text-[#0F6E56]" />
+                      <span className="text-[11px] text-[#0F6E56]">Análise → localizado</span>
+                    </div>
+                    <div className="text-base font-black text-[#04342C] mt-1">{fmtDuracao(picking.analiseLocalizadoMin)}</div>
+                    <div className="text-[10px] text-[#0F6E56] mt-0.5">{picking.qtdLocalizado || 0} itens</div>
+                  </div>
+                  <div className="bg-amber-50 rounded-xl p-3">
+                    <div className="flex items-center gap-1.5">
+                      <Ban className="h-3.5 w-3.5 text-[#854F0B]" />
+                      <span className="text-[11px] text-[#854F0B]">Análise → não faturar</span>
+                    </div>
+                    <div className="text-base font-black text-[#633806] mt-1">{fmtDuracao(picking.analiseNaoFaturarMin)}</div>
+                    <div className="text-[10px] text-[#854F0B] mt-0.5">{picking.qtdNaoFaturar || 0} itens</div>
+                  </div>
+                </div>
+              </div>
+            </Card>
+
+            {/* Dentro da embalagem */}
             <Card>
               <h3 className="font-black text-slate-800 text-sm mb-4 flex items-center gap-2">
                 <Package className="h-4 w-4 text-[#7F2D92]" /> Dentro da embalagem · caixas
@@ -177,6 +229,7 @@ export default function B2BPainelGestorPage() {
               </div>
             </Card>
 
+            {/* Dentro do faturamento */}
             <Card>
               <h3 className="font-black text-slate-800 text-sm mb-4 flex items-center gap-2">
                 <FileText className="h-4 w-4 text-[#7F2D92]" /> Dentro do faturamento · NFs

@@ -77,6 +77,8 @@ export async function buscarPainelGestorB2B(periodo = "30d") {
         { chave: "embalagem",   label: "Embalagem",   mediaMin: null, qtd: 0 },
         { chave: "faturamento", label: "Faturamento", mediaMin: null, qtd: 0, paralela: true },
       ],
+      picking: { separacaoMin: null, ateAnaliseMin: null, analiseLocalizadoMin: null, analiseNaoFaturarMin: null,
+                 qtdSeparacao: 0, qtdAnalise: 0, qtdLocalizado: 0, qtdNaoFaturar: 0 },
       caixas: { tempoMedioMin: null, fechadas: 0, abertas: 0, mediaItens: null },
       nfs: { pctOk: null, comErro: 0, total: 0, naoFaturar: 0 },
       wip: await calcularWip(),
@@ -85,7 +87,7 @@ export async function buscarPainelGestorB2B(periodo = "30d") {
 
   // ── 2. Itens, NFs e caixas desses pedidos ──
   const itens = await fetchEmChunks("b2b_itens",
-    "pedido_id, bipado_em, embalado_em, nf, nao_faturar_em", ids);
+    "pedido_id, bipado_em, embalado_em, nf, nao_faturar_em, nao_localizado_em, localizado_em", ids);
   const nfs = await fetchEmChunks("b2b_nfs",
     "pedido_id, numero_nf, importado_em, data_faturamento, status, total_itens", ids);
   const caixas = await fetchEmChunks("b2b_caixas",
@@ -96,6 +98,7 @@ export async function buscarPainelGestorB2B(periodo = "30d") {
   nfs.forEach(n => { nfDate[`${n.pedido_id}|${n.numero_nf}`] = n.data_faturamento || n.importado_em; });
 
   const T = { picking: [], embalagem: [], faturamento: [] };
+  const P = { separacao: [], ateAnalise: [], analiseLocalizado: [], analiseNaoFaturar: [] };
   const totais = [];
   let itensFaturados = 0;
 
@@ -105,7 +108,7 @@ export async function buscarPainelGestorB2B(periodo = "30d") {
 
     if (it.bipado_em) {
       const v = minutosUteis(dpISO, it.bipado_em);
-      if (v != null) T.picking.push(v);
+      if (v != null) { T.picking.push(v); P.separacao.push(v); }
     }
     if (it.bipado_em && it.embalado_em) {
       const v = minutosUteis(it.bipado_em, it.embalado_em);
@@ -120,6 +123,23 @@ export async function buscarPainelGestorB2B(periodo = "30d") {
       const tot = minutosUteis(dpISO, dtNF);
       if (tot != null) totais.push(tot);
     }
+
+    // ── Detalhe do picking ──
+    // Tempo do pedido até cair em análise (não localizado)
+    if (it.nao_localizado_em) {
+      const v = minutosUteis(dpISO, it.nao_localizado_em);
+      if (v != null) P.ateAnalise.push(v);
+
+      // Da análise até a ação: localizado depois OU marcado não faturar
+      if (it.localizado_em) {
+        const l = minutosUteis(it.nao_localizado_em, it.localizado_em);
+        if (l != null) P.analiseLocalizado.push(l);
+      }
+      if (it.nao_faturar_em) {
+        const nf2 = minutosUteis(it.nao_localizado_em, it.nao_faturar_em);
+        if (nf2 != null) P.analiseNaoFaturar.push(nf2);
+      }
+    }
   });
 
   const etapas = [
@@ -129,6 +149,17 @@ export async function buscarPainelGestorB2B(periodo = "30d") {
   ];
   const comTempo = etapas.filter(e => e.mediaMin != null);
   const gargalo = comTempo.length ? comTempo.reduce((a, b) => (b.mediaMin > a.mediaMin ? b : a)) : null;
+
+  const picking = {
+    separacaoMin:         media(P.separacao),
+    ateAnaliseMin:        media(P.ateAnalise),
+    analiseLocalizadoMin: media(P.analiseLocalizado),
+    analiseNaoFaturarMin: media(P.analiseNaoFaturar),
+    qtdSeparacao:  P.separacao.length,
+    qtdAnalise:    P.ateAnalise.length,
+    qtdLocalizado: P.analiseLocalizado.length,
+    qtdNaoFaturar: P.analiseNaoFaturar.length,
+  };
 
   // ── caixas ──
   const tempoCaixas = [];
@@ -160,6 +191,7 @@ export async function buscarPainelGestorB2B(periodo = "30d") {
       gargalo: gargalo ? { label: gargalo.label, mediaMin: gargalo.mediaMin } : null,
     },
     etapas,
+    picking,
     caixas: {
       tempoMedioMin: media(tempoCaixas),
       fechadas, abertas,
