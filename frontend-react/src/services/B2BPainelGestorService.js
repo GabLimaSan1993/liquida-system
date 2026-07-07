@@ -31,9 +31,12 @@ function media(arr) {
   return Math.round(arr.reduce((s, x) => s + x, 0) / arr.length);
 }
 
-// data_pedido é DATE (sem hora) -> vira meia-noite de SP; o minutosUteis clampa pra abertura do expediente
-function dataPedidoISO(d) {
-  return d ? `${d}T00:00:00-03:00` : null;
+// Marco inicial do pedido: usa data_pedido (DATE) quando existe; senão o criado_em (timestamp).
+// data_pedido vira meia-noite de SP e o minutosUteis clampa pra abertura do expediente.
+function marcoInicialISO(pedido) {
+  if (pedido?.data_pedido) return `${pedido.data_pedido}T00:00:00-03:00`;
+  if (pedido?.criado_em)   return pedido.criado_em;
+  return null;
 }
 
 async function fetchEmChunks(tabela, colunas, ids, campoIn = "pedido_id") {
@@ -62,8 +65,8 @@ export async function buscarPainelGestorB2B(periodo = "30d") {
 
   const lista = pedidos || [];
   const ids = lista.map(p => p.id);
-  const dataPedidoPorId = {};
-  lista.forEach(p => { dataPedidoPorId[p.id] = p.data_pedido; });
+  const pedidoPorId = {};
+  lista.forEach(p => { pedidoPorId[p.id] = p; });
 
   if (ids.length === 0) {
     return {
@@ -97,7 +100,7 @@ export async function buscarPainelGestorB2B(periodo = "30d") {
   let itensFaturados = 0;
 
   itens.forEach(it => {
-    const dpISO = dataPedidoISO(dataPedidoPorId[it.pedido_id]);
+    const dpISO = marcoInicialISO(pedidoPorId[it.pedido_id]);
     const dtNF = it.nf ? nfDate[`${it.pedido_id}|${it.nf}`] : null;
 
     if (it.bipado_em) {
