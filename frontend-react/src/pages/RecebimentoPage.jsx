@@ -6,7 +6,7 @@ import {
 import JsBarcode from "jsbarcode";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import { autoTable } from "jspdf-autotable";
 import {
   criarRecebimento, biparVoucher, removerVoucher, listarVouchers,
   concluirRecebimento, buscarRomaneio, TRANSPORTADORAS,
