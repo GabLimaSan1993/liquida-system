@@ -26,6 +26,7 @@ import AssurantSLAPage from "./pages/assurant/AssurantSLAPage.jsx";
 import AssurantLayoutPage from "./pages/assurant/AssurantLayoutPage.jsx";
 
 import RecebimentoPage from "./pages/RecebimentoPage.jsx";
+import GestaoRecebimentoPage from "./pages/GestaoRecebimentoPage.jsx";
 import B2BPickingPage from "./pages/B2BPickingPage.jsx";
 import TrocasB2CAssurantPage from "./pages/TrocasB2CAssurantPage.jsx";
 import TrocasB2CFurbtechPage from "./pages/TrocasB2CFurbtechPage.jsx";
@@ -112,7 +113,8 @@ export default function App() {
         <Route path="/assurant/layout"    element={<ProtectedRoute tela="/assurant/layout"><AssurantLayoutPage /></ProtectedRoute>} />
 
         {/* Recebimento YBV — entrada do processo */}
-        <Route path="/recebimento" element={<ProtectedRoute tela="/recebimento"><RecebimentoPage /></ProtectedRoute>} />
+        <Route path="/recebimento"        element={<ProtectedRoute tela="/recebimento"><RecebimentoPage /></ProtectedRoute>} />
+        <Route path="/recebimento/gestao" element={<ProtectedRoute tela="/recebimento/gestao"><GestaoRecebimentoPage /></ProtectedRoute>} />
 
         {/* B2B */}
         <Route path="/b2b/picking"     element={<ProtectedRoute tela="/b2b/picking"><B2BPickingPage abaInicial="picking" /></ProtectedRoute>} />

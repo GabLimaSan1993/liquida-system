@@ -158,6 +158,9 @@ function MenuAssurant({ onClose, telas }) {
         {tem("/recebimento") && (
           <NavItem to="/recebimento"        icon={Truck}           label="Recebimento YBV"       indent onClick={onClose} />
         )}
+        {tem("/recebimento/gestao") && (
+          <NavItem to="/recebimento/gestao" icon={ClipboardList}   label="Gestão Recebimento"    indent onClick={onClose} />
+        )}
         {tem("/assurant/dashboard") && (
           <NavItem to="/assurant/dashboard" icon={BarChart3}       label="Dashboard"             indent onClick={onClose} />
         )}
@@ -271,6 +274,7 @@ function SidebarContent({ profile, onClose, handleLogout }) {
 
             <CollapseGroup icon={Package} label="Assurant Warehouse" paths={["/assurant", "/recebimento", "/b2b", "/b2c", "/trocas-b2c"]}>
               <NavItem to="/recebimento"        icon={Truck}           label="Recebimento YBV"       indent onClick={onClose} />
+              <NavItem to="/recebimento/gestao" icon={ClipboardList}   label="Gestão Recebimento"    indent onClick={onClose} />
               <NavItem to="/assurant/dashboard" icon={BarChart3}       label="Dashboard"             indent onClick={onClose} />
               <NavItem to="/assurant/sla"       icon={Clock}           label="SLA & Rastreabilidade" indent onClick={onClose} />
               <NavItem to="/assurant/layout"    icon={LayoutDashboard} label="Layout Warehouse"      indent onClick={onClose} />
