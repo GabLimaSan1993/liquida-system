@@ -1,5 +1,5 @@
 import * as XLSX from "xlsx";
-import { supabase } from "./supabase";
+import { supabase } from "../lib/supabase";
 
 // Extrai a data do pedido do INÍCIO do nome do arquivo (formato aaaammdd).
 // Ex: "20260701_GABRISCELL_QUEBRA.xlsx" -> "2026-07-01". Retorna null se não achar.
