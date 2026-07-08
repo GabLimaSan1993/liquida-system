@@ -1,5 +1,5 @@
 import * as XLSX from "xlsx";
-import { supabase } from "../lib/supabase";
+import { supabase } from "./supabase";
 
 // Extrai a data do pedido do INÍCIO do nome do arquivo (formato aaaammdd).
 // Ex: "20260701_GABRISCELL_QUEBRA.xlsx" -> "2026-07-01". Retorna null se não achar.
@@ -11,6 +11,11 @@ function extrairDataDoNome(nomeArquivo) {
   const a = parseInt(ano), mi = parseInt(mes), d = parseInt(dia);
   if (mi < 1 || mi > 12 || d < 1 || d > 31 || a < 2020 || a > 2100) return null;
   return `${ano}-${mes}-${dia}`;
+}
+
+// Normaliza IMEI para o match com a triagem (remove espaços e lixo invisível).
+function limparImei(v) {
+  return String(v ?? "").trim();
 }
 
 async function resolverCliente(ganhador) {
@@ -73,7 +78,10 @@ export async function importarPedidoB2B(file, userId, extras = {}) {
           .select().single();
         if (errPedido) throw new Error(errPedido.message);
 
-        const imeisLista = rows.map(r => String(r["IMEI"] || r["NUM_IMEI"] || "").trim()).filter(i => i.length > 5);
+        // IMEIs da planilha, já normalizados (trim) para o match com a triagem
+        const imeisLista = rows
+          .map(r => limparImei(r["IMEI"] || r["NUM_IMEI"]))
+          .filter(i => i.length > 5);
 
         const { data: triagem } = await supabase
           .from("assurant_triagem")
@@ -81,15 +89,18 @@ export async function importarPedidoB2B(file, userId, extras = {}) {
           .in("imei", imeisLista)
           .order("criado_em", { ascending: false });
 
+        // Mapas robustos: para cada IMEI, o registro MAIS RECENTE que tenha voucher / local.
+        // Como vem ordenado por criado_em desc, o primeiro não-nulo já é o mais recente.
         const localMap = {}, voucherMap = {};
         (triagem || []).forEach(t => {
-          if (!t.imei) return;
-          if (t.local   && !localMap[t.imei])   localMap[t.imei]   = t.local;
-          if (t.voucher && !voucherMap[t.imei]) voucherMap[t.imei] = t.voucher;
+          const key = limparImei(t.imei);
+          if (!key) return;
+          if (t.voucher && !voucherMap[key]) voucherMap[key] = t.voucher;
+          if (t.local   && !localMap[key])   localMap[key]   = t.local;
         });
 
         const itens = rows.map((r, rowIdx) => {
-          const imei = String(r["IMEI"] || r["NUM_IMEI"] || "").trim();
+          const imei = limparImei(r["IMEI"] || r["NUM_IMEI"]);
           let valor = null;
           if (valorIdx >= 0) {
             const rawVal = allRows[rowIdx + 2]?.[valorIdx];
@@ -107,6 +118,7 @@ export async function importarPedidoB2B(file, userId, extras = {}) {
             grade2:        r["GRADE2"]  || null,
             desc_item:     r["DESC_ITEM"] || null,
             cod_item:      r["COD_ITEM"]  || null,
+            // Prioriza o endereço da triagem (RUA/BL/AD...); só cai na planilha se a triagem não tiver.
             local_estoque: localMap[imei] || r["LOCAL"] || null,
             aging:         r["AGING"] ? parseInt(r["AGING"]) : null,
             valor, status: "pendente",
@@ -260,7 +272,6 @@ export async function reverterNaoLocalizado(itemId, novoLocal) {
     .eq("id", itemId);
   if (error) throw new Error(error.message);
 
-  // Reverter pode "reabrir" o picking se ele estava concluído
   const { data: item } = await supabase.from("b2b_itens").select("pedido_id").eq("id", itemId).single();
   if (item?.pedido_id) await reabrirPickingSeNecessario(item.pedido_id);
 }
@@ -335,8 +346,6 @@ export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
 
 // ══════════════════════════════════════════════════════════
 // CONCLUSÃO DE PICKING — independente de NF
-// Conclui quando todos os itens estão em estado terminal
-// (bipado ou nao_faturar), sem pendentes nem em análise.
 // ══════════════════════════════════════════════════════════
 async function verificarConclusaoPicking(pedidoId) {
   const { data: itens } = await supabase
@@ -367,9 +376,6 @@ async function verificarConclusaoPicking(pedidoId) {
 
 // ══════════════════════════════════════════════════════════
 // CONCLUSÃO DE FATURAMENTO — depende de NF
-// pendente  → nenhuma NF importada
-// parcial   → NFs cobrem parte dos bipados
-// concluido → NFs cobrem todos os bipados
 // ══════════════════════════════════════════════════════════
 async function verificarConclusaoFaturamento(pedidoId) {
   const { data: itens } = await supabase
@@ -384,21 +390,17 @@ async function verificarConclusaoFaturamento(pedidoId) {
   const nfs          = todasNFs || [];
   const totalBipados = todos.filter(i => i.status === "bipado").length;
 
-  // Erro é propriedade da NF: NF com status 'erro' segura o pedido e não conta como faturado
   const nfsErro     = nfs.filter(n => n.status === "erro");
   const numerosErro = new Set(nfsErro.map(n => String(n.numero_nf)));
 
-  // Cobertura considera só NFs OK (itens amarrados a NF OK OU soma de total_itens das NFs OK)
   const bipadosComNFok = todos.filter(i => i.status === "bipado" && i.nf && !numerosErro.has(String(i.nf))).length;
   const totalItensNFok = nfs.filter(n => n.status !== "erro").reduce((s, n) => s + (n.total_itens || 0), 0);
   const cobertura      = Math.max(bipadosComNFok, totalItensNFok);
 
   let statusFaturamento;
   if (totalBipados === 0) {
-    // Pedido sem nenhum bipado (tudo nao_faturar) — faturamento não se aplica, conclui
     statusFaturamento = "concluido";
   } else if (nfsErro.length > 0) {
-    // Alguma NF teve erro na emissão — sinaliza e bloqueia a conclusão
     statusFaturamento = "erro_nf";
   } else if (cobertura === 0) {
     statusFaturamento = "pendente";
@@ -413,7 +415,6 @@ async function verificarConclusaoFaturamento(pedidoId) {
     .update({ status_faturamento: statusFaturamento })
     .eq("id", pedidoId);
 
-  // Mantém o status legado sincronizado: concluído só quando ambas etapas fecham
   const { data: pedido } = await supabase
     .from("b2b_pedidos").select("status_picking").eq("id", pedidoId).single();
   if (pedido?.status_picking === "concluido" && statusFaturamento === "concluido") {
@@ -453,7 +454,6 @@ export async function importarNFPlanilha(file, pedidoId, userId) {
 
         if (!rows.length) throw new Error("Planilha vazia.");
 
-        // Coluna STATUS (OK/ERRO) por linha marca a NF como erro. Erro é por NF, não por item.
         const ehErro    = (v) => String(v ?? "").trim().toLowerCase() === "erro";
         const lerMotivo = (r) =>
           r["MOTIVO"] ?? r["Motivo"] ?? r["OBSERVAÇÕES"] ?? r["OBSERVACOES"] ?? null;
@@ -465,7 +465,6 @@ export async function importarNFPlanilha(file, pedidoId, userId) {
           .from("b2b_pedidos").select("*").eq("id", pedidoId).single();
         if (errPedido || !pedido) throw new Error("Pedido não encontrado.");
 
-        // Agrupa por número de NF; uma NF é 'erro' se qualquer linha dela vier marcada como ERRO
         const nfMap = {};
         for (const row of linhasComNF) {
           const nf       = String(row["NF"]).trim();
@@ -513,7 +512,6 @@ export async function importarNFPlanilha(file, pedidoId, userId) {
             });
           }
 
-          // Amarra o número da NF aos IMEIs (mesmo NF com erro: fica o registro do vínculo)
           const imeisNF = dados.itens.filter(i => i.length > 5);
           if (imeisNF.length > 0) {
             const CHUNK = 500;
@@ -532,7 +530,6 @@ export async function importarNFPlanilha(file, pedidoId, userId) {
 
         if (!nfsProcessadas.length) throw new Error("Nenhuma NF foi processada.");
 
-        // Recalcula o status do faturamento do zero
         await verificarConclusaoFaturamento(pedidoId);
 
         resolve({
@@ -574,8 +571,6 @@ export async function importarNFPedido(pedidoId, numeroNf, totalItens, totalCaix
 
 // ══════════════════════════════════════════════════════════
 // REGISTRAR NF COM ERRO MANUALMENTE (pela tela, sem planilha)
-// Para casos em que a emissão falhou no outro sistema e o
-// pedido já está em andamento (não dá pra reexportar a planilha).
 // ══════════════════════════════════════════════════════════
 export async function registrarNFErro(pedidoId, numeroNf, qtdItens, motivo, userId) {
   const nf = String(numeroNf || "").trim();
@@ -614,7 +609,7 @@ export async function registrarNFErro(pedidoId, numeroNf, qtdItens, motivo, user
 }
 
 // ══════════════════════════════════════════════════════════
-// REMOVER NF COM ERRO (desfaz a marcação; remove o registro)
+// REMOVER NF COM ERRO
 // ══════════════════════════════════════════════════════════
 export async function removerNFErro(pedidoId, numeroNf, userId) {
   const nf = String(numeroNf || "").trim();
@@ -648,7 +643,6 @@ export async function buscarResumoValorPedido(pedidoId) {
   const qtdNaoFaturar   = itensNaoFaturar.length;
   const qtdEmAnalise    = itens.filter(i => ["nao_localizado", "em_analise"].includes(i.status)).length;
 
-  // Erro é por NF: só NFs OK contam como faturado; NFs com erro entram em nfsErro
   const nfsOk      = nfs.filter(n => n.status !== "erro");
   const nfsErroArr = nfs.filter(n => n.status === "erro");
   const nfsErro    = nfsErroArr.map(n => ({ numero: n.numero_nf, qtd: n.total_itens || 0, motivo: n.motivo_erro || "" }));
