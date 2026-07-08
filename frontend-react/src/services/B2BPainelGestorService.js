@@ -119,11 +119,23 @@ export async function buscarPainelGestorB2B(periodo = "30d") {
 
   // ── 2. Itens, NFs e caixas desses pedidos ──
   const itens = await fetchEmChunks("b2b_itens",
-    "pedido_id, bipado_em, bipado_por_nome, embalado_em, nf, nao_faturar_em, nao_localizado_em, localizado_em", ids);
+    "pedido_id, bipado_em, bipado_por, embalado_em, nf, nao_faturar_em, nao_localizado_em, localizado_em", ids);
   const nfs = await fetchEmChunks("b2b_nfs",
     "pedido_id, numero_nf, importado_em, data_faturamento, status, total_itens", ids);
   const caixas = await fetchEmChunks("b2b_caixas",
     "pedido_id, status, criado_em, fechado_em, total_itens", ids);
+
+  // Resolve os nomes dos operadores que biparam (bipado_por -> nome)
+  const bipadoPorIds = [...new Set(itens.map(it => it.bipado_por).filter(Boolean))];
+  const nomePorId = {};
+  if (bipadoPorIds.length) {
+    for (let i = 0; i < bipadoPorIds.length; i += 200) {
+      const { data: profs } = await supabase
+        .from("user_profiles").select("id, nome")
+        .in("id", bipadoPorIds.slice(i, i + 200));
+      (profs || []).forEach(p => { nomePorId[p.id] = p.nome; });
+    }
+  }
 
   // mapa NF -> data de faturamento
   const nfDate = {};
@@ -145,7 +157,7 @@ export async function buscarPainelGestorB2B(periodo = "30d") {
       const v = minutosUteis(dpISO, it.bipado_em);
       if (v != null) { T.picking.push(v); P.separacao.push(v); }
       if (!bipesPorPedido[it.pedido_id]) bipesPorPedido[it.pedido_id] = [];
-      bipesPorPedido[it.pedido_id].push({ em: it.bipado_em, quem: it.bipado_por_nome });
+      bipesPorPedido[it.pedido_id].push({ em: it.bipado_em, quem: nomePorId[it.bipado_por] || "—" });
     }
     if (it.bipado_em && it.embalado_em) {
       const v = minutosUteis(it.bipado_em, it.embalado_em);
@@ -177,16 +189,15 @@ export async function buscarPainelGestorB2B(periodo = "30d") {
   });
 
   // ── Cadência, lote por faixa e pausas ──
-  const intervalosCadencia = [];   // segundos, só abaixo do limite
-  const pausas = [];               // { seg, quem, lote }
-  const lotePorFaixa = {};         // chave -> { tempos: [min] }
+  const intervalosCadencia = [];
+  const pausas = [];
+  const lotePorFaixa = {};
   FAIXAS_LOTE.forEach(f => { lotePorFaixa[f.chave] = []; });
 
   Object.entries(bipesPorPedido).forEach(([pedidoId, bipes]) => {
     if (bipes.length < 1) return;
     bipes.sort((a, b) => new Date(a.em) - new Date(b.em));
 
-    // Intervalos entre bipes consecutivos (só no mesmo dia local)
     for (let i = 1; i < bipes.length; i++) {
       if (!mesmaDataLocal(bipes[i - 1].em, bipes[i].em)) continue;
       const seg = (new Date(bipes[i].em) - new Date(bipes[i - 1].em)) / 1000;
@@ -202,7 +213,6 @@ export async function buscarPainelGestorB2B(periodo = "30d") {
       }
     }
 
-    // Lote inteiro (1º → último bipe), por faixa de tamanho
     const qtd = bipes.length;
     const dur = minutosUteis(bipes[0].em, bipes[bipes.length - 1].em);
     if (dur != null && qtd >= 1) {
