@@ -7,6 +7,18 @@ export { fmtDuracao };
 // São Paulo = UTC-3 (fuso do Supabase). Timestamps naive são tratados como hora local de SP.
 const SP_OFFSET_MIN = -180;
 
+// Limite de pausa: intervalo entre bipes acima disso não conta como cadência e é apontado.
+const PAUSA_LIMITE_SEG = 5 * 60;
+
+// Faixas de tamanho de lote (1º → último bipe)
+const FAIXAS_LOTE = [
+  { chave: "1-50",    label: "1–50",    min: 1,   max: 50   },
+  { chave: "51-100",  label: "51–100",  min: 51,  max: 100  },
+  { chave: "101-200", label: "101–200", min: 101, max: 200  },
+  { chave: "201-500", label: "201–500", min: 201, max: 500  },
+  { chave: "500+",    label: "500+",    min: 501, max: Infinity },
+];
+
 function naiveISO(dSP) {
   const p = n => String(n).padStart(2, "0");
   return `${dSP.getUTCFullYear()}-${p(dSP.getUTCMonth() + 1)}-${p(dSP.getUTCDate())}` +
@@ -31,8 +43,17 @@ function media(arr) {
   return Math.round(arr.reduce((s, x) => s + x, 0) / arr.length);
 }
 
+// Formata segundos -> "4s" / "1m 20s" / "2m"
+export function fmtCadencia(seg) {
+  if (seg == null) return "—";
+  const s = Math.round(seg);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return r ? `${m}m ${r}s` : `${m}m`;
+}
+
 // Marco inicial do pedido: usa data_pedido (DATE) quando existe; senão o criado_em (timestamp).
-// data_pedido vira meia-noite de SP e o minutosUteis clampa pra abertura do expediente.
 function marcoInicialISO(pedido) {
   if (pedido?.data_pedido) return `${pedido.data_pedido}T00:00:00-03:00`;
   if (pedido?.criado_em)   return pedido.criado_em;
@@ -49,6 +70,14 @@ async function fetchEmChunks(tabela, colunas, ids, campoIn = "pedido_id") {
   return out;
 }
 
+function mesmaDataLocal(aISO, bISO) {
+  const a = new Date(new Date(aISO).getTime() + SP_OFFSET_MIN * 60000);
+  const b = new Date(new Date(bISO).getTime() + SP_OFFSET_MIN * 60000);
+  return a.getUTCFullYear() === b.getUTCFullYear()
+      && a.getUTCMonth()    === b.getUTCMonth()
+      && a.getUTCDate()     === b.getUTCDate();
+}
+
 // ══════════════════════════════════════════════════════════
 // PAINEL GESTOR B2B — tempos por etapa, caixas e NFs
 // periodo: "7d" | "30d" | "tudo"
@@ -59,7 +88,7 @@ export async function buscarPainelGestorB2B(periodo = "30d") {
   // ── 1. Pedidos do período (por criado_em do lote) ──
   const { data: pedidos, error: e1 } = await supabase
     .from("b2b_pedidos")
-    .select("id, data_pedido, criado_em")
+    .select("id, lote, data_pedido, criado_em")
     .gte("criado_em", desde);
   if (e1) return { ok: false, erro: e1.message };
 
@@ -77,8 +106,11 @@ export async function buscarPainelGestorB2B(periodo = "30d") {
         { chave: "embalagem",   label: "Embalagem",   mediaMin: null, qtd: 0 },
         { chave: "faturamento", label: "Faturamento", mediaMin: null, qtd: 0, paralela: true },
       ],
-      picking: { separacaoMin: null, ateAnaliseMin: null, analiseLocalizadoMin: null, analiseNaoFaturarMin: null,
-                 qtdSeparacao: 0, qtdAnalise: 0, qtdLocalizado: 0, qtdNaoFaturar: 0 },
+      picking: {
+        separacaoMin: null, ateAnaliseMin: null, analiseLocalizadoMin: null, analiseNaoFaturarMin: null,
+        qtdSeparacao: 0, qtdAnalise: 0, qtdLocalizado: 0, qtdNaoFaturar: 0,
+        cadenciaSeg: null, faixasLote: [], pausas: { qtd: 0, totalMin: 0, maior: null },
+      },
       caixas: { tempoMedioMin: null, fechadas: 0, abertas: 0, mediaItens: null },
       nfs: { pctOk: null, comErro: 0, total: 0, naoFaturar: 0 },
       wip: await calcularWip(),
@@ -87,7 +119,7 @@ export async function buscarPainelGestorB2B(periodo = "30d") {
 
   // ── 2. Itens, NFs e caixas desses pedidos ──
   const itens = await fetchEmChunks("b2b_itens",
-    "pedido_id, bipado_em, embalado_em, nf, nao_faturar_em, nao_localizado_em, localizado_em", ids);
+    "pedido_id, bipado_em, bipado_por_nome, embalado_em, nf, nao_faturar_em, nao_localizado_em, localizado_em", ids);
   const nfs = await fetchEmChunks("b2b_nfs",
     "pedido_id, numero_nf, importado_em, data_faturamento, status, total_itens", ids);
   const caixas = await fetchEmChunks("b2b_caixas",
@@ -102,6 +134,9 @@ export async function buscarPainelGestorB2B(periodo = "30d") {
   const totais = [];
   let itensFaturados = 0;
 
+  // Bipes por pedido (pra cadência, lote e pausas)
+  const bipesPorPedido = {};
+
   itens.forEach(it => {
     const dpISO = marcoInicialISO(pedidoPorId[it.pedido_id]);
     const dtNF = it.nf ? nfDate[`${it.pedido_id}|${it.nf}`] : null;
@@ -109,6 +144,8 @@ export async function buscarPainelGestorB2B(periodo = "30d") {
     if (it.bipado_em) {
       const v = minutosUteis(dpISO, it.bipado_em);
       if (v != null) { T.picking.push(v); P.separacao.push(v); }
+      if (!bipesPorPedido[it.pedido_id]) bipesPorPedido[it.pedido_id] = [];
+      bipesPorPedido[it.pedido_id].push({ em: it.bipado_em, quem: it.bipado_por_nome });
     }
     if (it.bipado_em && it.embalado_em) {
       const v = minutosUteis(it.bipado_em, it.embalado_em);
@@ -124,13 +161,10 @@ export async function buscarPainelGestorB2B(periodo = "30d") {
       if (tot != null) totais.push(tot);
     }
 
-    // ── Detalhe do picking ──
-    // Tempo do pedido até cair em análise (não localizado)
+    // Detalhe do picking: análise
     if (it.nao_localizado_em) {
       const v = minutosUteis(dpISO, it.nao_localizado_em);
       if (v != null) P.ateAnalise.push(v);
-
-      // Da análise até a ação: localizado depois OU marcado não faturar
       if (it.localizado_em) {
         const l = minutosUteis(it.nao_localizado_em, it.localizado_em);
         if (l != null) P.analiseLocalizado.push(l);
@@ -142,13 +176,44 @@ export async function buscarPainelGestorB2B(periodo = "30d") {
     }
   });
 
-  const etapas = [
-    { chave: "picking",     label: "Picking",     mediaMin: media(T.picking),     qtd: T.picking.length },
-    { chave: "embalagem",   label: "Embalagem",   mediaMin: media(T.embalagem),   qtd: T.embalagem.length },
-    { chave: "faturamento", label: "Faturamento", mediaMin: media(T.faturamento), qtd: T.faturamento.length, paralela: true },
-  ];
-  const comTempo = etapas.filter(e => e.mediaMin != null);
-  const gargalo = comTempo.length ? comTempo.reduce((a, b) => (b.mediaMin > a.mediaMin ? b : a)) : null;
+  // ── Cadência, lote por faixa e pausas ──
+  const intervalosCadencia = [];   // segundos, só abaixo do limite
+  const pausas = [];               // { seg, quem, lote }
+  const lotePorFaixa = {};         // chave -> { tempos: [min] }
+  FAIXAS_LOTE.forEach(f => { lotePorFaixa[f.chave] = []; });
+
+  Object.entries(bipesPorPedido).forEach(([pedidoId, bipes]) => {
+    if (bipes.length < 1) return;
+    bipes.sort((a, b) => new Date(a.em) - new Date(b.em));
+
+    // Intervalos entre bipes consecutivos (só no mesmo dia local)
+    for (let i = 1; i < bipes.length; i++) {
+      if (!mesmaDataLocal(bipes[i - 1].em, bipes[i].em)) continue;
+      const seg = (new Date(bipes[i].em) - new Date(bipes[i - 1].em)) / 1000;
+      if (seg < 0) continue;
+      if (seg <= PAUSA_LIMITE_SEG) {
+        intervalosCadencia.push(seg);
+      } else {
+        pausas.push({
+          seg,
+          quem: bipes[i].quem || "—",
+          lote: pedidoPorId[pedidoId]?.lote || "—",
+        });
+      }
+    }
+
+    // Lote inteiro (1º → último bipe), por faixa de tamanho
+    const qtd = bipes.length;
+    const dur = minutosUteis(bipes[0].em, bipes[bipes.length - 1].em);
+    if (dur != null && qtd >= 1) {
+      const faixa = FAIXAS_LOTE.find(f => qtd >= f.min && qtd <= f.max);
+      if (faixa) lotePorFaixa[faixa.chave].push(dur);
+    }
+  });
+
+  const maiorPausa = pausas.length
+    ? pausas.reduce((a, b) => (b.seg > a.seg ? b : a))
+    : null;
 
   const picking = {
     separacaoMin:         media(P.separacao),
@@ -159,7 +224,26 @@ export async function buscarPainelGestorB2B(periodo = "30d") {
     qtdAnalise:    P.ateAnalise.length,
     qtdLocalizado: P.analiseLocalizado.length,
     qtdNaoFaturar: P.analiseNaoFaturar.length,
+    cadenciaSeg:   media(intervalosCadencia),
+    faixasLote: FAIXAS_LOTE.map(f => ({
+      chave: f.chave, label: f.label,
+      mediaMin: media(lotePorFaixa[f.chave]),
+      qtdLotes: lotePorFaixa[f.chave].length,
+    })),
+    pausas: {
+      qtd:      pausas.length,
+      totalMin: Math.round(pausas.reduce((s, p) => s + p.seg, 0) / 60),
+      maior:    maiorPausa ? { min: Math.round(maiorPausa.seg / 60), quem: maiorPausa.quem, lote: maiorPausa.lote } : null,
+    },
   };
+
+  const etapas = [
+    { chave: "picking",     label: "Picking",     mediaMin: media(T.picking),     qtd: T.picking.length },
+    { chave: "embalagem",   label: "Embalagem",   mediaMin: media(T.embalagem),   qtd: T.embalagem.length },
+    { chave: "faturamento", label: "Faturamento", mediaMin: media(T.faturamento), qtd: T.faturamento.length, paralela: true },
+  ];
+  const comTempo = etapas.filter(e => e.mediaMin != null);
+  const gargalo = comTempo.length ? comTempo.reduce((a, b) => (b.mediaMin > a.mediaMin ? b : a)) : null;
 
   // ── caixas ──
   const tempoCaixas = [];
@@ -187,7 +271,7 @@ export async function buscarPainelGestorB2B(periodo = "30d") {
     kpis: {
       tempoMedioTotalMin: media(totais),
       itensFaturados,
-      emProcessoAgora: null, // preenchido no wip
+      emProcessoAgora: null,
       gargalo: gargalo ? { label: gargalo.label, mediaMin: gargalo.mediaMin } : null,
     },
     etapas,
@@ -209,7 +293,6 @@ async function calcularWip() {
     nao_faturar: 0, faturados_hoje: 0, em_processo: 0,
   };
 
-  // itens em aberto (sem NF e sem marca de não faturar)
   const abertos = [];
   let from = 0;
   const passo = 1000;
@@ -234,13 +317,11 @@ async function calcularWip() {
   });
   wip.em_processo = abertos.length;
 
-  // não faturar (total atual)
   const { count: naoFat } = await supabase
     .from("b2b_itens").select("id", { count: "exact", head: true })
     .not("nao_faturar_em", "is", null);
   wip.nao_faturar = naoFat || 0;
 
-  // faturados hoje (soma de itens das NFs ok lançadas hoje)
   const { data: nfsHoje } = await supabase
     .from("b2b_nfs").select("total_itens, status")
     .gte("importado_em", inicioHojeNaive());

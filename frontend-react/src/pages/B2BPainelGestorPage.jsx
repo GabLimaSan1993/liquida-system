@@ -2,8 +2,9 @@ import { useState, useEffect } from "react";
 import {
   Gauge, RefreshCw, Clock, AlertTriangle, TrendingUp,
   Package, FileText, ScanLine, PackageCheck, Search, MapPin, Ban,
+  Zap, GitCommitHorizontal, PauseCircle,
 } from "lucide-react";
-import { buscarPainelGestorB2B, fmtDuracao } from "../services/B2BPainelGestorService.js";
+import { buscarPainelGestorB2B, fmtDuracao, fmtCadencia } from "../services/B2BPainelGestorService.js";
 
 const PERIODOS = [
   { key: "7d",   label: "7 dias"  },
@@ -63,17 +64,13 @@ function MiniStat({ label, value, sub, cor = "slate" }) {
   );
 }
 
-function LinhaTempoPicking({ icon: Icon, cor, label, mediaMin, sub }) {
-  const map = {
-    purple: "text-[#534AB7]",
-    pink:   "text-[#993556]",
-  };
+function LinhaTempo({ icon: Icon, corIcon, label, valor, sub }) {
   return (
     <div className="bg-white ring-1 ring-slate-200 rounded-xl p-3">
       <div className="flex items-center gap-2">
-        <Icon className={`h-4 w-4 ${map[cor] || "text-slate-500"}`} />
+        <Icon className={`h-4 w-4 ${corIcon}`} />
         <span className="text-xs text-slate-500">{label}</span>
-        <span className="ml-auto text-lg font-black text-slate-800">{fmtDuracao(mediaMin)}</span>
+        <span className="ml-auto text-lg font-black text-slate-800">{valor}</span>
       </div>
       {sub && <div className="text-[11px] text-slate-400 mt-0.5">{sub}</div>}
     </div>
@@ -111,16 +108,19 @@ export default function B2BPainelGestorPage() {
     finally { setLoading(false); }
   }
 
-  const kpis   = dados?.kpis;
-  const etapas = dados?.etapas || [];
+  const kpis    = dados?.kpis;
+  const etapas  = dados?.etapas || [];
   const picking = dados?.picking || {};
-  const caixas = dados?.caixas || {};
-  const nfs    = dados?.nfs || {};
-  const wip    = dados?.wip || {};
+  const caixas  = dados?.caixas || {};
+  const nfs     = dados?.nfs || {};
+  const wip     = dados?.wip || {};
 
   const maxEtapa = Math.max(1, ...etapas.map(e => e.mediaMin || 0));
   const gargaloLabel = kpis?.gargalo?.label;
   const emProcesso = wip.em_processo ?? kpis?.emProcessoAgora ?? 0;
+
+  const faixas = picking.faixasLote || [];
+  const pausas = picking.pausas || { qtd: 0, totalMin: 0, maior: null };
 
   return (
     <div className="space-y-5">
@@ -179,42 +179,81 @@ export default function B2BPainelGestorPage() {
             </div>
           </Card>
 
-          {/* Dentro de cada etapa: picking + caixas + NFs */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {/* Dentro do picking */}
-            <Card>
-              <h3 className="font-black text-slate-800 text-sm mb-4 flex items-center gap-2">
-                <ScanLine className="h-4 w-4 text-[#7F2D92]" /> Dentro do picking · tempos
-              </h3>
-              <div className="space-y-2.5">
-                <LinhaTempoPicking icon={PackageCheck} cor="purple"
-                  label="Separação" mediaMin={picking.separacaoMin}
-                  sub={`data do pedido → bipado · ${picking.qtdSeparacao || 0} itens`} />
-                <LinhaTempoPicking icon={Search} cor="pink"
-                  label="Até ir para análise" mediaMin={picking.ateAnaliseMin}
-                  sub={`pedido → não localizado · ${picking.qtdAnalise || 0} itens`} />
-                <div className="grid grid-cols-2 gap-2.5">
-                  <div className="bg-emerald-50 rounded-xl p-3">
-                    <div className="flex items-center gap-1.5">
-                      <MapPin className="h-3.5 w-3.5 text-[#0F6E56]" />
-                      <span className="text-[11px] text-[#0F6E56]">Análise → localizado</span>
-                    </div>
-                    <div className="text-base font-black text-[#04342C] mt-1">{fmtDuracao(picking.analiseLocalizadoMin)}</div>
-                    <div className="text-[10px] text-[#0F6E56] mt-0.5">{picking.qtdLocalizado || 0} itens</div>
-                  </div>
-                  <div className="bg-amber-50 rounded-xl p-3">
-                    <div className="flex items-center gap-1.5">
-                      <Ban className="h-3.5 w-3.5 text-[#854F0B]" />
-                      <span className="text-[11px] text-[#854F0B]">Análise → não faturar</span>
-                    </div>
-                    <div className="text-base font-black text-[#633806] mt-1">{fmtDuracao(picking.analiseNaoFaturarMin)}</div>
-                    <div className="text-[10px] text-[#854F0B] mt-0.5">{picking.qtdNaoFaturar || 0} itens</div>
-                  </div>
-                </div>
-              </div>
-            </Card>
+          {/* Dentro do picking — linha inteira */}
+          <Card>
+            <h3 className="font-black text-slate-800 text-sm mb-4 flex items-center gap-2">
+              <ScanLine className="h-4 w-4 text-[#7F2D92]" /> Dentro do picking · tempos e ritmo
+            </h3>
 
-            {/* Dentro da embalagem */}
+            {/* Separação + cadência */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mb-2.5">
+              <LinhaTempo icon={PackageCheck} corIcon="text-[#534AB7]"
+                label="Separação" valor={fmtDuracao(picking.separacaoMin)}
+                sub={`data do pedido → bipado · ${picking.qtdSeparacao || 0} itens`} />
+              <LinhaTempo icon={Zap} corIcon="text-[#534AB7]"
+                label="Cadência" valor={fmtCadencia(picking.cadenciaSeg)}
+                sub="intervalo médio entre bipes · sem pausas" />
+              <LinhaTempo icon={Search} corIcon="text-[#993556]"
+                label="Até ir para análise" valor={fmtDuracao(picking.ateAnaliseMin)}
+                sub={`pedido → não localizado · ${picking.qtdAnalise || 0} itens`} />
+            </div>
+
+            {/* Lote inteiro por faixa */}
+            <div className="bg-slate-50 rounded-xl p-3 mb-2.5">
+              <div className="flex items-center gap-2 mb-2">
+                <GitCommitHorizontal className="h-4 w-4 text-[#534AB7]" />
+                <span className="text-xs font-semibold text-slate-600">Lote inteiro (1º → último bipe) · por tamanho</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                {faixas.map(f => (
+                  <div key={f.chave} className="bg-white ring-1 ring-slate-200 rounded-lg p-2.5 text-center">
+                    <div className="text-[11px] text-slate-400 font-semibold">{f.label}</div>
+                    <div className="text-sm font-black text-slate-800 mt-0.5">{fmtDuracao(f.mediaMin)}</div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">{f.qtdLotes} {f.qtdLotes === 1 ? "lote" : "lotes"}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Pausas apontadas */}
+            <div className={`rounded-xl p-3 mb-2.5 ${pausas.qtd > 0 ? "bg-amber-50" : "bg-slate-50"}`}>
+              <div className="flex items-center gap-2">
+                <PauseCircle className={`h-4 w-4 ${pausas.qtd > 0 ? "text-[#854F0B]" : "text-slate-400"}`} />
+                <span className={`text-xs font-semibold ${pausas.qtd > 0 ? "text-[#854F0B]" : "text-slate-500"}`}>Pausas sem justificativa</span>
+                <span className={`ml-auto text-lg font-black ${pausas.qtd > 0 ? "text-[#633806]" : "text-slate-700"}`}>
+                  {pausas.qtd} · {fmtDuracao(pausas.totalMin)}
+                </span>
+              </div>
+              <div className={`text-[11px] mt-1 ${pausas.qtd > 0 ? "text-[#854F0B]" : "text-slate-400"}`}>
+                {pausas.qtd > 0
+                  ? <>intervalos acima de 5 min entre bipes{pausas.maior ? ` — maior: ${fmtDuracao(pausas.maior.min)} (${pausas.maior.quem}, lote ${pausas.maior.lote})` : ""}</>
+                  : "nenhuma pausa acima de 5 min no período"}
+              </div>
+            </div>
+
+            {/* Desfechos da análise */}
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="bg-emerald-50 rounded-xl p-3">
+                <div className="flex items-center gap-1.5">
+                  <MapPin className="h-3.5 w-3.5 text-[#0F6E56]" />
+                  <span className="text-[11px] text-[#0F6E56]">Análise → localizado</span>
+                </div>
+                <div className="text-base font-black text-[#04342C] mt-1">{fmtDuracao(picking.analiseLocalizadoMin)}</div>
+                <div className="text-[10px] text-[#0F6E56] mt-0.5">encontrado depois · {picking.qtdLocalizado || 0} itens</div>
+              </div>
+              <div className="bg-amber-50 rounded-xl p-3">
+                <div className="flex items-center gap-1.5">
+                  <Ban className="h-3.5 w-3.5 text-[#854F0B]" />
+                  <span className="text-[11px] text-[#854F0B]">Análise → não faturar</span>
+                </div>
+                <div className="text-base font-black text-[#633806] mt-1">{fmtDuracao(picking.analiseNaoFaturarMin)}</div>
+                <div className="text-[10px] text-[#854F0B] mt-0.5">baixado · {picking.qtdNaoFaturar || 0} itens</div>
+              </div>
+            </div>
+          </Card>
+
+          {/* Embalagem + NFs */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <Card>
               <h3 className="font-black text-slate-800 text-sm mb-4 flex items-center gap-2">
                 <Package className="h-4 w-4 text-[#7F2D92]" /> Dentro da embalagem · caixas
@@ -229,7 +268,6 @@ export default function B2BPainelGestorPage() {
               </div>
             </Card>
 
-            {/* Dentro do faturamento */}
             <Card>
               <h3 className="font-black text-slate-800 text-sm mb-4 flex items-center gap-2">
                 <FileText className="h-4 w-4 text-[#7F2D92]" /> Dentro do faturamento · NFs
