@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { FileSpreadsheet, Upload, Landmark, Package, GitBranch, ScanLine, ShoppingCart } from "lucide-react";
+import { FileSpreadsheet, Upload, Landmark, Package, GitBranch, ScanLine, ShoppingCart, CalendarClock } from "lucide-react";
 import {
   previewFile,
   uploadAgingFile,
@@ -17,6 +17,7 @@ import {
 import { importarPedidoB2B } from "../services/b2bService.js";
 import { importarNFs }        from "../services/b2bNfService.js";
 import { uploadAnymarketZip } from "../services/anymarketService.js";
+import { importarSubinv }     from "../services/subinvService.js";
 import { supabase }           from "../lib/supabase.js";
 import { useAuth }            from "../AuthContext.jsx";
 
@@ -186,6 +187,11 @@ export default function UploadPage() {
   const [loadingAnyUpload, setLoadingAnyUpload]                     = useState(false);
   const [anyHoraCorte, setAnyHoraCorte]                             = useState("");
 
+  // ── Aging Subinventário (Assurant) ────────────────────
+  const [subinvFile, setSubinvFile]                                 = useState(null);
+  const [subinvPreview, setSubinvPreview]                           = useState(null);
+  const [loadingSubinvUpload, setLoadingSubinvUpload]               = useState(false);
+
   const [status, setStatus]     = useState("");
   const [progress, setProgress] = useState(0);
 
@@ -200,6 +206,7 @@ export default function UploadPage() {
     { type: "Pedido B2B",            name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
     { type: "NF B2B",                name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
     { type: "AnyMarket",             name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+    { type: "Aging Subinventário",   name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
   ]);
 
   useEffect(() => {
@@ -468,6 +475,43 @@ export default function UploadPage() {
       updateHistoryCard("NF B2B", { status: "Erro" });
     } finally {
       setLoadingNfUpload(false);
+    }
+  }
+
+  // ── Handler Aging Subinventário ───────────────────────
+  async function handleUploadSubinv() {
+    try {
+      if (!subinvFile) { setStatus("Selecione a planilha de aging (.xlsx)."); return; }
+      setLoadingSubinvUpload(true);
+      setProgress(0);
+      setSubinvPreview(null);
+      setStatus("Importando aging do subinventário...");
+      updateHistoryCard("Aging Subinventário", { name: subinvFile.name, status: "Enviando", progress: 5 });
+
+      const result = await importarSubinv(
+        subinvFile,
+        user.id,
+        profile?.nome,
+        ({ fase, pct }) => {
+          setProgress(pct);
+          updateHistoryCard("Aging Subinventário", { name: subinvFile.name, status: `Gravando ${fase}...`, progress: pct });
+          setStatus(`Aging: gravando ${fase}... ${pct}%`);
+        }
+      );
+
+      updateHistoryCard("Aging Subinventário", {
+        name: subinvFile.name, status: "Concluído",
+        rows: result.inseridas.toLocaleString("pt-BR"), progress: 100,
+      });
+      setProgress(100);
+      setSubinvPreview(result);
+      setStatus(`Aging importado! ${result.inseridas.toLocaleString("pt-BR")} IMEIs · extração de ${result.dataExtracao}.`);
+      setSubinvFile(null);
+    } catch (error) {
+      setStatus(`Erro ao importar aging: ${error.message}`);
+      updateHistoryCard("Aging Subinventário", { status: "Erro" });
+    } finally {
+      setLoadingSubinvUpload(false);
     }
   }
 
@@ -841,6 +885,55 @@ export default function UploadPage() {
                 <div className="text-sm font-bold text-emerald-700">{anyPreview.mensagem}</div>
                 <p>Pedidos B2C novos: <span className="font-bold text-emerald-700">{anyPreview.inseridos?.toLocaleString("pt-BR")}</span></p>
                 <p>Pedidos atualizados: <span className="font-bold text-blue-700">{anyPreview.atualizados?.toLocaleString("pt-BR")}</span></p>
+              </div>
+            )}
+          </div>
+
+          {/* ── Aging Subinventário ─────────────────────── */}
+          <div className="rounded-[24px] bg-[#FCFAFF] p-5 ring-1 ring-[#E9D5FF]">
+            <div className="flex items-center gap-3">
+              <div className="rounded-2xl bg-[#7F2D92] p-2.5 text-white">
+                <CalendarClock className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="text-sm font-black text-[#6B1F87]">Aging Subinventário</div>
+                <div className="text-xs text-slate-500">Base de aging do Oracle — usada no FIFO</div>
+              </div>
+            </div>
+
+            <div className="mt-4 text-xs text-slate-500 bg-emerald-50 ring-1 ring-emerald-200 rounded-xl px-3 py-2">
+              📋 Planilha .xlsx com as colunas NUM_IMEI e DATA_SUBINV · A data da extração vem do nome do arquivo (ex: 20260706.xlsx)
+            </div>
+
+            <div className="mt-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-[#E9D5FF]">
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={e => { setSubinvFile(e.target.files?.[0] || null); setSubinvPreview(null); }}
+                className="block w-full text-sm text-slate-600"
+              />
+              <div className="mt-3 text-sm font-medium">
+                {subinvFile ? subinvFile.name : "Nenhum arquivo selecionado"}
+              </div>
+              <div className="mt-1 text-xs text-slate-500">
+                {subinvFile ? "Arquivo pronto para envio" : "Selecione a planilha de aging"}
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <Button onClick={handleUploadSubinv} disabled={!subinvFile || loadingSubinvUpload}>
+                {loadingSubinvUpload ? "Importando..." : "Enviar arquivo"}
+              </Button>
+            </div>
+
+            {subinvPreview && (
+              <div className="mt-4 rounded-2xl bg-white p-4 ring-1 ring-[#E9D5FF] space-y-1 text-xs text-slate-600">
+                <div className="text-sm font-bold text-emerald-700">
+                  ✓ {subinvPreview.inseridas?.toLocaleString("pt-BR")} IMEIs importados
+                </div>
+                <p>Data da extração: <span className="font-bold text-[#6B1F87]">{subinvPreview.dataExtracao}</span> <span className="text-slate-400">({subinvPreview.origemData})</span></p>
+                {subinvPreview.duplicadas > 0 && <p>IMEIs repetidos (última linha venceu): <span className="font-bold text-amber-600">{subinvPreview.duplicadas}</span></p>}
+                {subinvPreview.invalidas > 0 && <p>Linhas ignoradas: <span className="font-bold text-amber-600">{subinvPreview.invalidas}</span></p>}
               </div>
             )}
           </div>
