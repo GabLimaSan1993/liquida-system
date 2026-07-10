@@ -150,16 +150,31 @@ export async function listarPedidosConcluidos() {
 // ALOCAÇÃO FIFO
 // ══════════════════════════════════════════════════════════
 
+// Alguns anúncios usam o SKU da Assurant (BZ661-xxxxx) em vez do SKU ALS (BRZDEVxxxxx),
+// que é o que a triagem guarda. A tabela sku_de_para traduz um no outro.
+async function traduzirSku(skuBase) {
+  if (!skuBase || skuBase.startsWith("BRZDEV")) return skuBase;
+  const { data } = await supabase
+    .from("sku_de_para")
+    .select("sku_als")
+    .eq("sku_assurant", skuBase)
+    .maybeSingle();
+  return data?.sku_als || skuBase;
+}
+
 export async function buscarSugestaoFifo(skuProduto, gradePedido) {
   // O SKU do anúncio vem como MODELO-CCx, onde -CCx codifica a grade vendida.
   // A triagem guarda só o MODELO base. Então: corta o -CCx para achar o modelo
   // no estoque, e usa o -CCx para definir a grade (mais confiável que o título).
   const skuRaw  = String(skuProduto || "").trim();
   const ccMatch = skuRaw.match(/-(CC\d+)$/i);
-  const skuBase = skuRaw.replace(/-CC\d+$/i, "").trim();
+  const skuSemCC = skuRaw.replace(/-CC\d+$/i, "").trim();
   const ccCode  = ccMatch ? ccMatch[1].toLowerCase() : null;
   // Grade vem do código -CCx; sem código conhecido (ex.: sem sufixo), usa a grade do título.
   const gradeAlvo = (ccCode && CC_GRADE[ccCode]) ? CC_GRADE[ccCode] : gradePedido;
+
+  // Traduz o SKU da Assurant para o SKU ALS, quando for o caso.
+  const skuBase = await traduzirSku(skuSemCC);
 
   const { data: encontrados, error } = await supabase
     .from("assurant_triagem")
