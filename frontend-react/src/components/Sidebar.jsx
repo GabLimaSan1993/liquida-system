@@ -7,7 +7,7 @@ import {
   Truck, TrendingUp, Users, LogOut, X, ShoppingCart,
   Landmark, BarChart2, Lock, TrendingDown, Database,
   Package, Clock, LayoutDashboard, ScanLine, RefreshCw,
-  PlusCircle, Box, Store, ClipboardList as Inventory,
+  PlusCircle, Box, Store,
 } from "lucide-react";
 import { useAuth } from "../AuthContext.jsx";
 import { signOut } from "../services/authService.js";
@@ -154,7 +154,13 @@ function MenuAssurant({ onClose, telas }) {
       {tem("/upload") && (
         <NavItem to="/upload" icon={Upload} label="Uploads" onClick={onClose} />
       )}
-      <CollapseGroup icon={Package} label="Assurant Warehouse" paths={["/assurant", "/b2b", "/b2c", "/trocas-b2c", "/inventario"]}>
+      <CollapseGroup icon={Package} label="Assurant Warehouse" paths={["/assurant", "/recebimento", "/b2b", "/b2c", "/trocas-b2c"]}>
+        {tem("/recebimento") && (
+          <NavItem to="/recebimento"        icon={Truck}           label="Recebimento YBV"       indent onClick={onClose} />
+        )}
+        {tem("/recebimento/gestao") && (
+          <NavItem to="/recebimento/gestao" icon={ClipboardList}   label="Gestão Recebimento"    indent onClick={onClose} />
+        )}
         {tem("/assurant/dashboard") && (
           <NavItem to="/assurant/dashboard" icon={BarChart3}       label="Dashboard"             indent onClick={onClose} />
         )}
@@ -173,14 +179,17 @@ function MenuAssurant({ onClose, telas }) {
         {tem("/b2b/faturamento") && (
           <NavItem to="/b2b/faturamento"    icon={BarChart3}       label="Faturamento B2B"       indent onClick={onClose} />
         )}
+        {tem("/b2b/painel") && (
+          <NavItem to="/b2b/painel"         icon={LayoutDashboard} label="Painel Gestor B2B"     indent onClick={onClose} />
+        )}
         {tem("/b2c/pedidos") && (
           <NavItem to="/b2c/pedidos"        icon={Store}           label="Pedidos B2C"           indent onClick={onClose} />
         )}
         {tem("/b2c/embalagem") && (
           <NavItem to="/b2c/embalagem"      icon={Box}             label="Embalagem B2C"         indent onClick={onClose} />
         )}
-        {tem("/inventario") && (
-          <NavItem to="/inventario"         icon={Inventory}       label="Inventário Cíclico"    indent onClick={onClose} />
+        {tem("/b2c/painel") && (
+          <NavItem to="/b2c/painel"         icon={LayoutDashboard} label="Painel Gestor B2C"     indent onClick={onClose} />
         )}
         {tem("/trocas-b2c/gestao") && (
           <NavItem to="/trocas-b2c/gestao"  icon={RefreshCw}       label="Trocas B2C"            indent onClick={onClose} />
@@ -263,16 +272,19 @@ function SidebarContent({ profile, onClose, handleLogout }) {
               <NavItem to="/abertura-os" icon={ClipboardList} label="Abertura de OS" indent onClick={onClose} />
             </CollapseGroup>
 
-            <CollapseGroup icon={Package} label="Assurant Warehouse" paths={["/assurant", "/b2b", "/b2c", "/trocas-b2c", "/inventario"]}>
+            <CollapseGroup icon={Package} label="Assurant Warehouse" paths={["/assurant", "/recebimento", "/b2b", "/b2c", "/trocas-b2c"]}>
+              <NavItem to="/recebimento"        icon={Truck}           label="Recebimento YBV"       indent onClick={onClose} />
+              <NavItem to="/recebimento/gestao" icon={ClipboardList}   label="Gestão Recebimento"    indent onClick={onClose} />
               <NavItem to="/assurant/dashboard" icon={BarChart3}       label="Dashboard"             indent onClick={onClose} />
               <NavItem to="/assurant/sla"       icon={Clock}           label="SLA & Rastreabilidade" indent onClick={onClose} />
               <NavItem to="/assurant/layout"    icon={LayoutDashboard} label="Layout Warehouse"      indent onClick={onClose} />
               <NavItem to="/b2b/picking"        icon={ScanLine}        label="Picking B2B"           indent onClick={onClose} />
               <NavItem to="/b2b/embalagem"      icon={Box}             label="Embalagem B2B"         indent onClick={onClose} />
               <NavItem to="/b2b/faturamento"    icon={BarChart3}       label="Faturamento B2B"       indent onClick={onClose} />
+              <NavItem to="/b2b/painel"         icon={LayoutDashboard} label="Painel Gestor B2B"     indent onClick={onClose} />
               <NavItem to="/b2c/pedidos"        icon={Store}           label="Pedidos B2C"           indent onClick={onClose} />
               <NavItem to="/b2c/embalagem"      icon={Box}             label="Embalagem B2C"         indent onClick={onClose} />
-              <NavItem to="/inventario"         icon={Inventory}       label="Inventário Cíclico"    indent onClick={onClose} />
+              <NavItem to="/b2c/painel"         icon={LayoutDashboard} label="Painel Gestor B2C"     indent onClick={onClose} />
               <NavItem to="/trocas-b2c/nova"    icon={PlusCircle}      label="Trocas — Assurant"     indent onClick={onClose} />
               <NavItem to="/trocas-b2c/gestao"  icon={RefreshCw}       label="Trocas — Furbtech"     indent onClick={onClose} />
               <NavItemDisabled icon={DollarSign} label="DRE Gerencial" indent />

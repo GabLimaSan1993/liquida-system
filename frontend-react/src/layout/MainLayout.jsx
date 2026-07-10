@@ -25,10 +25,13 @@ const PAGE_META = {
   "/assurant/dashboard":           { title: "Assurant Warehouse",        subtitle: "Dashboard · SLA, volumes e resultado financeiro" },
   "/assurant/sla":                 { title: "SLA & Rastreabilidade",     subtitle: "Assurant Warehouse · Funil, tempos, produtividade e busca por voucher" },
   "/assurant/layout":              { title: "Layout do Warehouse",       subtitle: "Assurant · Mapa das estações e tempos de SLA" },
+  "/recebimento":                  { title: "Recebimento YBV",           subtitle: "Assurant Warehouse · Registro da carga, bipagem de vouchers e romaneio" },
+  "/recebimento/gestao":           { title: "Gestão de Recebimento",     subtitle: "Assurant Warehouse · Histórico, tempos, produtividade e cargas em andamento" },
   "/b2b/picking":                  { title: "Picking B2B",               subtitle: "Assurant Warehouse · Separação e faturamento de pedidos B2B" },
+  "/b2b/painel":                   { title: "Painel Gestor B2B",         subtitle: "Assurant Warehouse · Tempos por etapa, caixas e NFs do processo B2B" },
   "/b2c/pedidos":                  { title: "Pedidos B2C",               subtitle: "Assurant Warehouse · Alocação, picking, embalagem e faturamento de pedidos marketplace" },
   "/b2c/embalagem":                { title: "Embalagem B2C",             subtitle: "Assurant Warehouse · Bipagem por mesa — limpeza, embalagem, NF e saída" },
-  "/inventario":                   { title: "Inventário Cíclico",        subtitle: "Assurant Warehouse · Contagem por endereço, divergências e acuracidade" },
+  "/b2c/painel":                   { title: "Painel Gestor B2C",         subtitle: "Assurant Warehouse · Tempos por etapa, mesas e fila do processo B2C" },
 };
 
 export default function MainLayout() {
