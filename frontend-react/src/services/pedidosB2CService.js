@@ -18,6 +18,17 @@ const CC_GRADE = {
   cc4: "Outlet",
 };
 
+// Faixas de saúde de bateria (valores da coluna status_bateria, já normalizados p/ minúsculo).
+// Outlet é definido pela bateria entre 70 e 79%.
+const BATERIA_OUTLET = "saúde da bateria entre 70 e 79%";
+// Faixas que NÃO servem para um pedido não-Outlet (Outlet ou pior).
+// Tudo que não estiver aqui (80%+, 80–85%, 85%+ e sem info/null) é aceito.
+const BATERIA_RUINS_NAO_OUTLET = [
+  "saúde da bateria entre 70 e 79%",
+  "saúde da bateria abaixo 70%",
+  "saúde da bateria abaixo de 80%",
+];
+
 // Status da triagem em que a peça está fisicamente no armazém e pode ser alocada.
 // "Finalizado" (já vendida/expedida) e os "Reservado para..." ficam de fora de propósito.
 const STATUS_ALOCAVEIS = [
@@ -201,16 +212,19 @@ export async function buscarSugestaoFifo(skuProduto, gradePedido) {
   const disponiveis = Array.from(porImei.values());
 
   // Filtro de elegibilidade:
-  // - Outlet (CC4): SÓ bateria entre 70 e 79% E grade Bom ou superior (Bom, Muito Bom, Excelente, Like New).
-  //   "Bom" tem ordem 4 na hierarquia; "Bom ou superior" = ordem <= 4. Regular e Quebrado ficam de fora.
-  // - Demais: grade exata ou superior (nunca inferior à vendida), sem regra de bateria.
+  // - Outlet (CC4): grade Bom ou superior E bateria entre 70 e 79%.
+  //   "Bom" tem ordem 4; "Bom ou superior" = ordem <= 4. Regular e Quebrado ficam de fora.
+  // - Não-Outlet: grade igual ou superior à vendida E bateria que NÃO seja Outlet nem pior
+  //   (exclui 70–79%, abaixo 70% e abaixo de 80%). Aceita 80%+, 80–85%, 85%+ e sem info (null).
+  //   Isso impede que um aparelho Outlet (70–79%) seja sugerido para um pedido que não é Outlet.
   const ORDEM_BOM = gradeOrdem("Bom");
   const imeisValidos = disponiveis.filter(item => {
+    const bateria = normalizeGrade(item.status_bateria);
     if (ehOutlet) {
-      const bateriaOk = normalizeGrade(item.status_bateria) === "saúde da bateria entre 70 e 79%";
-      return bateriaOk && gradeOrdem(item.grade) <= ORDEM_BOM;
+      return bateria === BATERIA_OUTLET && gradeOrdem(item.grade) <= ORDEM_BOM;
     }
-    return gradeAceita(item.grade, gradeAlvo);
+    const bateriaImprestavel = BATERIA_RUINS_NAO_OUTLET.includes(bateria);
+    return gradeAceita(item.grade, gradeAlvo) && !bateriaImprestavel;
   });
 
   if (!imeisValidos.length) return [];
