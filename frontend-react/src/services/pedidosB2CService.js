@@ -18,6 +18,15 @@ const CC_GRADE = {
   cc4: "Outlet",
 };
 
+// Status da triagem em que a peça está fisicamente no armazém e pode ser alocada.
+// "Finalizado" (já vendida/expedida) e os "Reservado para..." ficam de fora de propósito.
+const STATUS_ALOCAVEIS = [
+  "Produto disponível",
+  "Em processo de devolução Agd RI",
+  "Aguardando alocação",
+  "Aguardando oracle",
+];
+
 function normalizeGrade(grade) {
   if (!grade) return null;
   return grade.toLowerCase().trim();
@@ -152,14 +161,25 @@ export async function buscarSugestaoFifo(skuProduto, gradePedido) {
   // Grade vem do código -CCx; sem código conhecido (ex.: sem sufixo), usa a grade do título.
   const gradeAlvo = (ccCode && CC_GRADE[ccCode]) ? CC_GRADE[ccCode] : gradePedido;
 
-  const { data: disponiveis, error } = await supabase
+  const { data: encontrados, error } = await supabase
     .from("assurant_triagem")
-    .select("imei, sku, grade, local, voucher")
+    .select("imei, sku, grade, local, voucher, status_atual, criado_em")
     .eq("sku", skuBase)
-    .eq("status_atual", "Produto disponível");
+    .in("status_atual", STATUS_ALOCAVEIS);
 
   if (error) throw new Error(error.message);
-  if (!disponiveis?.length) return [];
+  if (!encontrados?.length) return [];
+
+  // Um IMEI pode ter mais de uma passagem pela triagem (ex.: venda + devolução).
+  // Fica a linha mais recente, que é o registro atual da peça — evita sugerir a mesma duas vezes.
+  const porImei = new Map();
+  for (const item of encontrados) {
+    const atual = porImei.get(item.imei);
+    if (!atual || new Date(item.criado_em) > new Date(atual.criado_em)) {
+      porImei.set(item.imei, item);
+    }
+  }
+  const disponiveis = Array.from(porImei.values());
 
   // Só grades aceitáveis: grade exata ou superior (nunca inferior à vendida)
   const imeisValidos = disponiveis.filter(item =>
