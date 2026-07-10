@@ -217,15 +217,7 @@ export async function buscarSugestaoFifo(skuProduto, gradePedido) {
   // - Não-Outlet: grade igual ou superior à vendida E bateria que NÃO seja Outlet nem pior
   //   (exclui 70–79%, abaixo 70% e abaixo de 80%). Aceita 80%+, 80–85%, 85%+ e sem info (null).
   //   Isso impede que um aparelho Outlet (70–79%) seja sugerido para um pedido que não é Outlet.
-  const ORDEM_BOM = gradeOrdem("Bom");
-  const imeisValidos = disponiveis.filter(item => {
-    const bateria = normalizeGrade(item.status_bateria);
-    if (ehOutlet) {
-      return bateria === BATERIA_OUTLET && gradeOrdem(item.grade) <= ORDEM_BOM;
-    }
-    const bateriaImprestavel = BATERIA_RUINS_NAO_OUTLET.includes(bateria);
-    return gradeAceita(item.grade, gradeAlvo) && !bateriaImprestavel;
-  });
+  const imeisValidos = disponiveis.filter(item => itemElegivel(item, ehOutlet, gradeAlvo));
 
   if (!imeisValidos.length) return [];
 
@@ -243,29 +235,171 @@ export async function buscarSugestaoFifo(skuProduto, gradePedido) {
   //   >0 = grade superior (quanto menor, mais próxima da vendida — menos "desperdício")
   const ordemPedido = gradeOrdem(gradeAlvo);
 
+  // O FIFO só SUGERE aparelhos com data_subinv (a âncora de antiguidade confiável).
+  // Aparelho sem subinv é pulado: o pedido segue com o próximo que tenha subinv, sem travar.
+  // (Os sem subinv não somem do controle — aparecem na aba Comparativo Aging à parte.)
   const ordenados = imeisValidos
     .map(item => ({
       ...item,
       data_subinv:     subinvMap[item.imei] || null,
       distancia_grade: ordemPedido - gradeOrdem(item.grade),
     }))
+    .filter(item => item.data_subinv)
     .sort((a, b) => {
       // Outlet mistura grades de propósito (Bom pra cima), então não prioriza grade:
       // é FIFO puro entre os elegíveis. Nos demais casos, grade mais próxima primeiro.
       if (!ehOutlet && a.distancia_grade !== b.distancia_grade) {
         return a.distancia_grade - b.distancia_grade;
       }
-      // FIFO: subinventário mais antigo primeiro (nulos vão para o fim)
-      if (!a.data_subinv && !b.data_subinv) return 0;
-      if (!a.data_subinv) return 1;
-      if (!b.data_subinv) return -1;
+      // FIFO: subinventário mais antigo primeiro (todos têm subinv aqui)
       return new Date(a.data_subinv) - new Date(b.data_subinv);
     });
 
   return ordenados;
 }
 
-// ── Verifica e cria grupos automaticamente ────────────────
+// Aplica a MESMA regra de elegibilidade do FIFO (grade + bateria) a um item de estoque,
+// dado se o pedido é Outlet e a grade alvo. Reaproveitada pela sugestão e pelo comparativo.
+function itemElegivel(item, ehOutlet, gradeAlvo) {
+  const bateria = normalizeGrade(item.status_bateria);
+  if (ehOutlet) {
+    return bateria === BATERIA_OUTLET && gradeOrdem(item.grade) <= gradeOrdem("Bom");
+  }
+  const bateriaImprestavel = BATERIA_RUINS_NAO_OUTLET.includes(bateria);
+  return gradeAceita(item.grade, gradeAlvo) && !bateriaImprestavel;
+}
+
+// ══════════════════════════════════════════════════════════
+// COMPARATIVO DE AGING (aparelhos sem subinv que o FIFO não sugere)
+// ══════════════════════════════════════════════════════════
+//
+// Para cada pedido, compara o aparelho que o FIFO SELECIONA (mais antigo COM subinv)
+// contra a ALTERNATIVA mais velha que existe SEM subinv (usando a coluna `aging` da triagem
+// como referência de idade). Só entram pedidos que têm ao menos uma alternativa sem subinv.
+//
+// IMPORTANTE: idade do selecionado = dias desde data_subinv; idade da alternativa = coluna aging.
+// São fontes diferentes (subinv conta desde o Oracle; aging desde o recebimento), então a
+// comparação é APROXIMADA. Só destacamos como "mais velha" quando a diferença passa da margem.
+const MARGEM_AGING_DIAS = 30;
+
+export async function buscarComparativoAging() {
+  // 1. Todos os pedidos (o comparativo cobre a base inteira, não só aguardando alocação)
+  const { data: pedidos, error: errPed } = await supabase
+    .from("pedidos_b2c")
+    .select("id, id_anymarket, sku_produto, grade_produto, titulo_produto, status, imei_alocado");
+  if (errPed) throw new Error(errPed.message);
+  if (!pedidos?.length) return [];
+
+  // 2. Estoque alocável inteiro, com aging, em um só fetch (evita N consultas por SKU)
+  const { data: triagem, error: errTri } = await supabase
+    .from("assurant_triagem")
+    .select("imei, sku, grade, local, status_atual, status_bateria, aging, criado_em")
+    .in("status_atual", STATUS_ALOCAVEIS);
+  if (errTri) throw new Error(errTri.message);
+
+  // Dedupe por IMEI: fica a passagem mais recente (mesma regra do FIFO)
+  const porImei = new Map();
+  for (const item of (triagem || [])) {
+    const atual = porImei.get(item.imei);
+    if (!atual || new Date(item.criado_em) > new Date(atual.criado_em)) {
+      porImei.set(item.imei, item);
+    }
+  }
+  const estoque = Array.from(porImei.values());
+
+  // Indexa o estoque por SKU para busca rápida por pedido
+  const estoquePorSku = {};
+  for (const item of estoque) {
+    (estoquePorSku[item.sku] ||= []).push(item);
+  }
+
+  // 3. Subinv de todos os IMEIs do estoque, em um fetch
+  const todosImeis = estoque.map(i => i.imei);
+  const subinvMap = {};
+  // O .in() tem limite prático de itens; fatia em blocos de 1000
+  for (let i = 0; i < todosImeis.length; i += 1000) {
+    const bloco = todosImeis.slice(i, i + 1000);
+    const { data: sub } = await supabase
+      .from("estoque_subinv").select("imei, data_subinv").in("imei", bloco);
+    (sub || []).forEach(s => { subinvMap[s.imei] = s.data_subinv; });
+  }
+
+  const hoje = new Date();
+  const diasDesde = (dataStr) => {
+    if (!dataStr) return null;
+    const d = new Date(dataStr);
+    return Math.floor((hoje - d) / 86400000);
+  };
+  const agingNum = (a) => {
+    if (a == null) return null;
+    const n = parseInt(String(a).trim(), 10);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  const linhas = [];
+
+  for (const p of pedidos) {
+    // Resolve grade alvo e SKU base igual ao FIFO
+    const skuRaw = String(p.sku_produto || "").trim();
+    const ccMatch = skuRaw.match(/-(CC\d+)$/i);
+    const skuSemCC = skuRaw.replace(/-CC\d+$/i, "").trim();
+    const ccCode = ccMatch ? ccMatch[1].toLowerCase() : null;
+    const gradeAlvo = (ccCode && CC_GRADE[ccCode]) ? CC_GRADE[ccCode] : p.grade_produto;
+    const ehOutlet = normalizeGrade(gradeAlvo) === "outlet";
+    const skuBase = await traduzirSku(skuSemCC);
+
+    const candidatos = (estoquePorSku[skuBase] || [])
+      .filter(item => itemElegivel(item, ehOutlet, gradeAlvo));
+    if (!candidatos.length) continue;
+
+    // Selecionado = mais antigo COM subinv (o que o FIFO sugeriria)
+    const comSubinv = candidatos
+      .map(c => ({ ...c, data_subinv: subinvMap[c.imei] || null }))
+      .filter(c => c.data_subinv)
+      .sort((a, b) => new Date(a.data_subinv) - new Date(b.data_subinv));
+
+    // Alternativas = elegíveis SEM subinv, ordenadas pela mais velha (maior aging)
+    const semSubinv = candidatos
+      .filter(c => !subinvMap[c.imei])
+      .map(c => ({ ...c, aging_dias: agingNum(c.aging) }))
+      .filter(c => c.aging_dias != null)
+      .sort((a, b) => b.aging_dias - a.aging_dias);
+
+    if (!semSubinv.length) continue; // só pedidos que têm alternativa sem subinv
+
+    const selecionado = comSubinv[0] || null;
+    const alternativa = semSubinv[0];
+    const idadeSelecionado = selecionado ? diasDesde(selecionado.data_subinv) : null;
+    const idadeAlternativa = alternativa.aging_dias;
+    const diff = (idadeSelecionado != null) ? (idadeAlternativa - idadeSelecionado) : null;
+
+    linhas.push({
+      pedido: p.id_anymarket,
+      status: p.status,
+      sku: p.sku_produto,
+      grade_alvo: gradeAlvo,
+      sel_imei: selecionado?.imei || null,
+      sel_grade: selecionado?.grade || null,
+      sel_subinv: selecionado?.data_subinv || null,
+      sel_idade: idadeSelecionado,
+      alt_imei: alternativa.imei,
+      alt_grade: alternativa.grade,
+      alt_local: alternativa.local,
+      alt_aging: idadeAlternativa,
+      diff_dias: diff,
+      // "mais velha" só quando passa da margem (evita ruído entre as duas fontes de data)
+      alerta: (diff != null && diff >= MARGEM_AGING_DIAS),
+    });
+  }
+
+  // Ordena: alertas primeiro, depois pela maior diferença
+  linhas.sort((a, b) => {
+    if (a.alerta !== b.alerta) return a.alerta ? -1 : 1;
+    return (b.diff_dias ?? -1e9) - (a.diff_dias ?? -1e9);
+  });
+
+  return linhas;
+}// ── Verifica e cria grupos automaticamente ────────────────
 async function verificarECriarGrupo(userId) {
   const TAMANHO = 20;
 

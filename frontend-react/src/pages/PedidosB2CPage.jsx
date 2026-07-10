@@ -4,6 +4,7 @@ import {
   X, ChevronDown, ChevronUp, Clock,
   Layers, ArrowRight, Loader, RefreshCw,
   FileText, Store, MapPin, Ticket, Download, Upload, Lock,
+  Scale, Clock3,
 } from "lucide-react";
 import {
   listarPedidosAguardandoAlocacao,
@@ -14,6 +15,7 @@ import {
   gerarPlanilhaFaturamentoGrupo,
   importarNFsGrupo,
   buscarSugestaoFifo,
+  buscarComparativoAging,
   alocarPedido,
   fecharGruposPendentes,
   registrarBipagem,
@@ -302,9 +304,7 @@ function TabAlocacao({ onGrupoFormado }) {
       )}
     </div>
   );
-}
-
-// ══════════════════════════════════════════════════════════
+}// ══════════════════════════════════════════════════════════
 // ABA PICKING
 // ══════════════════════════════════════════════════════════
 function TabPicking() {
@@ -701,9 +701,7 @@ function TabAnalise() {
       </div>
     </>
   );
-}
-
-// ══════════════════════════════════════════════════════════
+}// ══════════════════════════════════════════════════════════
 // ABA FATURAMENTO
 // ══════════════════════════════════════════════════════════
 function TabFaturamento() {
@@ -931,7 +929,142 @@ function TabFaturamento() {
 // ══════════════════════════════════════════════════════════
 // PÁGINA PRINCIPAL
 // ══════════════════════════════════════════════════════════
+// Emails com acesso à aba de comparativo de aging. Preencha com os endereços certos.
+const EMAILS_COMPARATIVO = [
+  "SEU_EMAIL_AQUI@liquidapreco.com.br",
+  "EMAIL_DO_JHONATAN_AQUI@liquidapreco.com.br",
+];
+
+function TabComparativoAging() {
+  const [linhas, setLinhas]   = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [erro, setErro]       = useState(null);
+  const [soAlertas, setSoAlertas] = useState(false);
+
+  useEffect(() => { carregar(); }, []);
+
+  async function carregar() {
+    setLoading(true); setErro(null);
+    try { setLinhas(await buscarComparativoAging()); }
+    catch (e) { setErro(e.message); }
+    finally { setLoading(false); }
+  }
+
+  const visiveis = soAlertas ? linhas.filter(l => l.alerta) : linhas;
+  const totalAlertas = linhas.filter(l => l.alerta).length;
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <div className="flex items-start gap-3">
+          <Scale className="h-5 w-5 text-[#7F2D92] shrink-0 mt-0.5" />
+          <div className="text-sm text-slate-600">
+            <p className="font-semibold text-slate-800">Aparelhos sem subinv que o FIFO não sugere</p>
+            <p className="text-xs mt-1 leading-relaxed">
+              O FIFO só sugere peças com subinv. Aqui você vê, por pedido, o aparelho selecionado
+              comparado com a alternativa mais velha <span className="font-semibold">sem</span> subinv.
+              A idade do selecionado vem do subinv; a da alternativa, da coluna aging da triagem —
+              são fontes diferentes, então a comparação é aproximada. Só destacamos diferenças de
+              {" "}{30} dias ou mais.
+            </p>
+          </div>
+        </div>
+      </Card>
+
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+        <KpiMini label="Pedidos com alternativa" value={fmtN(linhas.length)} color="bg-slate-50 ring-slate-200 text-slate-700" />
+        <KpiMini label="Com peça +velha (30d+)"   value={fmtN(totalAlertas)} color="bg-amber-50 ring-amber-200 text-amber-700" />
+        <KpiMini label="Margem de erro média"     value="±6d"                color="bg-slate-50 ring-slate-200 text-slate-700" />
+      </div>
+
+      <div className="flex items-center gap-3">
+        <button onClick={() => setSoAlertas(s => !s)}
+          className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
+            soAlertas ? "bg-amber-500 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+          }`}>
+          <AlertTriangle className="h-4 w-4" />
+          {soAlertas ? "Mostrando só alertas" : "Só peças mais velhas"}
+        </button>
+        <button onClick={carregar} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200">
+          <RefreshCw className="h-4 w-4" /> Recarregar
+        </button>
+      </div>
+
+      {loading && (
+        <div className="flex items-center gap-2 text-slate-500 text-sm py-8 justify-center">
+          <Loader className="h-4 w-4 animate-spin" /> Calculando comparativo…
+        </div>
+      )}
+      {erro && <Card className="text-sm text-red-600">Erro: {erro}</Card>}
+
+      {!loading && !erro && visiveis.length === 0 && (
+        <Card className="text-sm text-slate-500 text-center py-8">
+          Nenhum pedido com alternativa sem subinv{soAlertas ? " acima da margem" : ""}.
+        </Card>
+      )}
+
+      {!loading && !erro && visiveis.length > 0 && (
+        <Card className="overflow-x-auto p-0">
+          <table className="w-full text-sm min-w-[720px]">
+            <thead>
+              <tr className="border-b border-slate-200 text-slate-500 text-left">
+                <th className="px-3 py-2 font-semibold">Pedido</th>
+                <th className="px-3 py-2 font-semibold">Selecionado (FIFO)</th>
+                <th className="px-3 py-2 font-semibold text-center">Idade</th>
+                <th className="px-3 py-2 font-semibold">Alternativa (sem subinv)</th>
+                <th className="px-3 py-2 font-semibold text-center">Aging</th>
+                <th className="px-3 py-2 font-semibold text-center">Situação</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visiveis.map((l, i) => (
+                <tr key={`${l.pedido}-${i}`} className={`border-b border-slate-100 ${l.alerta ? "bg-amber-50" : ""}`}>
+                  <td className="px-3 py-2 font-medium text-slate-700">{l.pedido}</td>
+                  <td className="px-3 py-2">
+                    {l.sel_imei ? (
+                      <>
+                        <div className="text-slate-700">{l.sel_imei}</div>
+                        <div className="text-xs text-slate-500">{l.sel_grade} · subinv {fmtDataCurta(l.sel_subinv)}</div>
+                      </>
+                    ) : <span className="text-xs text-slate-400">nenhum com subinv</span>}
+                  </td>
+                  <td className="px-3 py-2 text-center text-slate-600">{l.sel_idade != null ? `${l.sel_idade}d` : "—"}</td>
+                  <td className="px-3 py-2">
+                    <div className="text-slate-700">{l.alt_imei}</div>
+                    <div className="text-xs text-slate-500">{l.alt_grade} · {l.alt_local || "sem local"}</div>
+                  </td>
+                  <td className="px-3 py-2 text-center font-medium text-slate-700">{l.alt_aging}d</td>
+                  <td className="px-3 py-2 text-center">
+                    {l.alerta ? (
+                      <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 px-2 py-1 rounded-md text-xs font-semibold">
+                        <Clock3 className="h-3 w-3" /> +{l.diff_dias}d mais velha
+                      </span>
+                    ) : l.diff_dias != null ? (
+                      <span className="text-xs text-slate-400">
+                        {l.diff_dias >= 0 ? `+${l.diff_dias}d · dentro da margem` : "alternativa +nova"}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-slate-400">sem selecionado p/ comparar</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function fmtDataCurta(d) {
+  if (!d) return "—";
+  const dt = new Date(d);
+  return dt.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+}
+
 export default function PedidosB2CPage() {
+  const { profile, user } = useAuth();
   const [aba, setAba]   = useState("alocacao");
   const [kpis, setKpis] = useState(null);
 
@@ -941,11 +1074,20 @@ export default function PedidosB2CPage() {
     buscarKpisPedidosB2C().then(setKpis).catch(console.error);
   }
 
+  // Acesso à aba de comparativo: master OU email na allowlist
+  const emailUsuario = (user?.email || "").toLowerCase();
+  const podeVerComparativo =
+    profile?.is_master ||
+    EMAILS_COMPARATIVO.map(e => e.toLowerCase()).includes(emailUsuario);
+
   const ABAS = [
     { key: "alocacao",    label: "Alocação",    icon: Layers        },
     { key: "picking",     label: "Picking",     icon: Search        },
     { key: "analise",     label: "Em Análise",  icon: AlertTriangle },
     { key: "faturamento", label: "Faturamento", icon: FileText      },
+    ...(podeVerComparativo
+      ? [{ key: "comparativo", label: "Comparativo Aging", icon: Scale }]
+      : []),
   ];
 
   return (
@@ -986,6 +1128,7 @@ export default function PedidosB2CPage() {
       {aba === "picking"     && <TabPicking />}
       {aba === "analise"     && <TabAnalise />}
       {aba === "faturamento" && <TabFaturamento />}
+      {aba === "comparativo" && podeVerComparativo && <TabComparativoAging />}
     </div>
   );
 }
