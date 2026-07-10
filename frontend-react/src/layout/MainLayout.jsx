@@ -32,6 +32,7 @@ const PAGE_META = {
   "/b2c/pedidos":                  { title: "Pedidos B2C",               subtitle: "Assurant Warehouse · Alocação, picking, embalagem e faturamento de pedidos marketplace" },
   "/b2c/embalagem":                { title: "Embalagem B2C",             subtitle: "Assurant Warehouse · Bipagem por mesa — limpeza, embalagem, NF e saída" },
   "/b2c/painel":                   { title: "Painel Gestor B2C",         subtitle: "Assurant Warehouse · Tempos por etapa, mesas e fila do processo B2C" },
+  "/inventario":                   { title: "Inventário Cíclico",        subtitle: "Assurant Warehouse · Contagem por endereço, divergências e acuracidade" },
 };
 
 export default function MainLayout() {
