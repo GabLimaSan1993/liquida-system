@@ -173,12 +173,16 @@ export async function buscarSugestaoFifo(skuProduto, gradePedido) {
   // Grade vem do código -CCx; sem código conhecido (ex.: sem sufixo), usa a grade do título.
   const gradeAlvo = (ccCode && CC_GRADE[ccCode]) ? CC_GRADE[ccCode] : gradePedido;
 
+  // Outlet (CC4) não é uma grade física: é definido pela bateria.
+  // Regra: apenas aparelhos de grade Bom ou superior COM bateria entre 70 e 79%.
+  const ehOutlet = normalizeGrade(gradeAlvo) === "outlet";
+
   // Traduz o SKU da Assurant para o SKU ALS, quando for o caso.
   const skuBase = await traduzirSku(skuSemCC);
 
   const { data: encontrados, error } = await supabase
     .from("assurant_triagem")
-    .select("imei, sku, grade, local, voucher, status_atual, criado_em")
+    .select("imei, sku, grade, local, voucher, status_atual, status_bateria, criado_em")
     .eq("sku", skuBase)
     .in("status_atual", STATUS_ALOCAVEIS);
 
@@ -196,10 +200,18 @@ export async function buscarSugestaoFifo(skuProduto, gradePedido) {
   }
   const disponiveis = Array.from(porImei.values());
 
-  // Só grades aceitáveis: grade exata ou superior (nunca inferior à vendida)
-  const imeisValidos = disponiveis.filter(item =>
-    gradeAceita(item.grade, gradeAlvo)
-  );
+  // Filtro de elegibilidade:
+  // - Outlet (CC4): SÓ bateria entre 70 e 79% E grade Bom ou superior (Bom, Muito Bom, Excelente, Like New).
+  //   "Bom" tem ordem 4 na hierarquia; "Bom ou superior" = ordem <= 4. Regular e Quebrado ficam de fora.
+  // - Demais: grade exata ou superior (nunca inferior à vendida), sem regra de bateria.
+  const ORDEM_BOM = gradeOrdem("Bom");
+  const imeisValidos = disponiveis.filter(item => {
+    if (ehOutlet) {
+      const bateriaOk = normalizeGrade(item.status_bateria) === "saúde da bateria entre 70 e 79%";
+      return bateriaOk && gradeOrdem(item.grade) <= ORDEM_BOM;
+    }
+    return gradeAceita(item.grade, gradeAlvo);
+  });
 
   if (!imeisValidos.length) return [];
 
@@ -224,11 +236,12 @@ export async function buscarSugestaoFifo(skuProduto, gradePedido) {
       distancia_grade: ordemPedido - gradeOrdem(item.grade),
     }))
     .sort((a, b) => {
-      // 1º) grade exata primeiro; só depois sobe para grades superiores, por proximidade
-      if (a.distancia_grade !== b.distancia_grade) {
+      // Outlet mistura grades de propósito (Bom pra cima), então não prioriza grade:
+      // é FIFO puro entre os elegíveis. Nos demais casos, grade mais próxima primeiro.
+      if (!ehOutlet && a.distancia_grade !== b.distancia_grade) {
         return a.distancia_grade - b.distancia_grade;
       }
-      // 2º) dentro da mesma grade, FIFO puro (subinventário mais antigo primeiro)
+      // FIFO: subinventário mais antigo primeiro (nulos vão para o fim)
       if (!a.data_subinv && !b.data_subinv) return 0;
       if (!a.data_subinv) return 1;
       if (!b.data_subinv) return -1;
