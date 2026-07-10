@@ -25,15 +25,12 @@ import AssurantDashboardPage from "./pages/assurant/AssurantDashboardPage.jsx";
 import AssurantSLAPage from "./pages/assurant/AssurantSLAPage.jsx";
 import AssurantLayoutPage from "./pages/assurant/AssurantLayoutPage.jsx";
 
-import RecebimentoPage from "./pages/RecebimentoPage.jsx";
-import GestaoRecebimentoPage from "./pages/GestaoRecebimentoPage.jsx";
 import B2BPickingPage from "./pages/B2BPickingPage.jsx";
 import TrocasB2CAssurantPage from "./pages/TrocasB2CAssurantPage.jsx";
 import TrocasB2CFurbtechPage from "./pages/TrocasB2CFurbtechPage.jsx";
 import PedidosB2CPage from "./pages/PedidosB2CPage.jsx";
 import B2CEmbalagemMesaPage from "./pages/B2CEmbalagemMesaPage.jsx";
-import B2CPainelGestorPage from "./pages/B2CPainelGestorPage.jsx";
-import B2BPainelGestorPage from "./pages/B2BPainelGestorPage.jsx";
+import InventarioPage from "./pages/InventarioPage.jsx";
 
 function ProtectedRoute({ tela, children }) {
   const { user, loading, hasAccess } = useAuth();
@@ -112,15 +109,10 @@ export default function App() {
         <Route path="/assurant/sla"       element={<ProtectedRoute tela="/assurant/sla"><AssurantSLAPage /></ProtectedRoute>} />
         <Route path="/assurant/layout"    element={<ProtectedRoute tela="/assurant/layout"><AssurantLayoutPage /></ProtectedRoute>} />
 
-        {/* Recebimento YBV — entrada do processo */}
-        <Route path="/recebimento"        element={<ProtectedRoute tela="/recebimento"><RecebimentoPage /></ProtectedRoute>} />
-        <Route path="/recebimento/gestao" element={<ProtectedRoute tela="/recebimento/gestao"><GestaoRecebimentoPage /></ProtectedRoute>} />
-
         {/* B2B */}
         <Route path="/b2b/picking"     element={<ProtectedRoute tela="/b2b/picking"><B2BPickingPage abaInicial="picking" /></ProtectedRoute>} />
         <Route path="/b2b/embalagem"   element={<ProtectedRoute tela="/b2b/embalagem"><B2BPickingPage abaInicial="embalagem" /></ProtectedRoute>} />
         <Route path="/b2b/faturamento" element={<ProtectedRoute tela="/b2b/faturamento"><B2BPickingPage abaInicial="pedidos" /></ProtectedRoute>} />
-        <Route path="/b2b/painel"      element={<ProtectedRoute tela="/b2b/painel"><B2BPainelGestorPage /></ProtectedRoute>} />
 
         {/* Trocas B2C Assurant */}
         <Route path="/trocas-b2c/nova"   element={<ProtectedRoute tela="/trocas-b2c/nova"><TrocasB2CAssurantPage /></ProtectedRoute>} />
@@ -129,7 +121,9 @@ export default function App() {
         {/* Pedidos B2C — novo módulo */}
         <Route path="/b2c/pedidos"   element={<ProtectedRoute tela="/b2c/pedidos"><PedidosB2CPage /></ProtectedRoute>} />
         <Route path="/b2c/embalagem" element={<ProtectedRoute tela="/b2c/embalagem"><B2CEmbalagemMesaPage /></ProtectedRoute>} />
-        <Route path="/b2c/painel"    element={<ProtectedRoute tela="/b2c/painel"><B2CPainelGestorPage /></ProtectedRoute>} />
+
+        {/* Inventário Cíclico */}
+        <Route path="/inventario" element={<ProtectedRoute tela="/inventario"><InventarioPage /></ProtectedRoute>} />
       </Route>
     </Routes>
   );
