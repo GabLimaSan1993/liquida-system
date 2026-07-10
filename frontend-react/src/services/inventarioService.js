@@ -412,3 +412,143 @@ export async function listarConflitos(cicloId) {
   if (error) throw new Error(error.message);
   return data || [];
 }
+
+// ══════════════════════════════════════════════════════════
+// FECHAMENTO DIÁRIO
+// O ciclo é mensal, mas as contagens são fechadas ao longo dos dias.
+// Aqui consolidamos tudo que foi concluído num dia (fuso São Paulo),
+// gravamos um snapshot assinável e alimentamos o histórico + o PDF.
+// ══════════════════════════════════════════════════════════
+
+// "Hoje" no fuso do armazém (São Paulo), no formato YYYY-MM-DD.
+export function hojeSP() {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+}
+
+// Dia seguinte a uma data YYYY-MM-DD, sem depender do fuso do navegador.
+function proximoDia(data) {
+  const [y, m, d] = String(data).split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + 1);
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
+}
+
+// Intervalo [início, fim) que cobre o dia inteiro em São Paulo (UTC-3).
+function rangeDiaSP(data) {
+  return { inicio: `${data}T00:00:00-03:00`, fim: `${proximoDia(data)}T00:00:00-03:00` };
+}
+
+function resumirContagem(itens) {
+  const conferidas = itens.filter(i => i.veredito === "conferido").length;
+  const sobras     = itens.filter(i => i.veredito === "sobra").length;
+  const conflitos  = itens.filter(i => i.veredito === "conflito").length;
+  const faltas     = itens.filter(i => i.veredito === "falta").length;
+  const perfeito   = itens.length > 0 && itens.every(i => i.veredito === "conferido");
+  return { conferidas, sobras, conflitos, faltas, perfeito };
+}
+
+// Resumo consolidado de um dia: contagens concluídas, seus itens (para o
+// drill-down e o anexo do PDF), os totais e o registro de fechamento se já existir.
+export async function resumoDoDia(cicloId, data) {
+  const { inicio, fim } = rangeDiaSP(data);
+
+  const { data: contagens, error } = await supabase
+    .from("inventario_contagens")
+    .select("*")
+    .eq("ciclo_id", cicloId)
+    .eq("status", "concluida")
+    .gte("fechada_em", inicio)
+    .lt("fechada_em", fim)
+    .order("endereco", { ascending: true });
+  if (error) throw new Error(error.message);
+
+  const ids = (contagens || []).map(c => c.id);
+  let itens = [];
+  if (ids.length) {
+    const { data: its, error: e2 } = await supabase
+      .from("inventario_itens")
+      .select("*")
+      .in("contagem_id", ids)
+      .order("bipado_em", { ascending: true });
+    if (e2) throw new Error(e2.message);
+    itens = its || [];
+  }
+
+  const porContagem = {};
+  itens.forEach(i => { (porContagem[i.contagem_id] = porContagem[i.contagem_id] || []).push(i); });
+
+  const detalhadas = (contagens || []).map(c => {
+    const its = porContagem[c.id] || [];
+    return { ...c, itens: its, ...resumirContagem(its) };
+  });
+
+  const conferidas = detalhadas.reduce((s, c) => s + c.conferidas, 0);
+  const sobras     = detalhadas.reduce((s, c) => s + c.sobras, 0);
+  const conflitos  = detalhadas.reduce((s, c) => s + c.conflitos, 0);
+  const faltas     = detalhadas.reduce((s, c) => s + c.faltas, 0);
+  const perfeitos  = detalhadas.filter(c => c.perfeito).length;
+
+  // Acuracidade do dia (bruta): das peças avaliadas, quantas estavam onde deviam.
+  const denomPeca = conferidas + sobras + conflitos + faltas;
+  const acuraciaPeca     = denomPeca > 0 ? (conferidas / denomPeca) * 100 : null;
+  const acuraciaEndereco = detalhadas.length > 0 ? (perfeitos / detalhadas.length) * 100 : null;
+
+  const { data: fechamento } = await supabase
+    .from("inventario_fechamentos")
+    .select("*")
+    .eq("ciclo_id", cicloId)
+    .eq("data", data)
+    .maybeSingle();
+
+  return {
+    data,
+    contagens: detalhadas,
+    totais: {
+      enderecos: detalhadas.length,
+      conferidas, sobras, conflitos, faltas, perfeitos,
+      acuraciaPeca, acuraciaEndereco,
+    },
+    fechamento: fechamento || null,
+  };
+}
+
+// Grava (ou atualiza) o fechamento do dia. Um registro por ciclo+data.
+export async function fecharDia(cicloId, data, userId, userNome) {
+  const resumo = await resumoDoDia(cicloId, data);
+  if (!resumo.contagens.length) {
+    return { ok: false, erro: `Nenhuma contagem concluída em ${data}.` };
+  }
+  const t = resumo.totais;
+
+  const { data: reg, error } = await supabase
+    .from("inventario_fechamentos")
+    .upsert({
+      ciclo_id:          cicloId,
+      data,
+      enderecos:         t.enderecos,
+      conferidas:        t.conferidas,
+      sobras:            t.sobras,
+      conflitos:         t.conflitos,
+      faltas:            t.faltas,
+      acuracia_peca:     t.acuraciaPeca,
+      acuracia_endereco: t.acuraciaEndereco,
+      fechado_por:       userId,
+      fechado_por_nome:  userNome || "Operador",
+      fechado_em:        new Date().toISOString(),
+    }, { onConflict: "ciclo_id,data" })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+
+  return { ok: true, fechamento: reg, resumo };
+}
+
+export async function listarFechamentos(cicloId) {
+  const { data, error } = await supabase
+    .from("inventario_fechamentos")
+    .select("*")
+    .eq("ciclo_id", cicloId)
+    .order("data", { ascending: false });
+  if (error) throw new Error(error.message);
+  return data || [];
+}

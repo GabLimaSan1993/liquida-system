@@ -2,11 +2,15 @@ import { useState, useEffect, useRef } from "react";
 import {
   Search, CheckCircle, AlertTriangle, ArrowLeft, RefreshCw,
   ClipboardList, BarChart3, Dices, Loader, MapPin, ArrowLeftRight, Lock,
+  Calendar, FileDown, ChevronDown, ChevronRight, History, PenLine,
 } from "lucide-react";
+import jsPDF from "jspdf";
+import "jspdf-autotable";
 import {
   cicloAberto, abrirCiclo, sortearDia,
   listarContagensPendentes, abrirContagem, biparItem, fecharContagem,
   painelCiclo, listarConflitos, listarItens,
+  hojeSP, resumoDoDia, fecharDia, listarFechamentos,
 } from "../services/inventarioService.js";
 import { useAuth } from "../AuthContext.jsx";
 
@@ -21,6 +25,7 @@ function nomeDoCicloAtual() {
 function fmtN(v) { return (v || 0).toLocaleString("pt-BR"); }
 function fmtPct(v) { return v == null ? "—" : `${v.toFixed(1).replace(".", ",")}%`; }
 function fmtData(d) { return d ? new Date(d).toLocaleString("pt-BR") : "—"; }
+function fmtDataBR(d) { if (!d) return "—"; const [y, m, dd] = String(d).split("-"); return `${dd}/${m}/${y}`; }
 
 function Card({ children, className = "" }) {
   return <div className={`bg-white rounded-2xl p-5 ring-1 ring-slate-200 shadow-sm ${className}`}>{children}</div>;
@@ -288,6 +293,349 @@ function TabContagem({ ciclo }) {
 }
 
 // ══════════════════════════════════════════════════════════
+// ABA FECHAMENTO — histórico do dia + PDF assinável
+// ══════════════════════════════════════════════════════════
+function TabFechamento({ ciclo }) {
+  const { user, profile } = useAuth();
+  const [data, setData]               = useState(hojeSP());
+  const [resumo, setResumo]           = useState(null);
+  const [fechamentos, setFechamentos] = useState([]);
+  const [loading, setLoading]         = useState(true);
+  const [proc, setProc]               = useState(false);
+  const [expandido, setExpandido]     = useState(null);
+  const [feedback, setFeedback]       = useState(null);
+
+  useEffect(() => { if (ciclo) carregar(); /* eslint-disable-next-line */ }, [ciclo, data]);
+
+  async function carregar() {
+    if (!ciclo) { setLoading(false); return; }
+    setLoading(true);
+    try {
+      const [r, fs] = await Promise.all([
+        resumoDoDia(ciclo.id, data),
+        listarFechamentos(ciclo.id),
+      ]);
+      setResumo(r);
+      setFechamentos(fs);
+    } catch (e) { console.error(e); setFeedback({ tipo: "erro", msg: e.message }); }
+    finally { setLoading(false); }
+  }
+
+  // ── Geração do PDF de fechamento ──
+  function gerarPDF(dataAlvo, r) {
+    const doc  = new jsPDF();
+    const roxo = [127, 45, 146];
+    const t    = r.totais;
+
+    // Cabeçalho
+    doc.setFillColor(roxo[0], roxo[1], roxo[2]);
+    doc.rect(0, 0, 210, 24, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(14);
+    doc.text("Relatório de fechamento diário — Inventário cíclico", 14, 13);
+    doc.setFontSize(9);
+    doc.text("Liquida Preço · Assurant Warehouse", 14, 19);
+    doc.setTextColor(20, 20, 20);
+
+    // Metadados
+    doc.setFontSize(10);
+    doc.text(`Ciclo: ${ciclo.nome}`, 14, 33);
+    doc.text(`Data: ${fmtDataBR(dataAlvo)}`, 14, 39);
+    doc.text(`Emitido: ${new Date().toLocaleString("pt-BR")}`, 120, 39);
+    if (r.fechamento) {
+      doc.text(`Fechado por: ${r.fechamento.fechado_por_nome} · ${fmtData(r.fechamento.fechado_em)}`, 14, 45);
+    }
+
+    // Resumo do dia
+    doc.autoTable({
+      startY: r.fechamento ? 51 : 47,
+      head: [["Endereços", "Conferidas", "Sobras", "Faltas", "Conflitos", "Acur. peça", "Acur. endereço"]],
+      body: [[
+        t.enderecos, t.conferidas, t.sobras, t.faltas, t.conflitos,
+        fmtPct(t.acuraciaPeca), fmtPct(t.acuraciaEndereco),
+      ]],
+      styles: { fontSize: 9, halign: "center" },
+      headStyles: { fillColor: roxo, halign: "center" },
+    });
+
+    // Detalhamento por endereço
+    doc.autoTable({
+      startY: doc.lastAutoTable.finalY + 6,
+      head: [["Endereço", "Operador", "Esp.", "Conf.", "Sob.", "Falt.", "Status"]],
+      body: r.contagens.map(c => [
+        c.endereco, c.operador_nome || "—",
+        c.esperadas || 0, c.conferidas, c.sobras, c.faltas,
+        c.perfeito ? "Perfeito" : "Divergência",
+      ]),
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: roxo },
+      columnStyles: {
+        2: { halign: "center" }, 3: { halign: "center" },
+        4: { halign: "center" }, 5: { halign: "center" },
+      },
+    });
+
+    // Anexo: divergências detalhadas (faltas, sobras e conflitos)
+    const divergentes = [];
+    r.contagens.forEach(c => {
+      c.itens.forEach(i => {
+        if (["falta", "sobra", "conflito"].includes(i.veredito)) {
+          divergentes.push([
+            i.imei || "—",
+            c.endereco,
+            i.veredito === "falta" ? "Falta" : i.veredito === "sobra" ? "Sobra" : "Conflito",
+            i.endereco_anterior || "—",
+          ]);
+        }
+      });
+    });
+    if (divergentes.length) {
+      const yTit = doc.lastAutoTable.finalY + 8;
+      doc.setFontSize(10);
+      doc.text("Anexo — Divergências detalhadas", 14, yTit);
+      doc.autoTable({
+        startY: yTit + 3,
+        head: [["IMEI", "Endereço", "Tipo", "Era esperado em"]],
+        body: divergentes,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: roxo },
+      });
+    }
+
+    // Assinaturas
+    let y = doc.lastAutoTable.finalY + 26;
+    if (y > 250) { doc.addPage(); y = 40; }
+    doc.setDrawColor(60, 60, 60);
+    doc.line(20, y, 90, y);
+    doc.line(120, y, 190, y);
+    doc.setTextColor(30, 30, 30);
+    doc.setFontSize(10);
+    doc.text("Contado por", 20, y + 6);
+    doc.text("Conferido por", 120, y + 6);
+    doc.setTextColor(120, 120, 120);
+    doc.setFontSize(8);
+    doc.text("Nome / matrícula", 20, y + 11);
+    doc.text("Gestor / supervisor", 120, y + 11);
+    doc.text("Data: ___/___/______", 20, y + 18);
+    doc.text("Data: ___/___/______", 120, y + 18);
+
+    doc.save(`fechamento_inventario_${dataAlvo}.pdf`);
+  }
+
+  async function handleFechar() {
+    if (proc || !resumo) return;
+    if (!resumo.contagens.length) {
+      setFeedback({ tipo: "aviso", msg: `Nenhuma contagem concluída em ${fmtDataBR(data)}.` });
+      return;
+    }
+    setProc(true);
+    setFeedback(null);
+    try {
+      const res = await fecharDia(ciclo.id, data, user.id, profile?.nome);
+      if (!res.ok) { setFeedback({ tipo: "aviso", msg: res.erro }); return; }
+      setFeedback({ tipo: "ok", msg: `Dia ${fmtDataBR(data)} fechado · PDF gerado.` });
+      gerarPDF(data, res.resumo);
+      await carregar();
+    } catch (e) { setFeedback({ tipo: "erro", msg: e.message }); }
+    finally { setProc(false); }
+  }
+
+  async function handleReimprimir(dataAlvo) {
+    if (proc) return;
+    setProc(true);
+    try {
+      const r = await resumoDoDia(ciclo.id, dataAlvo);
+      gerarPDF(dataAlvo, r);
+    } catch (e) { setFeedback({ tipo: "erro", msg: e.message }); }
+    finally { setProc(false); }
+  }
+
+  if (!ciclo) {
+    return (
+      <div className="text-center py-12 text-slate-400">
+        <ClipboardList className="h-8 w-8 mx-auto mb-2 opacity-30" />
+        <p className="text-sm">Nenhum ciclo aberto.</p>
+        <p className="text-xs mt-1">Peça para abrir um ciclo na aba Gestão.</p>
+      </div>
+    );
+  }
+
+  const t = resumo?.totais;
+  const jaFechado = resumo?.fechamento;
+
+  return (
+    <div className="space-y-4">
+      {feedback && (
+        <div className={`flex items-center gap-2 rounded-2xl px-4 py-3 ring-1 text-sm ${
+          feedback.tipo === "ok"    ? "bg-emerald-50 text-emerald-700 ring-emerald-200" :
+          feedback.tipo === "aviso" ? "bg-amber-50 text-amber-700 ring-amber-200" :
+          "bg-red-50 text-red-700 ring-red-200"
+        }`}>
+          {feedback.tipo === "ok" ? <CheckCircle className="h-4 w-4 shrink-0" /> : <AlertTriangle className="h-4 w-4 shrink-0" />}
+          <span className="font-semibold">{feedback.msg}</span>
+        </div>
+      )}
+
+      {/* Seletor de dia */}
+      <Card>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Calendar className="h-4 w-4 text-[#7F2D92]" />
+            <label className="text-sm font-semibold text-slate-700">Dia do fechamento</label>
+          </div>
+          <div className="flex items-center gap-2">
+            <input type="date" value={data} max={hojeSP()} onChange={e => setData(e.target.value)}
+              className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7F2D92]" />
+            <button onClick={carregar} className="text-xs text-slate-500 hover:text-purple-700 font-semibold flex items-center gap-1">
+              <RefreshCw className="h-3.5 w-3.5" /> Atualizar
+            </button>
+          </div>
+        </div>
+        {jaFechado && (
+          <div className="mt-3 flex items-center gap-2 text-xs bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 rounded-xl px-3 py-2">
+            <CheckCircle className="h-4 w-4 shrink-0" />
+            <span className="font-semibold">
+              Dia fechado por {jaFechado.fechado_por_nome} em {fmtData(jaFechado.fechado_em)}
+            </span>
+          </div>
+        )}
+      </Card>
+
+      {loading ? (
+        <div className="flex items-center justify-center h-32">
+          <div className="h-8 w-8 border-4 border-purple-200 border-t-[#7F2D92] rounded-full animate-spin" />
+        </div>
+      ) : !t || t.enderecos === 0 ? (
+        <div className="text-center py-12 text-slate-400">
+          <ClipboardList className="h-8 w-8 mx-auto mb-2 opacity-30" />
+          <p className="text-sm">Nenhuma contagem concluída em {fmtDataBR(data)}.</p>
+          <p className="text-xs mt-1">As contagens fechadas neste dia aparecem aqui.</p>
+        </div>
+      ) : (
+        <>
+          {/* KPIs do dia */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <KpiMini label="Endereços"  value={fmtN(t.enderecos)} />
+            <KpiMini label="Conferidas" value={fmtN(t.conferidas)}
+              color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
+            <KpiMini label="Sobras" value={fmtN(t.sobras)}
+              color="bg-amber-50 ring-amber-200 text-amber-700" />
+            <KpiMini label="Faltas" value={fmtN(t.faltas)}
+              color="bg-red-50 ring-red-200 text-red-700" />
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <KpiMini label="Conflitos" value={fmtN(t.conflitos)}
+              color="bg-red-50 ring-red-200 text-red-700" />
+            <KpiMini label="Acur. por peça" value={fmtPct(t.acuraciaPeca)}
+              color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
+            <KpiMini label="Acur. por endereço" value={fmtPct(t.acuraciaEndereco)}
+              sub={`${fmtN(t.perfeitos)} perfeitos`}
+              color="bg-blue-50 ring-blue-200 text-blue-700" />
+          </div>
+
+          {/* Detalhamento por endereço com drill-down */}
+          <Card>
+            <h3 className="font-black text-slate-800 text-sm mb-3">Detalhamento por endereço</h3>
+            <div className="space-y-1.5">
+              {resumo.contagens.map(c => {
+                const aberto = expandido === c.id;
+                return (
+                  <div key={c.id} className="rounded-xl ring-1 ring-slate-200 overflow-hidden">
+                    <button onClick={() => setExpandido(aberto ? null : c.id)}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 transition text-left">
+                      {aberto ? <ChevronDown className="h-4 w-4 text-slate-400 shrink-0" /> : <ChevronRight className="h-4 w-4 text-slate-400 shrink-0" />}
+                      <div className="min-w-0 flex-1">
+                        <div className="font-mono font-bold text-slate-800 text-xs truncate">{c.endereco}</div>
+                        <div className="text-xs text-slate-500">
+                          {c.operador_nome || "—"} · {c.esperadas || 0} esp · {c.conferidas} conf
+                          {c.sobras > 0 && ` · ${c.sobras} sob`}
+                          {c.faltas > 0 && ` · ${c.faltas} falt`}
+                        </div>
+                      </div>
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-lg shrink-0 ${
+                        c.perfeito ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+                                   : "bg-amber-50 text-amber-700 ring-1 ring-amber-200"
+                      }`}>
+                        {c.perfeito ? "Perfeito" : "Divergência"}
+                      </span>
+                    </button>
+                    {aberto && (
+                      <div className="px-3 pb-3 pt-1 bg-slate-50/60 border-t border-slate-100">
+                        {c.itens.length === 0 ? (
+                          <p className="text-xs text-slate-400 py-2">Sem itens registrados.</p>
+                        ) : (
+                          <div className="space-y-1 mt-1">
+                            {c.itens.map(i => (
+                              <div key={i.id} className="flex items-center justify-between gap-3 text-xs">
+                                <span className="font-mono text-slate-600 truncate">{i.imei || "—"}</span>
+                                <span className={`font-semibold shrink-0 ${
+                                  i.veredito === "conferido" ? "text-emerald-700" :
+                                  i.veredito === "sobra"      ? "text-amber-700" :
+                                  i.veredito === "conflito"   ? "text-red-700" :
+                                  i.veredito === "falta"      ? "text-red-700" : "text-slate-500"
+                                }`}>
+                                  {i.veredito === "conferido" ? "conferido" :
+                                   i.veredito === "sobra"      ? `sobra · era em ${i.endereco_anterior || "—"}` :
+                                   i.veredito === "conflito"   ? "conflito" :
+                                   i.veredito === "falta"      ? "falta" : i.veredito}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <button onClick={handleFechar} disabled={proc}
+              className="mt-4 flex items-center gap-2 bg-[#7F2D92] text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-[#5B1E74] transition disabled:opacity-50">
+              {proc ? <Loader className="h-4 w-4 animate-spin" /> : jaFechado ? <FileDown className="h-4 w-4" /> : <PenLine className="h-4 w-4" />}
+              {jaFechado ? "Refazer fechamento e gerar PDF" : "Fechar o dia e gerar PDF"}
+            </button>
+            {jaFechado && (
+              <p className="text-xs text-slate-400 mt-2">
+                Este dia já foi fechado. Refazer atualiza o snapshot com o estado atual.
+              </p>
+            )}
+          </Card>
+        </>
+      )}
+
+      {/* Histórico de fechamentos */}
+      {fechamentos.length > 0 && (
+        <Card>
+          <h3 className="font-black text-slate-800 text-sm mb-3 flex items-center gap-2">
+            <History className="h-4 w-4 text-[#7F2D92]" /> Fechamentos anteriores
+          </h3>
+          <div className="space-y-2">
+            {fechamentos.map(f => (
+              <div key={f.id} className="flex items-center justify-between gap-3 bg-slate-50 rounded-xl px-3 py-2.5 ring-1 ring-slate-200">
+                <div className="min-w-0">
+                  <button onClick={() => setData(f.data)}
+                    className="font-bold text-slate-800 text-sm hover:text-[#7F2D92] transition">
+                    {fmtDataBR(f.data)}
+                  </button>
+                  <div className="text-xs text-slate-500">
+                    {fmtN(f.enderecos)} endereços · {fmtN(f.conferidas)} conf · {fmtN(f.faltas)} falt · {fmtPct(f.acuracia_peca)}
+                  </div>
+                </div>
+                <button onClick={() => handleReimprimir(f.data)} disabled={proc}
+                  className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl ring-1 ring-slate-200 text-slate-600 hover:ring-purple-300 hover:text-[#7F2D92] transition disabled:opacity-50 shrink-0">
+                  <FileDown className="h-3.5 w-3.5" /> Reimprimir
+                </button>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════
 // ABA GESTÃO
 // ══════════════════════════════════════════════════════════
 function TabGestao({ ciclo, onCicloMudou, podeSortear }) {
@@ -481,8 +829,9 @@ export default function InventarioPage() {
   }
 
   const ABAS = [
-    { key: "contagem", label: "Contagem", icon: ClipboardList },
-    { key: "gestao",   label: "Gestão",   icon: BarChart3     },
+    { key: "contagem",   label: "Contagem",   icon: ClipboardList },
+    { key: "fechamento", label: "Fechamento", icon: FileDown      },
+    { key: "gestao",     label: "Gestão",     icon: BarChart3     },
   ];
 
   if (loading) {
@@ -520,8 +869,9 @@ export default function InventarioPage() {
         })}
       </div>
 
-      {aba === "contagem" && <TabContagem ciclo={ciclo} />}
-      {aba === "gestao"   && <TabGestao ciclo={ciclo} onCicloMudou={carregarCiclo} podeSortear={podeSortear} />}
+      {aba === "contagem"   && <TabContagem ciclo={ciclo} />}
+      {aba === "fechamento" && <TabFechamento ciclo={ciclo} />}
+      {aba === "gestao"     && <TabGestao ciclo={ciclo} onCicloMudou={carregarCiclo} podeSortear={podeSortear} />}
     </div>
   );
 }
