@@ -113,10 +113,26 @@ export async function listarPedidosGrupo(grupoId) {
   if (imeis.length) {
     const { data: estoque } = await supabase
       .from("assurant_triagem")
-      .select("imei, local, voucher")
+      .select("imei, local, voucher, criado_em")
       .in("imei", imeis);
+
+    // Um IMEI pode ter várias passagens (ex.: venda + devolução DEV...). Fica a passagem
+    // MAIS RECENTE que tenha local preenchido; se nenhuma tiver, a mais recente de todas.
+    // (Sem isso, o mapa ficava com uma linha qualquer — às vezes a antiga sem local.)
     const mapa = {};
-    (estoque || []).forEach(e => { mapa[e.imei] = e; });
+    (estoque || []).forEach(e => {
+      const atual = mapa[e.imei];
+      if (!atual) { mapa[e.imei] = e; return; }
+      const eTemLocal     = !!(e.local && String(e.local).trim());
+      const atualTemLocal = !!(atual.local && String(atual.local).trim());
+      // Prefere quem tem local; entre os dois, o mais recente
+      if (eTemLocal !== atualTemLocal) {
+        if (eTemLocal) mapa[e.imei] = e;
+      } else if (new Date(e.criado_em) > new Date(atual.criado_em)) {
+        mapa[e.imei] = e;
+      }
+    });
+
     pedidos.forEach(p => {
       const e = mapa[p.imei_alocado];
       p.local_estoque   = e?.local   || null;
