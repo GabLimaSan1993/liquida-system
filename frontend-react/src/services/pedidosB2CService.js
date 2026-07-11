@@ -795,10 +795,12 @@ export async function concluirPedido(pedidoId) {
 // Lista os grupos com picking concluído e faturamento ainda pendente,
 // com contagem de quantos estão a faturar (embalado) e em análise.
 export async function listarGruposFaturamento() {
+  // Antes exigia grupo status='concluido' (todos bipados/analisados). Agora mostra qualquer
+  // grupo ainda não faturado que tenha ao menos um pedido EMBALADO pronto — os localizados
+  // aparecem para faturar sem esperar os que ainda estão em picking ou em análise.
   const { data: grupos, error } = await supabase
     .from("pedidos_b2c_grupos")
     .select("*")
-    .eq("status", "concluido")
     .neq("status_faturamento", "concluido")
     .order("numero", { ascending: true });
   if (error) throw new Error(error.message);
@@ -814,7 +816,7 @@ export async function listarGruposFaturamento() {
 
   const cont = {};
   (pedidos || []).forEach(p => {
-    if (!cont[p.grupo_id]) cont[p.grupo_id] = { aFaturar: 0, emAnalise: 0, faturados: 0, valorAFaturar: 0, mp: {} };
+    if (!cont[p.grupo_id]) cont[p.grupo_id] = { aFaturar: 0, emAnalise: 0, emPicking: 0, faturados: 0, valorAFaturar: 0, mp: {} };
     const c = cont[p.grupo_id];
     if (p.status === "embalado") {
       c.aFaturar++;
@@ -823,25 +825,31 @@ export async function listarGruposFaturamento() {
       c.mp[nome] = (c.mp[nome] || 0) + 1;
     } else if (p.status === "em_analise") {
       c.emAnalise++;
+    } else if (p.status === "em_picking") {
+      c.emPicking++;
     } else if (["faturado", "concluido"].includes(p.status)) {
       c.faturados++;
     }
   });
 
-  return lista.map(g => {
-    const c = cont[g.id] || { aFaturar: 0, emAnalise: 0, faturados: 0, valorAFaturar: 0, mp: {} };
-    const marketplaces = Object.entries(c.mp)
-      .map(([nome, qtd]) => ({ nome, qtd }))
-      .sort((a, b) => b.qtd - a.qtd);
-    return {
-      ...g,
-      aFaturar: c.aFaturar,
-      emAnalise: c.emAnalise,
-      faturados: c.faturados,
-      valorAFaturar: c.valorAFaturar,
-      marketplaces,
-    };
-  });
+  return lista
+    .map(g => {
+      const c = cont[g.id] || { aFaturar: 0, emAnalise: 0, emPicking: 0, faturados: 0, valorAFaturar: 0, mp: {} };
+      const marketplaces = Object.entries(c.mp)
+        .map(([nome, qtd]) => ({ nome, qtd }))
+        .sort((a, b) => b.qtd - a.qtd);
+      return {
+        ...g,
+        aFaturar: c.aFaturar,
+        emAnalise: c.emAnalise,
+        emPicking: c.emPicking,
+        faturados: c.faturados,
+        valorAFaturar: c.valorAFaturar,
+        marketplaces,
+      };
+    })
+    // Só mostra grupos que têm ao menos um pedido pronto para faturar
+    .filter(g => g.aFaturar > 0);
 }
 
 // Gera e baixa a planilha do grupo com os pedidos prontos para faturar (status embalado).
