@@ -311,9 +311,7 @@ export async function buscarComparativoAging() {
   const estoquePorSku = {};
   for (const item of estoque) {
     (estoquePorSku[item.sku] ||= []).push(item);
-  }
-
-  // 3. Subinv de todos os IMEIs do estoque, em um fetch
+  }// 3. Subinv de todos os IMEIs do estoque, em um fetch
   const todosImeis = estoque.map(i => i.imei);
   const subinvMap = {};
   // O .in() tem limite prático de itens; fatia em blocos de 1000
@@ -399,7 +397,9 @@ export async function buscarComparativoAging() {
   });
 
   return linhas;
-}// ── Verifica e cria grupos automaticamente ────────────────
+}
+
+// ── Verifica e cria grupos automaticamente ────────────────
 async function verificarECriarGrupo(userId) {
   const TAMANHO = 20;
 
@@ -628,6 +628,121 @@ export async function resolverAnalise(pedidoId, novoImei, userId) {
 }
 
 // ══════════════════════════════════════════════════════════
+// AGUARDANDO DEFINIÇÃO DE PRODUTO
+// ══════════════════════════════════════════════════════════
+// Quando o FIFO não encontra nenhum aparelho para um pedido, ele não vai para
+// separação manual: gera um PDF com os dados do pedido (para a Assurant indicar um
+// substituto) e fica em "aguardando_definicao_produto" até alguém devolvê-lo ao fluxo.
+
+export async function listarPedidosAguardandoDefinicao() {
+  const { data, error } = await supabase
+    .from("pedidos_b2c")
+    .select("*")
+    .eq("status", "aguardando_definicao_produto")
+    .order("definicao_solicitada_em", { ascending: true });
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
+// Move o pedido para "aguardando_definicao_produto" (sem alocar nada).
+export async function marcarSemProduto(pedidoId, userId) {
+  const { error } = await supabase
+    .from("pedidos_b2c")
+    .update({
+      status:                  "aguardando_definicao_produto",
+      definicao_solicitada_em: new Date().toISOString(),
+      definicao_solicitada_por: userId,
+      atualizado_em:           new Date().toISOString(),
+    })
+    .eq("id", pedidoId);
+  if (error) throw new Error(error.message);
+}
+
+// Devolve o pedido para o fluxo normal de alocação (quando a Assurant já definiu o substituto).
+export async function voltarParaAlocacao(pedidoId) {
+  const { error } = await supabase
+    .from("pedidos_b2c")
+    .update({
+      status:        "aguardando_alocacao",
+      atualizado_em: new Date().toISOString(),
+    })
+    .eq("id", pedidoId);
+  if (error) throw new Error(error.message);
+}
+
+// Gera o PDF de solicitação de produto substituto — só dados do pedido e o que precisa.
+// Mesmo padrão visual dos outros PDFs do sistema (cabeçalho roxo da marca).
+export async function gerarPdfSemProduto(pedido) {
+  const { default: jsPDF } = await import("jspdf");
+  await import("jspdf-autotable");
+
+  const doc  = new jsPDF();
+  const roxo = [127, 45, 146];
+  const larg = doc.internal.pageSize.getWidth();
+
+  // Cabeçalho roxo
+  doc.setFillColor(roxo[0], roxo[1], roxo[2]);
+  doc.rect(0, 0, larg, 28, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(15);
+  doc.text("Solicitação de produto substituto", 14, 13);
+  doc.setFontSize(10);
+  doc.text("Liquida System · Assurant", 14, 21);
+
+  doc.setTextColor(60, 60, 60);
+  doc.setFontSize(9);
+  doc.text(`Gerado em ${new Date().toLocaleString("pt-BR")}`, 14, 36);
+
+  // Dados do pedido
+  doc.autoTable({
+    startY: 42,
+    head: [["Dados do pedido", ""]],
+    body: [
+      ["Pedido (marketplace)", String(pedido.id_anymarket ?? "—")],
+      ["Marketplace",          pedido.marketplace || "—"],
+      ["Data do pedido",       pedido.data_pedido || pedido.data_de_pagamento || "—"],
+      ["Cliente",              pedido.cliente || "—"],
+      ["CPF/CNPJ",             pedido.cpf_cnpj || "—"],
+    ],
+    theme: "grid",
+    headStyles: { fillColor: roxo, textColor: 255, fontStyle: "bold" },
+    styles: { fontSize: 10, cellPadding: 3 },
+    columnStyles: { 0: { fontStyle: "bold", cellWidth: 55 } },
+  });
+
+  // O que precisa
+  doc.autoTable({
+    startY: doc.lastAutoTable.finalY + 6,
+    head: [["Produto necessário", ""]],
+    body: [
+      ["SKU do anúncio", pedido.sku_produto || "—"],
+      ["Título",         pedido.titulo_produto || "—"],
+      ["Grade pedida",   pedido.grade_produto || "—"],
+      ["Valor",          pedido.total_do_pedido != null ? `R$ ${Number(pedido.total_do_pedido).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "—"],
+    ],
+    theme: "grid",
+    headStyles: { fillColor: roxo, textColor: 255, fontStyle: "bold" },
+    styles: { fontSize: 10, cellPadding: 3 },
+    columnStyles: { 0: { fontStyle: "bold", cellWidth: 55 } },
+  });
+
+  // Campo para a Assurant preencher o aparelho substituto
+  doc.autoTable({
+    startY: doc.lastAutoTable.finalY + 6,
+    head: [["Aparelho substituto (preenchimento Assurant)", ""]],
+    body: [
+      ["IMEI substituto", "                                        "],
+      ["Grade",           "                                        "],
+      ["Observações",     "                                        "],
+    ],
+    theme: "grid",
+    headStyles: { fillColor: [90, 90, 90], textColor: 255, fontStyle: "bold" },
+    styles: { fontSize: 10, cellPadding: 5, minCellHeight: 12 },
+    columnStyles: { 0: { fontStyle: "bold", cellWidth: 55 } },
+  });
+
+  doc.save(`sem_produto_pedido_${pedido.id_anymarket}.pdf`);
+}// ══════════════════════════════════════════════════════════
 // FATURAMENTO
 // ══════════════════════════════════════════════════════════
 

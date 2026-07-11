@@ -4,7 +4,7 @@ import {
   X, ChevronDown, ChevronUp, Clock,
   Layers, ArrowRight, Loader, RefreshCw,
   FileText, Store, MapPin, Ticket, Download, Upload, Lock,
-  Scale, Clock3,
+  Scale, Clock3, FileWarning, HelpCircle, CornerUpLeft,
 } from "lucide-react";
 import {
   listarPedidosAguardandoAlocacao,
@@ -16,6 +16,10 @@ import {
   importarNFsGrupo,
   buscarSugestaoFifo,
   buscarComparativoAging,
+  listarPedidosAguardandoDefinicao,
+  marcarSemProduto,
+  voltarParaAlocacao,
+  gerarPdfSemProduto,
   alocarPedido,
   fecharGruposPendentes,
   registrarBipagem,
@@ -84,6 +88,7 @@ function TabAlocacao({ onGrupoFormado }) {
   const [feedback, setFeedback]             = useState(null);
   const [pendentes, setPendentes]           = useState(0);
   const [fechandoGrupo, setFechandoGrupo]   = useState(false);
+  const [semProdutoId, setSemProdutoId]     = useState(null);
 
   useEffect(() => { carregar(); }, [horaCorte]);
 
@@ -147,6 +152,21 @@ function TabAlocacao({ onGrupoFormado }) {
       setTimeout(() => setFeedback(null), 4000);
     } catch (e) { setFeedback({ tipo: "erro", msg: e.message }); }
     finally { setFechandoGrupo(false); }
+  }
+
+  async function handleSemProduto(pedido) {
+    setSemProdutoId(pedido.id);
+    try {
+      await gerarPdfSemProduto(pedido);
+      await marcarSemProduto(pedido.id, user.id);
+      setPedidos(prev => prev.filter(p => p.id !== pedido.id));
+      setAlocandoId(null);
+      setSugestoes([]);
+      setFeedback({ tipo: "ok", msg: `✓ PDF gerado — pedido #${pedido.id_anymarket} enviado para Aguardando Definição.` });
+      setTimeout(() => setFeedback(null), 4000);
+    } catch (e) {
+      setFeedback({ tipo: "erro", msg: e.message });
+    } finally { setSemProdutoId(null); }
   }
 
   const pedidosFiltrados = pedidos.filter(p =>
@@ -267,9 +287,20 @@ function TabAlocacao({ onGrupoFormado }) {
                       Buscando sugestões FIFO...
                     </div>
                   ) : sugestoes.length === 0 ? (
-                    <div className="flex items-center gap-2 text-xs text-amber-600 font-semibold">
-                      <AlertTriangle className="h-4 w-4" />
-                      Nenhum IMEI disponível para este SKU e grade.
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <div className="flex items-center gap-2 text-xs text-amber-600 font-semibold">
+                        <AlertTriangle className="h-4 w-4" />
+                        Nenhum IMEI disponível para este SKU e grade.
+                      </div>
+                      <button
+                        onClick={() => handleSemProduto(p)}
+                        disabled={semProdutoId === p.id}
+                        className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl bg-amber-50 text-amber-700 ring-1 ring-amber-200 hover:bg-amber-100 transition disabled:opacity-50 shrink-0">
+                        {semProdutoId === p.id
+                          ? <div className="h-3 w-3 border-2 border-amber-300 border-t-amber-700 rounded-full animate-spin" />
+                          : <FileWarning className="h-3.5 w-3.5" />}
+                        Sem produto — gerar PDF
+                      </button>
                     </div>
                   ) : (
                     <div className="space-y-2">
@@ -927,6 +958,113 @@ function TabFaturamento() {
 }
 
 // ══════════════════════════════════════════════════════════
+// ABA AGUARDANDO DEFINIÇÃO DE PRODUTO
+// ══════════════════════════════════════════════════════════
+function TabAguardandoDefinicao() {
+  const [pedidos, setPedidos]   = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [feedback, setFeedback] = useState(null);
+  const [baixando, setBaixando] = useState(null);
+  const [voltando, setVoltando] = useState(null);
+
+  useEffect(() => { carregar(); }, []);
+
+  async function carregar() {
+    setLoading(true);
+    try { setPedidos(await listarPedidosAguardandoDefinicao()); }
+    catch (e) { console.error(e); }
+    finally { setLoading(false); }
+  }
+
+  async function handleBaixarPdf(p) {
+    setBaixando(p.id);
+    try { await gerarPdfSemProduto(p); }
+    catch (e) { setFeedback({ tipo: "erro", msg: e.message }); }
+    finally { setBaixando(null); }
+  }
+
+  async function handleVoltar(p) {
+    setVoltando(p.id);
+    try {
+      await voltarParaAlocacao(p.id);
+      setPedidos(prev => prev.filter(x => x.id !== p.id));
+      setFeedback({ tipo: "ok", msg: `✓ Pedido #${p.id_anymarket} devolvido para alocação.` });
+      setTimeout(() => setFeedback(null), 4000);
+    } catch (e) { setFeedback({ tipo: "erro", msg: e.message }); }
+    finally { setVoltando(null); }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <p className="text-sm text-slate-500">Pedidos sem aparelho disponível — aguardando a Assurant indicar um substituto.</p>
+        <button onClick={carregar} className="text-xs text-slate-500 hover:text-purple-700 font-semibold flex items-center gap-1">
+          <RefreshCw className="h-3.5 w-3.5" /> Atualizar
+        </button>
+      </div>
+
+      {feedback && (
+        <div className={`flex items-center gap-2 rounded-2xl px-4 py-3 ring-1 text-sm ${feedback.tipo === "ok" ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-red-50 text-red-700 ring-red-200"}`}>
+          {feedback.tipo === "ok" ? <CheckCircle className="h-4 w-4 shrink-0" /> : <AlertTriangle className="h-4 w-4 shrink-0" />}
+          <span className="font-semibold">{feedback.msg}</span>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="flex items-center justify-center h-32">
+          <div className="h-8 w-8 border-4 border-purple-200 border-t-[#7F2D92] rounded-full animate-spin" />
+        </div>
+      ) : pedidos.length === 0 ? (
+        <div className="text-center py-12 text-slate-400">
+          <HelpCircle className="h-8 w-8 mx-auto mb-2 opacity-30" />
+          <p className="text-sm">Nenhum pedido aguardando definição de produto.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-xs text-slate-500 font-semibold">{fmtN(pedidos.length)} pedido{pedidos.length > 1 ? "s" : ""} aguardando definição</p>
+          {pedidos.map(p => (
+            <Card key={p.id} className="ring-1 ring-amber-200">
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <span className="font-black text-slate-800 text-sm">#{p.id_anymarket}</span>
+                    <span className="text-xs text-slate-400">{p.marketplace}</span>
+                    <GradeBadge grade={p.grade_produto} />
+                  </div>
+                  <p className="text-sm font-semibold text-slate-700 truncate">{p.titulo_produto}</p>
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    <span className="text-xs text-slate-500 font-mono">{p.sku_produto}</span>
+                    <span className="text-xs font-bold text-emerald-700">{fmtR(p.total_do_pedido)}</span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-0.5">{p.cliente}</p>
+                  {p.definicao_solicitada_em && (
+                    <p className="text-xs text-amber-600 font-semibold mt-1">
+                      Aguardando desde {fmtData(p.definicao_solicitada_em)}
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button onClick={() => handleBaixarPdf(p)} disabled={baixando === p.id}
+                    className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-slate-50 text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100 transition disabled:opacity-50">
+                    {baixando === p.id ? <div className="h-3 w-3 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                    Baixar PDF
+                  </button>
+                  <button onClick={() => handleVoltar(p)} disabled={voltando === p.id}
+                    className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100 transition disabled:opacity-50">
+                    {voltando === p.id ? <div className="h-3 w-3 border-2 border-emerald-300 border-t-emerald-700 rounded-full animate-spin" /> : <CornerUpLeft className="h-3.5 w-3.5" />}
+                    Voltar para alocação
+                  </button>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════
 // PÁGINA PRINCIPAL
 // ══════════════════════════════════════════════════════════
 // Emails com acesso à aba de comparativo de aging. Preencha com os endereços certos.
@@ -1084,6 +1222,7 @@ export default function PedidosB2CPage() {
     { key: "alocacao",    label: "Alocação",    icon: Layers        },
     { key: "picking",     label: "Picking",     icon: Search        },
     { key: "analise",     label: "Em Análise",  icon: AlertTriangle },
+    { key: "definicao",   label: "Aguardando Definição", icon: HelpCircle },
     { key: "faturamento", label: "Faturamento", icon: FileText      },
     ...(podeVerComparativo
       ? [{ key: "comparativo", label: "Comparativo Aging", icon: Scale }]
@@ -1127,6 +1266,7 @@ export default function PedidosB2CPage() {
       {aba === "alocacao"    && <TabAlocacao onGrupoFormado={recarregarKpis} />}
       {aba === "picking"     && <TabPicking />}
       {aba === "analise"     && <TabAnalise />}
+      {aba === "definicao"   && <TabAguardandoDefinicao />}
       {aba === "faturamento" && <TabFaturamento />}
       {aba === "comparativo" && podeVerComparativo && <TabComparativoAging />}
     </div>
