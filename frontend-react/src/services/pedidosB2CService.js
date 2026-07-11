@@ -251,16 +251,19 @@ export async function buscarSugestaoFifo(skuProduto, gradePedido) {
   //   >0 = grade superior (quanto menor, mais próxima da vendida — menos "desperdício")
   const ordemPedido = gradeOrdem(gradeAlvo);
 
-  // O FIFO só SUGERE aparelhos com data_subinv (a âncora de antiguidade confiável).
-  // Aparelho sem subinv é pulado: o pedido segue com o próximo que tenha subinv, sem travar.
-  // (Os sem subinv não somem do controle — aparecem na aba Comparativo Aging à parte.)
+  // O FIFO só SUGERE aparelhos que estão fisicamente no armazém (WH2): precisam ter
+  //   (1) local preenchido — a garantia do Gaia de que o aparelho está no armazém, e
+  //   (2) data_subinv — a âncora de antiguidade para o FIFO.
+  // Sem local OU sem subinv, o aparelho é pulado (o pedido segue com o próximo elegível).
+  // (Os pulados não somem do controle — aparecem na aba Comparativo Aging à parte.)
+  const temLocal = (item) => !!(item.local && String(item.local).trim());
   const ordenados = imeisValidos
     .map(item => ({
       ...item,
       data_subinv:     subinvMap[item.imei] || null,
       distancia_grade: ordemPedido - gradeOrdem(item.grade),
     }))
-    .filter(item => item.data_subinv)
+    .filter(item => item.data_subinv && temLocal(item))
     .sort((a, b) => {
       // Outlet mistura grades de propósito (Bom pra cima), então não prioriza grade:
       // é FIFO puro entre os elegíveis. Nos demais casos, grade mais próxima primeiro.
@@ -366,10 +369,11 @@ export async function buscarComparativoAging() {
       .filter(item => itemElegivel(item, ehOutlet, gradeAlvo));
     if (!candidatos.length) continue;
 
-    // Selecionado = mais antigo COM subinv (o que o FIFO sugeriria)
+    // Selecionado = o que o FIFO sugeriria: mais antigo COM subinv E com local (armazém/Gaia)
+    const temLocalCmp = (c) => !!(c.local && String(c.local).trim());
     const comSubinv = candidatos
       .map(c => ({ ...c, data_subinv: subinvMap[c.imei] || null }))
-      .filter(c => c.data_subinv)
+      .filter(c => c.data_subinv && temLocalCmp(c))
       .sort((a, b) => new Date(a.data_subinv) - new Date(b.data_subinv));
 
     // Alternativas = elegíveis SEM subinv, ordenadas pela mais velha (maior aging)
