@@ -4,7 +4,7 @@ import {
   X, ChevronDown, ChevronUp, Clock,
   Layers, ArrowRight, Loader, RefreshCw,
   FileText, Store, MapPin, Ticket, Download, Upload, Lock,
-  Scale, Clock3, FileWarning, HelpCircle, CornerUpLeft,
+  Scale, Clock3, FileWarning, HelpCircle, CornerUpLeft, Building2,
 } from "lucide-react";
 import {
   listarPedidosAguardandoAlocacao,
@@ -32,6 +32,15 @@ import { useAuth } from "../AuthContext.jsx";
 function fmtR(v) { return v != null ? `R$ ${Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "—"; }
 function fmtN(v) { return (v || 0).toLocaleString("pt-BR"); }
 function fmtData(d) { if (!d) return "—"; return new Date(d).toLocaleString("pt-BR"); }
+
+// Detecta o tipo de documento pelo número de dígitos (ignora pontuação).
+// 11 = CPF, 14 = CNPJ, qualquer outra coisa (vazio, nulo, contagem estranha) = sem documento.
+function tipoDocumento(cpfCnpj) {
+  const digitos = String(cpfCnpj || "").replace(/\D/g, "");
+  if (digitos.length === 14) return "cnpj";
+  if (digitos.length === 11) return "cpf";
+  return "sem";
+}
 
 function Card({ children, className = "" }) {
   return <div className={`bg-white rounded-2xl p-5 ring-1 ring-slate-200 shadow-sm ${className}`}>{children}</div>;
@@ -244,14 +253,30 @@ function TabAlocacao({ onGrupoFormado }) {
       ) : (
         <div className="space-y-3">
           <p className="text-xs text-slate-500 font-semibold">{fmtN(pedidosFiltrados.length)} pedidos aguardando alocação</p>
-          {pedidosFiltrados.map(p => (
-            <div key={p.id} className="bg-white rounded-2xl ring-1 ring-slate-200 shadow-sm overflow-hidden">
+          {pedidosFiltrados.map(p => {
+            const doc = tipoDocumento(p.cpf_cnpj);
+            const cardCls =
+              doc === "cnpj" ? "bg-amber-50 ring-2 ring-amber-300" :
+              doc === "sem"  ? "bg-red-50 ring-2 ring-red-300" :
+              "bg-white ring-1 ring-slate-200";
+            return (
+            <div key={p.id} className={`rounded-2xl shadow-sm overflow-hidden ${cardCls}`}>
               <div className="p-4">
                 <div className="flex items-start justify-between gap-3 flex-wrap">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
                       <span className="font-black text-slate-800 text-sm">#{p.id_anymarket}</span>
                       <span className="text-xs text-slate-400">{p.marketplace}</span>
+                      {doc === "cnpj" && (
+                        <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-lg bg-amber-500 text-white">
+                          <Building2 className="h-3 w-3" /> CNPJ — Pessoa Jurídica
+                        </span>
+                      )}
+                      {doc === "sem" && (
+                        <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-lg bg-red-600 text-white">
+                          <AlertTriangle className="h-3 w-3" /> Sem CPF/CNPJ
+                        </span>
+                      )}
                       {p.data_de_pagamento && (
                         <span className="text-xs text-slate-400 flex items-center gap-1">
                           <Clock className="h-3 w-3" /> {p.data_de_pagamento}
@@ -264,7 +289,12 @@ function TabAlocacao({ onGrupoFormado }) {
                       <GradeBadge grade={p.grade_produto} />
                       <span className="text-xs font-bold text-emerald-700">{fmtR(p.total_do_pedido)}</span>
                     </div>
-                    <p className="text-xs text-slate-400 mt-0.5">{p.cliente}</p>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {p.cliente}
+                      {doc === "sem"
+                        ? " · documento não informado"
+                        : p.cpf_cnpj ? ` · ${p.cpf_cnpj}` : ""}
+                    </p>
                   </div>
                   <button
                     onClick={() => abrirSugestoes(p)}
@@ -330,7 +360,8 @@ function TabAlocacao({ onGrupoFormado }) {
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
