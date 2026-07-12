@@ -3,12 +3,14 @@ import {
   Search, CheckCircle, AlertTriangle, Package,
   X, ChevronDown, ChevronUp, Clock,
   Layers, ArrowRight, Loader, RefreshCw,
-  FileText, Store, MapPin, Ticket, Download, Upload, Lock,
+  FileText, Store, MapPin, Ticket, Download, Upload, Lock, Unlock,
   Scale, Clock3, FileWarning, HelpCircle, CornerUpLeft, Building2,
 } from "lucide-react";
 import {
   listarPedidosAguardandoAlocacao,
   listarGruposPicking,
+  reservarGrupoPicking,
+  liberarTravaPicking,
   listarPedidosGrupo,
   listarPedidosEmAnalise,
   listarGruposFaturamento,
@@ -370,7 +372,7 @@ function TabAlocacao({ onGrupoFormado }) {
 // ABA PICKING
 // ══════════════════════════════════════════════════════════
 function TabPicking() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [grupos, setGrupos]               = useState([]);
   const [grupoSel, setGrupoSel]           = useState(null);
   const [pedidos, setPedidos]             = useState([]);
@@ -379,6 +381,7 @@ function TabPicking() {
   const [feedback, setFeedback]           = useState(null);
   const [modalAnalise, setModalAnalise]   = useState(null);
   const [motivoAnalise, setMotivoAnalise] = useState("");
+  const [abrindoId, setAbrindoId]         = useState(null);
   const inputRef = useRef(null);
 
   useEffect(() => { carregarGrupos(); }, []);
@@ -390,6 +393,32 @@ function TabPicking() {
     try { setGrupos(await listarGruposPicking()); }
     catch (e) { console.error(e); }
     finally { setLoading(false); }
+  }
+
+  async function abrirGrupo(g) {
+    setAbrindoId(g.id);
+    setFeedback(null);
+    try {
+      const res = await reservarGrupoPicking(g.id, user.id, profile?.nome);
+      if (res.ok) {
+        setGrupoSel(g);
+      } else if (res.bloqueado) {
+        setFeedback({ tipo: "erro", msg: `Grupo em separacao por ${res.por}. Aguarde a conclusao.` });
+        await carregarGrupos();
+      }
+    } catch (e) {
+      setFeedback({ tipo: "erro", msg: e.message });
+    } finally { setAbrindoId(null); }
+  }
+
+  async function handleLiberarTrava(g, ev) {
+    ev.stopPropagation();
+    try {
+      await liberarTravaPicking(g.id);
+      setFeedback({ tipo: "ok", msg: `Trava do Grupo #${g.numero} liberada.` });
+      setTimeout(() => setFeedback(null), 3000);
+      await carregarGrupos();
+    } catch (e) { setFeedback({ tipo: "erro", msg: e.message }); }
   }
 
   async function carregarPedidos() {
@@ -448,6 +477,15 @@ function TabPicking() {
             <RefreshCw className="h-3.5 w-3.5" /> Atualizar
           </button>
         </div>
+        {feedback && (
+          <div className={`flex items-center gap-2 rounded-2xl px-4 py-3 ring-1 text-sm ${
+            feedback.tipo === "ok" ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-red-50 text-red-700 ring-red-200"
+          }`}>
+            {feedback.tipo === "ok" ? <CheckCircle className="h-4 w-4 shrink-0" /> : <AlertTriangle className="h-4 w-4 shrink-0" />}
+            <span className="font-semibold">{feedback.msg}</span>
+          </div>
+        )}
+
         {loading ? (
           <div className="flex items-center justify-center h-32">
             <div className="h-8 w-8 border-4 border-purple-200 border-t-[#7F2D92] rounded-full animate-spin" />
@@ -462,20 +500,47 @@ function TabPicking() {
           <div className="grid gap-3">
             {grupos.map(g => {
               const pctG = g.total_pedidos > 0 ? Math.round((g.concluidos || 0) / g.total_pedidos * 100) : 0;
+              const travadoOutro = g.picking_por && g.picking_por !== user.id;
+              const travadoVoce   = g.picking_por && g.picking_por === user.id;
+              const cardCls = travadoOutro
+                ? "bg-slate-50 ring-1 ring-slate-200 opacity-60 cursor-not-allowed"
+                : travadoVoce
+                ? "bg-white ring-2 ring-[#7F2D92] hover:ring-[#5B1E74] cursor-pointer"
+                : "bg-white ring-1 ring-slate-200 hover:ring-purple-300 hover:bg-purple-50 cursor-pointer";
               return (
-                <button key={g.id} onClick={() => setGrupoSel(g)}
-                  className="bg-white rounded-2xl p-4 ring-1 ring-slate-200 text-left hover:ring-purple-300 hover:bg-purple-50 transition-all">
-                  <div className="flex items-center justify-between mb-3">
+                <div key={g.id}
+                  onClick={() => { if (!travadoOutro && abrindoId !== g.id) abrirGrupo(g); }}
+                  className={`rounded-2xl p-4 text-left transition-all ${cardCls}`}>
+                  <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
                     <div>
                       <div className="font-black text-slate-800">Grupo #{g.numero}</div>
                       <div className="text-xs text-slate-500 mt-0.5">{g.total_pedidos} pedidos · criado em {fmtData(g.criado_em)}</div>
                     </div>
-                    <StatusBadge status={g.status} />
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {travadoOutro && (
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-red-50 text-red-700 ring-1 ring-red-200">
+                          <Lock className="h-3 w-3" /> Em separação por {g.picking_por_nome || "outro operador"}
+                        </span>
+                      )}
+                      {travadoVoce && (
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-purple-50 text-[#7F2D92] ring-1 ring-purple-200">
+                          <Lock className="h-3 w-3" /> Em separação por você
+                        </span>
+                      )}
+                      <StatusBadge status={g.status} />
+                      {abrindoId === g.id && <Loader className="h-4 w-4 animate-spin text-purple-500" />}
+                    </div>
                   </div>
                   <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                     <div className="h-full rounded-full bg-[#7F2D92] transition-all" style={{ width: `${pctG}%` }} />
                   </div>
-                </button>
+                  {travadoOutro && profile?.is_master && (
+                    <button onClick={(ev) => handleLiberarTrava(g, ev)}
+                      className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-white text-slate-600 ring-1 ring-slate-300 hover:bg-slate-100 transition">
+                      <Unlock className="h-3.5 w-3.5" /> Liberar trava (master)
+                    </button>
+                  )}
+                </div>
               );
             })}
           </div>

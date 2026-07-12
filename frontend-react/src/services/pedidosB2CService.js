@@ -97,6 +97,65 @@ export async function listarGruposPicking() {
   return data || [];
 }
 
+// ── Trava de separação (picking) ─────────────────────
+// Quando um usuário abre um grupo para separar, o grupo é reservado para ele.
+// Ninguém mais consegue abrir até concluir (libera automática) ou o master destravar.
+
+// Tenta reservar o grupo para o usuário. Reserva atômica: só grava se estiver livre
+// (picking_por is null) OU se já for do próprio usuário (reabrindo). Se estiver com
+// outro, retorna bloqueado com o nome de quem está separando.
+export async function reservarGrupoPicking(grupoId, userId, userNome) {
+  const { data: grupo } = await supabase
+    .from("pedidos_b2c_grupos")
+    .select("picking_por, picking_por_nome, picking_em")
+    .eq("id", grupoId)
+    .single();
+
+  if (grupo?.picking_por && grupo.picking_por === userId) {
+    return { ok: true, ja_era_seu: true };
+  }
+
+  if (grupo?.picking_por && grupo.picking_por !== userId) {
+    return {
+      ok: false,
+      bloqueado: true,
+      por: grupo.picking_por_nome || "outro operador",
+      em: grupo.picking_em,
+    };
+  }
+
+  const { data: reservado } = await supabase
+    .from("pedidos_b2c_grupos")
+    .update({ picking_por: userId, picking_por_nome: userNome || "Operador", picking_em: new Date().toISOString() })
+    .eq("id", grupoId)
+    .is("picking_por", null)
+    .select("picking_por");
+
+  if (reservado && reservado.length > 0) {
+    return { ok: true };
+  }
+
+  const { data: dono } = await supabase
+    .from("pedidos_b2c_grupos")
+    .select("picking_por, picking_por_nome, picking_em")
+    .eq("id", grupoId)
+    .single();
+  if (dono?.picking_por && dono.picking_por !== userId) {
+    return { ok: false, bloqueado: true, por: dono.picking_por_nome || "outro operador", em: dono.picking_em };
+  }
+  return { ok: true };
+}
+
+// Libera a trava do picking (master destravando um grupo preso).
+// Só solta a reserva — não bipa nada nem muda status de pedido.
+export async function liberarTravaPicking(grupoId) {
+  const { error } = await supabase
+    .from("pedidos_b2c_grupos")
+    .update({ picking_por: null, picking_por_nome: null, picking_em: null })
+    .eq("id", grupoId);
+  if (error) throw new Error(error.message);
+}
+
 export async function listarPedidosGrupo(grupoId) {
   const { data, error } = await supabase
     .from("pedidos_b2c")
@@ -579,9 +638,10 @@ async function verificarConclusaoGrupo(grupoId) {
   ).length;
 
   if (concluidos >= todos.length) {
+    // Grupo concluído: fecha e libera a trava de picking automaticamente.
     await supabase
       .from("pedidos_b2c_grupos")
-      .update({ status: "concluido" })
+      .update({ status: "concluido", picking_por: null, picking_por_nome: null, picking_em: null })
       .eq("id", grupoId);
   } else {
     // Reabriu no picking: limpa a trava de faturamento (fica livre de novo quando voltar).
