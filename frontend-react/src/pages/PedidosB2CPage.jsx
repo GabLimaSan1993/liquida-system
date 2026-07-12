@@ -382,6 +382,8 @@ function TabPicking() {
   const [modalAnalise, setModalAnalise]   = useState(null);
   const [motivoAnalise, setMotivoAnalise] = useState("");
   const [abrindoId, setAbrindoId]         = useState(null);
+  const [conferindo, setConferindo]       = useState(null);
+  const [checks, setChecks]               = useState({ cor: false, modelo: false, sku: false });
   const inputRef = useRef(null);
 
   useEffect(() => { carregarGrupos(); }, []);
@@ -440,14 +442,43 @@ function TabPicking() {
       return;
     }
 
-    const res = await registrarBipagem(pedido.id, imei, user.id);
+    // Abre o painel de conferência (cor/modelo/SKU) antes de confirmar a bipagem.
+    setChecks({ cor: false, modelo: false, sku: false });
+    setConferindo(pedido);
+  }
+
+  // Confirma a bipagem após a operadora conferir os três itens.
+  async function confirmarBipagem() {
+    const pedido = conferindo;
+    if (!pedido) return;
+    const res = await registrarBipagem(pedido.id, pedido.imei_alocado, user.id);
     if (res.ok) {
       setFeedback({ tipo: "ok", msg: `✓ Pedido #${pedido.id_anymarket} bipado!` });
       setPedidos(prev => prev.map(p => p.id === pedido.id ? { ...p, status: "embalado", bipado_em: new Date().toISOString() } : p));
     } else {
       setFeedback({ tipo: "erro", msg: res.erro });
     }
+    setConferindo(null);
     setTimeout(() => setFeedback(null), 3000);
+    inputRef.current?.focus();
+  }
+
+  // Divergência na conferência: envia o pedido para análise com o motivo do que não conferiu.
+  async function divergenciaConferencia() {
+    const pedido = conferindo;
+    if (!pedido) return;
+    const faltou = [];
+    if (!checks.cor)    faltou.push("cor");
+    if (!checks.modelo) faltou.push("modelo");
+    if (!checks.sku)    faltou.push("SKU");
+    const motivo = `Divergência na conferência: ${faltou.join(", ")}`;
+    try {
+      await marcarNaoLocalizado(pedido.id, motivo, user.id);
+      setPedidos(prev => prev.map(p => p.id === pedido.id ? { ...p, status: "em_analise" } : p));
+      setFeedback({ tipo: "aviso", msg: `⚠ Pedido #${pedido.id_anymarket} enviado para análise (${motivo}).` });
+    } catch (e) { setFeedback({ tipo: "erro", msg: e.message }); }
+    setConferindo(null);
+    setTimeout(() => setFeedback(null), 4000);
     inputRef.current?.focus();
   }
 
@@ -632,6 +663,66 @@ function TabPicking() {
               <CheckCircle className="h-4 w-4" /> Confirmar
             </button>
           </form>
+
+          {conferindo && (
+            <div className="mt-4 rounded-2xl ring-1 ring-purple-200 bg-purple-50/40 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Search className="h-4 w-4 text-[#7F2D92]" />
+                <span className="font-bold text-slate-800 text-sm">Confira o aparelho antes de embalar</span>
+                <span className="text-xs text-slate-500">#{conferindo.id_anymarket} · IMEI {conferindo.imei_alocado}</span>
+              </div>
+
+              <div className="bg-white rounded-xl ring-1 ring-slate-200 px-3 py-2.5 mb-3">
+                <div className="text-xs text-slate-500 mb-0.5">Produto do pedido:</div>
+                <div className="text-sm font-semibold text-slate-800">{conferindo.titulo_produto}</div>
+                <div className="text-xs font-mono text-slate-500 mt-1">SKU: {conferindo.sku_produto}</div>
+              </div>
+
+              <div className="space-y-2 mb-3">
+                {[
+                  { key: "cor",    label: "A cor do aparelho confere" },
+                  { key: "modelo", label: "O modelo confere" },
+                  { key: "sku",    label: "O SKU confere" },
+                ].map(item => (
+                  <label key={item.key} className="flex items-center gap-2.5 text-sm text-slate-700 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={checks[item.key]}
+                      onChange={e => setChecks(prev => ({ ...prev, [item.key]: e.target.checked }))}
+                      className="h-5 w-5 rounded accent-[#7F2D92] cursor-pointer"
+                    />
+                    {item.label}
+                    {!checks[item.key] && <span className="text-xs text-red-500">— não confere</span>}
+                  </label>
+                ))}
+              </div>
+
+              {checks.cor && checks.modelo && checks.sku ? (
+                <button onClick={confirmarBipagem}
+                  className="w-full flex items-center justify-center gap-2 bg-[#7F2D92] text-white py-2.5 rounded-xl text-sm font-bold hover:bg-[#5B1E74] transition">
+                  <CheckCircle className="h-4 w-4" /> Confirmar bipagem
+                </button>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2 bg-red-50 text-red-700 rounded-xl px-3 py-2 text-xs font-semibold mb-2 ring-1 ring-red-200">
+                    <AlertTriangle className="h-4 w-4 shrink-0" />
+                    Marque tudo que confere. O que ficar desmarcado envia o pedido para análise.
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={divergenciaConferencia}
+                      className="flex-1 flex items-center justify-center gap-2 bg-red-600 text-white py-2.5 rounded-xl text-sm font-bold hover:bg-red-700 transition">
+                      <ArrowRight className="h-4 w-4" /> Enviar para análise
+                    </button>
+                    <button onClick={() => { setConferindo(null); inputRef.current?.focus(); }}
+                      className="px-4 py-2.5 rounded-xl text-sm font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 transition">
+                      Cancelar
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           {feedback && (
             <div className={`mt-3 flex items-center gap-2 text-sm rounded-xl px-4 py-3 ring-1 ${
               feedback.tipo === "ok"    ? "bg-emerald-50 text-emerald-700 ring-emerald-200" :
