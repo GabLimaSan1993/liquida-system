@@ -26,6 +26,7 @@ import {
   fecharGruposPendentes,
   registrarBipagem,
   marcarNaoLocalizado,
+  naoLocalizadoBuscarProximo,
   resolverAnalise,
   buscarKpisPedidosB2C,
 } from "../services/pedidosB2CService.js";
@@ -384,6 +385,7 @@ function TabPicking() {
   const [abrindoId, setAbrindoId]         = useState(null);
   const [conferindo, setConferindo]       = useState(null);
   const [checks, setChecks]               = useState({ cor: false, modelo: false, sku: false });
+  const [buscandoProximo, setBuscandoProximo] = useState(null);
   const inputRef = useRef(null);
 
   useEffect(() => { carregarGrupos(); }, []);
@@ -480,6 +482,29 @@ function TabPicking() {
     setConferindo(null);
     setTimeout(() => setFeedback(null), 4000);
     inputRef.current?.focus();
+  }
+
+  // "Não localizado": manda o IMEI para análise de estoque e busca o próximo do FIFO.
+  // Se achar, troca na hora e o pedido segue no grupo. Se não, vai para análise.
+  async function handleNaoLocalizado(pedido) {
+    setBuscandoProximo(pedido.id);
+    try {
+      const res = await naoLocalizadoBuscarProximo(pedido, user.id);
+      if (res.trocado) {
+        setPedidos(prev => prev.map(p => p.id === pedido.id
+          ? { ...p, imei_alocado: res.novoImei, grade_alocada: res.grade, local_estoque: res.local }
+          : p));
+        setFeedback({ tipo: "ok", msg: `✓ Nova peça para #${pedido.id_anymarket}: IMEI ${res.novoImei}${res.local ? ` · ${res.local}` : ""}. Bipe a nova peça.` });
+      } else {
+        setPedidos(prev => prev.map(p => p.id === pedido.id ? { ...p, status: "em_analise" } : p));
+        setFeedback({ tipo: "aviso", msg: `⚠ Sem segunda opção para #${pedido.id_anymarket} — enviado para análise.` });
+      }
+    } catch (e) {
+      setFeedback({ tipo: "erro", msg: e.message });
+    } finally {
+      setBuscandoProximo(null);
+      setTimeout(() => setFeedback(null), 5000);
+    }
   }
 
   async function confirmarAnalise() {
@@ -771,9 +796,9 @@ function TabPicking() {
                   <div className="flex items-center gap-2 shrink-0">
                     <StatusBadge status={p.status} />
                     {p.status === "em_picking" && (
-                      <button onClick={() => setModalAnalise(p)}
-                        className="text-xs font-semibold px-2 py-1 rounded-lg bg-amber-50 text-amber-700 ring-1 ring-amber-200 hover:bg-amber-100 transition whitespace-nowrap">
-                        Não localizado
+                      <button onClick={() => handleNaoLocalizado(p)} disabled={buscandoProximo === p.id}
+                        className="text-xs font-semibold px-2 py-1 rounded-lg bg-amber-50 text-amber-700 ring-1 ring-amber-200 hover:bg-amber-100 transition whitespace-nowrap disabled:opacity-50">
+                        {buscandoProximo === p.id ? "Buscando..." : "Não localizado"}
                       </button>
                     )}
                   </div>

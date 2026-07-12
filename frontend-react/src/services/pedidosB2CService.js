@@ -670,6 +670,53 @@ export async function marcarNaoLocalizado(pedidoId, motivo, userId) {
   if (error) throw new Error(error.message);
 }
 
+// Picking — "Não localizado" com busca automática de segunda opção.
+// 1. Manda o IMEI não encontrado para "Em análise de estoque" (sai do estoque sugerível).
+// 2. Busca o próximo IMEI do FIFO para o mesmo pedido (excluindo o antigo).
+// 3. Se achar: reserva o novo e o pedido segue no grupo apontando para ele.
+//    Se não achar: manda o pedido para análise (fluxo atual).
+// Retorna { trocado: true, novoImei, local } | { trocado: false } (foi para análise).
+export async function naoLocalizadoBuscarProximo(pedido, userId) {
+  const imeiAntigo = pedido.imei_alocado;
+
+  // 1. IMEI antigo vai para análise de estoque (não some, mas sai do FIFO até verificação)
+  if (imeiAntigo) {
+    await supabase
+      .from("assurant_triagem")
+      .update({ status_atual: "Em análise de estoque" })
+      .eq("imei", imeiAntigo);
+  }
+
+  // 2. Busca a próxima sugestão FIFO para o mesmo produto (o antigo já saiu dos alocáveis)
+  const sugestoes = await buscarSugestaoFifo(pedido.sku_produto, pedido.grade_produto);
+  // Exclui por segurança o próprio antigo (caso ainda apareça) e qualquer já reservado
+  const proximo = (sugestoes || []).find(s => s.imei !== imeiAntigo);
+
+  if (proximo) {
+    // 3a. Reserva o novo IMEI e aponta o pedido para ele — segue no mesmo grupo
+    await supabase
+      .from("assurant_triagem")
+      .update({ status_atual: "Reservado para pedido B2C" })
+      .eq("imei", proximo.imei);
+
+    await supabase
+      .from("pedidos_b2c")
+      .update({
+        imei_alocado:  proximo.imei,
+        sku_alocado:   proximo.sku,
+        grade_alocada: proximo.grade,
+        atualizado_em: new Date().toISOString(),
+      })
+      .eq("id", pedido.id);
+
+    return { trocado: true, novoImei: proximo.imei, local: proximo.local, grade: proximo.grade };
+  }
+
+  // 3b. Sem segunda opção: manda o pedido para análise (fluxo atual)
+  await marcarNaoLocalizado(pedido.id, "Não localizado (sem segunda opção no FIFO)", userId);
+  return { trocado: false };
+}
+
 export async function resolverAnalise(pedidoId, novoImei, userId) {
   const { data: pedido } = await supabase
     .from("pedidos_b2c")
