@@ -94,6 +94,7 @@ function TabAlocacao({ onGrupoFormado }) {
   const [loading, setLoading]               = useState(true);
   const [horaCorte, setHoraCorte]           = useState("");
   const [busca, setBusca]                   = useState("");
+  const [mpFiltro, setMpFiltro]             = useState("todos");
   const [alocandoId, setAlocandoId]         = useState(null);
   const [sugestoes, setSugestoes]           = useState([]);
   const [loadingSugestao, setLoadingSugestao] = useState(false);
@@ -155,7 +156,10 @@ function TabAlocacao({ onGrupoFormado }) {
     try {
       const grupo = await fecharGruposPendentes(user.id);
       if (grupo) {
-        setFeedback({ tipo: "ok", msg: `✓ Grupo #${grupo.numero} criado com ${grupo.total_pedidos} pedidos.` });
+        const n = grupo.gruposCriados || 1;
+        setFeedback({ tipo: "ok", msg: n > 1
+          ? `✓ ${n} grupos criados (um por marketplace).`
+          : `✓ Grupo #${grupo.numero} criado com ${grupo.total_pedidos} pedidos.` });
         setPendentes(0);
         if (onGrupoFormado) onGrupoFormado();
       } else {
@@ -181,11 +185,17 @@ function TabAlocacao({ onGrupoFormado }) {
     } finally { setSemProdutoId(null); }
   }
 
+  // Marketplaces presentes nos pedidos aguardando alocação (para os botões de filtro)
+  const marketplacesDisponiveis = Array.from(
+    new Set(pedidos.map(p => p.marketplace).filter(Boolean))
+  ).sort();
+
   const pedidosFiltrados = pedidos.filter(p =>
-    !busca ||
-    String(p.id_anymarket).includes(busca) ||
-    p.cliente?.toLowerCase().includes(busca.toLowerCase()) ||
-    p.sku_produto?.toLowerCase().includes(busca.toLowerCase())
+    (mpFiltro === "todos" || p.marketplace === mpFiltro) &&
+    (!busca ||
+      String(p.id_anymarket).includes(busca) ||
+      p.cliente?.toLowerCase().includes(busca.toLowerCase()) ||
+      p.sku_produto?.toLowerCase().includes(busca.toLowerCase()))
   );
 
   return (
@@ -216,6 +226,32 @@ function TabAlocacao({ onGrupoFormado }) {
             <RefreshCw className="h-3.5 w-3.5" /> Atualizar
           </button>
         </div>
+
+        {/* Filtro por marketplace */}
+        {marketplacesDisponiveis.length > 0 && (
+          <div className="mt-3 flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-bold text-slate-500 flex items-center gap-1">
+              <Store className="h-3.5 w-3.5" /> Marketplace:
+            </span>
+            <button onClick={() => setMpFiltro("todos")}
+              className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition ${
+                mpFiltro === "todos" ? "bg-[#7F2D92] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}>
+              Todos ({pedidos.length})
+            </button>
+            {marketplacesDisponiveis.map(mp => {
+              const qtd = pedidos.filter(p => p.marketplace === mp).length;
+              return (
+                <button key={mp} onClick={() => setMpFiltro(mp)}
+                  className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition ${
+                    mpFiltro === mp ? "bg-[#7F2D92] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}>
+                  {mp} ({qtd})
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* Banner de pendentes */}
         {pendentes > 0 && (
@@ -569,7 +605,14 @@ function TabPicking() {
                   className={`rounded-2xl p-4 text-left transition-all ${cardCls}`}>
                   <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
                     <div>
-                      <div className="font-black text-slate-800">Grupo #{g.numero}</div>
+                      <div className="font-black text-slate-800 flex items-center gap-2">
+                        Grupo #{g.numero}
+                        {g.marketplace && (
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded-lg bg-purple-50 text-[#7F2D92] ring-1 ring-purple-200">
+                            {g.marketplace}
+                          </span>
+                        )}
+                      </div>
                       <div className="text-xs text-slate-500 mt-0.5">{g.total_pedidos} pedidos · criado em {fmtData(g.criado_em)}</div>
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">

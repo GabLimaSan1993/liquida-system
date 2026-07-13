@@ -94,7 +94,28 @@ export async function listarGruposPicking() {
     .in("status", ["aberto", "em_picking"])
     .order("criado_em", { ascending: true });
   if (error) throw new Error(error.message);
-  return data || [];
+
+  const grupos = data || [];
+  if (!grupos.length) return [];
+
+  // Descobre o marketplace de cada grupo pelos pedidos (todos do mesmo marketplace agora)
+  const ids = grupos.map(g => g.id);
+  const { data: pedidos } = await supabase
+    .from("pedidos_b2c")
+    .select("grupo_id, marketplace")
+    .in("grupo_id", ids);
+
+  const mpPorGrupo = {};
+  (pedidos || []).forEach(p => {
+    if (!mpPorGrupo[p.grupo_id]) mpPorGrupo[p.grupo_id] = new Set();
+    mpPorGrupo[p.grupo_id].add(p.marketplace || "—");
+  });
+
+  return grupos.map(g => {
+    const mps = mpPorGrupo[g.id] ? Array.from(mpPorGrupo[g.id]) : [];
+    const marketplace = mps.length === 1 ? mps[0] : (mps.length > 1 ? "Vários" : null);
+    return { ...g, marketplace };
+  });
 }
 
 // ── Trava de separação (picking) ─────────────────────
@@ -482,23 +503,31 @@ export async function buscarComparativoAging() {
 async function verificarECriarGrupo(userId) {
   const TAMANHO = 20;
 
-  // Busca pedidos alocados sem grupo
+  // Busca pedidos alocados sem grupo, com o marketplace (para agrupar por marketplace)
   const { data: semGrupo, error } = await supabase
     .from("pedidos_b2c")
-    .select("id")
+    .select("id, marketplace")
     .eq("status", "alocado")
     .is("grupo_id", null)
     .order("alocado_em", { ascending: true });
 
   if (error || !semGrupo?.length) return null;
 
-  // Só cria grupo se tiver 20 ou mais
-  if (semGrupo.length < TAMANHO) return null;
+  // Agrupa por marketplace, preservando a ordem de alocação (FIFO)
+  const porMarketplace = {};
+  for (const p of semGrupo) {
+    const mp = p.marketplace || "—";
+    (porMarketplace[mp] ||= []).push(p.id);
+  }
 
-  // Pega os primeiros 20
-  const lote = semGrupo.slice(0, TAMANHO);
+  // Fecha automaticamente o primeiro marketplace que atingir 20 pedidos
+  for (const [mp, ids] of Object.entries(porMarketplace)) {
+    if (ids.length >= TAMANHO) {
+      return await _criarGrupo(ids.slice(0, TAMANHO), userId);
+    }
+  }
 
-  return await _criarGrupo(lote.map(p => p.id), userId);
+  return null;
 }
 
 async function _criarGrupo(pedidoIds, userId) {
@@ -570,11 +599,11 @@ export async function alocarPedido(pedidoId, imei, sku, grade, userId) {
   return { ok: true, grupoFormado };
 }
 
-// ── Fechar grupos pendentes (sobras < 20) ─────────────────
+// ── Fechar grupos pendentes (sobras) — um grupo por marketplace ──
 export async function fecharGruposPendentes(userId) {
   const { data: semGrupo, error } = await supabase
     .from("pedidos_b2c")
-    .select("id")
+    .select("id, marketplace")
     .eq("status", "alocado")
     .is("grupo_id", null)
     .order("alocado_em", { ascending: true });
@@ -582,7 +611,22 @@ export async function fecharGruposPendentes(userId) {
   if (error) throw new Error(error.message);
   if (!semGrupo?.length) return null;
 
-  return await _criarGrupo(semGrupo.map(p => p.id), userId);
+  // Agrupa por marketplace e fecha um grupo para cada marketplace (mesmo com < 20)
+  const porMarketplace = {};
+  for (const p of semGrupo) {
+    const mp = p.marketplace || "—";
+    (porMarketplace[mp] ||= []).push(p.id);
+  }
+
+  const grupos = [];
+  for (const ids of Object.values(porMarketplace)) {
+    const grupo = await _criarGrupo(ids, userId);
+    if (grupo) grupos.push(grupo);
+  }
+
+  // Retorna o primeiro grupo e quantos foram criados (um por marketplace)
+  if (!grupos.length) return null;
+  return { ...grupos[0], gruposCriados: grupos.length };
 }
 
 // ══════════════════════════════════════════════════════════
