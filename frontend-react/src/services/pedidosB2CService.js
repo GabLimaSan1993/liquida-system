@@ -1166,13 +1166,14 @@ async function verificarConclusaoFaturamentoGrupo(grupoId) {
 export async function buscarKpisPedidosB2C() {
   const { data, error } = await supabase
     .from("pedidos_b2c")
-    .select("status");
+    .select("status, status_anymarket");
   if (error) throw new Error(error.message);
 
   const todos = data || [];
   return {
     total:               todos.length,
-    aguardando_alocacao: todos.filter(p => p.status === "aguardando_alocacao").length,
+    // Só conta como aguardando alocação os que estão pagos (igual à lista de alocação).
+    aguardando_alocacao: todos.filter(p => p.status === "aguardando_alocacao" && p.status_anymarket === "Pago").length,
     alocado:             todos.filter(p => p.status === "alocado").length,
     em_picking:          todos.filter(p => p.status === "em_picking").length,
     em_analise:          todos.filter(p => p.status === "em_analise").length,
