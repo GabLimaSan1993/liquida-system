@@ -1147,6 +1147,133 @@ export async function importarNFsGrupo(file, grupoId, userId) {
   });
 }
 
+// ── Importação de NFs por XML (NF-e) ──────────────────────
+// O IMEI vem no fim da descrição do produto (xProd), ex.:
+//   <xProd>SAMSUNG GALAXY S24 ULTRA 512GB TITANIUM BLACK 352364850100375</xProd>
+// Cuidado: <nProt> (protocolo de autorização) também tem 15 dígitos — por isso o IMEI
+// é lido SÓ de dentro de det/prod/xProd, nunca varrendo o XML inteiro.
+function imeiDoXProd(xProd) {
+  const m = String(xProd || "").match(/(\d{15})\s*$/);
+  return m ? m[1] : null;
+}
+
+// Compara SKUs ignorando sufixo de grade (-CC2/-CC3/-CC4), espaços e caixa.
+function baseSku(s) {
+  return String(s || "").toUpperCase().trim().replace(/\s+/g, "").replace(/-CC\d+$/, "");
+}
+
+function parseNFeXml(texto) {
+  const doc = new DOMParser().parseFromString(texto, "application/xml");
+  if (doc.getElementsByTagName("parsererror").length) return null;
+  const um = (ctx, tag) => ctx?.getElementsByTagNameNS("*", tag)[0]?.textContent?.trim() || null;
+
+  const infNFe = doc.getElementsByTagNameNS("*", "infNFe")[0];
+  if (!infNFe) return null;
+  const ide = infNFe.getElementsByTagNameNS("*", "ide")[0];
+
+  // Chave: do protocolo, ou do atributo Id do infNFe (formato "NFe3526...")
+  const chave = um(doc, "chNFe") || String(infNFe.getAttribute("Id") || "").replace(/^NFe/i, "") || null;
+
+  const itens = [];
+  const dets = infNFe.getElementsByTagNameNS("*", "det");
+  for (let i = 0; i < dets.length; i++) {
+    const prod = dets[i].getElementsByTagNameNS("*", "prod")[0];
+    if (!prod) continue;
+    const xProd = um(prod, "xProd") || "";
+    itens.push({ imei: imeiDoXProd(xProd), cProd: um(prod, "cProd"), xProd });
+  }
+
+  return { numeroNf: um(ide, "nNF"), serie: um(ide, "serie"), chave, itens };
+}
+
+// Sobe XMLs de NF-e (um .xml ou um .zip com vários) e fatura casando pelo IMEI.
+// Uma NF pode ter vários itens — todos são faturados com o mesmo número de nota.
+// O IMEI é a identificação única do aparelho: se a NF traz o IMEI do pedido, é ele.
+// O SKU só é conferido para AVISAR (não bloqueia): o sku_alocado pode estar desatualizado
+// após troca de aparelho, e em "aguardando definição" a Assurant manda um substituto de
+// modelo diferente — nesses casos divergir é o esperado, não erro.
+export async function importarNFsXmlGrupo(file, grupoId, userId) {
+  const arquivos = [];
+  if (/\.zip$/i.test(file.name)) {
+    const JSZip = (await import("jszip")).default;
+    const zip = await JSZip.loadAsync(file);
+    const nomes = Object.keys(zip.files);
+    for (const nome of nomes) {
+      const entrada = zip.files[nome];
+      if (entrada.dir || !/\.xml$/i.test(nome)) continue;
+      arquivos.push({ nome: nome.split("/").pop(), texto: await entrada.async("string") });
+    }
+    if (!arquivos.length) throw new Error("Nenhum arquivo .xml encontrado dentro do ZIP.");
+  } else {
+    arquivos.push({ nome: file.name, texto: await file.text() });
+  }
+
+  // Pedidos do grupo indexados por IMEI
+  const { data: pedidosGrupo } = await supabase
+    .from("pedidos_b2c")
+    .select("id, id_anymarket, status, imei_alocado, sku_alocado")
+    .eq("grupo_id", grupoId);
+  const porImei = {};
+  (pedidosGrupo || []).forEach(p => {
+    if (p.imei_alocado) porImei[String(p.imei_alocado).trim()] = p;
+  });
+
+  let faturados = 0;
+  let totalItens = 0;
+  const ignorados = [];
+  const avisos = [];
+
+  for (const arq of arquivos) {
+    const nfe = parseNFeXml(arq.texto);
+    if (!nfe) { ignorados.push({ arquivo: arq.nome, motivo: "XML inválido ou fora do padrão NF-e" }); continue; }
+    if (!nfe.itens.length) { ignorados.push({ arquivo: arq.nome, motivo: "NF sem itens" }); continue; }
+
+    for (const item of nfe.itens) {
+      totalItens++;
+      if (!item.imei) {
+        ignorados.push({ arquivo: arq.nome, nf: nfe.numeroNf, motivo: "IMEI não encontrado na descrição do produto" });
+        continue;
+      }
+      const pedido = porImei[item.imei];
+      if (!pedido) {
+        ignorados.push({ arquivo: arq.nome, nf: nfe.numeroNf, imei: item.imei, motivo: "IMEI não pertence a este grupo" });
+        continue;
+      }
+      if (pedido.status !== "embalado") {
+        ignorados.push({ arquivo: arq.nome, nf: nfe.numeroNf, imei: item.imei, pedido: pedido.id_anymarket,
+                         motivo: `Pedido não está aguardando NF (status: ${pedido.status})` });
+        continue;
+      }
+
+      const { error } = await supabase
+        .from("pedidos_b2c")
+        .update({
+          status:        "faturado",
+          numero_nf:     nfe.numeroNf,
+          chave_nf:      nfe.chave,
+          faturado_em:   new Date().toISOString(),
+          faturado_por:  userId,
+          atualizado_em: new Date().toISOString(),
+        })
+        .eq("id", pedido.id);
+      if (error) {
+        ignorados.push({ arquivo: arq.nome, nf: nfe.numeroNf, imei: item.imei, motivo: error.message });
+        continue;
+      }
+
+      faturados++;
+      // Faturou pelo IMEI; se o SKU não bate, registra o aviso para conferência posterior.
+      if (item.cProd && pedido.sku_alocado && baseSku(item.cProd) !== baseSku(pedido.sku_alocado)) {
+        avisos.push({ nf: nfe.numeroNf, imei: item.imei, pedido: pedido.id_anymarket,
+                      motivo: `SKU da NF (${item.cProd}) diferente do alocado (${pedido.sku_alocado})` });
+      }
+    }
+  }
+
+  const grupoConcluido = await verificarConclusaoFaturamentoGrupo(grupoId);
+  return { ok: true, faturados, ignorados, avisos, totalXmls: arquivos.length, totalItens, grupoConcluido };
+}
+
 // Marca o faturamento do grupo como concluído quando não resta nada pendente
 // (nada embalado aguardando NF, nem em picking, nem em análise).
 async function verificarConclusaoFaturamentoGrupo(grupoId) {

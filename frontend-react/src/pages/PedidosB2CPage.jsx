@@ -16,6 +16,7 @@ import {
   listarGruposFaturamento,
   gerarPlanilhaFaturamentoGrupo,
   importarNFsGrupo,
+  importarNFsXmlGrupo,
   buscarSugestaoFifo,
   buscarComparativoAging,
   listarPedidosAguardandoDefinicao,
@@ -1001,6 +1002,8 @@ function TabFaturamento() {
   const [pedidosGrupo, setPedidosGrupo]     = useState({});
   const [loadingPedidos, setLoadingPedidos] = useState(null);
   const [histAberto, setHistAberto]         = useState(null);
+  const [pendencias, setPendencias]         = useState({});
+  const [avisosSku, setAvisosSku]           = useState({});
   const inputRefs = useRef({});
 
   useEffect(() => { carregar(); }, []);
@@ -1052,11 +1055,26 @@ function TabFaturamento() {
     if (!file) return;
     setSubindo(grupo.id);
     setFeedback(prev => ({ ...prev, [grupo.id]: null }));
+    setPendencias(prev => ({ ...prev, [grupo.id]: null }));
+    setAvisosSku(prev => ({ ...prev, [grupo.id]: null }));
     try {
-      const res = await importarNFsGrupo(file, grupo.id, user.id);
+      // XML/ZIP casa pelo IMEI (dentro da NF-e); planilha casa pelo ID_PEDIDO.
+      const ehXml = /\.(zip|xml)$/i.test(file.name);
+      const res = ehXml
+        ? await importarNFsXmlGrupo(file, grupo.id, user.id)
+        : await importarNFsGrupo(file, grupo.id, user.id);
+
       const partes = [`${res.faturados} pedido${res.faturados !== 1 ? "s" : ""} faturado${res.faturados !== 1 ? "s" : ""}`];
-      if (res.semNF > 0)     partes.push(`${res.semNF} linha${res.semNF > 1 ? "s" : ""} sem NF`);
-      if (res.ignorados > 0) partes.push(`${res.ignorados} ignorada${res.ignorados > 1 ? "s" : ""}`);
+      if (ehXml) {
+        partes.unshift(`${res.totalXmls} XML${res.totalXmls !== 1 ? "s" : ""} lido${res.totalXmls !== 1 ? "s" : ""}`);
+        if (res.ignorados?.length) partes.push(`${res.ignorados.length} pendente${res.ignorados.length > 1 ? "s" : ""}`);
+        if (res.avisos?.length) partes.push(`${res.avisos.length} com SKU divergente`);
+        setPendencias(prev => ({ ...prev, [grupo.id]: res.ignorados || [] }));
+        setAvisosSku(prev => ({ ...prev, [grupo.id]: res.avisos || [] }));
+      } else {
+        if (res.semNF > 0)     partes.push(`${res.semNF} linha${res.semNF > 1 ? "s" : ""} sem NF`);
+        if (res.ignorados > 0) partes.push(`${res.ignorados} ignorada${res.ignorados > 1 ? "s" : ""}`);
+      }
       const msg = (res.grupoConcluido ? "✓ Grupo concluído! " : "✓ ") + partes.join(" · ");
       setFeedback(prev => ({ ...prev, [grupo.id]: { tipo: res.grupoConcluido ? "ok" : "aviso", msg } }));
       setPedidosGrupo(prev => { const n = { ...prev }; delete n[grupo.id]; return n; });
@@ -1077,7 +1095,7 @@ function TabFaturamento() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <p className="text-sm text-slate-500">Baixe a planilha do grupo, preencha a coluna NUMERO_NF e suba de volta.</p>
+        <p className="text-sm text-slate-500">Baixe a planilha do grupo e suba as NFs: os XMLs da NF-e (.zip ou .xml) casam pelo IMEI, ou a planilha com a coluna NUMERO_NF preenchida.</p>
         <button onClick={carregar} className="text-xs text-slate-500 hover:text-purple-700 font-semibold flex items-center gap-1">
           <RefreshCw className="h-3.5 w-3.5" /> Atualizar
         </button>
@@ -1170,7 +1188,7 @@ function TabFaturamento() {
                   }`}>
                     {subindo === g.id ? <div className="h-3 w-3 border-2 border-blue-300 border-t-blue-700 rounded-full animate-spin" /> : <Upload className="h-3 w-3" />}
                     Subir NFs
-                    <input type="file" accept=".xlsx,.xls" className="hidden"
+                    <input type="file" accept=".xlsx,.xls,.zip,.xml" className="hidden"
                       ref={el => inputRefs.current[g.id] = el}
                       disabled={subindo === g.id}
                       onChange={e => handleSubir(g, e.target.files?.[0])} />
@@ -1230,6 +1248,44 @@ function TabFaturamento() {
                   }`}>
                     {fb.tipo === "ok" ? <CheckCircle className="h-4 w-4 shrink-0" /> : <AlertTriangle className="h-4 w-4 shrink-0" />}
                     <span className="font-semibold">{fb.msg}</span>
+                  </div>
+                )}
+
+                {/* Detalhe das NFs que não puderam ser faturadas (upload de XML) */}
+                {pendencias[g.id]?.length > 0 && (
+                  <div className="mt-2 rounded-xl bg-amber-50 ring-1 ring-amber-200 p-3">
+                    <p className="text-xs font-bold text-amber-800 mb-1.5">
+                      NFs não faturadas ({pendencias[g.id].length}) — verifique antes de reenviar
+                    </p>
+                    <div className="space-y-1 max-h-48 overflow-y-auto">
+                      {pendencias[g.id].map((p, i) => (
+                        <div key={i} className="text-xs text-amber-900 flex flex-wrap items-center gap-x-2">
+                          {p.nf && <span className="font-bold">NF {p.nf}</span>}
+                          {p.imei && <span className="font-mono">{p.imei}</span>}
+                          {p.pedido && <span className="text-amber-700">#{p.pedido}</span>}
+                          <span className="text-amber-700">— {p.motivo}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* SKU da NF diferente do alocado — faturado pelo IMEI, mas vale conferir */}
+                {avisosSku[g.id]?.length > 0 && (
+                  <div className="mt-2 rounded-xl bg-blue-50 ring-1 ring-blue-200 p-3">
+                    <p className="text-xs font-bold text-blue-800 mb-1.5">
+                      Faturados com SKU divergente ({avisosSku[g.id].length}) — esperado em troca de aparelho ou substituto
+                    </p>
+                    <div className="space-y-1 max-h-48 overflow-y-auto">
+                      {avisosSku[g.id].map((p, i) => (
+                        <div key={i} className="text-xs text-blue-900 flex flex-wrap items-center gap-x-2">
+                          {p.nf && <span className="font-bold">NF {p.nf}</span>}
+                          {p.imei && <span className="font-mono">{p.imei}</span>}
+                          {p.pedido && <span className="text-blue-700">#{p.pedido}</span>}
+                          <span className="text-blue-700">— {p.motivo}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </Card>
