@@ -969,6 +969,18 @@ export async function listarGruposFaturamento() {
     .select("grupo_id, status, marketplace, total_do_pedido")
     .in("grupo_id", ids);
 
+  // Histórico de downloads de cada grupo (todos os downloads, mais recente primeiro)
+  const { data: downloads } = await supabase
+    .from("pedidos_b2c_downloads")
+    .select("grupo_id, usuario_nome, total_linhas, baixado_em")
+    .in("grupo_id", ids)
+    .order("baixado_em", { ascending: false });
+
+  const dlPorGrupo = {};
+  (downloads || []).forEach(d => {
+    (dlPorGrupo[d.grupo_id] ||= []).push(d);
+  });
+
   const cont = {};
   (pedidos || []).forEach(p => {
     if (!cont[p.grupo_id]) cont[p.grupo_id] = { aFaturar: 0, emAnalise: 0, emPicking: 0, faturados: 0, valorAFaturar: 0, mp: {} };
@@ -993,6 +1005,7 @@ export async function listarGruposFaturamento() {
       const marketplaces = Object.entries(c.mp)
         .map(([nome, qtd]) => ({ nome, qtd }))
         .sort((a, b) => b.qtd - a.qtd);
+      const dls = dlPorGrupo[g.id] || [];
       return {
         ...g,
         aFaturar: c.aFaturar,
@@ -1001,6 +1014,8 @@ export async function listarGruposFaturamento() {
         faturados: c.faturados,
         valorAFaturar: c.valorAFaturar,
         marketplaces,
+        downloads: dls,              // histórico completo (mais recente primeiro)
+        totalDownloads: dls.length,  // quantas vezes já foi baixado
       };
     })
     // Só mostra grupos que têm ao menos um pedido pronto para faturar
@@ -1012,22 +1027,12 @@ export async function listarGruposFaturamento() {
 export async function gerarPlanilhaFaturamentoGrupo(grupoId, userId, userNome) {
   const { data: grupo } = await supabase
     .from("pedidos_b2c_grupos")
-    .select("numero, baixado_por, baixado_por_nome, baixado_em")
+    .select("numero")
     .eq("id", grupoId)
     .single();
 
-  // Trava: se o grupo já foi baixado por outro usuário, bloqueia o download.
-  if (grupo?.baixado_por && grupo.baixado_por !== userId) {
-    return {
-      ok: false,
-      bloqueado: true,
-      por: grupo.baixado_por_nome || "outro usuário",
-      porId: grupo.baixado_por,
-      em: grupo.baixado_em,
-      erro: `Grupo já baixado por ${grupo.baixado_por_nome || "outro usuário"}.`,
-    };
-  }
-
+  // Sem trava: qualquer usuário pode baixar (e rebaixar) a planilha do grupo.
+  // Cada download é registrado em pedidos_b2c_downloads para o histórico.
   const { data: pedidos, error } = await supabase
     .from("pedidos_b2c")
     .select("*")
@@ -1036,30 +1041,6 @@ export async function gerarPlanilhaFaturamentoGrupo(grupoId, userId, userNome) {
     .order("id_anymarket", { ascending: true });
   if (error) throw new Error(error.message);
   if (!pedidos?.length) return { ok: false, erro: "Nenhum pedido pronto para faturar neste grupo." };
-
-  // Reserva o grupo no primeiro download. A condição .is("baixado_por", null)
-  // protege contra corrida: só reserva se ninguém tiver reservado ainda.
-  if (!grupo?.baixado_por) {
-    const { data: reservado } = await supabase
-      .from("pedidos_b2c_grupos")
-      .update({ baixado_por: userId, baixado_por_nome: userNome || "Usuário", baixado_em: new Date().toISOString() })
-      .eq("id", grupoId)
-      .is("baixado_por", null)
-      .select("baixado_por");
-    if (!reservado || reservado.length === 0) {
-      const { data: dono } = await supabase
-        .from("pedidos_b2c_grupos").select("baixado_por, baixado_por_nome").eq("id", grupoId).single();
-      if (dono?.baixado_por && dono.baixado_por !== userId) {
-        return {
-          ok: false,
-          bloqueado: true,
-          por: dono.baixado_por_nome || "outro usuário",
-          porId: dono.baixado_por,
-          erro: `Grupo já baixado por ${dono.baixado_por_nome || "outro usuário"}.`,
-        };
-      }
-    }
-  }
 
   const rows = pedidos.map(p => ({
     "ID_PEDIDO":   p.id,
@@ -1080,6 +1061,20 @@ export async function gerarPlanilhaFaturamentoGrupo(grupoId, userId, userNome) {
   const nomeArquivo = `faturamento_grupo_${grupo?.numero || grupoId}.xlsx`;
   XLSX.writeFile(wb, nomeArquivo);
 
+  // Registra o download no histórico (todos ficam guardados)
+  await supabase.from("pedidos_b2c_downloads").insert({
+    grupo_id:     grupoId,
+    usuario_id:   userId,
+    usuario_nome: userNome || "Usuário",
+    total_linhas: rows.length,
+  });
+
+  // Mantém as colunas do grupo apontando para o ÚLTIMO download (leitura rápida)
+  await supabase
+    .from("pedidos_b2c_grupos")
+    .update({ baixado_por: userId, baixado_por_nome: userNome || "Usuário", baixado_em: new Date().toISOString() })
+    .eq("id", grupoId);
+
   return { ok: true, total: rows.length, nomeArquivo };
 }
 
@@ -1090,13 +1085,7 @@ export async function importarNFsGrupo(file, grupoId, userId) {
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
-        // Trava: só o usuário que baixou o grupo pode subir as NFs.
-        const { data: grupoLock } = await supabase
-          .from("pedidos_b2c_grupos").select("baixado_por, baixado_por_nome").eq("id", grupoId).single();
-        if (grupoLock?.baixado_por && grupoLock.baixado_por !== userId) {
-          throw new Error(`Grupo travado — só ${grupoLock.baixado_por_nome || "quem baixou"} pode subir as NFs.`);
-        }
-
+        // Sem trava: qualquer usuário pode subir as NFs do grupo.
         const wb   = XLSX.read(e.target.result, { type: "binary" });
         const ws   = wb.Sheets[wb.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json(ws, { defval: null });

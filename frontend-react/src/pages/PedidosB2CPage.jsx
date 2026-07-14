@@ -1000,6 +1000,7 @@ function TabFaturamento() {
   const [expandido, setExpandido]           = useState(null);
   const [pedidosGrupo, setPedidosGrupo]     = useState({});
   const [loadingPedidos, setLoadingPedidos] = useState(null);
+  const [histAberto, setHistAberto]         = useState(null);
   const inputRefs = useRef({});
 
   useEffect(() => { carregar(); }, []);
@@ -1029,14 +1030,18 @@ function TabFaturamento() {
     setFeedback(prev => ({ ...prev, [grupo.id]: null }));
     try {
       const res = await gerarPlanilhaFaturamentoGrupo(grupo.id, user.id, profile?.nome);
-      if (res.bloqueado) {
-        setFeedback(prev => ({ ...prev, [grupo.id]: { tipo: "erro", msg: `🔒 ${res.erro}` } }));
-        setGrupos(prev => prev.map(x => x.id === grupo.id ? { ...x, baixado_por: res.porId || "__outro__", baixado_por_nome: res.por, baixado_em: res.em || x.baixado_em } : x));
-      } else if (!res.ok) {
+      if (!res.ok) {
         setFeedback(prev => ({ ...prev, [grupo.id]: { tipo: "erro", msg: res.erro } }));
       } else {
         setFeedback(prev => ({ ...prev, [grupo.id]: { tipo: "ok", msg: `✓ Planilha gerada — ${res.total} linha${res.total > 1 ? "s" : ""} (${res.nomeArquivo})` } }));
-        setGrupos(prev => prev.map(x => x.id === grupo.id ? { ...x, baixado_por: user.id, baixado_por_nome: profile?.nome || "você", baixado_em: new Date().toISOString() } : x));
+        const agora = new Date().toISOString();
+        const novoDl = { usuario_nome: profile?.nome || "você", total_linhas: res.total, baixado_em: agora };
+        setGrupos(prev => prev.map(x => x.id === grupo.id
+          ? { ...x,
+              baixado_por: user.id, baixado_por_nome: profile?.nome || "você", baixado_em: agora,
+              downloads: [novoDl, ...(x.downloads || [])],
+              totalDownloads: (x.totalDownloads || 0) + 1 }
+          : x));
       }
     } catch (e) {
       setFeedback(prev => ({ ...prev, [grupo.id]: { tipo: "erro", msg: e.message } }));
@@ -1065,6 +1070,10 @@ function TabFaturamento() {
     }
   }
 
+  // Contadores: quantos grupos já foram baixados para emissão de NF e quantos não
+  const gruposBaixados    = grupos.filter(g => (g.totalDownloads || 0) > 0).length;
+  const gruposNaoBaixados = grupos.length - gruposBaixados;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -1073,6 +1082,14 @@ function TabFaturamento() {
           <RefreshCw className="h-3.5 w-3.5" /> Atualizar
         </button>
       </div>
+
+      {grupos.length > 0 && (
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+          <KpiMini label="Grupos a faturar"      value={fmtN(grupos.length)}      color="bg-slate-50 ring-slate-200 text-slate-700" />
+          <KpiMini label="Baixados para NF"      value={fmtN(gruposBaixados)}     color="bg-blue-50 ring-blue-200 text-blue-700" />
+          <KpiMini label="Aguardando download"   value={fmtN(gruposNaoBaixados)}  color="bg-yellow-50 ring-yellow-200 text-yellow-700" />
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center h-32">
@@ -1092,8 +1109,7 @@ function TabFaturamento() {
             const lista = pedidosGrupo[g.id] || [];
             const aFaturar = lista.filter(p => p.status === "embalado");
             const emAnalise = lista.filter(p => p.status === "em_analise");
-            const meuLock = g.baixado_por && g.baixado_por === user.id;
-            const outroLock = g.baixado_por && g.baixado_por !== user.id;
+            const ultimoDl = g.downloads?.[0];
             return (
               <Card key={g.id}>
                 <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
@@ -1114,14 +1130,28 @@ function TabFaturamento() {
                         ))}
                       </div>
                     )}
-                    {outroLock && (
-                      <div className="inline-flex items-center gap-1.5 mt-2 text-xs font-semibold px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 ring-1 ring-amber-200">
-                        <Lock className="h-3 w-3" /> Baixado por {g.baixado_por_nome}{g.baixado_em ? ` · ${fmtData(g.baixado_em)}` : ""}
+                    {g.totalDownloads > 0 ? (
+                      <button onClick={() => setHistAberto(histAberto === g.id ? null : g.id)}
+                        className="inline-flex items-center gap-1.5 mt-2 text-xs font-semibold px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 ring-1 ring-blue-200 hover:bg-blue-100 transition">
+                        <Download className="h-3 w-3" />
+                        Baixado {g.totalDownloads}x{ultimoDl ? ` · último por ${ultimoDl.usuario_nome} · ${fmtData(ultimoDl.baixado_em)}` : ""}
+                        {histAberto === g.id ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                      </button>
+                    ) : (
+                      <div className="inline-flex items-center gap-1.5 mt-2 text-xs font-semibold px-2.5 py-1 rounded-lg bg-slate-50 text-slate-500 ring-1 ring-slate-200">
+                        <Download className="h-3 w-3" /> Não baixado
                       </div>
                     )}
-                    {meuLock && (
-                      <div className="inline-flex items-center gap-1.5 mt-2 text-xs font-semibold px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 ring-1 ring-blue-200">
-                        <Lock className="h-3 w-3" /> Baixado por você
+                    {histAberto === g.id && g.downloads?.length > 0 && (
+                      <div className="mt-2 space-y-1 bg-slate-50 rounded-xl p-2.5 ring-1 ring-slate-200">
+                        <p className="text-xs font-bold text-slate-500 mb-1">Histórico de downloads</p>
+                        {g.downloads.map((d, i) => (
+                          <div key={i} className="text-xs text-slate-600 flex items-center gap-2 flex-wrap">
+                            <span className="font-semibold">{d.usuario_nome || "—"}</span>
+                            <span className="text-slate-400">{fmtData(d.baixado_em)}</span>
+                            {d.total_linhas != null && <span className="text-slate-400">· {d.total_linhas} linha{d.total_linhas !== 1 ? "s" : ""}</span>}
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
@@ -1129,13 +1159,12 @@ function TabFaturamento() {
                 </div>
 
                 <div className="flex gap-2 flex-wrap items-center">
-                  <button onClick={() => handleBaixar(g)} disabled={baixando === g.id || g.aFaturar === 0 || outroLock}
+                  <button onClick={() => handleBaixar(g)} disabled={baixando === g.id || g.aFaturar === 0}
                     className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-[#7F2D92] text-white hover:bg-[#5B1E74] transition disabled:opacity-40">
                     {baixando === g.id ? <div className="h-3 w-3 border-2 border-purple-200 border-t-white rounded-full animate-spin" /> : <Download className="h-3 w-3" />}
-                    Baixar planilha ({g.aFaturar})
+                    {g.totalDownloads > 0 ? "Baixar novamente" : "Baixar planilha"} ({g.aFaturar})
                   </button>
                   <label className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl ring-1 transition ${
-                    outroLock ? "bg-slate-50 text-slate-300 ring-slate-200 cursor-not-allowed" :
                     subindo === g.id ? "bg-blue-50 text-blue-400 ring-blue-200 opacity-60 cursor-pointer" :
                     "bg-blue-50 text-blue-700 ring-blue-200 hover:bg-blue-100 cursor-pointer"
                   }`}>
@@ -1143,7 +1172,7 @@ function TabFaturamento() {
                     Subir NFs
                     <input type="file" accept=".xlsx,.xls" className="hidden"
                       ref={el => inputRefs.current[g.id] = el}
-                      disabled={subindo === g.id || outroLock}
+                      disabled={subindo === g.id}
                       onChange={e => handleSubir(g, e.target.files?.[0])} />
                   </label>
                   <button onClick={() => handleVerPedidos(g)}
