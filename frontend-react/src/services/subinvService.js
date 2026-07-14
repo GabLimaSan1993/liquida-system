@@ -90,8 +90,11 @@ function mapearLinhas(rows) {
     // seriais alfanuméricos e códigos curtos. Converter para número corrompe.
     const imei = String(row["NUM_IMEI"] ?? "").trim();
     const data = normalizarData(row["DATA_SUBINV"]);
+    // LOCAL = armazém/subinventário do Oracle (ex.: "WH2 B2C", "WH2 CENTER CELL",
+    // "CENTER CELL", "ALPHA"). É o que diz se a peça está fisicamente no nosso WH2.
+    const local = String(row["LOCAL"] ?? "").trim() || null;
     if (!imei || !data) { invalidas++; continue; }
-    validas.push({ imei, data_subinv: data });
+    validas.push({ imei, data_subinv: data, local_subinv: local });
   }
 
   // Se o mesmo IMEI vier repetido, a última linha manda
@@ -102,6 +105,13 @@ function mapearLinhas(rows) {
   return { linhas: unicas, invalidas, duplicadas: validas.length - unicas.length };
 }
 
+// Só o estoque do WH2 é elegível para o FIFO (WH2 B2C e WH2 CENTER CELL).
+// Atenção: existe "CENTER CELL" e "WH2 CENTER CELL" — nomes parecidos, armazéns
+// diferentes. Por isso o teste é pelo PREFIXO "WH2", nunca por "contém".
+export function ehWH2(localSubinv) {
+  return String(localSubinv || "").trim().toUpperCase().startsWith("WH2");
+}
+
 // Prévia antes de gravar: o operador confere o que vai subir
 export async function previewSubinv(file) {
   const rows = await lerArquivo(file);
@@ -109,12 +119,28 @@ export async function previewSubinv(file) {
   if (!("NUM_IMEI" in rows[0]) || !("DATA_SUBINV" in rows[0])) {
     throw new Error("Colunas esperadas não encontradas: NUM_IMEI e DATA_SUBINV.");
   }
+  // LOCAL é obrigatório: o FIFO só sugere peças do WH2. Sem essa coluna, todo o
+  // estoque entraria sem armazém — melhor recusar aqui do que afrouxar o filtro.
+  if (!("LOCAL" in rows[0])) {
+    throw new Error("Coluna LOCAL não encontrada. A planilha do subinv precisa ter NUM_IMEI, LOCAL e DATA_SUBINV.");
+  }
 
   const { linhas, invalidas, duplicadas } = mapearLinhas(rows);
   if (!linhas.length) throw new Error("Nenhuma linha válida na planilha.");
 
   const datas = linhas.map(l => l.data_subinv).sort();
   const { data: dataExtracao, origem } = dataExtracaoDoArquivo(file.name);
+
+  // Quebra por armazém, para o operador ver o que entra no FIFO e o que fica de fora
+  const porLocal = {};
+  linhas.forEach(l => {
+    const k = l.local_subinv || "(sem local)";
+    porLocal[k] = (porLocal[k] || 0) + 1;
+  });
+  const locais = Object.entries(porLocal)
+    .map(([nome, qtd]) => ({ nome, qtd, wh2: ehWH2(nome) }))
+    .sort((a, b) => b.qtd - a.qtd);
+  const totalWH2 = linhas.filter(l => ehWH2(l.local_subinv)).length;
 
   return {
     totalLinhas: linhas.length,
@@ -125,6 +151,9 @@ export async function previewSubinv(file) {
     dataExtracao,
     origemData: origem,
     amostra: linhas.slice(0, 5),
+    locais,
+    totalWH2,
+    totalForaWH2: linhas.length - totalWH2,
   };
 }
 
@@ -135,6 +164,9 @@ export async function previewSubinv(file) {
 // ══════════════════════════════════════════════════════════
 export async function importarSubinv(file, userId, userNome, onProgress) {
   const rows = await lerArquivo(file);
+  if (rows.length && !("LOCAL" in rows[0])) {
+    throw new Error("Coluna LOCAL não encontrada. A planilha do subinv precisa ter NUM_IMEI, LOCAL e DATA_SUBINV.");
+  }
   const { linhas, invalidas, duplicadas } = mapearLinhas(rows);
   if (!linhas.length) throw new Error("Nenhuma linha válida na planilha.");
 
@@ -181,6 +213,17 @@ export async function importarSubinv(file, userId, userNome, onProgress) {
     onProgress?.({ fase: "foto atual", pct: Math.round((passo / totalPassos) * 100) });
   }
 
+  // Quebra por armazém: o que entra no FIFO (WH2) e o que fica de fora
+  const porLocal = {};
+  linhas.forEach(l => {
+    const k = l.local_subinv || "(sem local)";
+    porLocal[k] = (porLocal[k] || 0) + 1;
+  });
+  const locais = Object.entries(porLocal)
+    .map(([nome, qtd]) => ({ nome, qtd, wh2: ehWH2(nome) }))
+    .sort((a, b) => b.qtd - a.qtd);
+  const totalWH2 = linhas.filter(l => ehWH2(l.local_subinv)).length;
+
   return {
     ok: true,
     cargaId: carga.id,
@@ -189,6 +232,9 @@ export async function importarSubinv(file, userId, userNome, onProgress) {
     inseridas: linhas.length,
     invalidas,
     duplicadas,
+    locais,
+    totalWH2,
+    totalForaWH2: linhas.length - totalWH2,
   };
 }
 

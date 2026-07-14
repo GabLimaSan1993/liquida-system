@@ -320,11 +320,11 @@ export async function buscarSugestaoFifo(skuProduto, gradePedido) {
   const imeisList = imeisValidos.map(i => i.imei);
   const { data: subinv } = await supabase
     .from("estoque_subinv")
-    .select("imei, data_subinv")
+    .select("imei, data_subinv, local_subinv")
     .in("imei", imeisList);
 
   const subinvMap = {};
-  (subinv || []).forEach(s => { subinvMap[s.imei] = s.data_subinv; });
+  (subinv || []).forEach(s => { subinvMap[s.imei] = s; });
 
   // Distância de grade em relação ao pedido:
   //   0  = grade exata (prioridade máxima)
@@ -336,14 +336,23 @@ export async function buscarSugestaoFifo(skuProduto, gradePedido) {
   //   (2) data_subinv — a âncora de antiguidade para o FIFO.
   // Sem local OU sem subinv, o aparelho é pulado (o pedido segue com o próximo elegível).
   // (Os pulados não somem do controle — aparecem na aba Comparativo Aging à parte.)
+  // (3) armazém do Oracle (local_subinv) sendo WH2 — "WH2 B2C" ou "WH2 CENTER CELL".
+  // É o que impede sugerir peça que está em CENTER CELL / ALPHA / YUSEN (fora do WH2).
+  // Atenção: "CENTER CELL" e "WH2 CENTER CELL" são armazéns diferentes — teste por PREFIXO.
+  // local_subinv NULO é aceito de propósito: enquanto a base não for reimportada com a
+  // coluna LOCAL, todo o estoque está sem armazém e o FIFO travaria. Como o importador
+  // recusa planilha sem LOCAL, nulo só existe em dados anteriores à virada.
   const temLocal = (item) => !!(item.local && String(item.local).trim());
+  const ehWH2 = (loc) => String(loc || "").trim().toUpperCase().startsWith("WH2");
+  const armazemOk = (loc) => loc == null || String(loc).trim() === "" || ehWH2(loc);
   const ordenados = imeisValidos
     .map(item => ({
       ...item,
-      data_subinv:     subinvMap[item.imei] || null,
+      data_subinv:     subinvMap[item.imei]?.data_subinv || null,
+      local_subinv:    subinvMap[item.imei]?.local_subinv || null,
       distancia_grade: ordemPedido - gradeOrdem(item.grade),
     }))
-    .filter(item => item.data_subinv && temLocal(item))
+    .filter(item => item.data_subinv && temLocal(item) && armazemOk(item.local_subinv))
     .sort((a, b) => {
       // Outlet mistura grades de propósito (Bom pra cima), então não prioriza grade:
       // é FIFO puro entre os elegíveis. Nos demais casos, grade mais próxima primeiro.
@@ -413,12 +422,16 @@ export async function buscarComparativoAging() {
   }// 3. Subinv de todos os IMEIs do estoque, em um fetch
   const todosImeis = estoque.map(i => i.imei);
   const subinvMap = {};
+  const localSubinvMap = {};
   // O .in() tem limite prático de itens; fatia em blocos de 1000
   for (let i = 0; i < todosImeis.length; i += 1000) {
     const bloco = todosImeis.slice(i, i + 1000);
     const { data: sub } = await supabase
-      .from("estoque_subinv").select("imei, data_subinv").in("imei", bloco);
-    (sub || []).forEach(s => { subinvMap[s.imei] = s.data_subinv; });
+      .from("estoque_subinv").select("imei, data_subinv, local_subinv").in("imei", bloco);
+    (sub || []).forEach(s => {
+      subinvMap[s.imei] = s.data_subinv;
+      localSubinvMap[s.imei] = s.local_subinv;
+    });
   }
 
   const hoje = new Date();
@@ -450,10 +463,13 @@ export async function buscarComparativoAging() {
     if (!candidatos.length) continue;
 
     // Selecionado = o que o FIFO sugeriria: mais antigo COM subinv E com local (armazém/Gaia)
+    // (local_subinv nulo é aceito enquanto a base não tem a coluna LOCAL — mesma regra do FIFO)
     const temLocalCmp = (c) => !!(c.local && String(c.local).trim());
+    const armazemOkCmp = (loc) => loc == null || String(loc).trim() === "" ||
+      String(loc).trim().toUpperCase().startsWith("WH2");
     const comSubinv = candidatos
-      .map(c => ({ ...c, data_subinv: subinvMap[c.imei] || null }))
-      .filter(c => c.data_subinv && temLocalCmp(c))
+      .map(c => ({ ...c, data_subinv: subinvMap[c.imei] || null, local_subinv: localSubinvMap[c.imei] || null }))
+      .filter(c => c.data_subinv && temLocalCmp(c) && armazemOkCmp(c.local_subinv))
       .sort((a, b) => new Date(a.data_subinv) - new Date(b.data_subinv));
 
     // Alternativas = elegíveis SEM subinv, ordenadas pela mais velha (maior aging)

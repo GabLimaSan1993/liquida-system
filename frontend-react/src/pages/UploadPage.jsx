@@ -902,7 +902,7 @@ export default function UploadPage() {
             </div>
 
             <div className="mt-4 text-xs text-slate-500 bg-emerald-50 ring-1 ring-emerald-200 rounded-xl px-3 py-2">
-              📋 Planilha .xlsx com as colunas NUM_IMEI e DATA_SUBINV · A data da extração vem do nome do arquivo (ex: 20260706.xlsx)
+              📋 Planilha .xlsx com as colunas NUM_IMEI, LOCAL e DATA_SUBINV · Só o estoque do WH2 (WH2 B2C e WH2 CENTER CELL) entra no FIFO
             </div>
 
             <div className="mt-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-[#E9D5FF]">
@@ -932,6 +932,25 @@ export default function UploadPage() {
                   ✓ {subinvPreview.inseridas?.toLocaleString("pt-BR")} IMEIs importados
                 </div>
                 <p>Data da extração: <span className="font-bold text-[#6B1F87]">{subinvPreview.dataExtracao}</span> <span className="text-slate-400">({subinvPreview.origemData})</span></p>
+                {subinvPreview.totalWH2 != null && (
+                  <p>
+                    No WH2 (entram no FIFO): <span className="font-bold text-emerald-700">{subinvPreview.totalWH2.toLocaleString("pt-BR")}</span>
+                    {subinvPreview.totalForaWH2 > 0 && (
+                      <> · fora do WH2 (não entram): <span className="font-bold text-amber-600">{subinvPreview.totalForaWH2.toLocaleString("pt-BR")}</span></>
+                    )}
+                  </p>
+                )}
+                {subinvPreview.locais?.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {subinvPreview.locais.map(l => (
+                      <span key={l.nome} className={`inline-flex items-center rounded-lg px-2 py-0.5 text-xs font-semibold ring-1 ${
+                        l.wh2 ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-amber-50 text-amber-700 ring-amber-200"
+                      }`}>
+                        {l.nome} · {l.qtd.toLocaleString("pt-BR")}
+                      </span>
+                    ))}
+                  </div>
+                )}
                 {subinvPreview.duplicadas > 0 && <p>IMEIs repetidos (última linha venceu): <span className="font-bold text-amber-600">{subinvPreview.duplicadas}</span></p>}
                 {subinvPreview.invalidas > 0 && <p>Linhas ignoradas: <span className="font-bold text-amber-600">{subinvPreview.invalidas}</span></p>}
               </div>
