@@ -529,21 +529,28 @@ async function verificarECriarGrupo(userId) {
 
   if (error || !semGrupo?.length) return null;
 
-  // Agrupa por marketplace, preservando a ordem de alocação (FIFO)
+  // O gatilho é o TOTAL da leva chegar a 20 — não 20 do mesmo marketplace.
+  // Esperar 20 de cada deixaria pedidos de marketplace menor encalhados.
+  if (semGrupo.length < TAMANHO) return null;
+
+  // Pega os 20 mais antigos (FIFO) e divide por marketplace: cada marketplace vira
+  // seu próprio grupo, mesmo que fiquem menores (ex.: 12 Magalu + 8 Via Varejo = 20).
+  // Grupo NUNCA mistura marketplace — isso já causou problema na operação.
+  const lote = semGrupo.slice(0, TAMANHO);
   const porMarketplace = {};
-  for (const p of semGrupo) {
+  for (const p of lote) {
     const mp = p.marketplace || "—";
     (porMarketplace[mp] ||= []).push(p.id);
   }
 
-  // Fecha automaticamente o primeiro marketplace que atingir 20 pedidos
-  for (const [mp, ids] of Object.entries(porMarketplace)) {
-    if (ids.length >= TAMANHO) {
-      return await _criarGrupo(ids.slice(0, TAMANHO), userId);
-    }
+  const grupos = [];
+  for (const ids of Object.values(porMarketplace)) {
+    const g = await _criarGrupo(ids, userId);
+    if (g) grupos.push(g);
   }
+  if (!grupos.length) return null;
 
-  return null;
+  return { ...grupos[0], gruposCriados: grupos.length };
 }
 
 async function _criarGrupo(pedidoIds, userId) {

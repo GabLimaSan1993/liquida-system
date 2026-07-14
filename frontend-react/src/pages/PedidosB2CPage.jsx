@@ -141,7 +141,10 @@ function TabAlocacao({ onGrupoFormado }) {
       setSugestoes([]);
 
       if (grupoFormado) {
-        setFeedback({ tipo: "ok", msg: `✓ Pedido alocado! Grupo #${grupoFormado.numero} criado com 20 pedidos.` });
+        const n = grupoFormado.gruposCriados || 1;
+        setFeedback({ tipo: "ok", msg: n > 1
+          ? `✓ Pedido alocado! Leva de 20 fechada — ${n} grupos criados (um por marketplace).`
+          : `✓ Pedido alocado! Grupo #${grupoFormado.numero} criado com ${grupoFormado.total_pedidos || 20} pedidos.` });
         setPendentes(0);
         if (onGrupoFormado) onGrupoFormado();
       } else {
