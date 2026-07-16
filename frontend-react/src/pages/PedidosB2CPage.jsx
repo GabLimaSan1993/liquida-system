@@ -965,28 +965,33 @@ function TabAnalise() {
     <>
       {modalResolver && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-[28px] bg-white p-8 shadow-2xl">
-            <h2 className="text-lg font-black text-slate-800 mb-1">Resolver Análise</h2>
-            <p className="text-xs text-slate-500 mb-4">Pedido #{modalResolver.id_anymarket}</p>
-            <div className="bg-slate-50 ring-1 ring-slate-200 rounded-2xl p-4 mb-4 space-y-1">
-              <p className="text-xs font-bold text-slate-500">IMEI original alocado</p>
-              <p className="font-mono font-bold text-slate-800">{modalResolver.imei_alocado}</p>
-              <p className="text-xs text-slate-500">{modalResolver.motivo_analise}</p>
+          <div className="w-full max-w-md rounded-[28px] bg-white shadow-2xl flex flex-col max-h-[92vh]">
+            {/* Cabeçalho fixo */}
+            <div className="px-6 pt-6 pb-3 shrink-0">
+              <h2 className="text-lg font-black text-slate-800">Resolver Análise</h2>
+              <p className="text-xs text-slate-500 mb-3">Pedido #{modalResolver.id_anymarket}</p>
+              <div className="bg-slate-50 ring-1 ring-slate-200 rounded-xl px-3 py-2">
+                <p className="font-mono font-bold text-sm text-slate-800">{modalResolver.imei_alocado}</p>
+                <p className="text-[11px] text-slate-500 leading-tight">{modalResolver.motivo_analise}</p>
+              </div>
             </div>
-            <p className="text-xs font-bold text-slate-600 mb-2">O que aconteceu?</p>
-            <div className="space-y-2 mb-4">
+
+            {/* Corpo rolável — o botão de confirmar fica sempre visível no rodapé */}
+            <div className="px-6 overflow-y-auto grow">
+            <p className="text-xs font-bold text-slate-600 mb-1.5">O que aconteceu?</p>
+            <div className="space-y-1.5 mb-3">
               {OPCOES_RESOLUCAO.map(op => {
                 const Icon = op.icon;
                 const ativo = tipoResolucao === op.key;
                 return (
                   <button key={op.key} onClick={() => { setTipoResolucao(op.key); setValorReal(""); }}
-                    className={`w-full flex items-center gap-3 p-3 rounded-xl text-left transition ring-1 ${
+                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition ring-1 ${
                       ativo ? `${op.bg} text-white ${op.ring}` : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"
                     }`}>
-                    <Icon className="h-5 w-5 shrink-0" />
-                    <div>
-                      <div className="text-sm font-bold">{op.label}</div>
-                      <div className={`text-xs ${ativo ? "text-white/80" : "text-slate-500"}`}>{op.desc}</div>
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-[13px] font-bold leading-tight">{op.label}</div>
+                      <div className={`text-[11px] leading-tight ${ativo ? "text-white/80" : "text-slate-400"}`}>{op.desc}</div>
                     </div>
                   </button>
                 );
@@ -1091,14 +1096,17 @@ function TabAnalise() {
               </>
             )}
 
-            <div className="flex gap-3">
+            </div>
+
+            {/* Rodapé fixo */}
+            <div className="flex gap-2 px-6 py-4 shrink-0 border-t border-slate-100">
               <button onClick={handleResolver}
                 disabled={!podeConfirmar()}
-                className="flex-1 rounded-2xl bg-emerald-600 py-3 text-sm font-bold text-white hover:bg-emerald-700 transition disabled:opacity-40 disabled:cursor-not-allowed">
+                className="flex-1 rounded-xl bg-emerald-600 py-2.5 text-[13px] font-bold text-white hover:bg-emerald-700 transition disabled:opacity-40 disabled:cursor-not-allowed">
                 Confirmar — segue para embalagem
               </button>
               <button onClick={fecharModal}
-                className="px-5 rounded-2xl bg-slate-100 py-3 text-sm font-bold text-slate-600 hover:bg-slate-200 transition">
+                className="px-4 rounded-xl bg-slate-100 py-2.5 text-[13px] font-bold text-slate-600 hover:bg-slate-200 transition">
                 Cancelar
               </button>
             </div>
