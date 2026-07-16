@@ -4,7 +4,7 @@ import {
   X, ChevronDown, ChevronUp, Clock,
   Layers, ArrowRight, Loader, RefreshCw,
   FileText, Store, MapPin, Ticket, Download, Upload, Lock, Unlock,
-  Scale, Clock3, FileWarning, HelpCircle, CornerUpLeft, Building2,
+  Scale, Clock3, FileWarning, HelpCircle, CornerUpLeft, Building2, Palette,
 } from "lucide-react";
 import {
   listarPedidosAguardandoAlocacao,
@@ -29,6 +29,7 @@ import {
   marcarNaoLocalizado,
   naoLocalizadoBuscarProximo,
   resolverAnalise,
+  resolverAnaliseParaEmbalagem,
   buscarKpisPedidosB2C,
 } from "../services/pedidosB2CService.js";
 import { useAuth } from "../AuthContext.jsx";
@@ -869,6 +870,8 @@ function TabAnalise() {
   const [busca, setBusca]                   = useState("");
   const [modalResolver, setModalResolver]   = useState(null);
   const [novoImei, setNovoImei]             = useState("");
+  const [tipoResolucao, setTipoResolucao]   = useState(null);
+  const [skuInformado, setSkuInformado]     = useState("");
   const [feedback, setFeedback]             = useState(null);
 
   useEffect(() => { carregar(); }, []);
@@ -881,14 +884,28 @@ function TabAnalise() {
   }
 
   async function handleResolver() {
-    if (!modalResolver) return;
+    if (!modalResolver || !tipoResolucao) return;
     try {
-      await resolverAnalise(modalResolver.id, novoImei.trim() || null, user.id);
+      await resolverAnaliseParaEmbalagem(
+        modalResolver.id,
+        { tipo: tipoResolucao, novoImei: novoImei.trim(), skuInformado: skuInformado.trim() },
+        user.id
+      );
       setPedidos(prev => prev.filter(p => p.id !== modalResolver.id));
-      setFeedback({ tipo: "ok", msg: `✓ Pedido #${modalResolver.id_anymarket} devolvido para picking.` });
-      setTimeout(() => setFeedback(null), 3000);
-    } catch (e) { setFeedback({ tipo: "erro", msg: e.message }); }
-    finally { setModalResolver(null); setNovoImei(""); }
+      setFeedback({ tipo: "ok", msg: `✓ Pedido #${modalResolver.id_anymarket} resolvido — segue para faturamento.` });
+      setTimeout(() => setFeedback(null), 4000);
+      fecharModal();
+    } catch (e) {
+      setFeedback({ tipo: "erro", msg: e.message });
+      setTimeout(() => setFeedback(null), 5000);
+    }
+  }
+
+  function fecharModal() {
+    setModalResolver(null);
+    setTipoResolucao(null);
+    setNovoImei("");
+    setSkuInformado("");
   }
 
   const filtrados = pedidos.filter(p =>
@@ -910,22 +927,77 @@ function TabAnalise() {
               <p className="font-mono font-bold text-slate-800">{modalResolver.imei_alocado}</p>
               <p className="text-xs text-slate-500">{modalResolver.motivo_analise}</p>
             </div>
-            <div className="mb-4">
-              <label className="block text-xs font-bold text-slate-600 mb-1">Novo IMEI (deixe vazio para manter o mesmo)</label>
-              <input
-                value={novoImei}
-                onChange={e => setNovoImei(e.target.value)}
-                placeholder="Bipe ou digite o novo IMEI..."
-                className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-mono font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7F2D92]"
-              />
+            <p className="text-xs font-bold text-slate-600 mb-2">O que aconteceu?</p>
+            <div className="space-y-2 mb-4">
+              <button onClick={() => setTipoResolucao("localizado")}
+                className={`w-full flex items-center gap-3 p-3 rounded-xl text-left transition ring-1 ${
+                  tipoResolucao === "localizado"
+                    ? "bg-emerald-600 text-white ring-emerald-600"
+                    : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"
+                }`}>
+                <CheckCircle className="h-5 w-5 shrink-0" />
+                <div>
+                  <div className="text-sm font-bold">Localizado</div>
+                  <div className={`text-xs ${tipoResolucao === "localizado" ? "text-emerald-50" : "text-slate-500"}`}>
+                    Achei o aparelho — segue para embalagem
+                  </div>
+                </div>
+              </button>
+
+              <button onClick={() => setTipoResolucao("divergencia_cor")}
+                className={`w-full flex items-center gap-3 p-3 rounded-xl text-left transition ring-1 ${
+                  tipoResolucao === "divergencia_cor"
+                    ? "bg-[#7F2D92] text-white ring-[#7F2D92]"
+                    : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"
+                }`}>
+                <Palette className="h-5 w-5 shrink-0" />
+                <div>
+                  <div className="text-sm font-bold">Divergência de cor</div>
+                  <div className={`text-xs ${tipoResolucao === "divergencia_cor" ? "text-purple-100" : "text-slate-500"}`}>
+                    Troquei por outro aparelho
+                  </div>
+                </div>
+              </button>
             </div>
+
+            {tipoResolucao === "divergencia_cor" && (
+              <>
+                <div className="mb-3">
+                  <label className="block text-xs font-bold text-slate-600 mb-1">Novo IMEI *</label>
+                  <input
+                    value={novoImei}
+                    onChange={e => setNovoImei(e.target.value)}
+                    placeholder="Bipe ou digite o novo IMEI..."
+                    autoFocus
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-mono font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7F2D92]"
+                  />
+                </div>
+                <div className="mb-3">
+                  <label className="block text-xs font-bold text-slate-600 mb-1">
+                    SKU do aparelho <span className="font-normal text-slate-400">(opcional — só registro)</span>
+                  </label>
+                  <input
+                    value={skuInformado}
+                    onChange={e => setSkuInformado(e.target.value)}
+                    placeholder="Ex: BRZDEV12571"
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-mono font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7F2D92]"
+                  />
+                </div>
+                <div className="flex items-start gap-2 bg-blue-50 ring-1 ring-blue-200 rounded-xl px-3 py-2 mb-4 text-xs text-blue-800">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                  <span>O aparelho antigo volta para o estoque como disponível.</span>
+                </div>
+              </>
+            )}
+
             <div className="flex gap-3">
               <button onClick={handleResolver}
-                className="flex-1 rounded-2xl bg-emerald-600 py-3 text-sm font-bold text-white hover:bg-emerald-700 transition">
-                Devolver para Picking
+                disabled={!tipoResolucao || (tipoResolucao === "divergencia_cor" && !novoImei.trim())}
+                className="flex-1 rounded-2xl bg-emerald-600 py-3 text-sm font-bold text-white hover:bg-emerald-700 transition disabled:opacity-40 disabled:cursor-not-allowed">
+                Confirmar — segue para embalagem
               </button>
-              <button onClick={() => { setModalResolver(null); setNovoImei(""); }}
-                className="flex-1 rounded-2xl bg-slate-100 py-3 text-sm font-bold text-slate-600 hover:bg-slate-200 transition">
+              <button onClick={fecharModal}
+                className="px-5 rounded-2xl bg-slate-100 py-3 text-sm font-bold text-slate-600 hover:bg-slate-200 transition">
                 Cancelar
               </button>
             </div>

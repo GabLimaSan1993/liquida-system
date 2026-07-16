@@ -784,6 +784,71 @@ export async function naoLocalizadoBuscarProximo(pedido, userId) {
   return { trocado: false };
 }
 
+// Resolve a análise mandando o pedido DIRETO para embalagem/faturamento.
+// Quem resolve está com o aparelho na mão — não faz sentido devolver para o picking
+// para outra pessoa bipar de novo. O pedido fica no mesmo estado de um bipado normal.
+//   tipo "localizado"       → o aparelho apareceu; mantém o IMEI (segue reservado).
+//   tipo "divergencia_cor"  → troca pelo novoImei; o antigo volta para "Produto disponível".
+//                             O SKU informado é só registro: entra no motivo, não altera o pedido.
+export async function resolverAnaliseParaEmbalagem(pedidoId, { tipo, novoImei, skuInformado }, userId) {
+  const { data: pedido } = await supabase
+    .from("pedidos_b2c")
+    .select("imei_alocado, grupo_id, motivo_analise")
+    .eq("id", pedidoId)
+    .single();
+  if (!pedido) throw new Error("Pedido não encontrado.");
+
+  const agora = new Date().toISOString();
+  let imeiFinal = pedido.imei_alocado;
+  let motivo    = pedido.motivo_analise || "";
+
+  if (tipo === "divergencia_cor") {
+    const imei = String(novoImei || "").trim();
+    if (!imei) throw new Error("Informe o novo IMEI.");
+    if (imei === pedido.imei_alocado) throw new Error("O novo IMEI é igual ao que já está alocado.");
+
+    // A peça de cor errada volta para o estoque
+    if (pedido.imei_alocado) {
+      await supabase.from("assurant_triagem")
+        .update({ status_atual: "Produto disponível" })
+        .eq("imei", pedido.imei_alocado);
+    }
+    // A peça correta fica reservada para este pedido
+    await supabase.from("assurant_triagem")
+      .update({ status_atual: "Reservado para pedido B2C" })
+      .eq("imei", imei);
+
+    imeiFinal = imei;
+    const registro = `Divergência de cor: ${pedido.imei_alocado || "—"} → ${imei}` +
+                     (skuInformado ? ` (SKU informado: ${String(skuInformado).trim()})` : "");
+    motivo = [motivo, registro].filter(Boolean).join(" | ");
+  }
+  // tipo "localizado": nada a fazer no estoque — o IMEI continua reservado para o pedido.
+  // (O fluxo antigo liberava o IMEI mesmo mantendo o mesmo aparelho, o que permitia o
+  //  FIFO sugerir para outro pedido uma peça ainda alocada.)
+
+  const { error } = await supabase
+    .from("pedidos_b2c")
+    .update({
+      status:         "embalado",
+      imei_alocado:   imeiFinal,
+      imei_bipado:    imeiFinal,
+      bipado_em:      agora,
+      bipado_por:     userId,
+      embalado_em:    agora,
+      embalado_por:   userId,
+      motivo_analise: motivo || null,
+      resolvido_em:   agora,
+      resolvido_por:  userId,
+      atualizado_em:  agora,
+    })
+    .eq("id", pedidoId);
+  if (error) throw new Error(error.message);
+
+  if (pedido.grupo_id) await verificarConclusaoGrupo(pedido.grupo_id);
+  return { ok: true, imei: imeiFinal };
+}
+
 export async function resolverAnalise(pedidoId, novoImei, userId) {
   const { data: pedido } = await supabase
     .from("pedidos_b2c")
