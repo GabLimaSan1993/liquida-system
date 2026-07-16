@@ -784,13 +784,67 @@ export async function naoLocalizadoBuscarProximo(pedido, userId) {
   return { trocado: false };
 }
 
+// Monta os dados do modal de resolução de análise:
+//   - a peça atual na triagem (para mostrar/corrigir cor, SKU e grade)
+//   - as cores já vistas nesse modelo (fonte provisória até existir o catálogo por fabricante)
+//   - a próxima opção do FIFO, se houver — só para LER (não reserva nada aqui)
+export async function prepararResolucaoAnalise(pedido) {
+  let peca = null;
+  if (pedido.imei_alocado) {
+    // Um IMEI pode ter várias passagens; a linha mais recente é o registro atual da peça
+    // (é a que o FIFO usa depois de deduplicar).
+    const { data } = await supabase
+      .from("assurant_triagem")
+      .select("unique_key, imei, marca, modelo, cor, sku, grade, local")
+      .eq("imei", pedido.imei_alocado)
+      .order("criado_em", { ascending: false })
+      .limit(1);
+    peca = data?.[0] || null;
+  }
+
+  // Cores que já apareceram nesse modelo. Provisório: quando existir a lista oficial
+  // por marca/modelo, é só trocar a origem deste array.
+  let cores = [];
+  if (peca?.modelo) {
+    const { data: linhas } = await supabase
+      .from("assurant_triagem")
+      .select("cor")
+      .eq("modelo", peca.modelo)
+      .not("cor", "is", null)
+      .limit(2000);
+    cores = Array.from(new Set((linhas || []).map(l => String(l.cor).trim()).filter(Boolean))).sort();
+  }
+
+  // Próxima opção do FIFO para o mesmo produto do pedido (exclui a peça com problema)
+  let proximo = null;
+  try {
+    const sugestoes = await buscarSugestaoFifo(pedido.sku_produto, pedido.grade_produto);
+    proximo = (sugestoes || []).find(s => s.imei !== pedido.imei_alocado) || null;
+  } catch { proximo = null; }
+
+  return { peca, cores, proximo };
+}
+
 // Resolve a análise mandando o pedido DIRETO para embalagem/faturamento.
-// Quem resolve está com o aparelho na mão — não faz sentido devolver para o picking
-// para outra pessoa bipar de novo. O pedido fica no mesmo estado de um bipado normal.
-//   tipo "localizado"       → o aparelho apareceu; mantém o IMEI (segue reservado).
-//   tipo "divergencia_cor"  → troca pelo novoImei; o antigo volta para "Produto disponível".
-//                             O SKU informado é só registro: entra no motivo, não altera o pedido.
-export async function resolverAnaliseParaEmbalagem(pedidoId, { tipo, novoImei, skuInformado }, userId) {
+// Quem resolve está com o aparelho na mão (bipou), então não faz sentido devolver
+// para o picking para outra pessoa bipar de novo.
+//
+//   tipo "localizado"        → o aparelho apareceu; mantém o IMEI, nada muda no estoque.
+//   tipo "divergencia_cor"   → o cadastro da cor está errado
+//   tipo "divergencia_sku"   → o cadastro do SKU está errado
+//   tipo "divergencia_grade" → o cadastro da grade está errado
+//
+// Nas três divergências: o valor informado CORRIGE o cadastro da peça (só na linha mais
+// recente da triagem — as passagens antigas são histórico e ficam intactas), a peça volta
+// para "Produto disponível" já com o dado certo (assim o FIFO não repete o erro), e o
+// pedido segue com o novoImei que o operador bipou.
+const CAMPO_DIVERGENCIA = {
+  divergencia_cor:   "cor",
+  divergencia_sku:   "sku",
+  divergencia_grade: "grade",
+};
+
+export async function resolverAnaliseParaEmbalagem(pedidoId, { tipo, valorReal, novoImei }, userId) {
   const { data: pedido } = await supabase
     .from("pedidos_b2c")
     .select("imei_alocado, grupo_id, motivo_analise")
@@ -802,30 +856,53 @@ export async function resolverAnaliseParaEmbalagem(pedidoId, { tipo, novoImei, s
   let imeiFinal = pedido.imei_alocado;
   let motivo    = pedido.motivo_analise || "";
 
-  if (tipo === "divergencia_cor") {
+  if (tipo !== "localizado") {
+    const campo = CAMPO_DIVERGENCIA[tipo];
+    if (!campo) throw new Error("Tipo de resolução inválido.");
+
+    const valor = String(valorReal || "").trim();
+    if (!valor) throw new Error("Informe o valor real do aparelho.");
+
     const imei = String(novoImei || "").trim();
-    if (!imei) throw new Error("Informe o novo IMEI.");
+    if (!imei) throw new Error("Bipe o aparelho que será usado no pedido.");
     if (imei === pedido.imei_alocado) throw new Error("O novo IMEI é igual ao que já está alocado.");
 
-    // A peça de cor errada volta para o estoque
     if (pedido.imei_alocado) {
+      // Corrige o cadastro só na linha mais recente — é a que o FIFO lê
+      const { data: linhas } = await supabase
+        .from("assurant_triagem")
+        .select("unique_key, " + campo)
+        .eq("imei", pedido.imei_alocado)
+        .order("criado_em", { ascending: false })
+        .limit(1);
+      const peca = linhas?.[0];
+      const valorAntigo = peca ? peca[campo] : null;
+
+      if (peca?.unique_key) {
+        const { error: errCampo } = await supabase
+          .from("assurant_triagem")
+          .update({ [campo]: valor })
+          .eq("unique_key", peca.unique_key);
+        if (errCampo) throw new Error(`Falha ao corrigir ${campo} da peça: ${errCampo.message}`);
+      }
+
+      // Peça volta ao estoque já com o dado corrigido
       await supabase.from("assurant_triagem")
         .update({ status_atual: "Produto disponível" })
         .eq("imei", pedido.imei_alocado);
+
+      const rotulo = { cor: "cor", sku: "SKU", grade: "grade" }[campo];
+      motivo = [motivo, `Divergência de ${rotulo}: ${pedido.imei_alocado} era "${valorAntigo || "—"}" e é "${valor}" (cadastro corrigido, peça devolvida ao estoque) · trocado por ${imei}`]
+        .filter(Boolean).join(" | ");
     }
-    // A peça correta fica reservada para este pedido
+
+    // Peça correta fica reservada para este pedido
     await supabase.from("assurant_triagem")
       .update({ status_atual: "Reservado para pedido B2C" })
       .eq("imei", imei);
 
     imeiFinal = imei;
-    const registro = `Divergência de cor: ${pedido.imei_alocado || "—"} → ${imei}` +
-                     (skuInformado ? ` (SKU informado: ${String(skuInformado).trim()})` : "");
-    motivo = [motivo, registro].filter(Boolean).join(" | ");
   }
-  // tipo "localizado": nada a fazer no estoque — o IMEI continua reservado para o pedido.
-  // (O fluxo antigo liberava o IMEI mesmo mantendo o mesmo aparelho, o que permitia o
-  //  FIFO sugerir para outro pedido uma peça ainda alocada.)
 
   const { error } = await supabase
     .from("pedidos_b2c")

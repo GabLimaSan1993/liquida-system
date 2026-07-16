@@ -30,6 +30,7 @@ import {
   naoLocalizadoBuscarProximo,
   resolverAnalise,
   resolverAnaliseParaEmbalagem,
+  prepararResolucaoAnalise,
   buscarKpisPedidosB2C,
 } from "../services/pedidosB2CService.js";
 import { useAuth } from "../AuthContext.jsx";
@@ -863,6 +864,17 @@ function TabPicking() {
 // ══════════════════════════════════════════════════════════
 // ABA EM ANÁLISE
 // ══════════════════════════════════════════════════════════
+// Opções do modal de resolução de análise. As três divergências corrigem o cadastro
+// da peça e devolvem ela ao estoque com o dado certo — por isso o FIFO não repete o erro.
+const OPCOES_RESOLUCAO = [
+  { key: "localizado",        label: "Localizado",           desc: "Achei o aparelho — segue para embalagem", icon: CheckCircle,   bg: "bg-emerald-600", ring: "ring-emerald-600" },
+  { key: "divergencia_cor",   label: "Divergência de cor",   desc: "O cadastro da cor está errado",           icon: Palette,       bg: "bg-[#7F2D92]",   ring: "ring-[#7F2D92]" },
+  { key: "divergencia_sku",   label: "Divergência de SKU",   desc: "É outro produto",                          icon: Ticket,        bg: "bg-[#7F2D92]",   ring: "ring-[#7F2D92]" },
+  { key: "divergencia_grade", label: "Divergência de grade", desc: "A grade não confere",                      icon: Scale,         bg: "bg-[#7F2D92]",   ring: "ring-[#7F2D92]" },
+];
+
+const GRADES_POSSIVEIS = ["Like New", "Excelente", "Muito Bom", "Bom", "Outlet", "Outlet Bateria 70%"];
+
 function TabAnalise() {
   const { user } = useAuth();
   const [pedidos, setPedidos]               = useState([]);
@@ -871,7 +883,10 @@ function TabAnalise() {
   const [modalResolver, setModalResolver]   = useState(null);
   const [novoImei, setNovoImei]             = useState("");
   const [tipoResolucao, setTipoResolucao]   = useState(null);
-  const [skuInformado, setSkuInformado]     = useState("");
+  const [valorReal, setValorReal]           = useState("");
+  const [corLivre, setCorLivre]             = useState("");
+  const [prep, setPrep]                     = useState(null);
+  const [carregandoPrep, setCarregandoPrep] = useState(false);
   const [feedback, setFeedback]             = useState(null);
 
   useEffect(() => { carregar(); }, []);
@@ -883,12 +898,41 @@ function TabAnalise() {
     finally { setLoading(false); }
   }
 
+  // Ao abrir o modal, busca as cores do modelo e a próxima opção do FIFO
+  useEffect(() => {
+    if (!modalResolver) { setPrep(null); return; }
+    let cancelado = false;
+    setCarregandoPrep(true);
+    prepararResolucaoAnalise(modalResolver)
+      .then(r => { if (!cancelado) setPrep(r); })
+      .catch(e => { console.error(e); if (!cancelado) setPrep({ peca: null, cores: [], proximo: null }); })
+      .finally(() => { if (!cancelado) setCarregandoPrep(false); });
+    return () => { cancelado = true; };
+  }, [modalResolver]);
+
+  // A cor pode vir do dropdown ou do campo livre ("Outra")
+  function valorFinal() {
+    if (tipoResolucao === "divergencia_cor" && valorReal === "__outra__") return corLivre.trim();
+    return valorReal.trim();
+  }
+
+  function podeConfirmar() {
+    if (!tipoResolucao) return false;
+    if (tipoResolucao === "localizado") return true;
+    if (!valorFinal()) return false;
+    const imei = novoImei.trim();
+    if (!imei) return false;
+    // Com sugestão do FIFO, o operador tem que bipar exatamente aquele aparelho
+    if (prep?.proximo && imei !== prep.proximo.imei) return false;
+    return true;
+  }
+
   async function handleResolver() {
     if (!modalResolver || !tipoResolucao) return;
     try {
       await resolverAnaliseParaEmbalagem(
         modalResolver.id,
-        { tipo: tipoResolucao, novoImei: novoImei.trim(), skuInformado: skuInformado.trim() },
+        { tipo: tipoResolucao, valorReal: valorFinal(), novoImei: novoImei.trim() },
         user.id
       );
       setPedidos(prev => prev.filter(p => p.id !== modalResolver.id));
@@ -905,7 +949,9 @@ function TabAnalise() {
     setModalResolver(null);
     setTipoResolucao(null);
     setNovoImei("");
-    setSkuInformado("");
+    setValorReal("");
+    setCorLivre("");
+    setPrep(null);
   }
 
   const filtrados = pedidos.filter(p =>
@@ -929,70 +975,125 @@ function TabAnalise() {
             </div>
             <p className="text-xs font-bold text-slate-600 mb-2">O que aconteceu?</p>
             <div className="space-y-2 mb-4">
-              <button onClick={() => setTipoResolucao("localizado")}
-                className={`w-full flex items-center gap-3 p-3 rounded-xl text-left transition ring-1 ${
-                  tipoResolucao === "localizado"
-                    ? "bg-emerald-600 text-white ring-emerald-600"
-                    : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"
-                }`}>
-                <CheckCircle className="h-5 w-5 shrink-0" />
-                <div>
-                  <div className="text-sm font-bold">Localizado</div>
-                  <div className={`text-xs ${tipoResolucao === "localizado" ? "text-emerald-50" : "text-slate-500"}`}>
-                    Achei o aparelho — segue para embalagem
-                  </div>
-                </div>
-              </button>
-
-              <button onClick={() => setTipoResolucao("divergencia_cor")}
-                className={`w-full flex items-center gap-3 p-3 rounded-xl text-left transition ring-1 ${
-                  tipoResolucao === "divergencia_cor"
-                    ? "bg-[#7F2D92] text-white ring-[#7F2D92]"
-                    : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"
-                }`}>
-                <Palette className="h-5 w-5 shrink-0" />
-                <div>
-                  <div className="text-sm font-bold">Divergência de cor</div>
-                  <div className={`text-xs ${tipoResolucao === "divergencia_cor" ? "text-purple-100" : "text-slate-500"}`}>
-                    Troquei por outro aparelho
-                  </div>
-                </div>
-              </button>
+              {OPCOES_RESOLUCAO.map(op => {
+                const Icon = op.icon;
+                const ativo = tipoResolucao === op.key;
+                return (
+                  <button key={op.key} onClick={() => { setTipoResolucao(op.key); setValorReal(""); }}
+                    className={`w-full flex items-center gap-3 p-3 rounded-xl text-left transition ring-1 ${
+                      ativo ? `${op.bg} text-white ${op.ring}` : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"
+                    }`}>
+                    <Icon className="h-5 w-5 shrink-0" />
+                    <div>
+                      <div className="text-sm font-bold">{op.label}</div>
+                      <div className={`text-xs ${ativo ? "text-white/80" : "text-slate-500"}`}>{op.desc}</div>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
 
-            {tipoResolucao === "divergencia_cor" && (
+            {tipoResolucao && tipoResolucao !== "localizado" && (
               <>
-                <div className="mb-3">
-                  <label className="block text-xs font-bold text-slate-600 mb-1">Novo IMEI *</label>
-                  <input
-                    value={novoImei}
-                    onChange={e => setNovoImei(e.target.value)}
-                    placeholder="Bipe ou digite o novo IMEI..."
-                    autoFocus
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-mono font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7F2D92]"
-                  />
-                </div>
+                {/* O que a peça REALMENTE é — corrige o cadastro antes de devolver ao estoque */}
                 <div className="mb-3">
                   <label className="block text-xs font-bold text-slate-600 mb-1">
-                    SKU do aparelho <span className="font-normal text-slate-400">(opcional — só registro)</span>
+                    {tipoResolucao === "divergencia_cor"   && "Qual a cor real do aparelho? *"}
+                    {tipoResolucao === "divergencia_sku"   && "Qual o SKU real do aparelho? *"}
+                    {tipoResolucao === "divergencia_grade" && "Qual a grade real do aparelho? *"}
                   </label>
-                  <input
-                    value={skuInformado}
-                    onChange={e => setSkuInformado(e.target.value)}
-                    placeholder="Ex: BRZDEV12571"
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-mono font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7F2D92]"
-                  />
+
+                  {tipoResolucao === "divergencia_cor" && (
+                    prep?.cores?.length ? (
+                      <select value={valorReal} onChange={e => setValorReal(e.target.value)}
+                        className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7F2D92] bg-white">
+                        <option value="">Selecione...</option>
+                        {prep.cores.map(c => <option key={c} value={c}>{c}</option>)}
+                        <option value="__outra__">Outra (digitar)</option>
+                      </select>
+                    ) : (
+                      <input value={valorReal} onChange={e => setValorReal(e.target.value)}
+                        placeholder="Ex: Preto"
+                        className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7F2D92]" />
+                    )
+                  )}
+                  {tipoResolucao === "divergencia_cor" && valorReal === "__outra__" && (
+                    <input value={corLivre} onChange={e => setCorLivre(e.target.value)} autoFocus
+                      placeholder="Digite a cor..."
+                      className="w-full mt-2 rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7F2D92]" />
+                  )}
+
+                  {tipoResolucao === "divergencia_sku" && (
+                    <input value={valorReal} onChange={e => setValorReal(e.target.value)}
+                      placeholder="Ex: BRZDEV12571"
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-mono font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7F2D92]" />
+                  )}
+
+                  {tipoResolucao === "divergencia_grade" && (
+                    <select value={valorReal} onChange={e => setValorReal(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7F2D92] bg-white">
+                      <option value="">Selecione...</option>
+                      {GRADES_POSSIVEIS.map(g => <option key={g} value={g}>{g}</option>)}
+                    </select>
+                  )}
+
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    {prep?.peca && (
+                      <>Cadastro atual: <span className="font-semibold text-slate-500">
+                        {tipoResolucao === "divergencia_cor"   ? (prep.peca.cor   || "—") :
+                         tipoResolucao === "divergencia_sku"   ? (prep.peca.sku   || "—") :
+                                                                  (prep.peca.grade || "—")}
+                      </span> · será corrigido e a peça volta ao estoque</>
+                    )}
+                  </p>
                 </div>
-                <div className="flex items-start gap-2 bg-blue-50 ring-1 ring-blue-200 rounded-xl px-3 py-2 mb-4 text-xs text-blue-800">
-                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                  <span>O aparelho antigo volta para o estoque como disponível.</span>
-                </div>
+
+                {/* Aparelho que vai para o pedido: o FIFO manda, ou o operador informa */}
+                {carregandoPrep ? (
+                  <div className="flex items-center gap-2 text-xs text-slate-400 mb-4">
+                    <Loader className="h-3.5 w-3.5 animate-spin" /> Procurando outra opção no estoque...
+                  </div>
+                ) : prep?.proximo ? (
+                  <>
+                    <div className="bg-emerald-50 ring-1 ring-emerald-200 rounded-xl p-3 mb-3">
+                      <p className="text-[11px] font-bold text-emerald-700 flex items-center gap-1 mb-1">
+                        <MapPin className="h-3 w-3" /> BUSQUE ESTE APARELHO
+                      </p>
+                      <p className="font-mono font-bold text-sm text-emerald-800">{prep.proximo.imei}</p>
+                      <p className="text-xs text-emerald-700">{prep.proximo.local} · {prep.proximo.grade}</p>
+                    </div>
+                    <div className="mb-3">
+                      <label className="block text-xs font-bold text-slate-600 mb-1">Bipe o aparelho que você pegou *</label>
+                      <input value={novoImei} onChange={e => setNovoImei(e.target.value)} autoFocus
+                        placeholder="Bipe o IMEI..."
+                        className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-mono font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7F2D92]" />
+                      {novoImei.trim() && novoImei.trim() !== prep.proximo.imei && (
+                        <p className="text-[11px] font-semibold text-red-600 mt-1">
+                          Este não é o aparelho indicado pelo FIFO. Bipe o {prep.proximo.imei}.
+                        </p>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-start gap-2 bg-amber-50 ring-1 ring-amber-200 rounded-xl px-3 py-2 mb-3 text-xs text-amber-800">
+                      <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                      <span>Sem outra opção no FIFO para este produto. Informe o aparelho que será usado.</span>
+                    </div>
+                    <div className="mb-3">
+                      <label className="block text-xs font-bold text-slate-600 mb-1">IMEI do aparelho que você vai usar *</label>
+                      <input value={novoImei} onChange={e => setNovoImei(e.target.value)} autoFocus
+                        placeholder="Bipe ou digite o IMEI..."
+                        className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-mono font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7F2D92]" />
+                    </div>
+                  </>
+                )}
               </>
             )}
 
             <div className="flex gap-3">
               <button onClick={handleResolver}
-                disabled={!tipoResolucao || (tipoResolucao === "divergencia_cor" && !novoImei.trim())}
+                disabled={!podeConfirmar()}
                 className="flex-1 rounded-2xl bg-emerald-600 py-3 text-sm font-bold text-white hover:bg-emerald-700 transition disabled:opacity-40 disabled:cursor-not-allowed">
                 Confirmar — segue para embalagem
               </button>
