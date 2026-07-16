@@ -160,16 +160,34 @@ async function sincronizarPedidosB2C(rows, horaCorte, userId) {
 
   const pedidos = Array.from(pedidoMap.values());
 
-  const ids = pedidos.map(p => p.id_anymarket);
-  const { data: existentes } = await supabase
-    .from("pedidos_b2c")
-    .select("id, id_anymarket, status")
-    .in("id_anymarket", ids);
+  // Busca os já existentes em BLOCOS. Mandar todos os ids de uma vez monta uma URL
+  // gigante e a requisição falha — e, se falhasse em silêncio, todo pedido seria tratado
+  // como novo e a base inteira duplicaria (aconteceu em 16/07/2026).
+  // Por isso: fatia em blocos E aborta no erro, em vez de seguir com a lista vazia.
+  const existentes = [];
+  const idsTodos = pedidos.map(p => p.id_anymarket);
+  const BLOCO_IDS = 200;
+  for (let i = 0; i < idsTodos.length; i += BLOCO_IDS) {
+    const bloco = idsTodos.slice(i, i + BLOCO_IDS);
+    const { data, error } = await supabase
+      .from("pedidos_b2c")
+      .select("id, id_anymarket, status, status_anymarket, codigo_de_rastreio")
+      .in("id_anymarket", bloco);
+    if (error) {
+      throw new Error(
+        `Falha ao verificar pedidos já existentes (bloco ${i / BLOCO_IDS + 1}): ${error.message}. ` +
+        `Nenhum pedido foi criado — tente novamente.`
+      );
+    }
+    existentes.push(...(data || []));
+  }
 
-  const existentesMap = new Map((existentes || []).map(e => [e.id_anymarket, e]));
+  const existentesMap = new Map(existentes.map(e => [e.id_anymarket, e]));
 
   const paraInserir  = [];
   const paraAtualizar = [];
+  let ignorados = 0;
+  let inalterados = 0;
 
   for (const pedido of pedidos) {
     const grade = extrairGrade(pedido.titulo_produto);
@@ -203,17 +221,32 @@ async function sincronizarPedidosB2C(rows, horaCorte, userId) {
     const existente = existentesMap.get(pedido.id_anymarket);
 
     if (existente) {
-      paraAtualizar.push({
-        id:                 existente.id,
-        status_anymarket:   pedido.status,
-        codigo_de_rastreio: pedido.codigo_de_rastreio,
-        data_entrega:       pedido.data_entrega,
-        atualizado_em:      new Date().toISOString(),
-      });
-    } else {
+      // Só atualiza quem REALMENTE mudou. Cada update é um request próprio; mandar
+      // a base inteira a cada hora de corte seriam milhares de chamadas em fila
+      // (minutos de tela travada). Numa hora típica, só um punhado muda de status.
+      const mudouStatus   = (pedido.status ?? null) !== (existente.status_anymarket ?? null);
+      const mudouRastreio = (pedido.codigo_de_rastreio ?? null) !== (existente.codigo_de_rastreio ?? null);
+      if (mudouStatus || mudouRastreio) {
+        paraAtualizar.push({
+          id:                 existente.id,
+          status_anymarket:   pedido.status,
+          codigo_de_rastreio: pedido.codigo_de_rastreio,
+          data_entrega:       pedido.data_entrega,
+          atualizado_em:      new Date().toISOString(),
+        });
+      } else {
+        inalterados++;
+      }
+    } else if (pedido.status === "Pago") {
+      // Só entra na fila quem está PAGO. Um export completo traz Cancelado/Entregue/
+      // Enviado de semanas atrás — criar pedido para eles inunda a operação com fantasmas.
       registro.status          = "aguardando_alocacao";
       registro.status_anymarket = pedido.status;
       paraInserir.push(registro);
+    } else {
+      // Linha nova que não está Paga: não vira pedido. Fica registrada na
+      // anymarket_pedidos como histórico.
+      ignorados++;
     }
   }
 
@@ -237,7 +270,7 @@ async function sincronizarPedidosB2C(rows, horaCorte, userId) {
     else atualizados++;
   }
 
-  return { inseridos, atualizados };
+  return { inseridos, atualizados, ignorados, inalterados };
 }
 
 export async function uploadAnymarketZip(file, userId, horaCorte, onProgress) {
@@ -282,11 +315,11 @@ export async function uploadAnymarketZip(file, userId, horaCorte, onProgress) {
 
   if (onProgress) onProgress({ inserted: 0, total: 1, fase: "b2c" });
 
-  const { inseridos, atualizados } = await sincronizarPedidosB2C(rows, horaCorte, userId);
+  const { inseridos, atualizados, ignorados, inalterados } = await sincronizarPedidosB2C(rows, horaCorte, userId);
 
   if (onProgress) onProgress({ inserted: 1, total: 1, fase: "b2c" });
 
-  return { total: rows.length, arquivo: xlsxEntry.name, inseridos, atualizados };
+  return { total: rows.length, arquivo: xlsxEntry.name, inseridos, atualizados, ignorados, inalterados };
 }
 
 export async function buscarPedidoAnymarket(idAnymarket) {
