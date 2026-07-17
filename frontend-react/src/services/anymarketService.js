@@ -144,34 +144,56 @@ function mapRow(rawHeaders, values, userId) {
 }
 
 async function sincronizarPedidosB2C(rows, horaCorte, userId) {
-  const pedidoMap = new Map();
+  // Cada linha do export é UM item do pedido, e cada item vira UMA linha em
+  // pedidos_b2c (1 linha = 1 IMEI). Um pedido com 10 produtos tem 10 linhas.
+  //
+  // A versão anterior montava um Map chaveado só por id_anymarket e ficava com a
+  // PRIMEIRA linha de cada pedido, descartando as demais em silêncio: o pedido
+  // 360799973 (10 aparelhos, R$ 15.597,50) entrou como 1 aparelho. Por isso a
+  // chave aqui é composta: id_anymarket + sku_marketplace + item_seq.
+  //
+  // O item_seq resolve os casos em que a mesma chave se repete de forma legítima:
+  //   - QUANTIDADE = 2 numa linha (Magazine Luiza / Mercado Livre) -> 2 unidades
+  //   - a mesma linha repetida (Via Varejo manda 2 linhas iguais)
+  // Em vez de descartar a repetição, contamos: seq 1, seq 2...
+  const itens = [];
+  const seqPorChave = new Map();
+
   for (const row of rows) {
     const id = row.id_anymarket;
     if (!id) continue;
-    if (!pedidoMap.has(id)) {
-      pedidoMap.set(id, row);
-    } else {
-      const existing = pedidoMap.get(id);
-      if (row.status && row.status !== existing.status) {
-        pedidoMap.set(id, { ...existing, status: row.status });
-      }
+
+    // sku_marketplace nulo desligaria o índice único (no Postgres, null é
+    // distinto de null), então caímos no sku_produto como identidade do item.
+    const skuItem = row.sku_do_produto_no_marketplace || row.sku_produto || null;
+
+    const qtdBruta = Number(row.quantidade);
+    const quantidade = Number.isFinite(qtdBruta) && qtdBruta >= 1 ? Math.round(qtdBruta) : 1;
+
+    const chaveBase = `${id}|${skuItem ?? ""}`;
+
+    for (let i = 0; i < quantidade; i++) {
+      const seq = (seqPorChave.get(chaveBase) ?? 0) + 1;
+      seqPorChave.set(chaveBase, seq);
+      itens.push({ ...row, _sku_item: skuItem, _item_seq: seq });
     }
   }
 
-  const pedidos = Array.from(pedidoMap.values());
+  const chaveDe = (idAnymarket, skuItem, itemSeq) =>
+    `${idAnymarket}|${skuItem ?? ""}|${itemSeq}`;
 
   // Busca os já existentes em BLOCOS. Mandar todos os ids de uma vez monta uma URL
   // gigante e a requisição falha — e, se falhasse em silêncio, todo pedido seria tratado
   // como novo e a base inteira duplicaria (aconteceu em 16/07/2026).
   // Por isso: fatia em blocos E aborta no erro, em vez de seguir com a lista vazia.
   const existentes = [];
-  const idsTodos = pedidos.map(p => p.id_anymarket);
+  const idsTodos = [...new Set(itens.map(it => it.id_anymarket))];
   const BLOCO_IDS = 200;
   for (let i = 0; i < idsTodos.length; i += BLOCO_IDS) {
     const bloco = idsTodos.slice(i, i + BLOCO_IDS);
     const { data, error } = await supabase
       .from("pedidos_b2c")
-      .select("id, id_anymarket, status, status_anymarket, codigo_de_rastreio")
+      .select("id, id_anymarket, sku_marketplace, item_seq, status, status_anymarket, codigo_de_rastreio")
       .in("id_anymarket", bloco);
     if (error) {
       throw new Error(
@@ -182,69 +204,75 @@ async function sincronizarPedidosB2C(rows, horaCorte, userId) {
     existentes.push(...(data || []));
   }
 
-  const existentesMap = new Map(existentes.map(e => [e.id_anymarket, e]));
+  const existentesMap = new Map(
+    existentes.map(e => [chaveDe(e.id_anymarket, e.sku_marketplace, e.item_seq), e])
+  );
 
   const paraInserir  = [];
   const paraAtualizar = [];
   let ignorados = 0;
   let inalterados = 0;
 
-  for (const pedido of pedidos) {
-    const grade = extrairGrade(pedido.titulo_produto);
+  for (const item of itens) {
+    const grade = extrairGrade(item.titulo_produto);
     const registro = {
-      id_anymarket:       pedido.id_anymarket,
+      id_anymarket:       item.id_anymarket,
+      sku_marketplace:    item._sku_item,
+      item_seq:           item._item_seq,
       hora_corte:         horaCorte || null,
-      cpf_cnpj:           pedido.cpf_cnpj,
-      cliente:            pedido.cliente,
-      telefone:           pedido.telefone,
-      email:              pedido.email,
-      marketplace:        pedido.marketplace,
-      data_pedido:        pedido.data_pedido,
-      data_de_pagamento:  pedido.data_de_pagamento,
-      titulo_produto:     pedido.titulo_produto,
-      sku_produto:        pedido.sku_produto,
+      cpf_cnpj:           item.cpf_cnpj,
+      cliente:            item.cliente,
+      telefone:           item.telefone,
+      email:              item.email,
+      marketplace:        item.marketplace,
+      data_pedido:        item.data_pedido,
+      data_de_pagamento:  item.data_de_pagamento,
+      titulo_produto:     item.titulo_produto,
+      sku_produto:        item.sku_produto,
       grade_produto:      grade,
-      valor_unitario:     pedido.valor_unitario,
-      total_do_pedido:    pedido.total_do_pedido,
-      codigo_de_rastreio: pedido.codigo_de_rastreio,
-      logradouro:         pedido.logradouro,
-      numero:             pedido.numero,
-      complemento:        pedido.complemento,
-      bairro:             pedido.bairro,
-      municipio:          pedido.municipio,
-      estado:             pedido.estado,
-      cep:                pedido.cep,
+      valor_unitario:     item.valor_unitario,
+      total_do_pedido:    item.total_do_pedido,
+      codigo_de_rastreio: item.codigo_de_rastreio,
+      logradouro:         item.logradouro,
+      numero:             item.numero,
+      complemento:        item.complemento,
+      bairro:             item.bairro,
+      municipio:          item.municipio,
+      estado:             item.estado,
+      cep:                item.cep,
       criado_por:         userId,
       atualizado_em:      new Date().toISOString(),
     };
 
-    const existente = existentesMap.get(pedido.id_anymarket);
+    const existente = existentesMap.get(
+      chaveDe(item.id_anymarket, item._sku_item, item._item_seq)
+    );
 
     if (existente) {
       // Só atualiza quem REALMENTE mudou. Cada update é um request próprio; mandar
       // a base inteira a cada hora de corte seriam milhares de chamadas em fila
       // (minutos de tela travada). Numa hora típica, só um punhado muda de status.
-      const mudouStatus   = (pedido.status ?? null) !== (existente.status_anymarket ?? null);
-      const mudouRastreio = (pedido.codigo_de_rastreio ?? null) !== (existente.codigo_de_rastreio ?? null);
+      const mudouStatus   = (item.status ?? null) !== (existente.status_anymarket ?? null);
+      const mudouRastreio = (item.codigo_de_rastreio ?? null) !== (existente.codigo_de_rastreio ?? null);
       if (mudouStatus || mudouRastreio) {
         paraAtualizar.push({
           id:                 existente.id,
-          status_anymarket:   pedido.status,
-          codigo_de_rastreio: pedido.codigo_de_rastreio,
-          data_entrega:       pedido.data_entrega,
+          status_anymarket:   item.status,
+          codigo_de_rastreio: item.codigo_de_rastreio,
+          data_entrega:       item.data_entrega,
           atualizado_em:      new Date().toISOString(),
         });
       } else {
         inalterados++;
       }
-    } else if (pedido.status === "Pago") {
+    } else if (item.status === "Pago") {
       // Só entra na fila quem está PAGO. Um export completo traz Cancelado/Entregue/
       // Enviado de semanas atrás — criar pedido para eles inunda a operação com fantasmas.
       registro.status          = "aguardando_alocacao";
-      registro.status_anymarket = pedido.status;
+      registro.status_anymarket = item.status;
       paraInserir.push(registro);
     } else {
-      // Linha nova que não está Paga: não vira pedido. Fica registrada na
+      // Item novo que não está Pago: não vira pedido. Fica registrado na
       // anymarket_pedidos como histórico.
       ignorados++;
     }
