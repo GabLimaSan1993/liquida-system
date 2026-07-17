@@ -35,9 +35,29 @@ export function normalizarEndereco(local) {
   return [rua, bloco, ad, ...partes.slice(3)].filter(Boolean).join("/");
 }
 
-function bloco(endereco) {
-  const p = String(endereco || "").split("/");
-  return p.length >= 2 ? `${p[0]}/${p[1]}` : endereco;
+// Ordena endereços na ordem física do armazém. O sort() de texto puro compara
+// caractere a caractere e colocaria "RUA 10" antes de "RUA 2" (porque "1" < "2"),
+// fazendo o operador subir e descer a mesma rua. Aqui cada trecho do endereço é
+// comparado pelo número que ele contém.
+function ordemEndereco(a, b) {
+  const pa = String(a || "").split("/");
+  const pb = String(b || "").split("/");
+  const n = Math.max(pa.length, pb.length);
+  for (let i = 0; i < n; i++) {
+    const sa = pa[i] ?? "";
+    const sb = pb[i] ?? "";
+    const ta = sa.replace(/\d+/g, "");
+    const tb = sb.replace(/\d+/g, "");
+    if (ta !== tb) return ta < tb ? -1 : 1;
+    const na = parseInt((sa.match(/\d+/) || [])[0] ?? "", 10);
+    const nb = parseInt((sb.match(/\d+/) || [])[0] ?? "", 10);
+    if (Number.isNaN(na) || Number.isNaN(nb)) {
+      if (sa !== sb) return sa < sb ? -1 : 1;
+    } else if (na !== nb) {
+      return na - nb;
+    }
+  }
+  return 0;
 }
 
 // ══════════════════════════════════════════════════════════
@@ -72,8 +92,11 @@ export async function abrirCiclo(nome, userId) {
 
 // ══════════════════════════════════════════════════════════
 // SORTEIO DO DIA
-// Pega os endereços ainda não contados no ciclo, agrupa por bloco
-// (para o operador não atravessar o armazém) e cria as contagens pendentes.
+// Sorteia de verdade entre os endereços ainda não contados no ciclo.
+// A versão anterior escolhia por ordem alfabética de bloco: como RUA 1 e RUA 2 têm
+// ~977 posições e o ritmo é 131/dia, a contagem ficava presa nelas por mais de uma
+// semana seguida. Nenhum endereço se repetia, mas o operador via "RUA 1" todo dia
+// e concluía, com razão, que o sistema estava travado.
 // ══════════════════════════════════════════════════════════
 export async function sortearDia(cicloId, quantidade = 131) {
   // Endereços que existem no estoque (a coluna local_normalizado é mantida por trigger)
@@ -88,32 +111,34 @@ export async function sortearDia(cicloId, quantidade = 131) {
   const enderecos = new Set();
   (pecas || []).forEach(p => enderecos.add(p.local_normalizado));
 
-  // Os que já foram contados neste ciclo
-  const { data: jaContados } = await supabase
+  // Os que já foram contados neste ciclo.
+  // O erro é verificado de propósito: se esta consulta falhar sem ninguém olhar,
+  // "contados" fica vazio, o código conclui que nada foi contado e re-sorteia
+  // endereços já contados — aí sim seria repetição de verdade, e em silêncio.
+  const { data: jaContados, error: errContados } = await supabase
     .from("inventario_contagens")
     .select("endereco")
     .eq("ciclo_id", cicloId);
+  if (errContados) {
+    throw new Error(
+      `Falha ao verificar o que já foi contado: ${errContados.message}. Nenhum sorteio foi feito.`
+    );
+  }
   const contados = new Set((jaContados || []).map(c => c.endereco));
 
   const pendentes = Array.from(enderecos).filter(e => !contados.has(e));
   if (!pendentes.length) return { ok: false, erro: "Todos os endereços já foram contados neste ciclo." };
 
-  // Agrupa por bloco e vai preenchendo bloco a bloco, para minimizar deslocamento
-  const porBloco = {};
-  pendentes.forEach(e => {
-    const b = bloco(e);
-    (porBloco[b] = porBloco[b] || []).push(e);
-  });
-
-  const blocos = Object.keys(porBloco).sort();
-  const doDia = [];
-  for (const b of blocos) {
-    for (const e of porBloco[b].sort()) {
-      if (doDia.length >= quantidade) break;
-      doDia.push(e);
-    }
-    if (doDia.length >= quantidade) break;
+  // Fisher-Yates: todo endereço pendente tem exatamente a mesma chance de cair no dia.
+  const sorteio = [...pendentes];
+  for (let i = sorteio.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [sorteio[i], sorteio[j]] = [sorteio[j], sorteio[i]];
   }
+
+  // Sorteia espalhado, mas ENTREGA em ordem de caminhada: o operador atravessa o
+  // armazém uma vez só, seguindo um percurso, em vez de zigue-zaguear entre ruas.
+  const doDia = sorteio.slice(0, quantidade).sort(ordemEndereco);
 
   const linhas = doDia.map(e => ({ ciclo_id: cicloId, endereco: e, status: "pendente" }));
   const { error: errIns } = await supabase.from("inventario_contagens").insert(linhas);
@@ -127,10 +152,13 @@ export async function listarContagensPendentes(cicloId) {
     .from("inventario_contagens")
     .select("*")
     .eq("ciclo_id", cicloId)
-    .in("status", ["pendente", "em_contagem"])
-    .order("endereco", { ascending: true });
+    .in("status", ["pendente", "em_contagem"]);
   if (error) throw new Error(error.message);
-  return data || [];
+
+  // A ordenação é feita aqui, e não no banco: o .order() do Postgres é alfabético e
+  // colocaria "RUA 10" antes de "RUA 2". Com a contagem presa nas ruas 1 e 2 isso
+  // nunca apareceu; com o sorteio espalhando pelo armazém, apareceria todo dia.
+  return (data || []).sort((a, b) => ordemEndereco(a.endereco, b.endereco));
 }
 
 // ══════════════════════════════════════════════════════════
@@ -452,15 +480,18 @@ function resumirContagem(itens) {
 export async function resumoDoDia(cicloId, data) {
   const { inicio, fim } = rangeDiaSP(data);
 
-  const { data: contagens, error } = await supabase
+  const { data: contagensRaw, error } = await supabase
     .from("inventario_contagens")
     .select("*")
     .eq("ciclo_id", cicloId)
     .eq("status", "concluida")
     .gte("fechada_em", inicio)
-    .lt("fechada_em", fim)
-    .order("endereco", { ascending: true });
+    .lt("fechada_em", fim);
   if (error) throw new Error(error.message);
+
+  // Ordem de caminhada (e não alfabética) para o resumo e o PDF saírem na mesma
+  // sequência em que o operador percorreu o armazém.
+  const contagens = (contagensRaw || []).sort((a, b) => ordemEndereco(a.endereco, b.endereco));
 
   const ids = (contagens || []).map(c => c.id);
   let itens = [];

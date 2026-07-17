@@ -516,36 +516,105 @@ export async function buscarComparativoAging() {
 }
 
 // ── Verifica e cria grupos automaticamente ────────────────
+// Um pedido do marketplace pode ter vários itens (1 linha = 1 IMEI). Os itens de um
+// mesmo pedido têm que sair na MESMA nota, então precisam ficar no MESMO grupo.
+// Esta função devolve os pedidos cujos itens estão TODOS alocados e sem grupo —
+// pedido pela metade não entra em leva nenhuma, senão racha em dois grupos e duas NFs.
+async function agruparPedidosCompletos(semGrupo) {
+  const ids = [...new Set(semGrupo.map(p => p.id_anymarket))];
+
+  // Busca TODOS os itens desses pedidos, em qualquer status, em blocos (URL não estoura).
+  const todosItens = [];
+  const BLOCO_IDS = 200;
+  for (let i = 0; i < ids.length; i += BLOCO_IDS) {
+    const bloco = ids.slice(i, i + BLOCO_IDS);
+    const { data, error } = await supabase
+      .from("pedidos_b2c")
+      .select("id, id_anymarket, status, grupo_id")
+      .in("id_anymarket", bloco);
+    if (error) throw new Error(`Falha ao verificar itens do pedido: ${error.message}`);
+    todosItens.push(...(data || []));
+  }
+
+  const itensPorPedido = new Map();
+  for (const it of todosItens) {
+    if (!itensPorPedido.has(it.id_anymarket)) itensPorPedido.set(it.id_anymarket, []);
+    itensPorPedido.get(it.id_anymarket).push(it);
+  }
+
+  const prontos = [];
+  for (const p of semGrupo) {
+    const irmaos = itensPorPedido.get(p.id_anymarket) || [];
+    const completo = irmaos.length > 0 &&
+      irmaos.every(i => i.status === "alocado" && !i.grupo_id);
+    if (!completo) continue;
+    if (prontos.some(x => x.id_anymarket === p.id_anymarket)) continue;
+
+    // semGrupo já vem ordenado por alocado_em, então o primeiro item de cada pedido
+    // que aparece aqui é o mais antigo dele — é ele que define a vez do pedido (FIFO).
+    prontos.push({
+      id_anymarket: p.id_anymarket,
+      marketplace:  p.marketplace,
+      itemIds:      semGrupo.filter(x => x.id_anymarket === p.id_anymarket).map(x => x.id),
+    });
+  }
+
+  return prontos;
+}
+
+// Monta a leva enfiando pedidos INTEIROS até chegar ao tamanho. Nunca parte um pedido:
+// se o próximo não couber, a leva fecha menor e ele vai na próxima (mantém o FIFO).
+// Exceção: pedido que sozinho já passa do tamanho entra assim mesmo e o grupo estoura —
+// a integridade do pedido vale mais que o número 20.
+function montarLote(pedidosProntos, tamanho) {
+  const lote = [];
+  let total = 0;
+  for (const ped of pedidosProntos) {
+    if (total > 0 && total + ped.itemIds.length > tamanho) break;
+    lote.push(ped);
+    total += ped.itemIds.length;
+    if (total >= tamanho) break;
+  }
+  return { lote, total };
+}
+
 async function verificarECriarGrupo(userId) {
   const TAMANHO = 20;
 
-  // Busca pedidos alocados sem grupo, com o marketplace (para agrupar por marketplace)
+  // Busca itens alocados sem grupo, com o pedido a que pertencem (para nunca separá-los).
   const { data: semGrupo, error } = await supabase
     .from("pedidos_b2c")
-    .select("id, marketplace")
+    .select("id, id_anymarket, marketplace")
     .eq("status", "alocado")
     .is("grupo_id", null)
     .order("alocado_em", { ascending: true });
 
   if (error || !semGrupo?.length) return null;
 
-  // O gatilho é o TOTAL da leva chegar a 20 — não 20 do mesmo marketplace.
-  // Esperar 20 de cada deixaria pedidos de marketplace menor encalhados.
-  if (semGrupo.length < TAMANHO) return null;
+  const prontos = await agruparPedidosCompletos(semGrupo);
+  if (!prontos.length) return null;
 
-  // Pega os 20 mais antigos (FIFO) e divide por marketplace: cada marketplace vira
-  // seu próprio grupo, mesmo que fiquem menores (ex.: 12 Magalu + 8 Via Varejo = 20).
+  // O gatilho conta só itens de pedido COMPLETO. Pode haver 20 itens alocados na tela
+  // e nenhum grupo formar, porque são pedaços de pedidos incompletos — é o esperado:
+  // eles esperam os irmãos. Para as sobras existe o "Fechar grupos pendentes".
+  const totalPronto = prontos.reduce((s, p) => s + p.itemIds.length, 0);
+  if (totalPronto < TAMANHO) return null;
+
+  const { lote } = montarLote(prontos, TAMANHO);
+  if (!lote.length) return null;
+
+  // Divide por marketplace: cada marketplace vira seu próprio grupo, mesmo menor.
   // Grupo NUNCA mistura marketplace — isso já causou problema na operação.
-  const lote = semGrupo.slice(0, TAMANHO);
+  // Como um pedido tem um marketplace só, seus itens continuam juntos.
   const porMarketplace = {};
-  for (const p of lote) {
-    const mp = p.marketplace || "—";
-    (porMarketplace[mp] ||= []).push(p.id);
+  for (const ped of lote) {
+    const mp = ped.marketplace || "—";
+    (porMarketplace[mp] ||= []).push(...ped.itemIds);
   }
 
   const grupos = [];
-  for (const ids of Object.values(porMarketplace)) {
-    const g = await _criarGrupo(ids, userId);
+  for (const itemIds of Object.values(porMarketplace)) {
+    const g = await _criarGrupo(itemIds, userId);
     if (g) grupos.push(g);
   }
   if (!grupos.length) return null;
@@ -626,7 +695,7 @@ export async function alocarPedido(pedidoId, imei, sku, grade, userId) {
 export async function fecharGruposPendentes(userId) {
   const { data: semGrupo, error } = await supabase
     .from("pedidos_b2c")
-    .select("id, marketplace")
+    .select("id, id_anymarket, marketplace")
     .eq("status", "alocado")
     .is("grupo_id", null)
     .order("alocado_em", { ascending: true });
@@ -634,20 +703,24 @@ export async function fecharGruposPendentes(userId) {
   if (error) throw new Error(error.message);
   if (!semGrupo?.length) return null;
 
-  // Agrupa por marketplace e fecha um grupo para cada marketplace (mesmo com < 20)
+  // Mesmo aqui, onde a ideia é fechar sobras, pedido incompleto não entra: fechar
+  // metade de um pedido criaria duas NFs para o mesmo comprador.
+  const prontos = await agruparPedidosCompletos(semGrupo);
+  if (!prontos.length) return null;
+
+  // Agrupa por marketplace e fecha um grupo para cada (mesmo com < 20), com pedidos inteiros.
   const porMarketplace = {};
-  for (const p of semGrupo) {
-    const mp = p.marketplace || "—";
-    (porMarketplace[mp] ||= []).push(p.id);
+  for (const ped of prontos) {
+    const mp = ped.marketplace || "—";
+    (porMarketplace[mp] ||= []).push(...ped.itemIds);
   }
 
   const grupos = [];
-  for (const ids of Object.values(porMarketplace)) {
-    const grupo = await _criarGrupo(ids, userId);
+  for (const itemIds of Object.values(porMarketplace)) {
+    const grupo = await _criarGrupo(itemIds, userId);
     if (grupo) grupos.push(grupo);
   }
 
-  // Retorna o primeiro grupo e quantos foram criados (um por marketplace)
   if (!grupos.length) return null;
   return { ...grupos[0], gruposCriados: grupos.length };
 }
