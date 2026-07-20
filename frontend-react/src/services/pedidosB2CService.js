@@ -1102,13 +1102,18 @@ export async function voltarParaAlocacao(pedidoId) {
 // no catálogo? (Aceita mesmo sem estoque livre agora — o substituto pode chegar depois.)
 // Retorna { existe, modelo, disponiveis } para a tela mostrar o feedback.
 export async function validarSkuDefinicao(skuDigitado) {
-  const sku = String(skuDigitado || "").trim();
-  if (!sku) return { existe: false };
+  const raw = String(skuDigitado || "").trim();
+  if (!raw) return { existe: false };
+
+  // Traduz BZ661 (Assurant) -> BRZDEV (ALS) e corta -CCx antes de buscar, igual o FIFO.
+  // A triagem guarda o SKU ALS; sem traduzir, um SKU Assurant de iPhone nunca casaria.
+  const skuSemCC = raw.replace(/-CC\d+$/i, "").trim();
+  const skuBase  = await traduzirSku(skuSemCC);
 
   const { data, error } = await supabase
     .from("assurant_triagem")
     .select("modelo, status_atual")
-    .eq("sku", sku)
+    .eq("sku", skuBase)
     .limit(500);
   if (error) throw new Error(error.message);
   if (!data?.length) return { existe: false };
@@ -1128,10 +1133,13 @@ export async function definirProduto(pedidoId, { mesmoSku, novoSku, novaGrade, i
   if (!pedido) throw new Error("Pedido não encontrado.");
 
   // O que passa a valer para o FIFO/alocação.
-  const skuVal   = mesmoSku ? null : String(novoSku || "").trim();
   const gradeVal = mesmoSku ? null : String(novaGrade || "").trim();
-  if (!mesmoSku && (!skuVal || !gradeVal)) {
-    throw new Error("Informe o novo SKU e a nova grade.");
+  let skuVal = null;
+  if (!mesmoSku) {
+    const raw = String(novoSku || "").trim();
+    if (!raw || !gradeVal) throw new Error("Informe o novo SKU e a nova grade.");
+    // Grava o SKU JÁ TRADUZIDO (BRZDEV), que é o que o FIFO usa para achar estoque.
+    skuVal = await traduzirSku(raw.replace(/-CC\d+$/i, "").trim());
   }
 
   const skuEfetivo   = mesmoSku ? pedido.sku_produto   : skuVal;
