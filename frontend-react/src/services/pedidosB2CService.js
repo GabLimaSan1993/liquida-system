@@ -92,6 +92,7 @@ export async function listarGruposPicking() {
     .from("pedidos_b2c_grupos")
     .select("*")
     .in("status", ["aberto", "em_picking"])
+    .eq("oculto_picking", false)
     .order("criado_em", { ascending: true });
   if (error) throw new Error(error.message);
 

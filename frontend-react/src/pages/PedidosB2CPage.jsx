@@ -428,10 +428,11 @@ function TabPicking() {
   const [conferindo, setConferindo]       = useState(null);
   const [checks, setChecks]               = useState({ cor: false, modelo: false, sku: false });
   const [buscandoProximo, setBuscandoProximo] = useState(null);
+  const [ruasSel, setRuasSel] = useState([]);
   const inputRef = useRef(null);
 
   useEffect(() => { carregarGrupos(); }, []);
-  useEffect(() => { if (grupoSel) carregarPedidos(); }, [grupoSel]);
+  useEffect(() => { if (grupoSel) { carregarPedidos(); setRuasSel([]); } }, [grupoSel]);
   useEffect(() => { if (grupoSel) inputRef.current?.focus(); }, [grupoSel]);
 
   async function carregarGrupos() {
@@ -561,6 +562,24 @@ function TabPicking() {
   }
 
   const totalGrupo = pedidos.length;
+
+  // Filtro de rua (mesma lógica do Picking B2B): a rua sai do local_estoque da peça,
+  // ex.: "RUA 4/BL02/AD01/A" -> "RUA 4". Multi-seleção; vazio = todas.
+  const ruasDisponiveis = [...new Set(
+    pedidos
+      .filter(i => i.local_estoque)
+      .map(i => { const m = i.local_estoque.match(/^RUA\s+(\d+)/i); return m ? `RUA ${m[1]}` : null; })
+      .filter(Boolean)
+  )].sort((a, b) => parseInt(a.replace("RUA ", "")) - parseInt(b.replace("RUA ", "")));
+
+  function toggleRua(rua) {
+    setRuasSel(prev => prev.includes(rua) ? prev.filter(r => r !== rua) : [...prev, rua]);
+  }
+
+  const pedidosFiltrados = pedidos.filter(p =>
+    ruasSel.length === 0 ||
+    ruasSel.some(r => p.local_estoque?.match(new RegExp(`^RUA\\s+${r.replace("RUA ", "")}\\b`, "i")))
+  );
   const bipados    = pedidos.filter(p => ["embalado", "faturado", "concluido"].includes(p.status)).length;
   const emAnalise  = pedidos.filter(p => p.status === "em_analise").length;
   const pendentes  = pedidos.filter(p => p.status === "em_picking").length;
@@ -811,8 +830,18 @@ function TabPicking() {
 
         <Card>
           <h3 className="font-black text-slate-800 text-sm mb-4">Pedidos do grupo ({totalGrupo})</h3>
+          {ruasDisponiveis.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap mb-4">
+              <span className="text-xs font-bold text-slate-500 flex items-center gap-1"><MapPin className="h-3 w-3" /> Filtrar por rua:</span>
+              <button onClick={() => setRuasSel([])} className={`text-xs px-3 py-1.5 rounded-xl font-semibold transition-all ${ruasSel.length === 0 ? "bg-[#7F2D92] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>Todas</button>
+              {ruasDisponiveis.map(rua => (
+                <button key={rua} onClick={() => toggleRua(rua)} className={`text-xs px-3 py-1.5 rounded-xl font-semibold transition-all ${ruasSel.includes(rua) ? "bg-[#7F2D92] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>{rua}</button>
+              ))}
+              {ruasSel.length > 0 && <span className="text-xs text-purple-600 font-semibold ml-1">{pedidosFiltrados.filter(p => p.status === "em_picking").length} pendentes nas ruas selecionadas</span>}
+            </div>
+          )}
           <div className="space-y-2">
-            {pedidos.map(p => {
+            {pedidosFiltrados.map(p => {
               const concluido = ["embalado", "faturado", "concluido"].includes(p.status);
               return (
                 <div key={p.id} className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 ring-1 ${
