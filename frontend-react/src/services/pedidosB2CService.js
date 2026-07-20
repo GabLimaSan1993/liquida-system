@@ -1195,6 +1195,7 @@ export async function listarGruposFaturamento() {
     .from("pedidos_b2c_grupos")
     .select("*")
     .neq("status_faturamento", "concluido")
+    .eq("oculto_faturamento", false)
     .order("numero", { ascending: true });
   if (error) throw new Error(error.message);
 
