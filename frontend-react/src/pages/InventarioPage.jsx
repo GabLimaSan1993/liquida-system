@@ -62,6 +62,7 @@ function TabContagem({ ciclo }) {
   const [historico, setHistorico] = useState([]);
   const [proc, setProc]           = useState(false);
   const [resumo, setResumo]       = useState(null);
+  const [ruasSel, setRuasSel]     = useState([]);
   const inputRef = useRef(null);
 
   useEffect(() => { if (ciclo) carregar(); }, [ciclo]);
@@ -73,6 +74,23 @@ function TabContagem({ ciclo }) {
     catch (e) { console.error(e); }
     finally { setLoading(false); }
   }
+
+  // Filtro de rua (mesma lógica do picking): extrai "RUA N" do endereço, ex.:
+  // "RUA 2/BL06/AD01/C01" -> "RUA 2". Multi-seleção; vazio = todas.
+  const ruasDisponiveis = [...new Set(
+    pendentes
+      .map(c => { const m = String(c.endereco || "").match(/^RUA\s+(\d+)/i); return m ? `RUA ${m[1]}` : null; })
+      .filter(Boolean)
+  )].sort((a, b) => parseInt(a.replace("RUA ", "")) - parseInt(b.replace("RUA ", "")));
+
+  function toggleRua(rua) {
+    setRuasSel(prev => prev.includes(rua) ? prev.filter(r => r !== rua) : [...prev, rua]);
+  }
+
+  const pendentesFiltrados = pendentes.filter(c =>
+    ruasSel.length === 0 ||
+    ruasSel.some(r => String(c.endereco || "").match(new RegExp(`^RUA\\s+${r.replace("RUA ", "")}\\b`, "i")))
+  );
 
   function addHist(item) {
     setHistorico(prev => [{ ...item, ts: Date.now() + Math.random() }, ...prev].slice(0, 30));
@@ -178,8 +196,19 @@ function TabContagem({ ciclo }) {
             <p className="text-xs mt-1">Peça para sortear o dia na aba Gestão.</p>
           </div>
         ) : (
+          <>
+          {ruasDisponiveis.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap mb-3">
+              <span className="text-xs font-bold text-slate-500 flex items-center gap-1"><MapPin className="h-3 w-3" /> Filtrar por rua:</span>
+              <button onClick={() => setRuasSel([])} className={`text-xs px-3 py-1.5 rounded-xl font-semibold transition-all ${ruasSel.length === 0 ? "bg-[#7F2D92] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>Todas</button>
+              {ruasDisponiveis.map(rua => (
+                <button key={rua} onClick={() => toggleRua(rua)} className={`text-xs px-3 py-1.5 rounded-xl font-semibold transition-all ${ruasSel.includes(rua) ? "bg-[#7F2D92] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>{rua}</button>
+              ))}
+              {ruasSel.length > 0 && <span className="text-xs text-purple-600 font-semibold ml-1">{pendentesFiltrados.length} endereços nas ruas selecionadas</span>}
+            </div>
+          )}
           <div className="grid gap-2 sm:grid-cols-2">
-            {pendentes.map(c => (
+            {pendentesFiltrados.map(c => (
               <button key={c.id} onClick={() => handleAbrir(c)} disabled={proc}
                 className="text-left bg-white rounded-xl p-4 ring-1 ring-slate-200 hover:ring-purple-300 hover:bg-purple-50 transition-all disabled:opacity-50">
                 <div className="flex items-center gap-2">
@@ -194,6 +223,7 @@ function TabContagem({ ciclo }) {
               </button>
             ))}
           </div>
+          </>
         )}
       </div>
     );
