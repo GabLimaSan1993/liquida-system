@@ -21,7 +21,8 @@ import {
   buscarComparativoAging,
   listarPedidosAguardandoDefinicao,
   marcarSemProduto,
-  voltarParaAlocacao,
+  definirProduto,
+  validarSkuDefinicao,
   gerarPdfSemProduto,
   alocarPedido,
   fecharGruposPendentes,
@@ -129,7 +130,7 @@ function TabAlocacao({ onGrupoFormado }) {
     setLoadingSugestao(true);
     setSugestoes([]);
     try {
-      const res = await buscarSugestaoFifo(pedido.sku_produto, pedido.grade_produto);
+      const res = await buscarSugestaoFifo(pedido.sku_definido || pedido.sku_produto, pedido.grade_definida || pedido.grade_produto);
       setSugestoes(res);
     } catch (e) { setFeedback({ tipo: "erro", msg: e.message }); }
     finally { setLoadingSugestao(false); }
@@ -1514,11 +1515,18 @@ function TabFaturamento() {
 // ABA AGUARDANDO DEFINIÇÃO DE PRODUTO
 // ══════════════════════════════════════════════════════════
 function TabAguardandoDefinicao() {
+  const { user } = useAuth();
   const [pedidos, setPedidos]   = useState([]);
   const [loading, setLoading]   = useState(true);
   const [feedback, setFeedback] = useState(null);
   const [baixando, setBaixando] = useState(null);
-  const [voltando, setVoltando] = useState(null);
+  const [modalDef, setModalDef] = useState(null);
+  const [mesmoSku, setMesmoSku] = useState(true);
+  const [novoSku, setNovoSku]   = useState("");
+  const [novaGrade, setNovaGrade] = useState("Excelente");
+  const [imeiDef, setImeiDef]   = useState("");
+  const [skuCheck, setSkuCheck] = useState(null);
+  const [salvando, setSalvando] = useState(false);
 
   useEffect(() => { carregar(); }, []);
 
@@ -1536,15 +1544,48 @@ function TabAguardandoDefinicao() {
     finally { setBaixando(null); }
   }
 
-  async function handleVoltar(p) {
-    setVoltando(p.id);
+  function abrirModal(p) {
+    setModalDef(p);
+    setMesmoSku(true);
+    setNovoSku("");
+    setNovaGrade(p.grade_produto || "Excelente");
+    setImeiDef("");
+    setSkuCheck(null);
+  }
+
+  function fecharModal() { setModalDef(null); }
+
+  async function checarSku(valor) {
+    setNovoSku(valor);
+    if (!valor.trim()) { setSkuCheck(null); return; }
+    try { setSkuCheck(await validarSkuDefinicao(valor)); }
+    catch { setSkuCheck(null); }
+  }
+
+  async function handleConcluir() {
+    if (!modalDef) return;
+    if (!mesmoSku) {
+      if (!novoSku.trim() || !novaGrade.trim()) {
+        setFeedback({ tipo: "erro", msg: "Informe o novo SKU e a nova grade." });
+        return;
+      }
+      if (!skuCheck?.existe) {
+        setFeedback({ tipo: "erro", msg: "SKU não encontrado no estoque. Confira o código." });
+        return;
+      }
+    }
+    setSalvando(true);
     try {
-      await voltarParaAlocacao(p.id);
-      setPedidos(prev => prev.filter(x => x.id !== p.id));
-      setFeedback({ tipo: "ok", msg: `✓ Pedido #${p.id_anymarket} devolvido para alocação.` });
+      const res = await definirProduto(modalDef.id,
+        { mesmoSku, novoSku, novaGrade, imei: imeiDef }, user.id);
+      setPedidos(prev => prev.filter(x => x.id !== modalDef.id));
+      setFeedback({ tipo: "ok", msg: res.alocadoDireto
+        ? `✓ Pedido #${modalDef.id_anymarket} alocado direto no IMEI ${imeiDef.trim()} — aguardando grupo.`
+        : `✓ Pedido #${modalDef.id_anymarket} devolvido para alocação${mesmoSku ? "" : " com novo SKU"}.` });
       setTimeout(() => setFeedback(null), 4000);
+      fecharModal();
     } catch (e) { setFeedback({ tipo: "erro", msg: e.message }); }
-    finally { setVoltando(null); }
+    finally { setSalvando(false); }
   }
 
   return (
@@ -1602,15 +1643,78 @@ function TabAguardandoDefinicao() {
                     {baixando === p.id ? <div className="h-3 w-3 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" /> : <Download className="h-3.5 w-3.5" />}
                     Baixar PDF
                   </button>
-                  <button onClick={() => handleVoltar(p)} disabled={voltando === p.id}
-                    className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100 transition disabled:opacity-50">
-                    {voltando === p.id ? <div className="h-3 w-3 border-2 border-emerald-300 border-t-emerald-700 rounded-full animate-spin" /> : <CornerUpLeft className="h-3.5 w-3.5" />}
-                    Voltar para alocação
+                  <button onClick={() => abrirModal(p)}
+                    className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100 transition">
+                    <CornerUpLeft className="h-3.5 w-3.5" />
+                    Definir produto
                   </button>
                 </div>
               </div>
             </Card>
           ))}
+        </div>
+      )}
+
+      {modalDef && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4" onClick={fecharModal}>
+          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="font-black text-slate-800 text-base">Definir produto</h3>
+              <button onClick={fecharModal} className="text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
+            </div>
+            <p className="text-xs text-slate-500 mb-4">Pedido #{modalDef.id_anymarket} · {modalDef.marketplace} · {modalDef.titulo_produto}</p>
+
+            <div className="bg-slate-50 rounded-xl px-3 py-2.5 mb-4">
+              <span className="text-xs text-slate-400">Original do cliente</span>
+              <div className="text-xs font-mono text-slate-600 mt-0.5">{modalDef.sku_produto} · {modalDef.grade_produto}</div>
+            </div>
+
+            <label className="block text-xs font-bold text-slate-700 mb-2">É o mesmo SKU?</label>
+            <div className="flex gap-2 mb-4">
+              <button onClick={() => setMesmoSku(true)}
+                className={`flex-1 text-sm font-semibold py-2 rounded-xl transition ${mesmoSku ? "bg-[#7F2D92] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>Sim</button>
+              <button onClick={() => setMesmoSku(false)}
+                className={`flex-1 text-sm font-semibold py-2 rounded-xl transition ${!mesmoSku ? "bg-[#7F2D92] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>Não</button>
+            </div>
+
+            {!mesmoSku && (
+              <div className="border-t border-slate-100 pt-4 mb-4">
+                <label className="block text-xs text-slate-600 mb-1">Novo SKU</label>
+                <input value={novoSku} onChange={e => checarSku(e.target.value)} placeholder="Ex: BRZDEV12643"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm mb-1 focus:ring-2 focus:ring-purple-200 outline-none" />
+                {skuCheck && (skuCheck.existe
+                  ? <div className="text-xs text-emerald-700 flex items-center gap-1 mb-3"><CheckCircle className="h-3 w-3" /> {skuCheck.modelo} · {skuCheck.disponiveis} disponíveis no estoque</div>
+                  : <div className="text-xs text-red-600 flex items-center gap-1 mb-3"><AlertTriangle className="h-3 w-3" /> SKU não encontrado no estoque</div>)}
+
+                <label className="block text-xs text-slate-600 mb-1">Nova grade</label>
+                <select value={novaGrade} onChange={e => setNovaGrade(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm mb-1 focus:ring-2 focus:ring-purple-200 outline-none">
+                  <option>Like New</option>
+                  <option>Excelente</option>
+                  <option>Muito Bom</option>
+                  <option>Bom</option>
+                  <option>Outlet</option>
+                </select>
+              </div>
+            )}
+
+            <label className="block text-xs text-slate-600 mb-1">IMEI <span className="text-slate-400">(opcional)</span></label>
+            <input value={imeiDef} onChange={e => setImeiDef(e.target.value)} placeholder="Bipe ou digite o IMEI"
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm mb-1.5 focus:ring-2 focus:ring-purple-200 outline-none" />
+            <p className="text-xs text-slate-400 mb-5 leading-relaxed">
+              Com IMEI: aloca direto neste aparelho, aguarda formar grupo.<br />
+              Sem IMEI: volta para alocação e o FIFO sugere pelo SKU{mesmoSku ? "" : " novo"}.
+            </p>
+
+            <div className="flex gap-2 justify-end">
+              <button onClick={fecharModal} className="px-4 py-2 rounded-xl text-sm font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 transition">Cancelar</button>
+              <button onClick={handleConcluir} disabled={salvando}
+                className="px-4 py-2 rounded-xl text-sm font-semibold bg-[#7F2D92] text-white hover:bg-[#6d2680] transition disabled:opacity-50 flex items-center gap-2">
+                {salvando && <div className="h-3 w-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
+                Concluir definição
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

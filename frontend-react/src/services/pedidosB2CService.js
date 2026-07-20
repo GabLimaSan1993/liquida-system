@@ -1098,6 +1098,85 @@ export async function voltarParaAlocacao(pedidoId) {
   if (error) throw new Error(error.message);
 }
 
+// Valida um SKU digitado na definição de produto: existe algum aparelho com esse SKU
+// no catálogo? (Aceita mesmo sem estoque livre agora — o substituto pode chegar depois.)
+// Retorna { existe, modelo, disponiveis } para a tela mostrar o feedback.
+export async function validarSkuDefinicao(skuDigitado) {
+  const sku = String(skuDigitado || "").trim();
+  if (!sku) return { existe: false };
+
+  const { data, error } = await supabase
+    .from("assurant_triagem")
+    .select("modelo, status_atual")
+    .eq("sku", sku)
+    .limit(500);
+  if (error) throw new Error(error.message);
+  if (!data?.length) return { existe: false };
+
+  const disponiveis = data.filter(d => STATUS_ALOCAVEIS.includes(d.status_atual)).length;
+  return { existe: true, modelo: data[0].modelo, total: data.length, disponiveis };
+}
+
+// Conclui a definição de produto de um pedido em "aguardando_definicao_produto".
+// mesmoSku=false grava sku_definido/grade_definida (preserva o original do cliente).
+// Se vier imei: aloca DIRETO naquele aparelho (pula o FIFO), status = alocado,
+//   e dispara a formação de grupo. Se não vier: volta para aguardando_alocacao,
+//   e o FIFO passa a sugerir pelo SKU/grade definidos (ou originais, se mesmoSku).
+export async function definirProduto(pedidoId, { mesmoSku, novoSku, novaGrade, imei }, userId) {
+  const { data: pedido } = await supabase
+    .from("pedidos_b2c").select("sku_produto, grade_produto").eq("id", pedidoId).single();
+  if (!pedido) throw new Error("Pedido não encontrado.");
+
+  // O que passa a valer para o FIFO/alocação.
+  const skuVal   = mesmoSku ? null : String(novoSku || "").trim();
+  const gradeVal = mesmoSku ? null : String(novaGrade || "").trim();
+  if (!mesmoSku && (!skuVal || !gradeVal)) {
+    throw new Error("Informe o novo SKU e a nova grade.");
+  }
+
+  const skuEfetivo   = mesmoSku ? pedido.sku_produto   : skuVal;
+  const gradeEfetiva = mesmoSku ? pedido.grade_produto : gradeVal;
+  const imeiTrim = String(imei || "").trim();
+
+  const campos = {
+    // sku_definido/grade_definida só são gravados quando muda o SKU; no mesmo SKU
+    // ficam nulos e o sistema segue usando o original.
+    sku_definido:   mesmoSku ? null : skuVal,
+    grade_definida: mesmoSku ? null : gradeVal,
+    atualizado_em:  new Date().toISOString(),
+  };
+
+  if (imeiTrim) {
+    // Aloca DIRETO neste IMEI, pula o FIFO. Reserva o aparelho e aponta o pedido.
+    await supabase.from("pedidos_b2c").update({
+      ...campos,
+      status:        "alocado",
+      imei_alocado:  imeiTrim,
+      sku_alocado:   skuEfetivo,
+      grade_alocada: gradeEfetiva,
+      alocado_em:    new Date().toISOString(),
+      alocado_por:   userId,
+    }).eq("id", pedidoId);
+
+    const { error: errTri } = await supabase
+      .from("assurant_triagem")
+      .update({ status_atual: "Reservado para pedido B2C" })
+      .eq("imei", imeiTrim);
+    if (errTri) throw new Error(errTri.message);
+
+    const grupoFormado = await verificarECriarGrupo(userId);
+    return { ok: true, alocadoDireto: true, grupoFormado };
+  }
+
+  // Sem IMEI: volta para a fila; o FIFO usará o SKU/grade efetivos.
+  await supabase.from("pedidos_b2c").update({
+    ...campos,
+    status: "aguardando_alocacao",
+  }).eq("id", pedidoId);
+
+  return { ok: true, alocadoDireto: false };
+}
+
 // Gera o PDF de solicitação de produto substituto — só dados do pedido e o que precisa.
 // Mesmo padrão visual dos outros PDFs do sistema (cabeçalho roxo da marca).
 export async function gerarPdfSemProduto(pedido) {
