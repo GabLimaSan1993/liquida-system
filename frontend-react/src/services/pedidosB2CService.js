@@ -774,11 +774,14 @@ async function verificarConclusaoGrupo(grupoId) {
     .eq("grupo_id", grupoId);
 
   const todos = pedidos || [];
+  // "em_analise" saiu daqui: agora o item em análise deixa o grupo (grupo_id = null),
+  // então não precisa mais ser contado como concluído para o grupo poder fechar.
   const concluidos = todos.filter(p =>
-    ["embalado", "faturado", "concluido", "em_analise"].includes(p.status)
+    ["embalado", "faturado", "concluido"].includes(p.status)
   ).length;
 
-  if (concluidos >= todos.length) {
+  // Grupo que ficou sem nenhum pedido (todos saíram para análise) não deve reabrir.
+  if (todos.length > 0 && concluidos >= todos.length) {
     // Grupo concluído: fecha e libera a trava de picking automaticamente.
     await supabase
       .from("pedidos_b2c_grupos")
@@ -798,10 +801,19 @@ async function verificarConclusaoGrupo(grupoId) {
 // ══════════════════════════════════════════════════════════
 
 export async function marcarNaoLocalizado(pedidoId, motivo, userId) {
+  // O item em análise SAI do grupo (grupo_id = null). Assim os irmãos já embalados do
+  // grupo não ficam presos esperando por ele: fecham e vão faturar. Quando a análise
+  // for resolvida, este item volta ao picking sem grupo e a formação normal o recolhe
+  // numa leva nova. (Pedido multi-item anda inteiro por construção, então nunca sobra
+  // um item solto de um pedido cujos irmãos já faturaram.)
+  const { data: pedido } = await supabase
+    .from("pedidos_b2c").select("grupo_id").eq("id", pedidoId).single();
+
   const { error } = await supabase
     .from("pedidos_b2c")
     .update({
       status:         "em_analise",
+      grupo_id:       null,
       motivo_analise: motivo || "Não localizado",
       analise_em:     new Date().toISOString(),
       analise_por:    userId,
@@ -809,6 +821,9 @@ export async function marcarNaoLocalizado(pedidoId, motivo, userId) {
     })
     .eq("id", pedidoId);
   if (error) throw new Error(error.message);
+
+  // Recalcula o grupo de origem: sem o item pendente, os que sobraram podem fechar.
+  if (pedido?.grupo_id) await verificarConclusaoGrupo(pedido.grupo_id);
 }
 
 // Picking — "Não localizado" com busca automática de segunda opção.
@@ -978,16 +993,15 @@ export async function resolverAnaliseParaEmbalagem(pedidoId, { tipo, valorReal, 
     imeiFinal = imei;
   }
 
+  // Toda análise resolvida volta ao picking SEM grupo (grupo_id já é null desde que o
+  // item entrou em análise). Vira um alocado avulso que a formação de grupo recolhe numa
+  // leva nova — o item não pula o picking nem tenta reentrar no grupo antigo (que já
+  // pode ter faturado). A troca de aparelho, quando houve, já foi feita acima.
   const { error } = await supabase
     .from("pedidos_b2c")
     .update({
-      status:         "embalado",
+      status:         "alocado",
       imei_alocado:   imeiFinal,
-      imei_bipado:    imeiFinal,
-      bipado_em:      agora,
-      bipado_por:     userId,
-      embalado_em:    agora,
-      embalado_por:   userId,
       motivo_analise: motivo || null,
       resolvido_em:   agora,
       resolvido_por:  userId,
@@ -996,8 +1010,9 @@ export async function resolverAnaliseParaEmbalagem(pedidoId, { tipo, valorReal, 
     .eq("id", pedidoId);
   if (error) throw new Error(error.message);
 
-  if (pedido.grupo_id) await verificarConclusaoGrupo(pedido.grupo_id);
-  return { ok: true, imei: imeiFinal };
+  // Recolhe numa leva de grupo (respeita pedido inteiro + marketplace, como sempre).
+  const grupoFormado = await verificarECriarGrupo(userId);
+  return { ok: true, imei: imeiFinal, grupoFormado };
 }
 
 export async function resolverAnalise(pedidoId, novoImei, userId) {
@@ -1025,6 +1040,7 @@ export async function resolverAnalise(pedidoId, novoImei, userId) {
     .from("pedidos_b2c")
     .update({
       status:        "em_picking",
+      grupo_id:      null,
       imei_alocado:  novoImei || pedido?.imei_alocado,
       resolvido_em:  new Date().toISOString(),
       resolvido_por: userId,
@@ -1033,8 +1049,9 @@ export async function resolverAnalise(pedidoId, novoImei, userId) {
     .eq("id", pedidoId);
   if (error) throw new Error(error.message);
 
-  // Voltou para picking: recalcula o status do grupo (reabre no picking se estava fechado)
-  if (pedido?.grupo_id) await verificarConclusaoGrupo(pedido.grupo_id);
+  // O item resolvido volta ao picking SEM grupo: vira um alocado avulso que a formação
+  // de grupo recolhe numa leva nova — grupo diferente do original, como a operação pede.
+  // (O grupo antigo já foi recalculado quando o item saiu, em marcarNaoLocalizado.)
 }
 
 // ══════════════════════════════════════════════════════════

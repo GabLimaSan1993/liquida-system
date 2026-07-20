@@ -965,7 +965,7 @@ function TabAnalise() {
         user.id
       );
       setPedidos(prev => prev.filter(p => p.id !== modalResolver.id));
-      setFeedback({ tipo: "ok", msg: `✓ Pedido #${modalResolver.id_anymarket} resolvido — segue para faturamento.` });
+      setFeedback({ tipo: "ok", msg: `✓ Pedido #${modalResolver.id_anymarket} resolvido — volta ao picking em um novo grupo.` });
       setTimeout(() => setFeedback(null), 4000);
       fecharModal();
     } catch (e) {
