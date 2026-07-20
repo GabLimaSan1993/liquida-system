@@ -1101,25 +1101,32 @@ export async function voltarParaAlocacao(pedidoId) {
 // Valida um SKU digitado na definição de produto: existe algum aparelho com esse SKU
 // no catálogo? (Aceita mesmo sem estoque livre agora — o substituto pode chegar depois.)
 // Retorna { existe, modelo, disponiveis } para a tela mostrar o feedback.
-export async function validarSkuDefinicao(skuDigitado) {
+export async function validarSkuDefinicao(skuDigitado, grade) {
   const raw = String(skuDigitado || "").trim();
   if (!raw) return { existe: false };
 
   // Traduz BZ661 (Assurant) -> BRZDEV (ALS) e corta -CCx antes de buscar, igual o FIFO.
-  // A triagem guarda o SKU ALS; sem traduzir, um SKU Assurant de iPhone nunca casaria.
   const skuSemCC = raw.replace(/-CC\d+$/i, "").trim();
   const skuBase  = await traduzirSku(skuSemCC);
 
   const { data, error } = await supabase
     .from("assurant_triagem")
-    .select("modelo, status_atual")
+    .select("modelo, grade, status_atual")
     .eq("sku", skuBase)
-    .limit(500);
+    .limit(1000);
   if (error) throw new Error(error.message);
-  if (!data?.length) return { existe: false };
+  if (!data?.length) return { existe: false, skuBase };
 
-  const disponiveis = data.filter(d => STATUS_ALOCAVEIS.includes(d.status_atual)).length;
-  return { existe: true, modelo: data[0].modelo, total: data.length, disponiveis };
+  const disp = data.filter(d => STATUS_ALOCAVEIS.includes(d.status_atual));
+  const resultado = { existe: true, skuBase, modelo: data[0].modelo, disponiveis: disp.length };
+
+  // Contagem por grade quando a tela informa a grade: exatos naquela grade + em grade superior.
+  if (grade) {
+    const ordAlvo = gradeOrdem(grade);
+    resultado.gradeExata = disp.filter(d => gradeOrdem(d.grade) === ordAlvo).length;
+    resultado.gradeAcima = disp.filter(d => gradeOrdem(d.grade) < ordAlvo).length;
+  }
+  return resultado;
 }
 
 // Conclui a definição de produto de um pedido em "aguardando_definicao_produto".
