@@ -234,6 +234,64 @@ export async function listarPedidosEmAnalise() {
   return data || [];
 }
 
+// Lista os pedidos em análise já marcando quais têm SEGUNDA OPÇÃO disponível no FIFO
+// (aparelho que entrou no estoque depois que o pedido caiu em análise). Em vez de rodar
+// o FIFO por pedido (lento com dezenas), traz o estoque alocável UMA vez e cruza em
+// memória: para cada pedido, existe aparelho do mesmo SKU, grade igual ou melhor,
+// disponível, com subinv e WH2? Se sim, marca temOpcaoFifo = true para o selo na lista.
+export async function listarEmAnaliseComOpcao() {
+  const pedidos = await listarPedidosEmAnalise();
+  if (!pedidos.length) return [];
+
+  // Estoque alocável inteiro, em um fetch (dedupe por IMEI: passagem mais recente).
+  const { data: triagem } = await supabase
+    .from("assurant_triagem")
+    .select("imei, sku, grade, local, status_atual, criado_em")
+    .in("status_atual", STATUS_ALOCAVEIS)
+    .limit(20000);
+
+  const porImei = new Map();
+  for (const t of (triagem || [])) {
+    const a = porImei.get(t.imei);
+    if (!a || new Date(t.criado_em) > new Date(a.criado_em)) porImei.set(t.imei, t);
+  }
+
+  // Subinv de todos, em blocos (para saber quais têm âncora + WH2).
+  const imeis = [...porImei.keys()];
+  const subinv = new Map();
+  for (let i = 0; i < imeis.length; i += 1000) {
+    const { data } = await supabase
+      .from("estoque_subinv").select("imei, data_subinv, local_subinv")
+      .in("imei", imeis.slice(i, i + 1000));
+    (data || []).forEach(s => subinv.set(s.imei, s));
+  }
+
+  // Índice do estoque sugerível por SKU (só o que o FIFO ofereceria).
+  const temLocal = (t) => !!(t.local && String(t.local).trim());
+  const wh2ok = (loc) => loc == null || String(loc).trim() === "" || String(loc).trim().toUpperCase().startsWith("WH2");
+  const porSku = new Map();
+  for (const t of porImei.values()) {
+    const s = subinv.get(t.imei);
+    if (!s?.data_subinv || !temLocal(t) || !wh2ok(s.local_subinv)) continue;
+    if (!porSku.has(t.sku)) porSku.set(t.sku, []);
+    porSku.get(t.sku).push(t);
+  }
+
+  // Para cada pedido: usa o SKU/grade DEFINIDOS quando existirem (senão os originais),
+  // traduz e corta -CCx igual o FIFO, e checa se há aparelho de grade compatível.
+  const result = [];
+  for (const p of pedidos) {
+    const skuRaw = p.sku_definido || p.sku_produto || "";
+    const gradeAlvo = p.grade_definida || p.grade_produto;
+    const skuBase = await traduzirSku(String(skuRaw).replace(/-CC\d+$/i, "").trim());
+    const candidatos = porSku.get(skuBase) || [];
+    const temOpcaoFifo = candidatos.some(c => gradeAceita(c.grade, gradeAlvo));
+    result.push({ ...p, temOpcaoFifo });
+  }
+
+  return result;
+}
+
 export async function listarPedidosFaturamento() {
   const { data, error } = await supabase
     .from("pedidos_b2c")

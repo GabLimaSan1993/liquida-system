@@ -13,6 +13,7 @@ import {
   liberarTravaPicking,
   listarPedidosGrupo,
   listarPedidosEmAnalise,
+  listarEmAnaliseComOpcao,
   listarGruposFaturamento,
   gerarPlanilhaFaturamentoGrupo,
   importarNFsGrupo,
@@ -923,7 +924,7 @@ function TabAnalise() {
 
   async function carregar() {
     setLoading(true);
-    try { setPedidos(await listarPedidosEmAnalise()); }
+    try { setPedidos(await listarEmAnaliseComOpcao()); }
     catch (e) { console.error(e); }
     finally { setLoading(false); }
   }
@@ -1180,6 +1181,11 @@ function TabAnalise() {
                     <div className="flex items-center gap-2 flex-wrap mb-1">
                       <span className="font-black text-slate-800 text-sm">#{p.id_anymarket}</span>
                       <StatusBadge status={p.status} />
+                      {p.temOpcaoFifo && (
+                        <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 ring-1 ring-emerald-300">
+                          <CheckCircle className="h-3 w-3" /> Opção disponível no FIFO
+                        </span>
+                      )}
                     </div>
                     <p className="text-sm font-semibold text-slate-700 truncate">{p.titulo_produto}</p>
                     <div className="flex items-center gap-2 mt-1 flex-wrap">
