@@ -704,16 +704,17 @@ export async function fecharGruposPendentes(userId) {
   if (error) throw new Error(error.message);
   if (!semGrupo?.length) return null;
 
-  // Mesmo aqui, onde a ideia é fechar sobras, pedido incompleto não entra: fechar
-  // metade de um pedido criaria duas NFs para o mesmo comprador.
-  const prontos = await agruparPedidosCompletos(semGrupo);
-  if (!prontos.length) return null;
-
-  // Agrupa por marketplace e fecha um grupo para cada (mesmo com < 20), com pedidos inteiros.
+  // VÁLVULA MANUAL: aqui o operador está pedindo explicitamente para fechar as sobras.
+  // Diferente da formação automática, NÃO exigimos pedido completo. Por quê: um item que
+  // volta para a alocação (ex.: resolvido de análise) de um pedido cujos irmãos JÁ foram
+  // embalados/faturados nunca estaria "completo" — e ficaria preso para sempre, contado
+  // pela faixa mas impossível de fechar. A regra de pedido inteiro vale na automática
+  // (verificarECriarGrupo), que é quem garante a nota única no fluxo normal.
+  // Ordena por marketplace agrupando todos os alocados sem grupo, inteiros ou sobras.
   const porMarketplace = {};
-  for (const ped of prontos) {
+  for (const ped of semGrupo) {
     const mp = ped.marketplace || "—";
-    (porMarketplace[mp] ||= []).push(...ped.itemIds);
+    (porMarketplace[mp] ||= []).push(ped.id);
   }
 
   const grupos = [];
