@@ -112,11 +112,20 @@ export async function listarGruposPicking() {
     mpPorGrupo[p.grupo_id].add(p.marketplace || "—");
   });
 
-  return grupos.map(g => {
-    const mps = mpPorGrupo[g.id] ? Array.from(mpPorGrupo[g.id]) : [];
-    const marketplace = mps.length === 1 ? mps[0] : (mps.length > 1 ? "Vários" : null);
-    return { ...g, marketplace };
-  });
+  // Conta quantos pedidos cada grupo realmente tem (para esconder grupos-casca vazios).
+  const qtdPorGrupo = {};
+  (pedidos || []).forEach(p => { qtdPorGrupo[p.grupo_id] = (qtdPorGrupo[p.grupo_id] || 0) + 1; });
+
+  return grupos
+    // Grupo sem nenhum pedido não deve aparecer no picking. Isso acontece quando todos
+    // os itens de um grupo vão para análise (a regra tira o item do grupo, e a casca fica
+    // vazia). Some da tela sem precisar apagar o registro do grupo.
+    .filter(g => (qtdPorGrupo[g.id] || 0) > 0)
+    .map(g => {
+      const mps = mpPorGrupo[g.id] ? Array.from(mpPorGrupo[g.id]) : [];
+      const marketplace = mps.length === 1 ? mps[0] : (mps.length > 1 ? "Vários" : null);
+      return { ...g, marketplace };
+    });
 }
 
 // ── Trava de separação (picking) ─────────────────────
