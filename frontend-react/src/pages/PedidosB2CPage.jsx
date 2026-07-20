@@ -1555,10 +1555,17 @@ function TabAguardandoDefinicao() {
 
   function fecharModal() { setModalDef(null); }
 
-  async function checarSku(valor) {
+  async function checarSku(valor, grade) {
     setNovoSku(valor);
     if (!valor.trim()) { setSkuCheck(null); return; }
-    try { setSkuCheck(await validarSkuDefinicao(valor)); }
+    try { setSkuCheck(await validarSkuDefinicao(valor, grade ?? novaGrade)); }
+    catch { setSkuCheck(null); }
+  }
+
+  async function trocarGrade(grade) {
+    setNovaGrade(grade);
+    if (!novoSku.trim()) return;
+    try { setSkuCheck(await validarSkuDefinicao(novoSku, grade)); }
     catch { setSkuCheck(null); }
   }
 
@@ -1683,11 +1690,19 @@ function TabAguardandoDefinicao() {
                 <input value={novoSku} onChange={e => checarSku(e.target.value)} placeholder="Ex: BRZDEV12643"
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm mb-1 focus:ring-2 focus:ring-purple-200 outline-none" />
                 {skuCheck && (skuCheck.existe
-                  ? <div className="text-xs text-emerald-700 flex items-center gap-1 mb-3"><CheckCircle className="h-3 w-3" /> {skuCheck.modelo} · {skuCheck.disponiveis} disponíveis no estoque</div>
+                  ? <div className="mb-3">
+                      <div className="text-xs text-emerald-700 flex items-center gap-1"><CheckCircle className="h-3 w-3" /> {skuCheck.modelo}</div>
+                      {skuCheck.gradeExata !== undefined && (
+                        <div className="text-xs text-slate-500 mt-0.5 pl-4">
+                          <span className="font-semibold text-emerald-700">{skuCheck.gradeExata}</span> em {novaGrade}
+                          {skuCheck.gradeAcima > 0 && <> · <span className="font-semibold text-slate-600">{skuCheck.gradeAcima}</span> em grade superior</>}
+                        </div>
+                      )}
+                    </div>
                   : <div className="text-xs text-red-600 flex items-center gap-1 mb-3"><AlertTriangle className="h-3 w-3" /> SKU não encontrado no estoque</div>)}
 
                 <label className="block text-xs text-slate-600 mb-1">Nova grade</label>
-                <select value={novaGrade} onChange={e => setNovaGrade(e.target.value)}
+                <select value={novaGrade} onChange={e => trocarGrade(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm mb-1 focus:ring-2 focus:ring-purple-200 outline-none">
                   <option>Like New</option>
                   <option>Excelente</option>
