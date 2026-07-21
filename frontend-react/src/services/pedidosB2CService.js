@@ -1083,6 +1083,54 @@ export async function resolverAnaliseParaEmbalagem(pedidoId, { tipo, valorReal, 
   return { ok: true, imei: imeiFinal, grupoFormado };
 }
 
+// Resolve a análise pegando o PRIMEIRO aparelho da lista FIFO e alocando no pedido.
+// O aparelho antigo (não localizado) vai para "Em análise de estoque". O novo é
+// reservado e o pedido volta ao picking (sem grupo), para alguém buscar e bipar.
+// Usa o SKU/grade definidos quando existirem (senão os originais), igual o FIFO.
+export async function seguirComOpcaoFifo(pedido, userId) {
+  const imeiAntigo = pedido.imei_alocado;
+
+  const sku   = pedido.sku_definido   || pedido.sku_produto;
+  const grade = pedido.grade_definida || pedido.grade_produto;
+  const sugestoes = await buscarSugestaoFifo(sku, grade);
+  const proximo = (sugestoes || []).find(s => s.imei !== imeiAntigo);
+
+  if (!proximo) {
+    return { ok: false, erro: "Nenhuma opção disponível no FIFO agora." };
+  }
+
+  if (imeiAntigo) {
+    await supabase
+      .from("assurant_triagem")
+      .update({ status_atual: "Em análise de estoque" })
+      .eq("imei", imeiAntigo);
+  }
+
+  await supabase
+    .from("assurant_triagem")
+    .update({ status_atual: "Reservado para pedido B2C" })
+    .eq("imei", proximo.imei);
+
+  const agora = new Date().toISOString();
+  const { error } = await supabase
+    .from("pedidos_b2c")
+    .update({
+      status:        "em_picking",
+      grupo_id:      null,
+      imei_alocado:  proximo.imei,
+      sku_alocado:   proximo.sku,
+      grade_alocada: proximo.grade,
+      resolvido_em:  agora,
+      resolvido_por: userId,
+      atualizado_em: agora,
+    })
+    .eq("id", pedido.id);
+  if (error) throw new Error(error.message);
+
+  const grupoFormado = await verificarECriarGrupo(userId);
+  return { ok: true, novoImei: proximo.imei, local: proximo.local, grade: proximo.grade, grupoFormado };
+}
+
 export async function resolverAnalise(pedidoId, novoImei, userId) {
   const { data: pedido } = await supabase
     .from("pedidos_b2c")
