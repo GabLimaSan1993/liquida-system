@@ -4,7 +4,7 @@ import {
   X, ChevronDown, ChevronUp, Clock,
   Layers, ArrowRight, Loader, RefreshCw,
   FileText, Store, MapPin, Ticket, Download, Upload, Lock, Unlock,
-  Scale, Clock3, FileWarning, HelpCircle, CornerUpLeft, Building2, Palette,
+  Scale, Clock3, FileWarning, HelpCircle, CornerUpLeft, Building2, Palette, Ban,
 } from "lucide-react";
 import {
   listarPedidosAguardandoAlocacao,
@@ -24,6 +24,9 @@ import {
   marcarSemProduto,
   definirProduto,
   validarSkuDefinicao,
+  cancelarPedidoDefinicao,
+  listarDefinicaoConcluidos,
+  listarDefinicaoCancelados,
   gerarPdfSemProduto,
   alocarPedido,
   fecharGruposPendentes,
@@ -1533,14 +1536,39 @@ function TabAguardandoDefinicao() {
   const [imeiDef, setImeiDef]   = useState("");
   const [skuCheck, setSkuCheck] = useState(null);
   const [salvando, setSalvando] = useState(false);
+  const [aba, setAba]           = useState("pendentes");
+  const [concluidos, setConcluidos] = useState([]);
+  const [cancelados, setCancelados] = useState([]);
+  const [modalCancel, setModalCancel] = useState(null);
+  const [cancelando, setCancelando] = useState(false);
 
   useEffect(() => { carregar(); }, []);
 
   async function carregar() {
     setLoading(true);
-    try { setPedidos(await listarPedidosAguardandoDefinicao()); }
+    try {
+      const [pend, conc, canc] = await Promise.all([
+        listarPedidosAguardandoDefinicao(),
+        listarDefinicaoConcluidos(),
+        listarDefinicaoCancelados(),
+      ]);
+      setPedidos(pend); setConcluidos(conc); setCancelados(canc);
+    }
     catch (e) { console.error(e); }
     finally { setLoading(false); }
+  }
+
+  async function handleCancelar() {
+    if (!modalCancel) return;
+    setCancelando(true);
+    try {
+      await cancelarPedidoDefinicao(modalCancel.id, user.id);
+      setFeedback({ tipo: "ok", msg: `Pedido #${modalCancel.id_anymarket} cancelado.` });
+      setTimeout(() => setFeedback(null), 4000);
+      setModalCancel(null);
+      carregar();
+    } catch (e) { setFeedback({ tipo: "erro", msg: e.message }); }
+    finally { setCancelando(false); }
   }
 
   async function handleBaixarPdf(p) {
@@ -1617,16 +1645,30 @@ function TabAguardandoDefinicao() {
         </div>
       )}
 
+      <div className="flex gap-1 mb-4 border-b border-slate-200">
+        {[
+          { k: "pendentes",  label: "Pendentes",  n: pedidos.length },
+          { k: "concluidos", label: "Concluídos", n: concluidos.length },
+          { k: "cancelados", label: "Cancelados", n: cancelados.length },
+        ].map(t => (
+          <button key={t.k} onClick={() => setAba(t.k)}
+            className={`px-4 py-2 text-sm font-semibold border-b-2 transition ${aba === t.k ? "border-[#7F2D92] text-[#7F2D92]" : "border-transparent text-slate-500 hover:text-slate-700"}`}>
+            {t.label} <span className={`text-xs px-1.5 py-0.5 rounded-full ml-1 ${aba === t.k ? "bg-purple-100 text-[#7F2D92]" : "bg-slate-100 text-slate-500"}`}>{fmtN(t.n)}</span>
+          </button>
+        ))}
+      </div>
+
       {loading ? (
         <div className="flex items-center justify-center h-32">
           <div className="h-8 w-8 border-4 border-purple-200 border-t-[#7F2D92] rounded-full animate-spin" />
         </div>
-      ) : pedidos.length === 0 ? (
-        <div className="text-center py-12 text-slate-400">
-          <HelpCircle className="h-8 w-8 mx-auto mb-2 opacity-30" />
-          <p className="text-sm">Nenhum pedido aguardando definição de produto.</p>
-        </div>
-      ) : (
+      ) : aba === "pendentes" ? (
+        pedidos.length === 0 ? (
+          <div className="text-center py-12 text-slate-400">
+            <HelpCircle className="h-8 w-8 mx-auto mb-2 opacity-30" />
+            <p className="text-sm">Nenhum pedido aguardando definição de produto.</p>
+          </div>
+        ) : (
         <div className="space-y-3">
           <p className="text-xs text-slate-500 font-semibold">{fmtN(pedidos.length)} pedido{pedidos.length > 1 ? "s" : ""} aguardando definição</p>
           {pedidos.map(p => (
@@ -1661,11 +1703,62 @@ function TabAguardandoDefinicao() {
                     <CornerUpLeft className="h-3.5 w-3.5" />
                     Definir produto
                   </button>
+                  <button onClick={() => setModalCancel(p)}
+                    className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-red-50 text-red-700 ring-1 ring-red-200 hover:bg-red-100 transition">
+                    <Ban className="h-3.5 w-3.5" />
+                    Pedido cancelado
+                  </button>
                 </div>
               </div>
             </Card>
           ))}
         </div>
+        )
+      ) : aba === "concluidos" ? (
+        concluidos.length === 0 ? (
+          <div className="text-center py-12 text-slate-400"><CheckCircle className="h-8 w-8 mx-auto mb-2 opacity-30" /><p className="text-sm">Nenhum pedido definido ainda.</p></div>
+        ) : (
+        <div className="space-y-2">
+          {concluidos.map(p => (
+            <Card key={p.id} className="ring-1 ring-emerald-100">
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <span className="font-black text-slate-800 text-sm">#{p.id_anymarket}</span>
+                    <span className="text-xs text-slate-400">{p.marketplace}</span>
+                    <StatusBadge status={p.status} />
+                  </div>
+                  <p className="text-sm font-semibold text-slate-700 truncate">{p.titulo_produto}</p>
+                  {p.definicao_resumo && <p className="text-xs text-emerald-700 font-semibold mt-1">{p.definicao_resumo}</p>}
+                  {p.definicao_resolvido_em && <p className="text-xs text-slate-400 mt-0.5">Definido em {fmtData(p.definicao_resolvido_em)}</p>}
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+        )
+      ) : (
+        cancelados.length === 0 ? (
+          <div className="text-center py-12 text-slate-400"><Ban className="h-8 w-8 mx-auto mb-2 opacity-30" /><p className="text-sm">Nenhum pedido cancelado.</p></div>
+        ) : (
+        <div className="space-y-2">
+          {cancelados.map(p => (
+            <Card key={p.id} className="ring-1 ring-red-100">
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <span className="font-black text-slate-800 text-sm">#{p.id_anymarket}</span>
+                    <span className="text-xs text-slate-400">{p.marketplace}</span>
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-lg bg-red-100 text-red-700">Cancelado</span>
+                  </div>
+                  <p className="text-sm font-semibold text-slate-700 truncate">{p.titulo_produto}</p>
+                  {p.definicao_resolvido_em && <p className="text-xs text-slate-400 mt-0.5">Cancelado em {fmtData(p.definicao_resolvido_em)}</p>}
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+        )
       )}
 
       {modalDef && (
@@ -1733,6 +1826,29 @@ function TabAguardandoDefinicao() {
                 className="px-4 py-2 rounded-xl text-sm font-semibold bg-[#7F2D92] text-white hover:bg-[#6d2680] transition disabled:opacity-50 flex items-center gap-2">
                 {salvando && <div className="h-3 w-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
                 Concluir definição
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalCancel && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4" onClick={() => setModalCancel(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2 mb-2">
+              <AlertTriangle className="h-5 w-5 text-red-600" />
+              <h3 className="font-black text-slate-800 text-base">Cancelar pedido?</h3>
+            </div>
+            <p className="text-sm text-slate-500 mb-5 leading-relaxed">
+              O pedido #{modalCancel.id_anymarket} vai para a aba Cancelados. Se houver aparelho reservado, ele volta ao estoque. Esta ação não pode ser desfeita.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setModalCancel(null)}
+                className="px-4 py-2 rounded-xl text-sm font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 transition">Voltar</button>
+              <button onClick={handleCancelar} disabled={cancelando}
+                className="px-4 py-2 rounded-xl text-sm font-semibold bg-red-600 text-white hover:bg-red-700 transition disabled:opacity-50 flex items-center gap-2">
+                {cancelando && <div className="h-3 w-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
+                Cancelar pedido
               </button>
             </div>
           </div>

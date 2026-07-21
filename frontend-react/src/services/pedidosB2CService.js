@@ -1134,6 +1134,7 @@ export async function listarPedidosAguardandoDefinicao() {
     .from("pedidos_b2c")
     .select("*")
     .eq("status", "aguardando_definicao_produto")
+    .or("definicao_status.is.null,definicao_status.eq.pendente")
     .order("definicao_solicitada_em", { ascending: true });
   if (error) throw new Error(error.message);
   return data || [];
@@ -1163,6 +1164,64 @@ export async function voltarParaAlocacao(pedidoId) {
     })
     .eq("id", pedidoId);
   if (error) throw new Error(error.message);
+}
+
+// Cancela um pedido a partir da tela de definição. Definitivo. Se o pedido tinha
+// aparelho reservado, o aparelho volta ao estoque ("Produto disponível"). O pedido
+// sai do fluxo (status = cancelado) e passa a viver na aba Cancelados.
+export async function cancelarPedidoDefinicao(pedidoId, userId) {
+  const { data: pedido } = await supabase
+    .from("pedidos_b2c")
+    .select("imei_alocado")
+    .eq("id", pedidoId)
+    .single();
+
+  // Solta o aparelho reservado, se houver, de volta ao estoque.
+  if (pedido?.imei_alocado) {
+    await supabase
+      .from("assurant_triagem")
+      .update({ status_atual: "Produto disponível" })
+      .eq("imei", pedido.imei_alocado)
+      .eq("status_atual", "Reservado para pedido B2C");
+  }
+
+  const agora = new Date().toISOString();
+  const { error } = await supabase
+    .from("pedidos_b2c")
+    .update({
+      status:                 "cancelado",
+      definicao_status:       "cancelado",
+      definicao_resolvido_em: agora,
+      definicao_resolvido_por: userId,
+      definicao_resumo:       "Pedido cancelado",
+      atualizado_em:          agora,
+    })
+    .eq("id", pedidoId);
+  if (error) throw new Error(error.message);
+  return { ok: true };
+}
+
+// Histórico: pedidos que foram DEFINIDOS (voltaram ao fluxo). Seguem a vida normal no
+// picking/faturamento, mas ficam registrados aqui pela coluna definicao_status.
+export async function listarDefinicaoConcluidos() {
+  const { data, error } = await supabase
+    .from("pedidos_b2c")
+    .select("*")
+    .eq("definicao_status", "concluido")
+    .order("definicao_resolvido_em", { ascending: false });
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
+// Histórico: pedidos cancelados pela tela de definição.
+export async function listarDefinicaoCancelados() {
+  const { data, error } = await supabase
+    .from("pedidos_b2c")
+    .select("*")
+    .eq("definicao_status", "cancelado")
+    .order("definicao_resolvido_em", { ascending: false });
+  if (error) throw new Error(error.message);
+  return data || [];
 }
 
 // Valida um SKU digitado na definição de produto: existe algum aparelho com esse SKU
@@ -1220,12 +1279,24 @@ export async function definirProduto(pedidoId, { mesmoSku, novoSku, novaGrade, i
   const gradeEfetiva = mesmoSku ? pedido.grade_produto : gradeVal;
   const imeiTrim = String(imei || "").trim();
 
+  // Resumo do que foi definido, para o histórico da aba Concluídos.
+  const parteSku = mesmoSku ? "mesmo SKU" : `${skuVal} ${gradeVal}`;
+  const parteImei = imeiTrim ? `alocado direto no IMEI ${imeiTrim}` : "voltou ao FIFO";
+  const resumo = `Definido: ${parteSku} · ${parteImei}`;
+  const agora = new Date().toISOString();
+
   const campos = {
     // sku_definido/grade_definida só são gravados quando muda o SKU; no mesmo SKU
     // ficam nulos e o sistema segue usando o original.
     sku_definido:   mesmoSku ? null : skuVal,
     grade_definida: mesmoSku ? null : gradeVal,
-    atualizado_em:  new Date().toISOString(),
+    // Marca o histórico: o pedido foi definido (entra na aba Concluídos) mesmo seguindo
+    // o fluxo normal. definicao_status é paralelo ao status real, não interfere nele.
+    definicao_status:       "concluido",
+    definicao_resolvido_em: agora,
+    definicao_resolvido_por: userId,
+    definicao_resumo:       resumo,
+    atualizado_em:  agora,
   };
 
   if (imeiTrim) {
