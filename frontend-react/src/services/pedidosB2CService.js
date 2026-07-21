@@ -252,12 +252,25 @@ export async function listarEmAnaliseComOpcao() {
   const pedidos = await listarPedidosEmAnalise();
   if (!pedidos.length) return [];
 
-  // Estoque alocável inteiro, em um fetch (dedupe por IMEI: passagem mais recente).
+  // OTIMIZAÇÃO: em vez de varrer TODO o estoque alocável, busca só os SKUs que os
+  // pedidos em análise precisam. São poucos SKUs distintos, então a consulta fica leve.
+  const skuBasePorPedido = new Map();
+  const skusAlvo = new Set();
+  for (const p of pedidos) {
+    const skuRaw = p.sku_definido || p.sku_produto || "";
+    const skuBase = await traduzirSku(String(skuRaw).replace(/-CC\d+$/i, "").trim());
+    skuBasePorPedido.set(p.id, skuBase);
+    if (skuBase) skusAlvo.add(skuBase);
+  }
+  if (!skusAlvo.size) return pedidos.map(p => ({ ...p, temOpcaoFifo: false }));
+
+  // Busca só o estoque alocável DESSES SKUs (não o estoque inteiro).
   const { data: triagem } = await supabase
     .from("assurant_triagem")
     .select("imei, sku, grade, local, status_atual, criado_em")
     .in("status_atual", STATUS_ALOCAVEIS)
-    .limit(20000);
+    .in("sku", [...skusAlvo])
+    .limit(5000);
 
   const porImei = new Map();
   for (const t of (triagem || [])) {
@@ -265,7 +278,7 @@ export async function listarEmAnaliseComOpcao() {
     if (!a || new Date(t.criado_em) > new Date(a.criado_em)) porImei.set(t.imei, t);
   }
 
-  // Subinv de todos, em blocos (para saber quais têm âncora + WH2).
+  // Subinv só dos IMEIs desses SKUs.
   const imeis = [...porImei.keys()];
   const subinv = new Map();
   for (let i = 0; i < imeis.length; i += 1000) {
@@ -280,25 +293,19 @@ export async function listarEmAnaliseComOpcao() {
   const wh2ok = (loc) => loc == null || String(loc).trim() === "" || String(loc).trim().toUpperCase().startsWith("WH2");
   const porSku = new Map();
   for (const t of porImei.values()) {
-    const s = subinv.get(t.imei);
-    if (!s?.data_subinv || !temLocal(t) || !wh2ok(s.local_subinv)) continue;
+    const st = subinv.get(t.imei);
+    if (!st?.data_subinv || !temLocal(t) || !wh2ok(st.local_subinv)) continue;
     if (!porSku.has(t.sku)) porSku.set(t.sku, []);
     porSku.get(t.sku).push(t);
   }
 
-  // Para cada pedido: usa o SKU/grade DEFINIDOS quando existirem (senão os originais),
-  // traduz e corta -CCx igual o FIFO, e checa se há aparelho de grade compatível.
-  const result = [];
-  for (const p of pedidos) {
-    const skuRaw = p.sku_definido || p.sku_produto || "";
+  return pedidos.map(p => {
+    const skuBase = skuBasePorPedido.get(p.id);
     const gradeAlvo = p.grade_definida || p.grade_produto;
-    const skuBase = await traduzirSku(String(skuRaw).replace(/-CC\d+$/i, "").trim());
     const candidatos = porSku.get(skuBase) || [];
     const temOpcaoFifo = candidatos.some(c => gradeAceita(c.grade, gradeAlvo));
-    result.push({ ...p, temOpcaoFifo });
-  }
-
-  return result;
+    return { ...p, temOpcaoFifo };
+  });
 }
 
 export async function listarPedidosFaturamento() {
