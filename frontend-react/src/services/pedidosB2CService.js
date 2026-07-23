@@ -388,8 +388,32 @@ export async function buscarSugestaoFifo(skuProduto, gradePedido) {
   // - Não-Outlet: grade igual ou superior à vendida E bateria que NÃO seja Outlet nem pior
   //   (exclui 70–79%, abaixo 70% e abaixo de 80%). Aceita 80%+, 80–85%, 85%+ e sem info (null).
   //   Isso impede que um aparelho Outlet (70–79%) seja sugerido para um pedido que não é Outlet.
-  const imeisValidos = disponiveis.filter(item => itemElegivel(item, ehOutlet, gradeAlvo));
+  const imeisElegiveis = disponiveis.filter(item => itemElegivel(item, ehOutlet, gradeAlvo));
 
+  if (!imeisElegiveis.length) return [];
+
+  // TRAVA DE DONO: nunca sugerir aparelho que já está amarrado a um pedido ativo.
+  // O status_atual da triagem sozinho não basta — reimportação da planilha, resolução de
+  // análise e carimbo manual já devolveram para "Produto disponível" peças que tinham dono,
+  // e o FIFO ofereceu de novo (o mesmo IMEI apareceu em dois pedidos embalados). Aqui a
+  // fonte da verdade é a própria pedidos_b2c: existindo pedido ativo apontando para o
+  // IMEI, ele sai da lista, não importa o que a triagem diga.
+  const imeisEmUso = new Set();
+  const candidatosImei = imeisElegiveis.map(i => i.imei);
+  const BLOCO_DONO = 200;
+  for (let i = 0; i < candidatosImei.length; i += BLOCO_DONO) {
+    const { data: donos, error: errDonos } = await supabase
+      .from("pedidos_b2c")
+      .select("imei_alocado")
+      .in("status", ["alocado", "em_picking", "embalado"])
+      .in("imei_alocado", candidatosImei.slice(i, i + BLOCO_DONO));
+    if (errDonos) throw new Error(`Falha ao verificar IMEIs em uso: ${errDonos.message}`);
+    (donos || []).forEach(d => {
+      if (d.imei_alocado) imeisEmUso.add(String(d.imei_alocado).trim());
+    });
+  }
+
+  const imeisValidos = imeisElegiveis.filter(i => !imeisEmUso.has(String(i.imei).trim()));
   if (!imeisValidos.length) return [];
 
   const imeisList = imeisValidos.map(i => i.imei);
