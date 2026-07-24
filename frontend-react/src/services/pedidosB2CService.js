@@ -776,7 +776,62 @@ async function _criarGrupo(pedidoIds, userId) {
   return grupo;
 }
 
-export async function alocarPedido(pedidoId, imei, sku, grade, userId) {
+// ── Auditoria de FIFO ─────────────────────────────────────
+// A estoque_subinv é SUBSTITUÍDA a cada importação do Oracle: aparelho que sai do estoque
+// some da tabela, e com ele a data_subinv que ancorou a decisão do FIFO (hoje 1.996 de 2.161
+// alocados já estão sem registro). Sem congelar a foto no momento da alocação não há como
+// auditar depois por que uma peça foi escolhida. Grava o snapshot no pedido + a fila em
+// fifo_auditoria. Nunca lança: auditoria não pode derrubar a alocação.
+async function registrarAuditoriaFifo(pedidoId, { sugestao, candidatos, origem, pedido, userId }) {
+  try {
+    const lista = Array.isArray(candidatos) ? candidatos : [];
+    const idx = sugestao ? lista.findIndex(c => String(c.imei) === String(sugestao.imei)) : -1;
+    const posicao = idx >= 0 ? idx + 1 : null;
+    const gradeAlvo = pedido?.grade_definida || pedido?.grade_produto || null;
+
+    await supabase.from("pedidos_b2c").update({
+      data_subinv_alocado:   sugestao?.data_subinv  || null,
+      local_subinv_alocado:  sugestao?.local_subinv || null,
+      local_alocado:         sugestao?.local        || null,
+      fifo_posicao:          posicao,
+      fifo_total_candidatos: lista.length || null,
+      fifo_origem:           origem || null,
+    }).eq("id", pedidoId);
+
+    // Só os 10 primeiros: é a vizinhança que explica a escolha. A fila inteira de um SKU
+    // com centenas de peças infla a tabela sem agregar nada à auditoria.
+    const candidatosLog = lista.slice(0, 10).map((c, i) => ({
+      posicao:      i + 1,
+      imei:         c.imei,
+      grade:        c.grade,
+      data_subinv:  c.data_subinv  || null,
+      local:        c.local        || null,
+      local_subinv: c.local_subinv || null,
+      escolhido:    sugestao ? String(c.imei) === String(sugestao.imei) : false,
+    }));
+
+    await supabase.from("fifo_auditoria").insert({
+      pedido_id:             pedidoId,
+      id_anymarket:          pedido?.id_anymarket != null ? String(pedido.id_anymarket) : null,
+      sku_buscado:           sugestao?.sku || null,
+      grade_alvo:            gradeAlvo,
+      eh_outlet:             normalizeGrade(gradeAlvo) === "outlet",
+      imei_escolhido:        sugestao?.imei || null,
+      data_subinv_escolhido: sugestao?.data_subinv || null,
+      posicao_escolhida:     posicao,
+      total_candidatos:      lista.length,
+      candidatos:            candidatosLog,
+      origem:                origem || null,
+      criado_por:            userId || null,
+    });
+  } catch (e) {
+    console.error("Falha ao registrar auditoria de FIFO:", e?.message || e);
+  }
+}
+
+// O 6º parâmetro (auditoria) é opcional: { sugestao, candidatos, origem, pedido }.
+// Sem ele a alocação funciona igual, só não deixa rastro auditável.
+export async function alocarPedido(pedidoId, imei, sku, grade, userId, auditoria) {
   // 1. Atualiza o pedido para alocado
   const { error: errPedido } = await supabase
     .from("pedidos_b2c")
@@ -799,7 +854,12 @@ export async function alocarPedido(pedidoId, imei, sku, grade, userId) {
     .eq("imei", imei);
   if (errTriagem) throw new Error(errTriagem.message);
 
-  // 3. Verifica se formou grupo de 20
+  // 3. Congela a foto do FIFO antes que o subinv seja reimportado
+  if (auditoria) {
+    await registrarAuditoriaFifo(pedidoId, { ...auditoria, userId });
+  }
+
+  // 4. Verifica se formou grupo de 20
   const grupoFormado = await verificarECriarGrupo(userId);
 
   return { ok: true, grupoFormado };
@@ -985,6 +1045,13 @@ export async function naoLocalizadoBuscarProximo(pedido, userId, motivo) {
         atualizado_em: new Date().toISOString(),
       })
       .eq("id", pedido.id);
+
+    // Troca no picking também é decisão do FIFO — registra com a origem certa.
+    await registrarAuditoriaFifo(pedido.id, {
+      sugestao: proximo, candidatos: sugestoes,
+      origem: motivo ? "divergencia_conferencia" : "nao_localizado",
+      pedido, userId,
+    });
 
     return { trocado: true, novoImei: proximo.imei, local: proximo.local, grade: proximo.grade };
   }

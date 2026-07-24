@@ -142,7 +142,10 @@ function TabAlocacao({ onGrupoFormado }) {
 
   async function handleAlocar(pedido, sugestao) {
     try {
-      const { grupoFormado } = await alocarPedido(pedido.id, sugestao.imei, sugestao.sku, sugestao.grade, user.id);
+      // Passa a sugestão escolhida e a fila completa para a auditoria congelar a âncora
+      // (data_subinv) e a posição — o subinv some na próxima importação do Oracle.
+      const { grupoFormado } = await alocarPedido(pedido.id, sugestao.imei, sugestao.sku, sugestao.grade, user.id,
+        { sugestao, candidatos: sugestoes, origem: "alocacao", pedido });
       setPedidos(prev => prev.filter(p => p.id !== pedido.id));
       setAlocandoId(null);
       setSugestoes([]);
