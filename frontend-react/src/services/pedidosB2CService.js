@@ -467,10 +467,25 @@ export async function buscarSugestaoFifo(skuProduto, gradePedido) {
 
 // Aplica a MESMA regra de elegibilidade do FIFO (grade + bateria) a um item de estoque,
 // dado se o pedido é Outlet e a grade alvo. Reaproveitada pela sugestão e pelo comparativo.
+// Ordem devolvida por gradeOrdem() para grade fora da hierarquia comercial
+// (QUEBRADO, REGULAR, EM ANALISE...) e também para pedido SEM grade reconhecida.
+// Sem barreira explícita, 99 <= 99 é verdadeiro e o FIFO oferece peça quebrada
+// para pedido sem grade — foi o que aconteceu no pedido 364344445 (S24 Ultra 1TB
+// vendido como Excelente, título sem " - " antes da grade, grade_produto nulo).
+const GRADE_FORA_HIERARQUIA = 99;
+
 function itemElegivel(item, ehOutlet, gradeAlvo) {
+  // Barreira dura 1: peça de grade não-comercial nunca é alocável.
+  const ordemItem = gradeOrdem(item.grade);
+  if (ordemItem >= GRADE_FORA_HIERARQUIA) return false;
+
+  // Barreira dura 2: pedido sem grade reconhecida não aloca às cegas.
+  // Melhor cair em "sem produto" (Aguardando Definição) do que sair peça errada.
+  if (gradeOrdem(gradeAlvo) >= GRADE_FORA_HIERARQUIA) return false;
+
   const bateria = normalizeGrade(item.status_bateria);
   if (ehOutlet) {
-    return bateria === BATERIA_OUTLET && gradeOrdem(item.grade) <= gradeOrdem("Bom");
+    return bateria === BATERIA_OUTLET && ordemItem <= gradeOrdem("Bom");
   }
   const bateriaImprestavel = BATERIA_RUINS_NAO_OUTLET.includes(bateria);
   return gradeAceita(item.grade, gradeAlvo) && !bateriaImprestavel;
