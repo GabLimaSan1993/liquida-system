@@ -586,10 +586,14 @@ function TabPicking() {
 
   // Filtro de rua (mesma lógica do Picking B2B): a rua sai do local_estoque da peça,
   // ex.: "RUA 4/BL02/AD01/A" -> "RUA 4". Multi-seleção; vazio = todas.
+  // O Gaia tem 408 endereços cadastrados como "RA 12/BL01/..." em vez de "RUA 12" (rua 12,
+  // bloco 01, andares AD01-AD05). Com o regex antigo esses aparelhos sumiam de qualquer
+  // filtro de rua. O "U" opcional (RU?A) aceita as duas grafias e normaliza o rótulo para
+  // "RUA N", então os dois blocos aparecem juntos no mesmo botão.
   const ruasDisponiveis = [...new Set(
     pedidos
       .filter(i => i.local_estoque)
-      .map(i => { const m = i.local_estoque.match(/^RUA\s+(\d+)/i); return m ? `RUA ${m[1]}` : null; })
+      .map(i => { const m = i.local_estoque.match(/^RU?A\s+(\d+)/i); return m ? `RUA ${m[1]}` : null; })
       .filter(Boolean)
   )].sort((a, b) => parseInt(a.replace("RUA ", "")) - parseInt(b.replace("RUA ", "")));
 
@@ -599,7 +603,7 @@ function TabPicking() {
 
   const pedidosFiltrados = pedidos.filter(p =>
     ruasSel.length === 0 ||
-    ruasSel.some(r => p.local_estoque?.match(new RegExp(`^RUA\\s+${r.replace("RUA ", "")}\\b`, "i")))
+    ruasSel.some(r => p.local_estoque?.match(new RegExp(`^RU?A\\s+${r.replace("RUA ", "")}\\b`, "i")))
   );
   const bipados    = pedidos.filter(p => ["embalado", "faturado", "concluido"].includes(p.status)).length;
   const emAnalise  = pedidos.filter(p => p.status === "em_analise").length;
