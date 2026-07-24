@@ -946,8 +946,12 @@ export async function marcarNaoLocalizado(pedidoId, motivo, userId) {
 // 3. Se achar: reserva o novo e o pedido segue no grupo apontando para ele.
 //    Se não achar: manda o pedido para análise (fluxo atual).
 // Retorna { trocado: true, novoImei, local } | { trocado: false } (foi para análise).
-export async function naoLocalizadoBuscarProximo(pedido, userId) {
+export async function naoLocalizadoBuscarProximo(pedido, userId, motivo) {
   const imeiAntigo = pedido.imei_alocado;
+  // Motivo padrão é o "não localizado" do picking. A conferência de cor/modelo/SKU passa
+  // o motivo da divergência e reaproveita este mesmo fluxo: a peça problemática sai do
+  // estoque sugerível e o pedido ganha a próxima opção do FIFO sem cair em análise.
+  const motivoFinal = motivo || "Não localizado";
 
   // 1. IMEI antigo vai para análise de estoque (não some, mas sai do FIFO até verificação)
   if (imeiAntigo) {
@@ -957,8 +961,11 @@ export async function naoLocalizadoBuscarProximo(pedido, userId) {
       .eq("imei", imeiAntigo);
   }
 
-  // 2. Busca a próxima sugestão FIFO para o mesmo produto (o antigo já saiu dos alocáveis)
-  const sugestoes = await buscarSugestaoFifo(pedido.sku_produto, pedido.grade_produto);
+  // 2. Busca a próxima sugestão FIFO. Usa SKU/grade DEFINIDOS quando existirem (pedido que
+  //    passou por definição de produto), senão os originais — mesma regra do FIFO.
+  const skuBusca   = pedido.sku_definido   || pedido.sku_produto;
+  const gradeBusca = pedido.grade_definida || pedido.grade_produto;
+  const sugestoes = await buscarSugestaoFifo(skuBusca, gradeBusca);
   // Exclui por segurança o próprio antigo (caso ainda apareça) e qualquer já reservado
   const proximo = (sugestoes || []).find(s => s.imei !== imeiAntigo);
 
@@ -982,8 +989,8 @@ export async function naoLocalizadoBuscarProximo(pedido, userId) {
     return { trocado: true, novoImei: proximo.imei, local: proximo.local, grade: proximo.grade };
   }
 
-  // 3b. Sem segunda opção: manda o pedido para análise (fluxo atual)
-  await marcarNaoLocalizado(pedido.id, "Não localizado (sem segunda opção no FIFO)", userId);
+  // 3b. Sem segunda opção: manda o pedido para análise, preservando o motivo real.
+  await marcarNaoLocalizado(pedido.id, `${motivoFinal} (sem segunda opção no FIFO)`, userId);
   return { trocado: false };
 }
 

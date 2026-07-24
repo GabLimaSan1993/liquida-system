@@ -513,7 +513,9 @@ function TabPicking() {
     inputRef.current?.focus();
   }
 
-  // Divergência na conferência: envia o pedido para análise com o motivo do que não conferiu.
+  // Divergência na conferência: a peça errada sai do estoque sugerível (vai para "Em análise
+  // de estoque") e o pedido recebe a PRÓXIMA opção do FIFO, seguindo no mesmo grupo — igual
+  // ao "Não localizado". Antes ia direto para análise sem segunda opção, e o pedido travava lá.
   async function divergenciaConferencia() {
     const pedido = conferindo;
     if (!pedido) return;
@@ -522,14 +524,25 @@ function TabPicking() {
     if (!checks.modelo) faltou.push("modelo");
     if (!checks.sku)    faltou.push("SKU");
     const motivo = `Divergência na conferência: ${faltou.join(", ")}`;
-    try {
-      await marcarNaoLocalizado(pedido.id, motivo, user.id);
-      setPedidos(prev => prev.map(p => p.id === pedido.id ? { ...p, status: "em_analise" } : p));
-      setFeedback({ tipo: "aviso", msg: `⚠ Pedido #${pedido.id_anymarket} enviado para análise (${motivo}).` });
-    } catch (e) { setFeedback({ tipo: "erro", msg: e.message }); }
     setConferindo(null);
-    setTimeout(() => setFeedback(null), 4000);
-    inputRef.current?.focus();
+    setBuscandoProximo(pedido.id);
+    try {
+      const res = await naoLocalizadoBuscarProximo(pedido, user.id, motivo);
+      if (res.trocado) {
+        setPedidos(prev => prev.map(p => p.id === pedido.id
+          ? { ...p, imei_alocado: res.novoImei, grade_alocada: res.grade, local_estoque: res.local }
+          : p));
+        setFeedback({ tipo: "ok", msg: `✓ Peça divergente separada. Nova peça para #${pedido.id_anymarket}: IMEI ${res.novoImei}${res.local ? ` · ${res.local}` : ""}. Bipe a nova peça.` });
+      } else {
+        setPedidos(prev => prev.map(p => p.id === pedido.id ? { ...p, status: "em_analise" } : p));
+        setFeedback({ tipo: "aviso", msg: `⚠ Sem segunda opção no FIFO para #${pedido.id_anymarket} — enviado para análise (${motivo}).` });
+      }
+    } catch (e) { setFeedback({ tipo: "erro", msg: e.message }); }
+    finally {
+      setBuscandoProximo(null);
+      setTimeout(() => setFeedback(null), 5000);
+      inputRef.current?.focus();
+    }
   }
 
   // "Não localizado": manda o IMEI para análise de estoque e busca o próximo do FIFO.
