@@ -11,14 +11,32 @@ const NOME_CANAL = {
   magalu: "Magalu", meli: "Meli", via_varejo: "Via Varejo", seguradora: "Seguradora",
 };
 
+function bipErro() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "square";
+    osc.frequency.value = 220;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.35);
+  } catch (_) { /* ambiente sem áudio: ignora */ }
+}
+
 export default function ExpedicaoPage() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const nomeOperador = profile?.nome || user?.email || "Operador";
+
   const [canal, setCanal] = useState(null);
   const [romaneio, setRomaneio] = useState(null);
   const [itens, setItens] = useState([]);
   const [chave, setChave] = useState("");
   const [etiqueta, setEtiqueta] = useState("");
   const [msg, setMsg] = useState(null);
+  const [alerta, setAlerta] = useState(null);
   const [carregando, setCarregando] = useState(false);
 
   const chaveRef = useRef(null);
@@ -29,10 +47,22 @@ export default function ExpedicaoPage() {
     if (tipo === "ok") setTimeout(() => setMsg(null), 2500);
   }
 
+  function abrirAlerta(texto) {
+    bipErro();
+    setAlerta(texto);
+  }
+
+  function fecharAlerta() {
+    setAlerta(null);
+    setChave("");
+    setEtiqueta("");
+    setTimeout(() => chaveRef.current?.focus(), 50);
+  }
+
   async function selecionarCanal(c) {
     setCarregando(true);
     try {
-      const rom = await abrirRomaneio(c, user.id, user.nome || user.email);
+      const rom = await abrirRomaneio(c, user.id, nomeOperador);
       setCanal(c);
       setRomaneio(rom);
       const its = await listarItens(rom.id);
@@ -66,10 +96,15 @@ export default function ExpedicaoPage() {
       chaveRef.current?.focus();
       feedback(`Volume ${its.length} registrado.`, "ok");
     } catch (e) {
-      feedback(e.message, "erro");
-      setChave("");
-      setEtiqueta("");
-      chaveRef.current?.focus();
+      const dup = /já foi bipada/i.test(e.message);
+      if (dup) {
+        abrirAlerta(e.message);
+      } else {
+        feedback(e.message, "erro");
+        setChave("");
+        setEtiqueta("");
+        chaveRef.current?.focus();
+      }
     }
   }
 
@@ -94,7 +129,7 @@ export default function ExpedicaoPage() {
     doc.text(`Nº ${rom.numero}`, 14, 26);
     doc.text(`Canal: ${NOME_CANAL[rom.canal] || rom.canal}`, 14, 32);
     doc.text(`Volumes: ${lista.length}`, 14, 38);
-    doc.text(`Operador: ${user.nome || user.email || "-"}`, 120, 26);
+    doc.text(`Operador: ${nomeOperador}`, 120, 26);
     doc.text(`Emitido: ${dataStr}`, 120, 32);
 
     doc.autoTable({
@@ -106,7 +141,7 @@ export default function ExpedicaoPage() {
       columnStyles: { 0: { cellWidth: 12 }, 1: { cellWidth: 110 }, 2: { cellWidth: 60 } },
     });
 
-    const fimY = doc.lastAutoTable.finalY || 44;
+    const fimY = doc.lastAutoTable?.finalY || 44;
     doc.setFontSize(9);
     doc.text("Conferente: __________________________", 14, fimY + 20);
     doc.text("Transportadora: __________________________", 14, fimY + 30);
@@ -139,16 +174,8 @@ export default function ExpedicaoPage() {
   const canais = canaisExpedicao();
 
   return (
-    <div className="max-w-4xl mx-auto p-4">
-      <div className="flex items-center gap-3 mb-1">
-        <span className="text-2xl">📦</span>
-        <div>
-          <h1 className="text-xl font-bold text-purple-900">Expedição — Romaneio</h1>
-          <p className="text-sm text-gray-500">Bipe a chave da NF e a etiqueta de cada volume</p>
-        </div>
-      </div>
-
-      <p className="text-sm text-gray-500 mt-5 mb-2">Canal</p>
+    <div className="max-w-4xl mx-auto">
+      <p className="text-sm text-gray-500 mb-2">Canal</p>
       <div className="grid grid-cols-4 gap-2 mb-6">
         {canais.map((c) => (
           <button
@@ -249,6 +276,28 @@ export default function ExpedicaoPage() {
             </table>
           </div>
         </>
+      )}
+
+      {alerta && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onClick={(e) => { if (e.target === e.currentTarget) fecharAlerta(); }}
+        >
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 p-6 border-t-8 border-red-500">
+            <div className="flex items-center gap-3 mb-3">
+              <span className="text-3xl">⚠️</span>
+              <h2 className="text-lg font-bold text-red-700">Chave já bipada</h2>
+            </div>
+            <p className="text-sm text-gray-600 mb-1">Esta chave de NF já foi registrada neste romaneio:</p>
+            <p className="font-mono text-xs break-all bg-gray-50 rounded-lg p-2 mb-4">{chave}</p>
+            <button
+              onClick={fecharAlerta}
+              className="w-full py-3 rounded-xl bg-red-600 text-white font-bold hover:bg-red-700 transition"
+            >
+              Entendi
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
