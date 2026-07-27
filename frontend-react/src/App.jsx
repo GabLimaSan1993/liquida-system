@@ -33,6 +33,7 @@ import TrocasB2CFurbtechPage from "./pages/TrocasB2CFurbtechPage.jsx";
 import PedidosB2CPage from "./pages/PedidosB2CPage.jsx";
 import B2CEmbalagemMesaPage from "./pages/B2CEmbalagemMesaPage.jsx";
 import B2CPainelGestorPage from "./pages/B2CPainelGestorPage.jsx";
+import ExpedicaoPage from "./pages/ExpedicaoPage.jsx";
 import B2BPainelGestorPage from "./pages/B2BPainelGestorPage.jsx";
 import InventarioPage from "./pages/InventarioPage.jsx";
 
@@ -131,6 +132,7 @@ export default function App() {
         <Route path="/b2c/pedidos"   element={<ProtectedRoute tela="/b2c/pedidos"><PedidosB2CPage /></ProtectedRoute>} />
         <Route path="/b2c/embalagem" element={<ProtectedRoute tela="/b2c/embalagem"><B2CEmbalagemMesaPage /></ProtectedRoute>} />
         <Route path="/b2c/painel"    element={<ProtectedRoute tela="/b2c/painel"><B2CPainelGestorPage /></ProtectedRoute>} />
+        <Route path="/b2c/expedicao" element={<ProtectedRoute tela="/b2c/expedicao"><ExpedicaoPage /></ProtectedRoute>} />
 
         {/* Inventário Cíclico */}
         <Route path="/inventario" element={<ProtectedRoute tela="/inventario"><InventarioPage /></ProtectedRoute>} />

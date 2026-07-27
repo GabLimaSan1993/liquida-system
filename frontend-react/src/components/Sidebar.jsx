@@ -7,7 +7,7 @@ import {
   Truck, TrendingUp, Users, LogOut, X, ShoppingCart,
   Landmark, BarChart2, Lock, TrendingDown, Database,
   Package, Clock, LayoutDashboard, ScanLine, RefreshCw,
-  PlusCircle, Box, Store,
+  PlusCircle, Box, Store, Send,
 } from "lucide-react";
 import { useAuth } from "../AuthContext.jsx";
 import { signOut } from "../services/authService.js";
@@ -191,6 +191,9 @@ function MenuAssurant({ onClose, telas }) {
         {tem("/b2c/painel") && (
           <NavItem to="/b2c/painel"         icon={LayoutDashboard} label="Painel Gestor B2C"     indent onClick={onClose} />
         )}
+        {tem("/b2c/expedicao") && (
+          <NavItem to="/b2c/expedicao"      icon={Send}            label="Expedição B2C"         indent onClick={onClose} />
+        )}
         {tem("/inventario") && (
           <NavItem to="/inventario"         icon={ClipboardCheck}  label="Inventário Cíclico"    indent onClick={onClose} />
         )}
@@ -288,6 +291,7 @@ function SidebarContent({ profile, onClose, handleLogout }) {
               <NavItem to="/b2c/pedidos"        icon={Store}           label="Pedidos B2C"           indent onClick={onClose} />
               <NavItem to="/b2c/embalagem"      icon={Box}             label="Embalagem B2C"         indent onClick={onClose} />
               <NavItem to="/b2c/painel"         icon={LayoutDashboard} label="Painel Gestor B2C"     indent onClick={onClose} />
+              <NavItem to="/b2c/expedicao"      icon={Send}            label="Expedição B2C"         indent onClick={onClose} />
               <NavItem to="/inventario"         icon={ClipboardCheck}  label="Inventário Cíclico"    indent onClick={onClose} />
               <NavItem to="/trocas-b2c/nova"    icon={PlusCircle}      label="Trocas — Assurant"     indent onClick={onClose} />
               <NavItem to="/trocas-b2c/gestao"  icon={RefreshCw}       label="Trocas — Furbtech"     indent onClick={onClose} />
