@@ -299,12 +299,37 @@ export async function listarEmAnaliseComOpcao() {
     porSku.get(t.sku).push(t);
   }
 
+  // Enriquece com local e voucher da triagem (pelo imei_alocado), pra mostrar no card de
+  // análise ONDE o operador deveria ter achado a peça. Mesma regra do picking: prefere a
+  // passagem mais recente COM local preenchido; entre iguais, a mais nova.
+  const imeisAnalise = pedidos.map(p => p.imei_alocado).filter(Boolean);
+  const locVouch = new Map();
+  for (let i = 0; i < imeisAnalise.length; i += 200) {
+    const { data: est } = await supabase
+      .from("assurant_triagem")
+      .select("imei, local, voucher, criado_em")
+      .in("imei", imeisAnalise.slice(i, i + 200));
+    (est || []).forEach(e => {
+      const atual = locVouch.get(e.imei);
+      if (!atual) { locVouch.set(e.imei, e); return; }
+      const eTemLocal = !!(e.local && String(e.local).trim());
+      const aTemLocal = !!(atual.local && String(atual.local).trim());
+      if (eTemLocal !== aTemLocal) { if (eTemLocal) locVouch.set(e.imei, e); }
+      else if (new Date(e.criado_em) > new Date(atual.criado_em)) locVouch.set(e.imei, e);
+    });
+  }
+
   return pedidos.map(p => {
     const skuBase = skuBasePorPedido.get(p.id);
     const gradeAlvo = p.grade_definida || p.grade_produto;
     const candidatos = porSku.get(skuBase) || [];
     const temOpcaoFifo = candidatos.some(c => gradeAceita(c.grade, gradeAlvo));
-    return { ...p, temOpcaoFifo };
+    const est = locVouch.get(p.imei_alocado);
+    return {
+      ...p, temOpcaoFifo,
+      local_estoque: est?.local || null,
+      voucher_estoque: est?.voucher || null,
+    };
   });
 }
 

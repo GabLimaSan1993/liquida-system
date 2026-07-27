@@ -1215,6 +1215,14 @@ function TabAnalise() {
                       <span className="text-xs font-mono text-slate-500">IMEI: {p.imei_alocado}</span>
                       <GradeBadge grade={p.grade_produto} />
                     </div>
+                    <div className="flex items-center gap-3 mt-1 flex-wrap">
+                      <span className="text-xs text-slate-500">
+                        📍 Local: <span className="font-semibold text-slate-700">{p.local_estoque || "—"}</span>
+                      </span>
+                      <span className="text-xs text-slate-500">
+                        Voucher: <span className="font-mono text-slate-700">{p.voucher_estoque || "—"}</span>
+                      </span>
+                    </div>
                     <p className="text-xs text-slate-400 mt-0.5">{p.cliente}</p>
                     {p.motivo_analise && <p className="text-xs text-orange-600 font-semibold mt-1">⚠ {p.motivo_analise}</p>}
                     {p.analise_em && <p className="text-xs text-slate-400 mt-0.5">Em análise desde: {fmtData(p.analise_em)}</p>}
