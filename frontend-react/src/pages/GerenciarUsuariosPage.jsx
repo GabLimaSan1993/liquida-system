@@ -30,6 +30,7 @@ const TELAS = [
   { id: "/b2c/pedidos",                   label: "Assurant — Pedidos B2C",           grupo: "Assurant" },
   { id: "/b2c/embalagem",                 label: "Assurant — Embalagem B2C",         grupo: "Assurant" },
   { id: "/b2c/painel",                    label: "Assurant — Painel Gestor B2C",     grupo: "Assurant" },
+  { id: "/b2c/expedicao",                 label: "Assurant — Expedição B2C",         grupo: "Assurant" },
   { id: "/trocas-b2c/gestao",             label: "Assurant — Trocas B2C (Gestão)",   grupo: "Assurant" },
   { id: "/trocas-b2c/nova",               label: "Assurant — Trocas B2C (Nova)",     grupo: "Assurant" },
   { id: "/inventario",                    label: "Assurant — Inventário Cíclico",    grupo: "Assurant" },
