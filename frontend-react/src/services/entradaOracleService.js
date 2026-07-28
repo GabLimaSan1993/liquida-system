@@ -286,6 +286,81 @@ export async function listarAguardandoOracle() {
   });
 }
 
+// Lista o histórico do que já foi confirmado no Oracle. Mesmo cruzamento com o
+// relatório AP, mais quem confirmou e quando.
+export async function listarConfirmadosOracle({ limite = 1000 } = {}) {
+  const { data: triagem, error: errT } = await supabase
+    .from("assurant_triagem")
+    .select("*")
+    .not("oracle_confirmado_em", "is", null)
+    .order("oracle_confirmado_em", { ascending: false })
+    .limit(limite);
+  if (errT) throw new Error(errT.message);
+  if (!triagem?.length) return [];
+
+  // Dedupe por IMEI, mantendo a confirmação mais recente.
+  const porImei = new Map();
+  for (const t of triagem) {
+    const atual = porImei.get(t.imei);
+    if (!atual || new Date(t.oracle_confirmado_em) > new Date(atual.oracle_confirmado_em)) {
+      porImei.set(t.imei, t);
+    }
+  }
+  const itens = [...porImei.values()];
+
+  // Relatório AP dos vouchers em jogo (versão mais recente de cada PO).
+  const vouchers = [...new Set(itens.map(i => i.voucher).filter(Boolean))];
+  const apPorPo = new Map();
+  for (let i = 0; i < vouchers.length; i += BLOCO_IDS) {
+    const { data: ap, error: errAp } = await supabase
+      .from("entrada_oracle_ap")
+      .select("po_gerada, cpf_cnpj, ri_numero, nota_gerada, po_status, importado_em")
+      .in("po_gerada", vouchers.slice(i, i + BLOCO_IDS));
+    if (errAp) throw new Error(errAp.message);
+    for (const r of (ap || [])) {
+      const atual = apPorPo.get(r.po_gerada);
+      if (!atual || new Date(r.importado_em) > new Date(atual.importado_em)) {
+        apPorPo.set(r.po_gerada, r);
+      }
+    }
+  }
+
+  // Nome de quem confirmou (a triagem guarda só o uuid).
+  const userIds = [...new Set(itens.map(i => i.oracle_confirmado_por).filter(Boolean))];
+  const nomes = new Map();
+  if (userIds.length) {
+    const { data: perfis } = await supabase
+      .from("user_profiles").select("id, nome").in("id", userIds);
+    (perfis || []).forEach(p => nomes.set(p.id, p.nome));
+  }
+
+  return itens.map(t => {
+    const ap = apPorPo.get(t.voucher) || null;
+    const grade = campo(t, "grade", "grade_cosmetica", "grade_final");
+    const bateria = campo(t, "status_bateria");
+    return {
+      id:            t.id,
+      imei:          t.imei,
+      voucher:       t.voucher,
+      sku:           campo(t, "sku", "cod_item"),
+      produto:       campo(t, "produto", "modelo", "descricao"),
+      grade,
+      statusBateria: bateria,
+      gradeOracle:   gradeParaOracle(grade, bateria),
+      rebaixado:     rebaixadoPorBateria(grade, bateria),
+      local:         campo(t, "local"),
+      documento:     ap?.cpf_cnpj    || null,
+      ri:            ap?.ri_numero   || null,
+      nf:            ap?.nota_gerada || null,
+      poStatus:      ap?.po_status   || null,
+      pendenteRi:    !ap || !ap.ri_numero,
+      confirmadoEm:  t.oracle_confirmado_em,
+      confirmadoPor: nomes.get(t.oracle_confirmado_por) || null,
+      statusAtual:   t.status_atual,
+    };
+  });
+}
+
 // Confirma a entrada no Oracle: o item vira "Produto disponível" — ou seja,
 // passa a ser sugerível pelo FIFO — e grava data/quem confirmou.
 export async function confirmarOracle(imeis, userId) {
