@@ -944,6 +944,18 @@ export async function registrarBipagem(pedidoId, imeiDigitado, userId) {
     return { ok: false, erro: `IMEI incorreto. Esperado: ${pedido.imei_alocado}` };
   }
 
+  // TRAVA pedido multi-item: nenhum item pode ser bipado/embalado enquanto um IRMÃO do
+  // mesmo pedido estiver em análise. Pedido multi-item anda sempre junto — se um para,
+  // todos param, até a análise ser resolvida.
+  const { data: irmaos } = await supabase
+    .from("pedidos_b2c")
+    .select("id, status")
+    .eq("id_anymarket", pedido.id_anymarket)
+    .neq("id", pedidoId);
+  if ((irmaos || []).some(i => i.status === "em_analise")) {
+    return { ok: false, erro: "Pedido tem outro item em análise — resolva antes de bipar este." };
+  }
+
   const { error: errUpdate } = await supabase
     .from("pedidos_b2c")
     .update({
@@ -1000,29 +1012,66 @@ async function verificarConclusaoGrupo(grupoId) {
 // ══════════════════════════════════════════════════════════
 
 export async function marcarNaoLocalizado(pedidoId, motivo, userId) {
-  // O item em análise SAI do grupo (grupo_id = null). Assim os irmãos já embalados do
-  // grupo não ficam presos esperando por ele: fecham e vão faturar. Quando a análise
-  // for resolvida, este item volta ao picking sem grupo e a formação normal o recolhe
-  // numa leva nova. (Pedido multi-item anda inteiro por construção, então nunca sobra
-  // um item solto de um pedido cujos irmãos já faturaram.)
-  const { data: pedido } = await supabase
-    .from("pedidos_b2c").select("grupo_id").eq("id", pedidoId).single();
+  // REGRA: pedido multi-item anda SEMPRE junto. Se um item cai em análise, os irmãos que
+  // já avançaram (alocado em grupo, em picking, embalado) RECUAM para "alocado" sem grupo
+  // e esperam a resolução — mantendo o IMEI reservado (não perdem a peça já achada).
+  // Só voltam a andar quando TODOS os itens do pedido estiverem prontos de novo.
+  const { data: alvo } = await supabase
+    .from("pedidos_b2c")
+    .select("id, id_anymarket, grupo_id")
+    .eq("id", pedidoId)
+    .single();
+  if (!alvo) throw new Error("Pedido não encontrado.");
 
-  const { error } = await supabase
+  const agora = new Date().toISOString();
+  const gruposAfetados = new Set();
+  if (alvo.grupo_id) gruposAfetados.add(alvo.grupo_id);
+
+  // 1. O item vai para análise (sai do grupo).
+  const { error: errItem } = await supabase
     .from("pedidos_b2c")
     .update({
       status:         "em_analise",
       grupo_id:       null,
       motivo_analise: motivo || "Não localizado",
-      analise_em:     new Date().toISOString(),
+      analise_em:     agora,
       analise_por:    userId,
-      atualizado_em:  new Date().toISOString(),
+      atualizado_em:  agora,
     })
     .eq("id", pedidoId);
-  if (error) throw new Error(error.message);
+  if (errItem) throw new Error(errItem.message);
 
-  // Recalcula o grupo de origem: sem o item pendente, os que sobraram podem fechar.
-  if (pedido?.grupo_id) await verificarConclusaoGrupo(pedido.grupo_id);
+  // 2. Puxa os IRMÃOS que já avançaram de volta para "alocado" sem grupo. Mantém o IMEI
+  //    reservado (imei_alocado, sku_alocado, grade_alocada intactos). Limpa só bipagem/
+  //    embalagem, porque eles recuam de etapa. Não toca em item já faturado/concluído.
+  const { data: irmaos } = await supabase
+    .from("pedidos_b2c")
+    .select("id, grupo_id, status")
+    .eq("id_anymarket", alvo.id_anymarket)
+    .neq("id", pedidoId)
+    .in("status", ["alocado", "em_picking", "embalado"]);
+
+  for (const irmao of (irmaos || [])) {
+    if (irmao.grupo_id) gruposAfetados.add(irmao.grupo_id);
+    await supabase
+      .from("pedidos_b2c")
+      .update({
+        status:        "alocado",
+        grupo_id:      null,
+        imei_bipado:   null,
+        bipado_em:     null,
+        bipado_por:    null,
+        embalado_em:   null,
+        embalado_por:  null,
+        atualizado_em: agora,
+      })
+      .eq("id", irmao.id);
+  }
+
+  // 3. Recalcula todo grupo tocado: sem os itens que saíram, os que sobraram podem fechar.
+  for (const gid of gruposAfetados) {
+    await verificarConclusaoGrupo(gid);
+  }
 }
 
 // Picking — "Não localizado" com busca automática de segunda opção.

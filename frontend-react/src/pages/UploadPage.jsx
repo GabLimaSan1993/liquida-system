@@ -18,6 +18,7 @@ import { importarPedidoB2B } from "../services/b2bService.js";
 import { importarNFs }        from "../services/b2bNfService.js";
 import { uploadAnymarketZip } from "../services/anymarketService.js";
 import { importarSubinv }     from "../services/subinvService.js";
+import { previewRelatorioAP, uploadRelatorioAP } from "../services/entradaOracleService.js";
 import { supabase }           from "../lib/supabase.js";
 import { useAuth }            from "../AuthContext.jsx";
 
@@ -192,6 +193,13 @@ export default function UploadPage() {
   const [subinvPreview, setSubinvPreview]                           = useState(null);
   const [loadingSubinvUpload, setLoadingSubinvUpload]               = useState(false);
 
+  // ── Relatório AP (Entrada Oracle) ─────────────────────
+  const [apFile, setApFile]                                         = useState(null);
+  const [apPreview, setApPreview]                                   = useState(null);
+  const [apResultado, setApResultado]                               = useState(null);
+  const [loadingApPreview, setLoadingApPreview]                     = useState(false);
+  const [loadingApUpload, setLoadingApUpload]                       = useState(false);
+
   const [status, setStatus]     = useState("");
   const [progress, setProgress] = useState(0);
 
@@ -207,6 +215,7 @@ export default function UploadPage() {
     { type: "NF B2B",                name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
     { type: "AnyMarket",             name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
     { type: "Aging Subinventário",   name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+    { type: "Relatório AP Oracle",   name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
   ]);
 
   useEffect(() => {
@@ -512,6 +521,61 @@ export default function UploadPage() {
       updateHistoryCard("Aging Subinventário", { status: "Erro" });
     } finally {
       setLoadingSubinvUpload(false);
+    }
+  }
+
+  // ── Handlers Relatório AP (Entrada Oracle) ────────────
+  async function handlePreviewAp() {
+    try {
+      if (!apFile) { setStatus("Selecione o Relatório AP (.xlsx)."); return; }
+      setLoadingApPreview(true);
+      setApResultado(null);
+      setStatus("Validando estrutura do Relatório AP...");
+      const preview = await previewRelatorioAP(apFile);
+      setApPreview(preview);
+      updateHistoryCard("Relatório AP Oracle", { name: apFile.name, status: "Validado", rows: preview.totalLinhas.toLocaleString("pt-BR"), progress: 15 });
+      setStatus(`Relatório AP validado. ${preview.comPo.toLocaleString("pt-BR")} linhas com PO.`);
+    } catch (error) {
+      setStatus(`Erro ao validar o Relatório AP: ${error.message}`);
+    } finally {
+      setLoadingApPreview(false);
+    }
+  }
+
+  async function handleUploadAp() {
+    try {
+      if (!apFile) { setStatus("Selecione o Relatório AP (.xlsx)."); return; }
+      setLoadingApUpload(true);
+      setProgress(0);
+      setApResultado(null);
+      setStatus("Importando Relatório AP...");
+      updateHistoryCard("Relatório AP Oracle", { name: apFile.name, status: "Enviando", progress: 5 });
+
+      const result = await uploadRelatorioAP(
+        apFile,
+        user.id,
+        profile?.nome,
+        ({ fase, pct }) => {
+          setProgress(pct);
+          updateHistoryCard("Relatório AP Oracle", { name: apFile.name, status: `Gravando ${fase}...`, progress: pct });
+          setStatus(`Relatório AP: gravando... ${pct}%`);
+        }
+      );
+
+      updateHistoryCard("Relatório AP Oracle", {
+        name: apFile.name, status: "Concluído",
+        rows: result.inseridas.toLocaleString("pt-BR"), progress: 100,
+      });
+      setProgress(100);
+      setApResultado(result);
+      setApPreview(null);
+      setStatus(`Relatório AP importado! ${result.inseridas.toLocaleString("pt-BR")} linhas · ${result.vouchers.toLocaleString("pt-BR")} vouchers.`);
+      setApFile(null);
+    } catch (error) {
+      setStatus(`Erro ao importar o Relatório AP: ${error.message}`);
+      updateHistoryCard("Relatório AP Oracle", { status: "Erro" });
+    } finally {
+      setLoadingApUpload(false);
     }
   }
 
@@ -885,6 +949,73 @@ export default function UploadPage() {
                 <div className="text-sm font-bold text-emerald-700">{anyPreview.mensagem}</div>
                 <p>Pedidos B2C novos: <span className="font-bold text-emerald-700">{anyPreview.inseridos?.toLocaleString("pt-BR")}</span></p>
                 <p>Pedidos atualizados: <span className="font-bold text-blue-700">{anyPreview.atualizados?.toLocaleString("pt-BR")}</span></p>
+              </div>
+            )}
+          </div>
+
+          {/* ── Relatório AP (Entrada Oracle) ───────────── */}
+          <div className="rounded-[24px] bg-[#FCFAFF] p-5 ring-1 ring-[#E9D5FF]">
+            <div className="flex items-center gap-3">
+              <div className="rounded-2xl bg-[#7F2D92] p-2.5 text-white">
+                <FileSpreadsheet className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="text-sm font-black text-[#6B1F87]">Relatório AP Oracle</div>
+                <div className="text-xs text-slate-500">Base da Entrada no Oracle — RI, nota e documento por voucher</div>
+              </div>
+            </div>
+
+            <div className="mt-4 text-xs text-slate-500 bg-emerald-50 ring-1 ring-emerald-200 rounded-xl px-3 py-2">
+              📋 Planilha .xlsx do AP · casa com o Gaia pela coluna PO- GERADA (= voucher) · cada importação acumula histórico
+            </div>
+
+            <div className="mt-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-[#E9D5FF]">
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={e => { setApFile(e.target.files?.[0] || null); setApPreview(null); setApResultado(null); }}
+                className="block w-full text-sm text-slate-600"
+              />
+              <div className="mt-3 text-sm font-medium">
+                {apFile ? apFile.name : "Nenhum arquivo selecionado"}
+              </div>
+              <div className="mt-1 text-xs text-slate-500">
+                {apFile ? "Arquivo pronto para envio" : "Selecione o Relatório AP"}
+              </div>
+            </div>
+
+            <div className="mt-4 flex gap-2">
+              <Button variant="outline" onClick={handlePreviewAp} disabled={!apFile || loadingApPreview || loadingApUpload}>
+                {loadingApPreview ? "Validando..." : "Validar"}
+              </Button>
+              <Button onClick={handleUploadAp} disabled={!apFile || loadingApUpload}>
+                {loadingApUpload ? "Importando..." : "Enviar arquivo"}
+              </Button>
+            </div>
+
+            {apPreview && (
+              <div className="mt-4 rounded-2xl bg-white p-4 ring-1 ring-[#E9D5FF] space-y-1 text-xs text-slate-600">
+                <div className="text-sm font-bold text-[#6B1F87]">
+                  {apPreview.totalLinhas.toLocaleString("pt-BR")} linhas na planilha
+                </div>
+                <p>Com PO (serão importadas): <span className="font-bold text-emerald-700">{apPreview.comPo.toLocaleString("pt-BR")}</span></p>
+                {apPreview.semPo > 0 && <p>Sem PO (serão ignoradas): <span className="font-bold text-amber-600">{apPreview.semPo.toLocaleString("pt-BR")}</span></p>}
+                {apPreview.faltando?.length > 0 && (
+                  <p className="text-amber-700">Colunas esperadas que não vieram: <span className="font-bold">{apPreview.faltando.join(", ")}</span></p>
+                )}
+                {apPreview.naoMapeadas?.length > 0 && (
+                  <p className="text-slate-400">Colunas não reconhecidas (serão ignoradas): {apPreview.naoMapeadas.join(", ")}</p>
+                )}
+              </div>
+            )}
+
+            {apResultado && (
+              <div className="mt-4 rounded-2xl bg-white p-4 ring-1 ring-[#E9D5FF] space-y-1 text-xs text-slate-600">
+                <div className="text-sm font-bold text-emerald-700">
+                  ✓ {apResultado.inseridas.toLocaleString("pt-BR")} linhas importadas
+                </div>
+                <p>Vouchers distintos: <span className="font-bold text-[#6B1F87]">{apResultado.vouchers.toLocaleString("pt-BR")}</span></p>
+                {apResultado.semPo > 0 && <p>Linhas sem PO ignoradas: <span className="font-bold text-amber-600">{apResultado.semPo.toLocaleString("pt-BR")}</span></p>}
               </div>
             )}
           </div>
