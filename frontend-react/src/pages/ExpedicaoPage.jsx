@@ -211,7 +211,13 @@ export default function ExpedicaoPage() {
                 value={chave}
                 inputMode="numeric"
                 onChange={(e) => onChaveInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter" && chave.length === 44) etiquetaRef.current?.focus(); }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (chave.length === 44) etiquetaRef.current?.focus();
+                  }
+                }}
                 placeholder="Bipe o código de barras da DANFE"
                 className="w-full font-mono border rounded-lg px-3 py-2"
               />
@@ -222,7 +228,12 @@ export default function ExpedicaoPage() {
                 ref={etiquetaRef}
                 value={etiqueta}
                 onChange={(e) => setEtiqueta(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") salvar(); }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    if (e.target.value.trim()) salvar();
+                  }
+                }}
                 placeholder="Bipe a etiqueta do canal"
                 className="w-full font-mono border rounded-lg px-3 py-2"
               />
