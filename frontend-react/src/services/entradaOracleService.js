@@ -198,3 +198,118 @@ export async function uploadRelatorioAP(file, userId, userNome, onProgress) {
     importadoEm: new Date().toISOString(),
   };
 }
+
+// ══════════════════════════════════════════════════════════
+// TELA — ENTRADA NO ORACLE
+// Cruza a triagem (status "Aguardando oracle") com o relatório AP
+// pela chave voucher = PO- GERADA, e aplica o de/para de grade.
+// ══════════════════════════════════════════════════════════
+
+const STATUS_AGUARDANDO = "Aguardando oracle";
+const STATUS_CONFIRMADO = "Produto disponível";
+const BLOCO_IDS = 200;
+
+// Pega o primeiro valor não vazio entre várias chaves possíveis.
+// A assurant_triagem tem nomes de coluna que variam por origem de carga.
+function campo(obj, ...chaves) {
+  for (const k of chaves) {
+    const v = obj?.[k];
+    if (v != null && String(v).trim() !== "") return v;
+  }
+  return null;
+}
+
+export async function listarAguardandoOracle() {
+  // 1. Itens do Gaia aguardando Oracle. select("*") de propósito: a triagem tem
+  //    dezenas de colunas e nomes que variam, e são poucas centenas de linhas.
+  const { data: triagem, error: errT } = await supabase
+    .from("assurant_triagem")
+    .select("*")
+    .eq("status_atual", STATUS_AGUARDANDO);
+  if (errT) throw new Error(errT.message);
+  if (!triagem?.length) return [];
+
+  // 2. Dedupe por IMEI, mantendo a passagem mais recente.
+  const porImei = new Map();
+  for (const t of triagem) {
+    const atual = porImei.get(t.imei);
+    if (!atual || new Date(t.criado_em) > new Date(atual.criado_em)) {
+      porImei.set(t.imei, t);
+    }
+  }
+  const itens = [...porImei.values()];
+
+  // 3. Busca o relatório AP dos vouchers em jogo, em blocos de 200
+  //    (lista grande em .in() estoura a URL em silêncio).
+  const vouchers = [...new Set(itens.map(i => i.voucher).filter(Boolean))];
+  const apPorPo = new Map();
+  for (let i = 0; i < vouchers.length; i += BLOCO_IDS) {
+    const { data: ap, error: errAp } = await supabase
+      .from("entrada_oracle_ap")
+      .select("po_gerada, cpf_cnpj, nome, ri_numero, nota_gerada, po_status, importado_em")
+      .in("po_gerada", vouchers.slice(i, i + BLOCO_IDS));
+    if (errAp) throw new Error(errAp.message);
+    // Fica com a versão MAIS RECENTE de cada PO — é isso que faz o
+    // "Pendente RI" se resolver sozinho quando chega um download novo.
+    for (const r of (ap || [])) {
+      const atual = apPorPo.get(r.po_gerada);
+      if (!atual || new Date(r.importado_em) > new Date(atual.importado_em)) {
+        apPorPo.set(r.po_gerada, r);
+      }
+    }
+  }
+
+  // 4. Monta a linha da tela.
+  return itens.map(t => {
+    const ap = apPorPo.get(t.voucher) || null;
+    const grade = campo(t, "grade", "grade_cosmetica", "grade_final");
+    const bateria = campo(t, "status_bateria");
+    return {
+      id:            t.id,
+      imei:          t.imei,
+      voucher:       t.voucher,
+      sku:           campo(t, "sku", "cod_item"),
+      produto:       campo(t, "produto", "modelo", "descricao"),
+      grade,
+      statusBateria: bateria,
+      gradeOracle:   gradeParaOracle(grade, bateria),
+      rebaixado:     rebaixadoPorBateria(grade, bateria),
+      local:         campo(t, "local"),
+      documento:     ap?.cpf_cnpj  || null,
+      nomeCliente:   ap?.nome      || null,
+      ri:            ap?.ri_numero || null,
+      nf:            ap?.nota_gerada || null,
+      poStatus:      ap?.po_status || null,
+      temMatchAp:    !!ap,
+      pendenteRi:    !ap || !ap.ri_numero,
+    };
+  });
+}
+
+// Confirma a entrada no Oracle: o item vira "Produto disponível" — ou seja,
+// passa a ser sugerível pelo FIFO — e grava data/quem confirmou.
+export async function confirmarOracle(imeis, userId) {
+  const lista = [...new Set((imeis || []).filter(Boolean))];
+  if (!lista.length) return { ok: false, erro: "Nenhum item selecionado." };
+
+  const agora = new Date().toISOString();
+  let confirmados = 0;
+
+  for (let i = 0; i < lista.length; i += BLOCO_IDS) {
+    const bloco = lista.slice(i, i + BLOCO_IDS);
+    const { data, error } = await supabase
+      .from("assurant_triagem")
+      .update({
+        status_atual:          STATUS_CONFIRMADO,
+        oracle_confirmado_em:  agora,
+        oracle_confirmado_por: userId,
+      })
+      .in("imei", bloco)
+      .eq("status_atual", STATUS_AGUARDANDO) // trava: só muda quem ainda está aguardando
+      .select("imei");
+    if (error) throw new Error(error.message);
+    confirmados += (data || []).length;
+  }
+
+  return { ok: true, confirmados, solicitados: lista.length, confirmadoEm: agora };
+}
