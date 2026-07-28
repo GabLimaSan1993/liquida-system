@@ -155,50 +155,57 @@ function MenuAssurant({ onClose, telas }) {
         <NavItem to="/upload" icon={Upload} label="Uploads" onClick={onClose} />
       )}
       <CollapseGroup icon={Package} label="Assurant Warehouse" paths={["/assurant", "/recebimento", "/b2b", "/b2c", "/trocas-b2c", "/inventario"]}>
-        {tem("/recebimento") && (
-          <NavItem to="/recebimento"        icon={Truck}           label="Recebimento YBV"       indent onClick={onClose} />
+        {(tem("/recebimento") || tem("/recebimento/gestao")) && (
+          <SubGroup icon={Truck} label="Recebimento" paths={["/recebimento"]}>
+            {tem("/recebimento") && (
+              <NavItem to="/recebimento"        icon={Truck}         label="Recebimento YBV"    indent onClick={onClose} />
+            )}
+            {tem("/recebimento/gestao") && (
+              <NavItem to="/recebimento/gestao" icon={ClipboardList} label="Gestão Recebimento" indent onClick={onClose} />
+            )}
+          </SubGroup>
         )}
-        {tem("/recebimento/gestao") && (
-          <NavItem to="/recebimento/gestao" icon={ClipboardList}   label="Gestão Recebimento"    indent onClick={onClose} />
+        {(tem("/b2b/picking") || tem("/b2b/embalagem") || tem("/b2b/faturamento") || tem("/b2b/painel")) && (
+          <SubGroup icon={Box} label="B2B" paths={["/b2b"]}>
+            {tem("/b2b/picking") && (
+              <NavItem to="/b2b/picking"        icon={ScanLine}        label="Picking B2B"       indent onClick={onClose} />
+            )}
+            {tem("/b2b/embalagem") && (
+              <NavItem to="/b2b/embalagem"      icon={Box}             label="Embalagem B2B"     indent onClick={onClose} />
+            )}
+            {tem("/b2b/faturamento") && (
+              <NavItem to="/b2b/faturamento"    icon={BarChart3}       label="Faturamento B2B"   indent onClick={onClose} />
+            )}
+            {tem("/b2b/painel") && (
+              <NavItem to="/b2b/painel"         icon={LayoutDashboard} label="Painel Gestor B2B" indent onClick={onClose} />
+            )}
+          </SubGroup>
         )}
-        {tem("/assurant/dashboard") && (
-          <NavItem to="/assurant/dashboard" icon={BarChart3}       label="Dashboard"             indent onClick={onClose} />
-        )}
-        {tem("/assurant/sla") && (
-          <NavItem to="/assurant/sla"       icon={Clock}           label="SLA & Rastreabilidade" indent onClick={onClose} />
-        )}
-        {tem("/assurant/layout") && (
-          <NavItem to="/assurant/layout"    icon={LayoutDashboard} label="Layout Warehouse"      indent onClick={onClose} />
-        )}
-        {tem("/b2b/picking") && (
-          <NavItem to="/b2b/picking"        icon={ScanLine}        label="Picking B2B"           indent onClick={onClose} />
-        )}
-        {tem("/b2b/embalagem") && (
-          <NavItem to="/b2b/embalagem"      icon={Box}             label="Embalagem B2B"         indent onClick={onClose} />
-        )}
-        {tem("/b2b/faturamento") && (
-          <NavItem to="/b2b/faturamento"    icon={BarChart3}       label="Faturamento B2B"       indent onClick={onClose} />
-        )}
-        {tem("/b2b/painel") && (
-          <NavItem to="/b2b/painel"         icon={LayoutDashboard} label="Painel Gestor B2B"     indent onClick={onClose} />
-        )}
-        {tem("/b2c/pedidos") && (
-          <NavItem to="/b2c/pedidos"        icon={Store}           label="Pedidos B2C"           indent onClick={onClose} />
-        )}
-        {tem("/b2c/embalagem") && (
-          <NavItem to="/b2c/embalagem"      icon={Box}             label="Embalagem B2C"         indent onClick={onClose} />
-        )}
-        {tem("/b2c/painel") && (
-          <NavItem to="/b2c/painel"         icon={LayoutDashboard} label="Painel Gestor B2C"     indent onClick={onClose} />
-        )}
-        {tem("/b2c/expedicao") && (
-          <NavItem to="/b2c/expedicao"      icon={Send}            label="Expedição B2C"         indent onClick={onClose} />
+        {(tem("/b2c/pedidos") || tem("/b2c/embalagem") || tem("/b2c/painel") || tem("/b2c/expedicao")) && (
+          <SubGroup icon={Store} label="B2C" paths={["/b2c"]}>
+            {tem("/b2c/pedidos") && (
+              <NavItem to="/b2c/pedidos"        icon={Store}           label="Pedidos B2C"       indent onClick={onClose} />
+            )}
+            {tem("/b2c/embalagem") && (
+              <NavItem to="/b2c/embalagem"      icon={Box}             label="Embalagem B2C"     indent onClick={onClose} />
+            )}
+            {tem("/b2c/painel") && (
+              <NavItem to="/b2c/painel"         icon={LayoutDashboard} label="Painel Gestor B2C" indent onClick={onClose} />
+            )}
+            {tem("/b2c/expedicao") && (
+              <NavItem to="/b2c/expedicao"      icon={Send}            label="Expedição B2C"     indent onClick={onClose} />
+            )}
+          </SubGroup>
         )}
         {tem("/inventario") && (
-          <NavItem to="/inventario"         icon={ClipboardCheck}  label="Inventário Cíclico"    indent onClick={onClose} />
+          <SubGroup icon={ClipboardCheck} label="Gestão de Estoque" paths={["/inventario"]}>
+            <NavItem to="/inventario"           icon={ClipboardCheck}  label="Inventário Cíclico" indent onClick={onClose} />
+          </SubGroup>
         )}
         {tem("/trocas-b2c/gestao") && (
-          <NavItem to="/trocas-b2c/gestao"  icon={RefreshCw}       label="Trocas B2C"            indent onClick={onClose} />
+          <SubGroup icon={RefreshCw} label="Trocas" paths={["/trocas-b2c"]}>
+            <NavItem to="/trocas-b2c/gestao"    icon={RefreshCw}       label="Trocas B2C"        indent onClick={onClose} />
+          </SubGroup>
         )}
       </CollapseGroup>
     </>
@@ -279,23 +286,29 @@ function SidebarContent({ profile, onClose, handleLogout }) {
             </CollapseGroup>
 
             <CollapseGroup icon={Package} label="Assurant Warehouse" paths={["/assurant", "/recebimento", "/b2b", "/b2c", "/trocas-b2c", "/inventario"]}>
-              <NavItem to="/recebimento"        icon={Truck}           label="Recebimento YBV"       indent onClick={onClose} />
-              <NavItem to="/recebimento/gestao" icon={ClipboardList}   label="Gestão Recebimento"    indent onClick={onClose} />
-              <NavItem to="/assurant/dashboard" icon={BarChart3}       label="Dashboard"             indent onClick={onClose} />
-              <NavItem to="/assurant/sla"       icon={Clock}           label="SLA & Rastreabilidade" indent onClick={onClose} />
-              <NavItem to="/assurant/layout"    icon={LayoutDashboard} label="Layout Warehouse"      indent onClick={onClose} />
-              <NavItem to="/b2b/picking"        icon={ScanLine}        label="Picking B2B"           indent onClick={onClose} />
-              <NavItem to="/b2b/embalagem"      icon={Box}             label="Embalagem B2B"         indent onClick={onClose} />
-              <NavItem to="/b2b/faturamento"    icon={BarChart3}       label="Faturamento B2B"       indent onClick={onClose} />
-              <NavItem to="/b2b/painel"         icon={LayoutDashboard} label="Painel Gestor B2B"     indent onClick={onClose} />
-              <NavItem to="/b2c/pedidos"        icon={Store}           label="Pedidos B2C"           indent onClick={onClose} />
-              <NavItem to="/b2c/embalagem"      icon={Box}             label="Embalagem B2C"         indent onClick={onClose} />
-              <NavItem to="/b2c/painel"         icon={LayoutDashboard} label="Painel Gestor B2C"     indent onClick={onClose} />
-              <NavItem to="/b2c/expedicao"      icon={Send}            label="Expedição B2C"         indent onClick={onClose} />
-              <NavItem to="/inventario"         icon={ClipboardCheck}  label="Inventário Cíclico"    indent onClick={onClose} />
-              <NavItem to="/trocas-b2c/nova"    icon={PlusCircle}      label="Trocas — Assurant"     indent onClick={onClose} />
-              <NavItem to="/trocas-b2c/gestao"  icon={RefreshCw}       label="Trocas — Furbtech"     indent onClick={onClose} />
-              <NavItemDisabled icon={DollarSign} label="DRE Gerencial" indent />
+              <SubGroup icon={Truck} label="Recebimento" paths={["/recebimento"]}>
+                <NavItem to="/recebimento"        icon={Truck}           label="Recebimento YBV"    indent onClick={onClose} />
+                <NavItem to="/recebimento/gestao" icon={ClipboardList}   label="Gestão Recebimento" indent onClick={onClose} />
+              </SubGroup>
+              <SubGroup icon={Box} label="B2B" paths={["/b2b"]}>
+                <NavItem to="/b2b/picking"        icon={ScanLine}        label="Picking B2B"       indent onClick={onClose} />
+                <NavItem to="/b2b/embalagem"      icon={Box}             label="Embalagem B2B"     indent onClick={onClose} />
+                <NavItem to="/b2b/faturamento"    icon={BarChart3}       label="Faturamento B2B"   indent onClick={onClose} />
+                <NavItem to="/b2b/painel"         icon={LayoutDashboard} label="Painel Gestor B2B" indent onClick={onClose} />
+              </SubGroup>
+              <SubGroup icon={Store} label="B2C" paths={["/b2c"]}>
+                <NavItem to="/b2c/pedidos"        icon={Store}           label="Pedidos B2C"       indent onClick={onClose} />
+                <NavItem to="/b2c/embalagem"      icon={Box}             label="Embalagem B2C"     indent onClick={onClose} />
+                <NavItem to="/b2c/painel"         icon={LayoutDashboard} label="Painel Gestor B2C" indent onClick={onClose} />
+                <NavItem to="/b2c/expedicao"      icon={Send}            label="Expedição B2C"     indent onClick={onClose} />
+              </SubGroup>
+              <SubGroup icon={ClipboardCheck} label="Gestão de Estoque" paths={["/inventario"]}>
+                <NavItem to="/inventario"         icon={ClipboardCheck}  label="Inventário Cíclico" indent onClick={onClose} />
+              </SubGroup>
+              <SubGroup icon={RefreshCw} label="Trocas" paths={["/trocas-b2c"]}>
+                <NavItem to="/trocas-b2c/nova"    icon={PlusCircle}      label="Trocas — Assurant" indent onClick={onClose} />
+                <NavItem to="/trocas-b2c/gestao"  icon={RefreshCw}       label="Trocas — Furbtech" indent onClick={onClose} />
+              </SubGroup>
             </CollapseGroup>
           </>
         )}
