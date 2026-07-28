@@ -28,6 +28,7 @@ const TELAS = [
   { id: "/b2b/faturamento",               label: "Assurant — Faturamento B2B",       grupo: "Assurant" },
   { id: "/b2b/painel",                    label: "Assurant — Painel Gestor B2B",     grupo: "Assurant" },
   { id: "/b2c/pedidos",                   label: "Assurant — Pedidos B2C",           grupo: "Assurant" },
+  { id: "/triagens/entrada-oracle",       label: "Triagens — Entrada no Oracle",     grupo: "Assurant" },
   { id: "/b2c/embalagem",                 label: "Assurant — Embalagem B2C",         grupo: "Assurant" },
   { id: "/b2c/painel",                    label: "Assurant — Painel Gestor B2C",     grupo: "Assurant" },
   { id: "/b2c/expedicao",                 label: "Assurant — Expedição B2C",         grupo: "Assurant" },

@@ -34,6 +34,7 @@ const PAGE_META = {
   "/b2c/painel":                   { title: "Painel Gestor B2C",         subtitle: "Assurant Warehouse · Tempos por etapa, mesas e fila do processo B2C" },
   "/b2c/expedicao":                { title: "Expedição B2C",             subtitle: "Assurant Warehouse · Romaneio por canal — bipagem de chave da NF e etiqueta" },
   "/inventario":                   { title: "Inventário Cíclico",        subtitle: "Assurant Warehouse · Contagem por endereço, divergências e acuracidade" },
+  "/triagens/entrada-oracle":      { title: "Entrada no Oracle",         subtitle: "Triagens · Confirmação de entrada, RI e nota por voucher" },
 };
 
 export default function MainLayout() {
