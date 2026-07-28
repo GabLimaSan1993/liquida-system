@@ -32,6 +32,7 @@ function TabEntrada() {
   const [loading, setLoading]     = useState(true);
   const [busca, setBusca]         = useState("");
   const [selecao, setSelecao]     = useState(() => new Set());
+  const [filtroRi, setFiltroRi]   = useState(null); // null = todos | "pendente" | "concluido"
   const [confirmando, setConfirmando] = useState(false);
   const [feedback, setFeedback]   = useState(null);
 
@@ -51,12 +52,14 @@ function TabEntrada() {
 
   const filtrados = useMemo(() => {
     const q = busca.trim().toLowerCase();
-    if (!q) return itens;
-    return itens.filter(i =>
-      [i.voucher, i.imei, i.sku, i.produto, i.documento, i.ri, i.nf]
-        .some(v => String(v || "").toLowerCase().includes(q))
-    );
-  }, [itens, busca]);
+    return itens.filter(i => {
+      if (filtroRi === "pendente"  && !i.pendenteRi) return false;
+      if (filtroRi === "concluido" &&  i.pendenteRi) return false;
+      if (!q) return true;
+      return [i.voucher, i.imei, i.sku, i.produto, i.documento, i.ri, i.nf]
+        .some(v => String(v || "").toLowerCase().includes(q));
+    });
+  }, [itens, busca, filtroRi]);
 
   const todosMarcados = filtrados.length > 0 && filtrados.every(i => selecao.has(i.imei));
 
@@ -126,7 +129,13 @@ function TabEntrada() {
     XLSX.writeFile(wb, `entrada_oracle_${hoje}.xlsx`);
   }
 
-  const pendentes = itens.filter(i => i.pendenteRi).length;
+  const pendentes  = itens.filter(i => i.pendenteRi).length;
+  const concluidos = itens.length - pendentes;
+
+  // Clicar no botão já ativo limpa o filtro e volta a mostrar tudo.
+  function alternarFiltro(valor) {
+    setFiltroRi(atual => (atual === valor ? null : valor));
+  }
 
   return (
     <div className="space-y-4">
@@ -146,9 +155,9 @@ function TabEntrada() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="text-base font-bold text-slate-800">
           Aguardando Oracle · <span className="text-slate-500 font-semibold">{itens.length} {itens.length === 1 ? "item" : "itens"}</span>
-          {pendentes > 0 && (
-            <span className="ml-2 inline-flex items-center rounded-lg bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber-700 ring-1 ring-amber-200">
-              {pendentes} pendente{pendentes > 1 ? "s" : ""} de RI
+          {filtroRi && (
+            <span className="ml-2 text-xs font-semibold text-slate-400">
+              · mostrando {filtrados.length}
             </span>
           )}
         </div>
@@ -168,6 +177,31 @@ function TabEntrada() {
         </div>
       </div>
 
+      <div className="flex flex-wrap items-center gap-2">
+        <button onClick={() => alternarFiltro("pendente")}
+          className={`rounded-xl px-3 py-1.5 text-[13px] font-bold ring-1 transition ${
+            filtroRi === "pendente"
+              ? "bg-amber-500 text-white ring-amber-500"
+              : "bg-white text-amber-700 ring-amber-200 hover:bg-amber-50"
+          }`}>
+          Pendente RI · {pendentes}
+        </button>
+        <button onClick={() => alternarFiltro("concluido")}
+          className={`rounded-xl px-3 py-1.5 text-[13px] font-bold ring-1 transition ${
+            filtroRi === "concluido"
+              ? "bg-emerald-600 text-white ring-emerald-600"
+              : "bg-white text-emerald-700 ring-emerald-200 hover:bg-emerald-50"
+          }`}>
+          Concluído · {concluidos}
+        </button>
+        {filtroRi && (
+          <button onClick={() => setFiltroRi(null)}
+            className="rounded-xl px-3 py-1.5 text-[13px] font-semibold text-slate-500 hover:bg-slate-100">
+            Limpar filtro
+          </button>
+        )}
+      </div>
+
       <div className="relative">
         <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
         <input value={busca} onChange={e => setBusca(e.target.value)}
@@ -181,7 +215,7 @@ function TabEntrada() {
         </div>
       ) : !filtrados.length ? (
         <div className="rounded-2xl bg-slate-50 py-10 text-center text-sm text-slate-400 ring-1 ring-slate-200">
-          {itens.length ? "Nenhum item corresponde à busca." : "Nenhum item aguardando Oracle."}
+          {itens.length ? "Nenhum item corresponde ao filtro ou à busca." : "Nenhum item aguardando Oracle."}
         </div>
       ) : (
         <div className="overflow-x-auto rounded-2xl ring-1 ring-slate-200">
