@@ -71,7 +71,6 @@ export async function biparVolume(romaneioId, chaveNf, etiqueta, userId) {
     throw new Error(error.message);
   }
 
-  await supabase.rpc("noop").catch(() => {});
   const { count } = await supabase
     .from("romaneio_itens")
     .select("id", { count: "exact", head: true })
