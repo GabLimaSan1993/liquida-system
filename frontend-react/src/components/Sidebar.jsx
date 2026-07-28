@@ -154,14 +154,7 @@ function MenuAssurant({ onClose, telas }) {
       {tem("/upload") && (
         <NavItem to="/upload" icon={Upload} label="Uploads" onClick={onClose} />
       )}
-      {tem("/triagens/entrada-oracle") && (
-        <CollapseGroup icon={ClipboardCheck} label="Triagens" paths={["/triagens"]}>
-          <NavItem to="/triagens/entrada-oracle" icon={ClipboardList} label="Entrada no Oracle" indent onClick={onClose} />
-          <NavItemDisabled icon={Wrench}   label="Triagem Funcional" indent />
-          <NavItemDisabled icon={Sparkles} label="Triagem Cosmética" indent />
-        </CollapseGroup>
-      )}
-      <CollapseGroup icon={Package} label="Assurant Warehouse" paths={["/assurant", "/recebimento", "/b2b", "/b2c", "/trocas-b2c", "/inventario"]}>
+      <CollapseGroup icon={Package} label="Assurant Warehouse" paths={["/assurant", "/recebimento", "/triagens", "/b2b", "/b2c", "/trocas-b2c", "/inventario"]}>
         {(tem("/recebimento") || tem("/recebimento/gestao")) && (
           <SubGroup icon={Truck} label="Recebimento" paths={["/recebimento"]}>
             {tem("/recebimento") && (
@@ -170,6 +163,13 @@ function MenuAssurant({ onClose, telas }) {
             {tem("/recebimento/gestao") && (
               <NavItem to="/recebimento/gestao" icon={ClipboardList} label="Gestão Recebimento" indent onClick={onClose} />
             )}
+          </SubGroup>
+        )}
+        {tem("/triagens/entrada-oracle") && (
+          <SubGroup icon={FlaskConical} label="Triagens" paths={["/triagens"]}>
+            <NavItem to="/triagens/entrada-oracle" icon={ClipboardList} label="Entrada no Oracle" indent onClick={onClose} />
+            <NavItemDisabled icon={Wrench}   label="Triagem Funcional" indent />
+            <NavItemDisabled icon={Sparkles} label="Triagem Cosmética" indent />
           </SubGroup>
         )}
         {(tem("/b2b/picking") || tem("/b2b/embalagem") || tem("/b2b/faturamento") || tem("/b2b/painel")) && (
@@ -288,20 +288,19 @@ function SidebarContent({ profile, onClose, handleLogout }) {
               </SubGroup>
             </CollapseGroup>
 
-            <CollapseGroup icon={ClipboardCheck} label="Triagens" paths={["/triagens"]}>
-              <NavItem to="/triagens/entrada-oracle" icon={ClipboardList} label="Entrada no Oracle" indent onClick={onClose} />
-              <NavItemDisabled icon={Wrench}   label="Triagem Funcional" indent />
-              <NavItemDisabled icon={Sparkles} label="Triagem Cosmética" indent />
-            </CollapseGroup>
-
             <CollapseGroup icon={Truck} label="Logística" paths={["/abertura-os"]}>
               <NavItem to="/abertura-os" icon={ClipboardList} label="Abertura de OS" indent onClick={onClose} />
             </CollapseGroup>
 
-            <CollapseGroup icon={Package} label="Assurant Warehouse" paths={["/assurant", "/recebimento", "/b2b", "/b2c", "/trocas-b2c", "/inventario"]}>
+            <CollapseGroup icon={Package} label="Assurant Warehouse" paths={["/assurant", "/recebimento", "/triagens", "/b2b", "/b2c", "/trocas-b2c", "/inventario"]}>
               <SubGroup icon={Truck} label="Recebimento" paths={["/recebimento"]}>
                 <NavItem to="/recebimento"        icon={Truck}           label="Recebimento YBV"    indent onClick={onClose} />
                 <NavItem to="/recebimento/gestao" icon={ClipboardList}   label="Gestão Recebimento" indent onClick={onClose} />
+              </SubGroup>
+              <SubGroup icon={FlaskConical} label="Triagens" paths={["/triagens"]}>
+                <NavItem to="/triagens/entrada-oracle" icon={ClipboardList} label="Entrada no Oracle" indent onClick={onClose} />
+                <NavItemDisabled icon={Wrench}   label="Triagem Funcional" indent />
+                <NavItemDisabled icon={Sparkles} label="Triagem Cosmética" indent />
               </SubGroup>
               <SubGroup icon={Box} label="B2B" paths={["/b2b"]}>
                 <NavItem to="/b2b/picking"        icon={ScanLine}        label="Picking B2B"       indent onClick={onClose} />
