@@ -210,3 +210,41 @@ export async function salvarTriagemFuncional({
     conferencia,
   };
 }
+// ══════════════════════════════════════════════════════════
+// CATÁLOGO — marca, modelo, capacidade e cor
+// Carregado inteiro de uma vez (poucas centenas de linhas) e filtrado
+// na tela. Evita uma consulta a cada dropdown aberto na bancada.
+// ══════════════════════════════════════════════════════════
+
+export async function carregarCatalogo() {
+  const [prod, cor] = await Promise.all([
+    supabase.from("produtos_catalogo")
+      .select("marca, modelo, armazenamento")
+      .eq("ativo", true)
+      .order("marca").order("modelo"),
+    supabase.from("cores_catalogo")
+      .select("nome").eq("ativo", true).order("nome"),
+  ]);
+  if (prod.error) throw new Error(prod.error.message);
+  if (cor.error)  throw new Error(cor.error.message);
+  return { produtos: prod.data || [], cores: (cor.data || []).map(c => c.nome) };
+}
+
+// Modelo que o operador não achou na lista. Entra como pendente para
+// revisão depois, sem travar a bancada esperando cadastro.
+export async function cadastrarModeloPendente(marca, modelo, armazenamento) {
+  const registro = {
+    marca:         String(marca || "").trim().toUpperCase(),
+    modelo:        String(modelo || "").trim().toUpperCase(),
+    armazenamento: String(armazenamento || "").trim().toUpperCase() || null,
+    pendente:      true,
+  };
+  if (!registro.marca || !registro.modelo) {
+    return { ok: false, erro: "Marca e modelo são obrigatórios." };
+  }
+  const { error } = await supabase
+    .from("produtos_catalogo")
+    .upsert(registro, { onConflict: "marca,modelo,armazenamento" });
+  if (error) throw new Error(error.message);
+  return { ok: true, ...registro };
+}
