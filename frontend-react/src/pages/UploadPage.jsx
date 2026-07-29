@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { FileSpreadsheet, Upload, Landmark, Package, GitBranch, ScanLine, ShoppingCart, CalendarClock, Store } from "lucide-react";
+import { FileSpreadsheet, Upload, Landmark, Package, GitBranch, ScanLine, ShoppingCart, CalendarClock, Store, Tags } from "lucide-react";
 import {
   previewFile,
   uploadAgingFile,
@@ -20,6 +20,7 @@ import { uploadAnymarketZip } from "../services/anymarketService.js";
 import { importarSubinv }     from "../services/subinvService.js";
 import { previewRelatorioAP, uploadRelatorioAP } from "../services/entradaOracleService.js";
 import { previewTradein, uploadTradein } from "../services/tradeinService.js";
+import { previewSkus, uploadSkus } from "../services/skuCatalogoService.js";
 import { supabase }           from "../lib/supabase.js";
 import { useAuth }            from "../AuthContext.jsx";
 
@@ -208,6 +209,13 @@ export default function UploadPage() {
   const [loadingTdPreview, setLoadingTdPreview]                     = useState(false);
   const [loadingTdUpload, setLoadingTdUpload]                       = useState(false);
 
+  // ── Base de SKU (catálogo Assurant) ───────────────────
+  const [skuFile, setSkuFile]                                       = useState(null);
+  const [skuPreview, setSkuPreview]                                 = useState(null);
+  const [skuResultado, setSkuResultado]                             = useState(null);
+  const [loadingSkuPreview, setLoadingSkuPreview]                   = useState(false);
+  const [loadingSkuUpload, setLoadingSkuUpload]                     = useState(false);
+
   const [status, setStatus]     = useState("");
   const [progress, setProgress] = useState(0);
 
@@ -225,6 +233,7 @@ export default function UploadPage() {
     { type: "Aging Subinventário",   name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
     { type: "Relatório AP Oracle",   name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
     { type: "TradeIn",               name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+    { type: "Base de SKU",           name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
   ]);
 
   useEffect(() => {
@@ -640,6 +649,61 @@ export default function UploadPage() {
       updateHistoryCard("TradeIn", { status: "Erro" });
     } finally {
       setLoadingTdUpload(false);
+    }
+  }
+
+  // ── Handlers Base de SKU ──────────────────────────────
+  async function handlePreviewSku() {
+    try {
+      if (!skuFile) { setStatus("Selecione a base de SKU (.xlsx)."); return; }
+      setLoadingSkuPreview(true);
+      setSkuResultado(null);
+      setStatus("Validando estrutura da base de SKU...");
+      const preview = await previewSkus(skuFile);
+      setSkuPreview(preview);
+      updateHistoryCard("Base de SKU", { name: skuFile.name, status: "Validado", rows: preview.totalLinhas.toLocaleString("pt-BR"), progress: 15 });
+      setStatus(`Base de SKU validada. ${preview.aparelhos.toLocaleString("pt-BR")} aparelhos.`);
+    } catch (error) {
+      setStatus(`Erro ao validar a base de SKU: ${error.message}`);
+    } finally {
+      setLoadingSkuPreview(false);
+    }
+  }
+
+  async function handleUploadSku() {
+    try {
+      if (!skuFile) { setStatus("Selecione a base de SKU (.xlsx)."); return; }
+      setLoadingSkuUpload(true);
+      setProgress(0);
+      setSkuResultado(null);
+      setStatus("Importando base de SKU...");
+      updateHistoryCard("Base de SKU", { name: skuFile.name, status: "Enviando", progress: 5 });
+
+      const result = await uploadSkus(
+        skuFile,
+        user.id,
+        profile?.nome,
+        ({ fase, pct }) => {
+          setProgress(pct);
+          updateHistoryCard("Base de SKU", { name: skuFile.name, status: `Gravando ${fase}...`, progress: pct });
+          setStatus(`Base de SKU: gravando... ${pct}%`);
+        }
+      );
+
+      updateHistoryCard("Base de SKU", {
+        name: skuFile.name, status: "Concluído",
+        rows: result.gravadas.toLocaleString("pt-BR"), progress: 100,
+      });
+      setProgress(100);
+      setSkuResultado(result);
+      setSkuPreview(null);
+      setStatus(`Base de SKU importada! ${result.gravadas.toLocaleString("pt-BR")} SKUs · ${result.aparelhos.toLocaleString("pt-BR")} aparelhos.`);
+      setSkuFile(null);
+    } catch (error) {
+      setStatus(`Erro ao importar a base de SKU: ${error.message}`);
+      updateHistoryCard("Base de SKU", { status: "Erro" });
+    } finally {
+      setLoadingSkuUpload(false);
     }
   }
 
@@ -1157,6 +1221,84 @@ export default function UploadPage() {
                 </div>
                 {tdResultado.duplicadosNoArquivo > 0 && <p>Repetidos no arquivo (ficou o último): <span className="font-bold text-amber-600">{tdResultado.duplicadosNoArquivo.toLocaleString("pt-BR")}</span></p>}
                 {tdResultado.semVoucher > 0 && <p>Linhas sem voucher ignoradas: <span className="font-bold text-amber-600">{tdResultado.semVoucher.toLocaleString("pt-BR")}</span></p>}
+              </div>
+            )}
+          </div>
+
+          {/* ── Base de SKU ─────────────────────────────── */}
+          <div className="rounded-[24px] bg-[#FCFAFF] p-5 ring-1 ring-[#E9D5FF]">
+            <div className="flex items-center gap-3">
+              <div className="rounded-2xl bg-[#7F2D92] p-2.5 text-white">
+                <Tags className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="text-sm font-black text-[#6B1F87]">Base de SKU</div>
+                <div className="text-xs text-slate-500">Catálogo Assurant — alimenta os dropdowns da Triagem Funcional</div>
+              </div>
+            </div>
+
+            <div className="mt-4 text-xs text-slate-500 bg-emerald-50 ring-1 ring-emerald-200 rounded-xl px-3 py-2">
+              📋 Planilha .xlsx com Tipo, SKU Oracle, SKU ALS, Marca, Modelo, Capacidade e Cor · substitui a base inteira (modelos cadastrados na bancada são preservados)
+            </div>
+
+            <div className="mt-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-[#E9D5FF]">
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={e => { setSkuFile(e.target.files?.[0] || null); setSkuPreview(null); setSkuResultado(null); }}
+                className="block w-full text-sm text-slate-600"
+              />
+              <div className="mt-3 text-sm font-medium">
+                {skuFile ? skuFile.name : "Nenhum arquivo selecionado"}
+              </div>
+              <div className="mt-1 text-xs text-slate-500">
+                {skuFile ? "Arquivo pronto para envio" : "Selecione a base de SKU"}
+              </div>
+            </div>
+
+            <div className="mt-4 flex gap-2">
+              <Button variant="outline" onClick={handlePreviewSku} disabled={!skuFile || loadingSkuPreview || loadingSkuUpload}>
+                {loadingSkuPreview ? "Validando..." : "Validar"}
+              </Button>
+              <Button onClick={handleUploadSku} disabled={!skuFile || loadingSkuUpload}>
+                {loadingSkuUpload ? "Importando..." : "Enviar arquivo"}
+              </Button>
+            </div>
+
+            {skuPreview && (
+              <div className="mt-4 rounded-2xl bg-white p-4 ring-1 ring-[#E9D5FF] space-y-1 text-xs text-slate-600">
+                <div className="text-sm font-bold text-[#6B1F87]">
+                  {skuPreview.totalLinhas.toLocaleString("pt-BR")} SKUs na planilha
+                </div>
+                {skuPreview.porTipo && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {Object.entries(skuPreview.porTipo).map(([nome, qtd]) => (
+                      <span key={nome} className={`inline-flex items-center rounded-lg px-2 py-0.5 text-xs font-semibold ${
+                        nome === "APARELHO" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"
+                      }`}>
+                        {nome} · {qtd.toLocaleString("pt-BR")}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {skuPreview.semSku > 0 && <p>Sem SKU ALS: <span className="font-bold text-amber-600">{skuPreview.semSku.toLocaleString("pt-BR")}</span></p>}
+                {skuPreview.semMarca > 0 && <p>Sem marca (serão ignoradas): <span className="font-bold text-amber-600">{skuPreview.semMarca.toLocaleString("pt-BR")}</span></p>}
+                {skuPreview.faltando?.length > 0 && (
+                  <p className="text-amber-700">Colunas esperadas que não vieram: <span className="font-bold">{skuPreview.faltando.join(", ")}</span></p>
+                )}
+                {skuPreview.naoMapeadas?.length > 0 && (
+                  <p className="text-slate-400">Colunas não reconhecidas (serão ignoradas): {skuPreview.naoMapeadas.join(", ")}</p>
+                )}
+              </div>
+            )}
+
+            {skuResultado && (
+              <div className="mt-4 rounded-2xl bg-white p-4 ring-1 ring-[#E9D5FF] space-y-1 text-xs text-slate-600">
+                <div className="text-sm font-bold text-emerald-700">
+                  ✓ {skuResultado.gravadas.toLocaleString("pt-BR")} SKUs gravados
+                </div>
+                <p>Aparelhos (entram na triagem): <span className="font-bold text-[#6B1F87]">{skuResultado.aparelhos.toLocaleString("pt-BR")}</span></p>
+                {skuResultado.ignoradas > 0 && <p>Linhas sem marca ou modelo ignoradas: <span className="font-bold text-amber-600">{skuResultado.ignoradas.toLocaleString("pt-BR")}</span></p>}
               </div>
             )}
           </div>
