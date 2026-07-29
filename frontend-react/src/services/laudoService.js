@@ -79,6 +79,33 @@ export async function carregarParaLaudo(voucher) {
   };
 }
 
+// Fila de aparelhos parados aguardando laudo. É o que a tela mostra ao abrir,
+// em vez de exigir que o operador saiba de cor qual voucher bipar.
+export async function listarAguardandoLaudo() {
+  const { data, error } = await supabase
+    .from("assurant_triagem")
+    .select("voucher, imei, modelo, sku, data_funcional, respostas_funcional, defeitos_adicionais")
+    .eq("status_atual", "Aguardando laudo")
+    .order("data_funcional", { ascending: true });
+  if (error) throw new Error(error.message);
+
+  return (data || []).map(t => {
+    let r = null;
+    try { r = JSON.parse(t.respostas_funcional || "null"); } catch { r = null; }
+    const divergencias = (r?.respostas || []).filter(x => x.divergente).length;
+    return {
+      voucher:   t.voucher,
+      imei:      t.imei,
+      modelo:    r?.produto?.modelo || t.modelo || null,
+      marca:     r?.produto?.marca || null,
+      motivo:    r?.destino?.motivo || null,
+      divergencias,
+      defeitos:  t.defeitos_adicionais || null,
+      desde:     t.data_funcional,
+    };
+  });
+}
+
 function linha(doc, y, titulo) {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);

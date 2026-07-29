@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 import {
   Search, Camera, Upload, RotateCcw, AlertTriangle, CheckCircle,
-  FileText, X,
+  FileText, X, RefreshCw, Loader,
 } from "lucide-react";
 import { useAuth } from "../AuthContext.jsx";
 import {
   carregarParaLaudo,
   salvarLaudo,
+  listarAguardandoLaudo,
   ETAPAS_FOTO,
 } from "../services/laudoService.js";
 
@@ -54,12 +55,23 @@ export default function LaudoPage() {
   const [observacao, setObservacao] = useState("");
   const [resultado, setResultado] = useState(null);
 
+  const [fila, setFila]           = useState([]);
+  const [carregandoFila, setCarregandoFila] = useState(true);
+
   const [camAtiva, setCamAtiva]   = useState(false);
   const [camErro, setCamErro]     = useState(null);
   const videoRef  = useRef(null);
   const streamRef = useRef(null);
 
   useEffect(() => () => pararCamera(), []);
+  useEffect(() => { carregarFila(); }, []);
+
+  async function carregarFila() {
+    setCarregandoFila(true);
+    try { setFila(await listarAguardandoLaudo()); }
+    catch (e) { erro(e.message); }
+    finally { setCarregandoFila(false); }
+  }
 
   function erro(msg) {
     setFeedback({ tipo: "erro", msg });
@@ -126,6 +138,19 @@ export default function LaudoPage() {
     setEtapa("voucher"); setBusca(""); setDados(null);
     setFotos([null, null, null, null]); setIdxFoto(0);
     setObservacao(""); setResultado(null); setCamErro(null);
+    carregarFila();
+  }
+
+  async function abrirVoucher(v) {
+    setBusca(v);
+    setCarregando(true);
+    try {
+      const r = await carregarParaLaudo(v);
+      if (!r.ok) { erro(r.erro); return; }
+      setDados(r);
+      setEtapa("fotos");
+    } catch (e) { erro(e.message); }
+    finally { setCarregando(false); }
   }
 
   async function handleConsultar() {
@@ -188,6 +213,67 @@ export default function LaudoPage() {
               {carregando ? "Buscando..." : "Consultar"}
             </button>
           </div>
+
+          <div className="mt-7 flex items-center justify-between">
+            <p className="text-sm font-bold text-slate-800">
+              Aguardando laudo ·{" "}
+              <span className="font-semibold text-slate-500">
+                {fila.length} {fila.length === 1 ? "aparelho" : "aparelhos"}
+              </span>
+            </p>
+            <button onClick={carregarFila} disabled={carregandoFila}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200 disabled:opacity-40">
+              <RefreshCw className={`h-3 w-3 ${carregandoFila ? "animate-spin" : ""}`} /> Atualizar
+            </button>
+          </div>
+
+          {carregandoFila ? (
+            <div className="flex items-center justify-center gap-2 py-8 text-sm text-slate-400">
+              <Loader className="h-4 w-4 animate-spin" /> Carregando fila...
+            </div>
+          ) : !fila.length ? (
+            <div className="mt-3 rounded-2xl bg-slate-50 py-8 text-center text-sm text-slate-400 ring-1 ring-slate-200">
+              Nenhum aparelho aguardando laudo.
+            </div>
+          ) : (
+            <div className="mt-3 overflow-x-auto rounded-2xl ring-1 ring-slate-200">
+              <table className="w-full min-w-[760px] text-[13px]">
+                <thead>
+                  <tr className="bg-slate-50 text-left text-slate-500">
+                    <th className="px-3 py-2.5 font-bold">Voucher</th>
+                    <th className="px-3 py-2.5 font-bold">IMEI</th>
+                    <th className="px-3 py-2.5 font-bold">Aparelho</th>
+                    <th className="px-3 py-2.5 font-bold">Motivo</th>
+                    <th className="px-3 py-2.5 font-bold">Parado desde</th>
+                    <th className="px-3 py-2.5" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {fila.map(i => (
+                    <tr key={i.voucher} className="border-t border-slate-100 hover:bg-slate-50/60">
+                      <td className="px-3 py-2.5 font-mono font-semibold text-slate-700">{i.voucher}</td>
+                      <td className="px-3 py-2.5 font-mono text-xs text-slate-600">{i.imei || "—"}</td>
+                      <td className="px-3 py-2.5 text-slate-700">
+                        {[i.marca, i.modelo].filter(Boolean).join(" ") || "—"}
+                      </td>
+                      <td className="px-3 py-2.5 text-xs text-slate-500">
+                        {i.motivo || `${i.divergencias} divergência(s)`}
+                      </td>
+                      <td className="px-3 py-2.5 text-xs text-slate-500">
+                        {i.desde ? new Date(i.desde).toLocaleDateString("pt-BR") : "—"}
+                      </td>
+                      <td className="px-3 py-2.5 text-right">
+                        <button onClick={() => abrirVoucher(i.voucher)} disabled={carregando}
+                          className="rounded-lg bg-[#7F2D92] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#6B1F87] disabled:opacity-40">
+                          Fazer laudo
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
