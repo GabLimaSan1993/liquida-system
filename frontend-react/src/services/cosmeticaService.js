@@ -78,13 +78,6 @@ export function exibicaoGrade({ grade, gradeCosmetica, rebaixado }) {
   return { texto: g, raio: !!rebaixado };
 }
 
-export function exibicaoGrade({ grade, gradeCosmetica, rebaixado }) {
-  const g = String(grade || "").toUpperCase().trim();
-  if (!g) return { texto: "—", raio: false };
-  if (g === "OUTLET") return { texto: gradeCosmetica || "OUTLET", raio: true };
-  return { texto: g, raio: !!rebaixado };
-}
-
 export async function buscarOpcoes() {
   const { data, error } = await supabase
     .from("cosmetica_opcoes")
