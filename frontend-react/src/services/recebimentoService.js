@@ -132,8 +132,30 @@ async function enviarParaTriagem(recebimentoId, userId) {
     (data || []).forEach(r => existentes.add(r.voucher));
   }
 
+  // Enquanto o Gaia ainda importa a planilha diária, o voucher pode já existir
+  // na base antes do recebimento ser concluído. Nesse caso não dá para ignorar:
+  // o aparelho chegou fisicamente e precisa entrar na fila. Então o que existe
+  // mas ainda não foi triado pelo Liquida é ATUALIZADO em vez de pulado.
   const novos = lista.filter(v => !existentes.has(v));
-  if (!novos.length) return { criados: 0, jaExistiam: lista.length };
+  const jaNaBase = lista.filter(v => existentes.has(v));
+
+  let reativados = 0;
+  for (let i = 0; i < jaNaBase.length; i += BLOCO) {
+    const { data: upd } = await supabase
+      .from("assurant_triagem")
+      .update({
+        status_atual:     "Aguardando triagem funcional",
+        origem_triagem:   "liquida",
+        data_recebimento: new Date().toISOString(),
+        atualizado_em:    new Date().toISOString(),
+      })
+      .in("voucher", jaNaBase.slice(i, i + BLOCO))
+      .is("data_funcional", null)   // só quem nunca foi triado pelo Liquida
+      .select("voucher");
+    reativados += (upd || []).length;
+  }
+
+  if (!novos.length) return { criados: 0, reativados, jaExistiam: jaNaBase.length - reativados };
 
   const agora = new Date().toISOString();
   const registros = novos.map(voucher => ({
@@ -152,7 +174,7 @@ async function enviarParaTriagem(recebimentoId, userId) {
     if (errIns) throw new Error(errIns.message);
   }
 
-  return { criados: novos.length, jaExistiam: lista.length - novos.length };
+  return { criados: novos.length, reativados, jaExistiam: jaNaBase.length - reativados };
 }
 
 // ── Buscar o romaneio completo (cabeçalho + vouchers) ──
