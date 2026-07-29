@@ -85,6 +85,12 @@ export async function consultarVoucher(voucher) {
     }
   }
 
+  // Aparelho que já passou pela funcional não pode ser retriado por aqui:
+  // o UNIQUE (voucher) faria o upsert apagar a triagem anterior. Em vez de
+  // sobrescrever, a tela informa em que etapa ele está e manda o operador
+  // para o lugar certo.
+  const etapa = etapaAtual(existente);
+
   return {
     ok: true,
     voucher: v,
@@ -92,8 +98,34 @@ export async function consultarVoucher(voucher) {
     tradein,
     temTradein: !!tradein,
     jaTriado: !!existente?.data_funcional,
+    bloqueado: !!etapa,
+    etapa,
     existente: existente || null,
   };
+}
+
+// Traduz o status_atual para uma etapa que o operador entenda, e diz onde
+// o aparelho deve ser tratado. Status desconhecido cai no genérico em vez
+// de liberar a triagem por engano.
+const ETAPAS = {
+  "Aguardando análise Assurant":      { nome: "Análise Assurant",      onde: "Aguardando tratativa da Assurant" },
+  "Aguardando laudo":                 { nome: "Laudo",                 onde: "Tela de Laudo" },
+  "Aguardando triagem cosmética":     { nome: "Triagem Cosmética",     onde: "Tela de Triagem Cosmética" },
+  "Aguardando oracle":                { nome: "Entrada no Oracle",     onde: "Tela de Entrada no Oracle" },
+  "Produto disponível":               { nome: "Disponível em estoque", onde: "Já entrou no Oracle e está no FIFO" },
+  "Em análise de estoque":            { nome: "Análise de estoque",    onde: "Aparelho não localizado na prateleira" },
+  "Aguardando alocação":              { nome: "Aguardando alocação",   onde: "Pronto para ser alocado em pedido" },
+};
+
+function etapaAtual(existente) {
+  if (!existente) return null;
+  const st = String(existente.status_atual || "").trim();
+  const conhecida = ETAPAS[st];
+  if (conhecida) return { ...conhecida, status: st, desde: existente.data_funcional || existente.criado_em };
+  if (existente.data_funcional) {
+    return { nome: st || "Já triado", onde: "Etapa não mapeada — confira com a supervisão", status: st, desde: existente.data_funcional };
+  }
+  return null;
 }
 
 // Compara em silêncio o que o operador preencheu com o que a TradeIn diz.
@@ -145,7 +177,8 @@ export async function registrarDivergenciaImei(voucher, imeiBipado, userId, imei
 }
 
 export async function salvarTriagemFuncional({
-  voucher, imei, canal, produto, respostas, bateria, defeitos, userId, tradein,
+  voucher, imei, canal, produto, respostas, bateria, bateriaPercentual,
+  defeitos, userId, tradein,
 }) {
   const v = String(voucher || "").trim().toUpperCase();
   if (!v)    return { ok: false, erro: "Voucher ausente." };
@@ -182,6 +215,7 @@ export async function salvarTriagemFuncional({
         cor:           produto?.cor           || null,
       },
       conferencia_tradein: conferencia,
+      bateria: { percentual: bateriaPercentual ?? null, faixa: bateria || null },
       respostas: lista.map(r => ({
         pergunta_id: r.perguntaId,
         pergunta:    r.pergunta,
@@ -191,6 +225,7 @@ export async function salvarTriagemFuncional({
     }),
 
     status_bateria:      bateria || null,
+    bateria_percentual:  Number.isFinite(Number(bateriaPercentual)) ? Number(bateriaPercentual) : null,
     defeitos_adicionais: (defeitos || []).length ? defeitos.join("; ") : null,
   };
 
@@ -267,4 +302,27 @@ export async function cadastrarModeloPendente(marca, modelo, capacidade, cor) {
   const { error } = await supabase.from("produtos_catalogo").insert(registro);
   if (error) throw new Error(error.message);
   return { ok: true, ...registro };
+}
+// ══════════════════════════════════════════════════════════
+// BATERIA — o operador digita o número, o sistema classifica
+// As faixas ficam em tabela para ajuste sem deploy. O rótulo
+// "Saúde da bateria entre 70 e 79%" é o que a Entrada no Oracle
+// compara para rebaixar a grade — não pode mudar de forma.
+// ══════════════════════════════════════════════════════════
+
+export async function buscarFaixasBateria() {
+  const { data, error } = await supabase
+    .from("bateria_faixas")
+    .select("minimo, maximo, rotulo")
+    .eq("ativo", true)
+    .order("ordem");
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
+export function classificarBateria(faixas, valor) {
+  const n = Number(valor);
+  if (!Number.isFinite(n) || n < 0 || n > 100) return null;
+  const f = (faixas || []).find(x => n >= x.minimo && n <= x.maximo);
+  return f ? f.rotulo : null;
 }

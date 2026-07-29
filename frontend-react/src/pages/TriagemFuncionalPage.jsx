@@ -12,15 +12,12 @@ import {
   salvarTriagemFuncional,
   carregarCatalogo,
   cadastrarModeloPendente,
+  buscarFaixasBateria,
+  classificarBateria,
   resolverSku,
 } from "../services/triagemFuncionalService.js";
 
-const BATERIA = [
-  { pergunta: "Saúde da bateria acima de 85%?",  sim: "Saúde da bateria acima de 85%" },
-  { pergunta: "Saúde da bateria acima de 80%?",  sim: "Saúde da bateria acima de 80%" },
-  { pergunta: "Saúde da bateria entre 70 e 79%?", sim: "Saúde da bateria entre 70 e 79%",
-    nao: "Saúde da bateria abaixo 70%" },
-];
+
 
 function Aviso({ tipo, children }) {
   const cor = tipo === "erro"
@@ -89,13 +86,15 @@ export default function TriagemFuncionalPage() {
   const [defeitosSel, setDefeitosSel]           = useState([]);
   const [defeitosTodos, setDefeitosTodos]       = useState([]);
 
-  const [passoBateria, setPassoBateria] = useState(0);
+  const [faixasBateria, setFaixasBateria] = useState([]);
+  const [valorBateria, setValorBateria]   = useState("");
   const [bateria, setBateria]           = useState(null);
   const [resultado, setResultado]       = useState(null);
 
   useEffect(() => {
     listarDefeitos().then(setDefeitosCatalogo).catch(() => {});
     carregarCatalogo().then(setCatalogo).catch(() => {});
+    buscarFaixasBateria().then(setFaixasBateria).catch(() => {});
   }, []);
 
   // Listas derivadas: modelo depende da marca, capacidade depende do modelo.
@@ -201,7 +200,7 @@ export default function TriagemFuncionalPage() {
   function avancar(lista = respostas) {
     const proximo = idx + 1;
     const p = perguntas[proximo];
-    if (p && p.tipo_resposta === "bateria") { setEtapa("bateria"); setPassoBateria(0); return; }
+    if (p && p.tipo_resposta === "bateria") { setEtapa("bateria"); setValorBateria(""); return; }
     if (!p) { finalizar(lista, null); return; }
     setIdx(proximo);
   }
@@ -214,14 +213,13 @@ export default function TriagemFuncionalPage() {
     avancar();
   }
 
-  function responderBateria(sim) {
-    const passo = BATERIA[passoBateria];
-    if (sim) { finalizar(respostas, passo.sim); return; }
-    if (passoBateria < BATERIA.length - 1) { setPassoBateria(passoBateria + 1); return; }
-    finalizar(respostas, passo.nao);
+  function confirmarBateria() {
+    const rotulo = classificarBateria(faixasBateria, valorBateria);
+    if (!rotulo) { erro("Informe a saúde da bateria entre 0 e 100."); return; }
+    finalizar(respostas, rotulo, Number(valorBateria));
   }
 
-  async function finalizar(lista, bat) {
+  async function finalizar(lista, bat, pct = null) {
     setBateria(bat);
     setCarregando(true);
     try {
@@ -240,12 +238,14 @@ export default function TriagemFuncionalPage() {
         },
         respostas: lista,
         bateria: bat,
+        bateriaPercentual: pct,
         defeitos: defeitosTodos,
         userId: user.id,
         tradein: ctx.tradein,
       });
       if (!r.ok) { erro(r.erro); return; }
-      setResultado({ ...r, bateria: bat, respostas: lista });
+      setResultado({ ...r, bateria: bat,
+        bateriaPercentual: pct, respostas: lista });
       setEtapa("fim");
     } catch (e) { erro(e.message); }
     finally { setCarregando(false); }
@@ -291,15 +291,33 @@ export default function TriagemFuncionalPage() {
       {/* ── 2. Produto ── */}
       {etapa === "produto" && ctx && (
         <div>
-          {ctx.jaTriado && (
-            <div className="mb-4">
-              <Aviso tipo="aviso">
-                Este voucher já passou pela triagem funcional em{" "}
-                {new Date(ctx.existente.data_funcional).toLocaleDateString("pt-BR")}
-                {ctx.existente.grade ? ` · grade ${ctx.existente.grade}` : ""}. Seguir sobrescreve a triagem anterior.
-              </Aviso>
+          {ctx.bloqueado && (
+            <div className="rounded-2xl bg-amber-50 p-5 ring-1 ring-amber-200">
+              <p className="text-base font-bold text-amber-800">
+                <AlertTriangle className="mr-1.5 inline h-4 w-4" />
+                Este aparelho já foi triado
+              </p>
+              <p className="mt-2 text-sm text-amber-800">
+                Etapa atual: <span className="font-bold">{ctx.etapa.nome}</span>
+              </p>
+              <p className="text-sm text-amber-700">{ctx.etapa.onde}</p>
+              {ctx.etapa.desde && (
+                <p className="mt-1 text-xs text-amber-600">
+                  Desde {new Date(ctx.etapa.desde).toLocaleString("pt-BR", {
+                    day: "2-digit", month: "2-digit", year: "numeric",
+                    hour: "2-digit", minute: "2-digit",
+                  })}
+                </p>
+              )}
+              <button onClick={reiniciar}
+                className="mt-4 rounded-xl bg-[#7F2D92] px-5 py-2 text-sm font-bold text-white hover:bg-[#6B1F87]">
+                Bipar outro voucher
+              </button>
             </div>
           )}
+
+          {!ctx.bloqueado && (
+          <>
           {!ctx.temTradein && ctx.canal === "YBV" && (
             <div className="mb-4">
               <Aviso tipo="aviso">
@@ -387,6 +405,8 @@ export default function TriagemFuncionalPage() {
             className="mt-5 rounded-xl bg-[#7F2D92] px-5 py-2 text-sm font-bold text-white hover:bg-[#6B1F87] disabled:opacity-40 disabled:cursor-not-allowed">
             Salvar e continuar
           </button>
+          </>
+          )}
         </div>
       )}
 
@@ -495,18 +515,27 @@ export default function TriagemFuncionalPage() {
         <div>
           <BarraContexto voucher={ctx.voucher} imei={imeiDigitado} produto={produto} />
           <p className="mb-4 text-[15px] font-semibold text-slate-800">
-            {BATERIA[passoBateria].pergunta}
+            Qual a saúde da bateria?
           </p>
-          <div className="flex gap-3">
-            <button onClick={() => responderBateria(true)}
-              className="flex-1 rounded-xl bg-[#7F2D92] py-3 text-sm font-bold text-white hover:bg-[#6B1F87]">
-              Sim
-            </button>
-            <button onClick={() => responderBateria(false)}
-              className="flex-1 rounded-xl bg-rose-600 py-3 text-sm font-bold text-white hover:bg-rose-700">
-              Não
+          <div className="flex items-center gap-3">
+            <div className="relative w-40">
+              <input autoFocus type="number" min={0} max={100} value={valorBateria}
+                onChange={e => setValorBateria(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && confirmarBateria()}
+                placeholder="0 a 100"
+                className={`${inputCls} pr-8 text-center font-mono text-lg`} />
+              <span className="absolute right-3 top-2.5 text-sm text-slate-400">%</span>
+            </div>
+            <button onClick={confirmarBateria} disabled={valorBateria === ""}
+              className="rounded-xl bg-[#7F2D92] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#6B1F87] disabled:opacity-40">
+              Confirmar
             </button>
           </div>
+          {classificarBateria(faixasBateria, valorBateria) && (
+            <p className="mt-3 text-xs text-slate-500">
+              Classificação: <span className="font-bold text-slate-700">{classificarBateria(faixasBateria, valorBateria)}</span>
+            </p>
+          )}
           <Progresso atual={perguntas.length - 1} total={perguntas.length} />
         </div>
       )}
