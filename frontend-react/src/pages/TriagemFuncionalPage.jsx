@@ -189,7 +189,7 @@ export default function TriagemFuncionalPage() {
 
     const nova = [...respostas, {
       perguntaId: p.id, pergunta: p.texto, resposta: valor,
-      divergente, geraLaudo: divergente && p.gera_laudo,
+      divergente, geraLaudo: divergente && p.gera_laudo, bloqueante: !!p.bloqueante,
     }];
     setRespostas(nova);
 
@@ -559,11 +559,14 @@ export default function TriagemFuncionalPage() {
                   </span>
                 )}
               </div>
-              <p className="mb-4 text-sm text-slate-500">
+              <p className="mb-1 text-sm text-slate-500">
                 Próxima etapa: <span className="font-semibold text-slate-700">
                   {resultado.precisaLaudo ? "Laudo" : "Triagem cosmética"}
                 </span>
               </p>
+              {resultado.motivoDestino && (
+                <p className="mb-4 text-xs text-slate-400">{resultado.motivoDestino}</p>
+              )}
 
               <div className="border-t border-slate-100 pt-3">
                 {resultado.respostas?.map((r, i) => (

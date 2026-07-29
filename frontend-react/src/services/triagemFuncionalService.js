@@ -31,7 +31,7 @@ export function canalDoVoucher(voucher) {
 export async function buscarPerguntas(tipo, marca = null, etapa = "funcional") {
   const { data, error } = await supabase
     .from("triagem_perguntas")
-    .select("id, ordem, texto, tipo_resposta, resposta_ok, exige_defeito, gera_laudo, so_marcas")
+    .select("id, ordem, texto, tipo_resposta, resposta_ok, exige_defeito, gera_laudo, so_marcas, bloqueante")
     .eq("tipo", tipo)
     .eq("etapa", etapa)
     .eq("ativo", true)
@@ -176,6 +176,43 @@ export async function registrarDivergenciaImei(voucher, imeiBipado, userId, imei
   return { ok: true, status: STATUS_DIVERGENCIA };
 }
 
+// ══════════════════════════════════════════════════════════
+// DESTINO APÓS A FUNCIONAL
+// O laudo existe para sustentar divergência: a loja declarou uma condição
+// e o aparelho chegou em outra. Se a loja já declarou "Defeituoso", achar
+// defeito é o esperado e não precisa de laudo.
+// Exceção: pergunta marcada como bloqueante (aparelho que não liga) manda
+// para laudo sempre — não se compra aparelho que não liga, em nenhuma condição.
+// ══════════════════════════════════════════════════════════
+export function decidirDestino({ condicaoDeclarada, respostas }) {
+  const lista = Array.isArray(respostas) ? respostas : [];
+  const negativas = lista.filter(r => r.divergente);
+  const bloqueio  = negativas.find(r => r.bloqueante);
+
+  if (bloqueio) {
+    return { laudo: true, motivo: `Reprovou em pergunta eliminatória: ${bloqueio.pergunta}` };
+  }
+
+  const cond = String(condicaoDeclarada || "").toUpperCase().trim();
+  const declaradoDefeituoso = cond.startsWith("DEFEIT");
+
+  if (!negativas.length) {
+    return { laudo: false, motivo: declaradoDefeituoso
+      ? "Sem divergências, embora a loja tenha declarado defeituoso"
+      : "Sem divergências" };
+  }
+
+  if (declaradoDefeituoso) {
+    return { laudo: false, motivo: `Defeito esperado — loja declarou ${condicaoDeclarada}` };
+  }
+
+  // Sem condição declarada (canal fora da TradeIn) cai aqui de propósito:
+  // na dúvida, exige laudo em vez de deixar passar.
+  return { laudo: true, motivo: condicaoDeclarada
+    ? `Loja declarou ${condicaoDeclarada}, mas foram encontradas ${negativas.length} divergência(s)`
+    : `Sem condição declarada e ${negativas.length} divergência(s)` };
+}
+
 export async function salvarTriagemFuncional({
   voucher, imei, canal, produto, respostas, bateria, bateriaPercentual,
   defeitos, userId, tradein,
@@ -186,7 +223,11 @@ export async function salvarTriagemFuncional({
 
   const lista = Array.isArray(respostas) ? respostas : [];
   const negativas = lista.filter(r => r.divergente);
-  const temLaudo  = negativas.some(r => r.geraLaudo);
+  const decisao   = decidirDestino({
+    condicaoDeclarada: tradein?.condicao_aparelho,
+    respostas: lista,
+  });
+  const temLaudo  = decisao.laudo;
   const conferencia = conferirComTradein(produto, tradein);
 
   const agora = new Date().toISOString();
@@ -215,6 +256,7 @@ export async function salvarTriagemFuncional({
         cor:           produto?.cor           || null,
       },
       conferencia_tradein: conferencia,
+      destino: { laudo: decisao.laudo, motivo: decisao.motivo, condicao_declarada: tradein?.condicao_aparelho || null },
       bateria: { percentual: bateriaPercentual ?? null, faixa: bateria || null },
       respostas: lista.map(r => ({
         pergunta_id: r.perguntaId,
@@ -241,6 +283,7 @@ export async function salvarTriagemFuncional({
     id: data.id,
     status: data.status_atual,
     precisaLaudo: temLaudo,
+    motivoDestino: decisao.motivo,
     divergencias: negativas.length,
     conferencia,
   };
