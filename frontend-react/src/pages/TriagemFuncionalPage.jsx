@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import {
-  Search, CheckCircle, AlertTriangle, Loader, RotateCcw, ArrowLeft,
+  Search, CheckCircle, AlertTriangle, Loader, RotateCcw, ArrowLeft, RefreshCw,
 } from "lucide-react";
 import { useAuth } from "../AuthContext.jsx";
 import {
@@ -13,6 +13,7 @@ import {
   carregarCatalogo,
   cadastrarModeloPendente,
   buscarFaixasBateria,
+  listarAguardandoFuncional,
   classificarBateria,
   resolverSku,
 } from "../services/triagemFuncionalService.js";
@@ -91,10 +92,14 @@ export default function TriagemFuncionalPage() {
   const [bateria, setBateria]           = useState(null);
   const [resultado, setResultado]       = useState(null);
 
+  const [fila, setFila]                 = useState([]);
+  const [carregandoFila, setCarregandoFila] = useState(true);
+
   useEffect(() => {
     listarDefeitos().then(setDefeitosCatalogo).catch(() => {});
     carregarCatalogo().then(setCatalogo).catch(() => {});
     buscarFaixasBateria().then(setFaixasBateria).catch(() => {});
+    carregarFila();
   }, []);
 
   // Listas derivadas: modelo depende da marca, capacidade depende do modelo.
@@ -110,6 +115,13 @@ export default function TriagemFuncionalPage() {
     .map(p => p.cor).filter(Boolean))].sort();
   const produtoCompleto = produto.marca && produto.modelo && produto.armazenamento && produto.cor;
 
+  async function carregarFila() {
+    setCarregandoFila(true);
+    try { setFila(await listarAguardandoFuncional()); }
+    catch (e) { erro(e.message); }
+    finally { setCarregandoFila(false); }
+  }
+
   function erro(msg) {
     setFeedback({ tipo: "erro", msg });
     setTimeout(() => setFeedback(null), 6000);
@@ -122,6 +134,21 @@ export default function TriagemFuncionalPage() {
     setPassoBateria(0); setBateria(null); setResultado(null);
     setProduto({ marca: "", modelo: "", armazenamento: "", cor: "" });
     setModeloLivre(false);
+    carregarFila();
+  }
+
+  async function abrirVoucher(v) {
+    setBusca(v);
+    setCarregando(true);
+    try {
+      const r = await consultarVoucher(v);
+      if (!r.ok) { erro(r.erro); return; }
+      setCtx(r);
+      setProduto({ marca: "", modelo: "", armazenamento: "", cor: "" });
+      setModeloLivre(false);
+      setEtapa("produto");
+    } catch (e) { erro(e.message); }
+    finally { setCarregando(false); }
   }
 
   async function handleConsultar() {
@@ -285,6 +312,65 @@ export default function TriagemFuncionalPage() {
               {carregando ? "Buscando..." : "Consultar"}
             </button>
           </div>
+
+          <div className="mt-7 flex items-center justify-between">
+            <p className="text-sm font-bold text-slate-800">
+              Aguardando triagem funcional ·{" "}
+              <span className="font-semibold text-slate-500">
+                {fila.length} {fila.length === 1 ? "aparelho" : "aparelhos"}
+              </span>
+            </p>
+            <button onClick={carregarFila} disabled={carregandoFila}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200 disabled:opacity-40">
+              <RefreshCw className={`h-3 w-3 ${carregandoFila ? "animate-spin" : ""}`} /> Atualizar
+            </button>
+          </div>
+
+          {carregandoFila ? (
+            <div className="flex items-center justify-center gap-2 py-8 text-sm text-slate-400">
+              <Loader className="h-4 w-4 animate-spin" /> Carregando fila...
+            </div>
+          ) : !fila.length ? (
+            <div className="mt-3 rounded-2xl bg-slate-50 py-8 text-center text-sm text-slate-400 ring-1 ring-slate-200">
+              Nenhum aparelho aguardando triagem funcional.
+            </div>
+          ) : (
+            <div className="mt-3 overflow-x-auto rounded-2xl ring-1 ring-slate-200">
+              <table className="w-full min-w-[700px] text-[13px]">
+                <thead>
+                  <tr className="bg-slate-50 text-left text-slate-500">
+                    <th className="px-3 py-2.5 font-bold">Voucher</th>
+                    <th className="px-3 py-2.5 font-bold">IMEI</th>
+                    <th className="px-3 py-2.5 font-bold">Situação</th>
+                    <th className="px-3 py-2.5 font-bold">Recebido em</th>
+                    <th className="px-3 py-2.5" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {fila.map(i => (
+                    <tr key={i.voucher} className="border-t border-slate-100 hover:bg-slate-50/60">
+                      <td className="px-3 py-2.5 font-mono font-semibold text-slate-700">{i.voucher}</td>
+                      <td className="px-3 py-2.5 font-mono text-xs text-slate-500">{i.imei || "—"}</td>
+                      <td className="px-3 py-2.5">
+                        {i.devolvido
+                          ? <span className="rounded-md bg-amber-50 px-1.5 py-0.5 text-[11px] font-bold text-amber-700" title={i.motivo}>devolvido pela cosmética</span>
+                          : <span className="text-xs text-slate-400">do recebimento</span>}
+                      </td>
+                      <td className="px-3 py-2.5 text-xs text-slate-500">
+                        {i.desde ? new Date(i.desde).toLocaleDateString("pt-BR") : "—"}
+                      </td>
+                      <td className="px-3 py-2.5 text-right">
+                        <button onClick={() => abrirVoucher(i.voucher)} disabled={carregando}
+                          className="rounded-lg bg-[#7F2D92] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#6B1F87] disabled:opacity-40">
+                          Triar
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 

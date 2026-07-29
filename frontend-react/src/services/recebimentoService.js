@@ -102,7 +102,57 @@ export async function concluirRecebimento(recebimentoId, userId) {
     .select()
     .single();
   if (error) return { ok: false, erro: error.message };
-  return { ok: true, recebimento: data, total };
+
+  const fila = await enviarParaTriagem(recebimentoId, userId);
+  return { ok: true, recebimento: data, total, fila };
+}
+
+// Fecha a passagem de bastão: cada voucher bipado na doca vira uma linha em
+// assurant_triagem aguardando triagem funcional. Sem isso o recebimento é um
+// beco sem saída — o aparelho existe fisicamente mas não aparece em fila nenhuma.
+async function enviarParaTriagem(recebimentoId, userId) {
+  const { data: vouchers, error } = await supabase
+    .from("recebimento_vouchers")
+    .select("voucher, bipado_em")
+    .eq("recebimento_id", recebimentoId);
+  if (error) throw new Error(error.message);
+  if (!vouchers?.length) return { criados: 0, jaExistiam: 0 };
+
+  const lista = [...new Set(vouchers.map(v => String(v.voucher).trim().toUpperCase()))];
+
+  // Aparelho que já está na base não pode ser reaberto: pode estar em triagem,
+  // no Oracle ou já vendido. Só entram vouchers inéditos.
+  const existentes = new Set();
+  const BLOCO = 200;
+  for (let i = 0; i < lista.length; i += BLOCO) {
+    const { data } = await supabase
+      .from("assurant_triagem")
+      .select("voucher")
+      .in("voucher", lista.slice(i, i + BLOCO));
+    (data || []).forEach(r => existentes.add(r.voucher));
+  }
+
+  const novos = lista.filter(v => !existentes.has(v));
+  if (!novos.length) return { criados: 0, jaExistiam: lista.length };
+
+  const agora = new Date().toISOString();
+  const registros = novos.map(voucher => ({
+    voucher,
+    status_atual:     "Aguardando triagem funcional",
+    origem_triagem:   "liquida",
+    data_recebimento: agora,
+    uploaded_by:      userId,
+    atualizado_em:    agora,
+  }));
+
+  for (let i = 0; i < registros.length; i += BLOCO) {
+    const { error: errIns } = await supabase
+      .from("assurant_triagem")
+      .insert(registros.slice(i, i + BLOCO));
+    if (errIns) throw new Error(errIns.message);
+  }
+
+  return { criados: novos.length, jaExistiam: lista.length - novos.length };
 }
 
 // ── Buscar o romaneio completo (cabeçalho + vouchers) ──

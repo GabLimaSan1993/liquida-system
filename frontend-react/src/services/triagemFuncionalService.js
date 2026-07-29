@@ -45,6 +45,27 @@ export async function buscarPerguntas(tipo, marca = null, etapa = "funcional") {
   });
 }
 
+// Fila da tela inicial: o que o recebimento entregou e ainda não foi triado,
+// mais o que a cosmética devolveu por problema funcional.
+export async function listarAguardandoFuncional() {
+  const { data, error } = await supabase
+    .from("assurant_triagem")
+    .select("voucher, imei, modelo, status_atual, data_recebimento, condicao, reanalise, criado_em")
+    .eq("status_atual", "Aguardando triagem funcional")
+    .eq("origem_triagem", "liquida")
+    .order("data_recebimento", { ascending: true, nullsFirst: false });
+  if (error) throw new Error(error.message);
+
+  return (data || []).map(t => ({
+    voucher:   t.voucher,
+    imei:      t.imei,
+    modelo:    t.modelo,
+    devolvido: t.reanalise === "Sim",
+    motivo:    t.reanalise === "Sim" ? (t.condicao || "Devolvido pela cosmética") : null,
+    desde:     t.data_recebimento || t.criado_em,
+  }));
+}
+
 export async function listarDefeitos() {
   const { data, error } = await supabase
     .from("triagem_defeitos")
