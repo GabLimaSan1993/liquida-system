@@ -165,11 +165,15 @@ function MenuAssurant({ onClose, telas }) {
             )}
           </SubGroup>
         )}
-        {tem("/triagens/entrada-oracle") && (
+        {(tem("/triagens/entrada-oracle") || tem("/triagens/funcional")) && (
           <SubGroup icon={FlaskConical} label="Triagens" paths={["/triagens"]}>
-            <NavItem to="/triagens/entrada-oracle" icon={ClipboardList} label="Entrada no Oracle" indent onClick={onClose} />
-            <NavItemDisabled icon={Wrench}   label="Triagem Funcional" indent />
+            {tem("/triagens/funcional") && (
+              <NavItem to="/triagens/funcional" icon={Wrench} label="Triagem Funcional" indent onClick={onClose} />
+            )}
             <NavItemDisabled icon={Sparkles} label="Triagem Cosmética" indent />
+            {tem("/triagens/entrada-oracle") && (
+              <NavItem to="/triagens/entrada-oracle" icon={ClipboardList} label="Entrada no Oracle" indent onClick={onClose} />
+            )}
           </SubGroup>
         )}
         {(tem("/b2b/picking") || tem("/b2b/embalagem") || tem("/b2b/faturamento") || tem("/b2b/painel")) && (
@@ -298,9 +302,9 @@ function SidebarContent({ profile, onClose, handleLogout }) {
                 <NavItem to="/recebimento/gestao" icon={ClipboardList}   label="Gestão Recebimento" indent onClick={onClose} />
               </SubGroup>
               <SubGroup icon={FlaskConical} label="Triagens" paths={["/triagens"]}>
-                <NavItem to="/triagens/entrada-oracle" icon={ClipboardList} label="Entrada no Oracle" indent onClick={onClose} />
-                <NavItemDisabled icon={Wrench}   label="Triagem Funcional" indent />
+                <NavItem to="/triagens/funcional"      icon={Wrench}        label="Triagem Funcional" indent onClick={onClose} />
                 <NavItemDisabled icon={Sparkles} label="Triagem Cosmética" indent />
+                <NavItem to="/triagens/entrada-oracle" icon={ClipboardList} label="Entrada no Oracle" indent onClick={onClose} />
               </SubGroup>
               <SubGroup icon={Box} label="B2B" paths={["/b2b"]}>
                 <NavItem to="/b2b/picking"        icon={ScanLine}        label="Picking B2B"       indent onClick={onClose} />

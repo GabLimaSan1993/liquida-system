@@ -35,6 +35,7 @@ const PAGE_META = {
   "/b2c/expedicao":                { title: "Expedição B2C",             subtitle: "Assurant Warehouse · Romaneio por canal — bipagem de chave da NF e etiqueta" },
   "/inventario":                   { title: "Inventário Cíclico",        subtitle: "Assurant Warehouse · Contagem por endereço, divergências e acuracidade" },
   "/triagens/entrada-oracle":      { title: "Entrada no Oracle",         subtitle: "Triagens · Confirmação de entrada, RI e nota por voucher" },
+  "/triagens/funcional":           { title: "Triagem Funcional",         subtitle: "Triagens · Validação de IMEI, perguntas e defeitos" },
 };
 
 export default function MainLayout() {
