@@ -12,6 +12,7 @@ import {
   salvarTriagemFuncional,
   carregarCatalogo,
   cadastrarModeloPendente,
+  resolverSku,
 } from "../services/triagemFuncionalService.js";
 
 const BATERIA = [
@@ -80,7 +81,7 @@ export default function TriagemFuncionalPage() {
   const [idx, setIdx]             = useState(0);
   const [respostas, setRespostas] = useState([]);
 
-  const [catalogo, setCatalogo]   = useState({ produtos: [], cores: [] });
+  const [catalogo, setCatalogo]   = useState({ produtos: [] });
   const [modeloLivre, setModeloLivre] = useState(false);
 
   const [defeitosCatalogo, setDefeitosCatalogo] = useState([]);
@@ -103,7 +104,11 @@ export default function TriagemFuncionalPage() {
     .filter(p => p.marca === produto.marca).map(p => p.modelo))].sort();
   const capacidades = [...new Set(catalogo.produtos
     .filter(p => p.marca === produto.marca && p.modelo === produto.modelo)
-    .map(p => p.armazenamento).filter(Boolean))].sort();
+    .map(p => p.capacidade).filter(Boolean))].sort();
+  const cores = [...new Set(catalogo.produtos
+    .filter(p => p.marca === produto.marca && p.modelo === produto.modelo
+              && p.capacidade === produto.armazenamento)
+    .map(p => p.cor).filter(Boolean))].sort();
   const produtoCompleto = produto.marca && produto.modelo && produto.armazenamento && produto.cor;
 
   function erro(msg) {
@@ -138,7 +143,7 @@ export default function TriagemFuncionalPage() {
 
   async function handleSalvarProduto() {
     if (modeloLivre && produto.marca && produto.modelo) {
-      try { await cadastrarModeloPendente(produto.marca, produto.modelo, produto.armazenamento); }
+      try { await cadastrarModeloPendente(produto.marca, produto.modelo, produto.armazenamento, produto.cor); }
       catch { /* cadastro pendente não pode travar a bancada */ }
     }
     setEtapa("imei");
@@ -224,7 +229,15 @@ export default function TriagemFuncionalPage() {
         voucher: ctx.voucher,
         imei:    imeiDigitado.trim(),
         canal:   ctx.canal,
-        produto: { ...produto, sku: ctx.tradein?.sku_base || null },
+        produto: {
+          ...produto,
+          // SKU resolvido pela combinação escolhida. Não aparece na triagem —
+          // o operador só vê o SKU na alocação.
+          sku: resolverSku(catalogo.produtos, {
+            marca: produto.marca, modelo: produto.modelo,
+            capacidade: produto.armazenamento, cor: produto.cor,
+          }).sku || ctx.tradein?.sku_base || null,
+        },
         respostas: lista,
         bateria: bat,
         defeitos: defeitosTodos,
@@ -304,7 +317,7 @@ export default function TriagemFuncionalPage() {
             <div>
               <label className="mb-1 block text-xs font-bold text-slate-600">Marca</label>
               <select value={produto.marca} className={inputCls}
-                onChange={e => { setProduto({ marca: e.target.value, modelo: "", armazenamento: "", cor: produto.cor }); setModeloLivre(false); }}>
+                onChange={e => { setProduto({ marca: e.target.value, modelo: "", armazenamento: "", cor: "" }); setModeloLivre(false); }}>
                 <option value="">Selecione...</option>
                 {marcas.map(m => <option key={m} value={m}>{m}</option>)}
               </select>
@@ -319,8 +332,8 @@ export default function TriagemFuncionalPage() {
               ) : (
                 <select value={produto.modelo} disabled={!produto.marca} className={inputCls}
                   onChange={e => {
-                    if (e.target.value === "__outro__") { setModeloLivre(true); setProduto({ ...produto, modelo: "", armazenamento: "" }); return; }
-                    setProduto({ ...produto, modelo: e.target.value, armazenamento: "" });
+                    if (e.target.value === "__outro__") { setModeloLivre(true); setProduto({ ...produto, modelo: "", armazenamento: "", cor: "" }); return; }
+                    setProduto({ ...produto, modelo: e.target.value, armazenamento: "", cor: "" });
                   }}>
                   <option value="">{produto.marca ? "Selecione..." : "Escolha a marca"}</option>
                   {modelos.map(m => <option key={m} value={m}>{m}</option>)}
@@ -343,7 +356,7 @@ export default function TriagemFuncionalPage() {
                   className={inputCls} />
               ) : (
                 <select value={produto.armazenamento} disabled={!produto.modelo} className={inputCls}
-                  onChange={e => setProduto({ ...produto, armazenamento: e.target.value })}>
+                  onChange={e => setProduto({ ...produto, armazenamento: e.target.value, cor: "" })}>
                   <option value="">{produto.modelo ? "Selecione..." : "Escolha o modelo"}</option>
                   {capacidades.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
@@ -352,11 +365,17 @@ export default function TriagemFuncionalPage() {
 
             <div>
               <label className="mb-1 block text-xs font-bold text-slate-600">Cor</label>
-              <select value={produto.cor} className={inputCls}
-                onChange={e => setProduto({ ...produto, cor: e.target.value })}>
-                <option value="">Selecione...</option>
-                {catalogo.cores.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
+              {modeloLivre || (produto.armazenamento && !cores.length) ? (
+                <input value={produto.cor} placeholder="Ex: BLACK"
+                  onChange={e => setProduto({ ...produto, cor: e.target.value.toUpperCase() })}
+                  className={inputCls} />
+              ) : (
+                <select value={produto.cor} disabled={!produto.armazenamento} className={inputCls}
+                  onChange={e => setProduto({ ...produto, cor: e.target.value })}>
+                  <option value="">{produto.armazenamento ? "Selecione..." : "Escolha a capacidade"}</option>
+                  {cores.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              )}
             </div>
           </div>
 

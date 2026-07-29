@@ -216,35 +216,55 @@ export async function salvarTriagemFuncional({
 // na tela. Evita uma consulta a cada dropdown aberto na bancada.
 // ══════════════════════════════════════════════════════════
 
-export async function carregarCatalogo() {
-  const [prod, cor] = await Promise.all([
-    supabase.from("produtos_catalogo")
-      .select("marca, modelo, armazenamento")
-      .eq("ativo", true)
-      .order("marca").order("modelo"),
-    supabase.from("cores_catalogo")
-      .select("nome").eq("ativo", true).order("nome"),
-  ]);
-  if (prod.error) throw new Error(prod.error.message);
-  if (cor.error)  throw new Error(cor.error.message);
-  return { produtos: prod.data || [], cores: (cor.data || []).map(c => c.nome) };
+export async function carregarCatalogo(tipo = "APARELHO") {
+  // Traz o catálogo inteiro de aparelhos (~3.6 mil linhas) numa consulta só.
+  // A cor vem daqui, em inglês, porque é parte da chave que resolve o SKU.
+  const { data, error } = await supabase
+    .from("produtos_catalogo")
+    .select("marca, modelo, capacidade, cor, sku_als, sku_oracle, pendente")
+    .eq("tipo", tipo)
+    .eq("ativo", true)
+    .order("marca").order("modelo")
+    .limit(10000);
+  if (error) throw new Error(error.message);
+  return { produtos: data || [] };
+}
+
+// Resolve o SKU a partir dos quatro campos escolhidos. Se houver mais de um
+// cadastro para a mesma combinação (existe 1 caso na base), fica o não-pendente.
+export function resolverSku(produtos, { marca, modelo, capacidade, cor }) {
+  const eq = (a, b) => String(a || "").toUpperCase().trim() === String(b || "").toUpperCase().trim();
+  const achados = (produtos || []).filter(p =>
+    eq(p.marca, marca) && eq(p.modelo, modelo) &&
+    eq(p.capacidade, capacidade) && eq(p.cor, cor)
+  );
+  if (!achados.length) return { sku: null, skuOracle: null, ambiguo: false, achados: 0 };
+  const escolhido = achados.find(p => !p.pendente) || achados[0];
+  return {
+    sku:       escolhido.sku_als || null,
+    skuOracle: escolhido.sku_oracle || null,
+    ambiguo:   achados.length > 1,
+    achados:   achados.length,
+  };
 }
 
 // Modelo que o operador não achou na lista. Entra como pendente para
 // revisão depois, sem travar a bancada esperando cadastro.
-export async function cadastrarModeloPendente(marca, modelo, armazenamento) {
+export async function cadastrarModeloPendente(marca, modelo, capacidade, cor) {
   const registro = {
-    marca:         String(marca || "").trim().toUpperCase(),
-    modelo:        String(modelo || "").trim().toUpperCase(),
-    armazenamento: String(armazenamento || "").trim().toUpperCase() || null,
-    pendente:      true,
+    tipo:       "APARELHO",
+    marca:      String(marca || "").trim().toUpperCase(),
+    modelo:     String(modelo || "").trim().toUpperCase(),
+    capacidade: String(capacidade || "").trim().toUpperCase() || null,
+    cor:        String(cor || "").trim().toUpperCase() || null,
+    pendente:   true,
   };
   if (!registro.marca || !registro.modelo) {
     return { ok: false, erro: "Marca e modelo são obrigatórios." };
   }
-  const { error } = await supabase
-    .from("produtos_catalogo")
-    .upsert(registro, { onConflict: "marca,modelo,armazenamento" });
+  // Sem onConflict: a tabela não tem mais UNIQUE na combinação, porque a
+  // base oficial tem um caso legítimo de duplicata.
+  const { error } = await supabase.from("produtos_catalogo").insert(registro);
   if (error) throw new Error(error.message);
   return { ok: true, ...registro };
 }
