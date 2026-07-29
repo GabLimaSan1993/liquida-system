@@ -5,6 +5,7 @@ import {
   Layers, ArrowRight, Loader, RefreshCw,
   FileText, Store, MapPin, Ticket, Download, Upload, Lock, Unlock,
   Scale, Clock3, FileWarning, HelpCircle, CornerUpLeft, Building2, Palette, Ban,
+  Calendar, TrendingUp,
 } from "lucide-react";
 import {
   listarPedidosAguardandoAlocacao,
@@ -41,7 +42,9 @@ import {
 } from "../services/pedidosB2CService.js";
 import { useAuth } from "../AuthContext.jsx";
 
-function fmtR(v) { return v != null ? `R$ ${Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "—"; }
+const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+
+function fmtR(v) { return v != null ? `R$ ${Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"; }
 function fmtN(v) { return (v || 0).toLocaleString("pt-BR"); }
 function fmtData(d) { if (!d) return "—"; return new Date(d).toLocaleString("pt-BR"); }
 
@@ -1260,6 +1263,9 @@ function TabFaturamento() {
   const [faturados, setFaturados]           = useState([]);
   const [loadingFat, setLoadingFat]         = useState(false);
   const [carregouFat, setCarregouFat]       = useState(false);
+  const [soAtrasados, setSoAtrasados]       = useState(false);
+  const [filtroAno, setFiltroAno]           = useState("todos");
+  const [filtroMes, setFiltroMes]           = useState("todos");
   const inputRefs = useRef({});
 
   useEffect(() => { carregar(); }, []);
@@ -1360,41 +1366,84 @@ function TabFaturamento() {
   const gruposBaixados    = grupos.filter(g => (g.totalDownloads || 0) > 0).length;
   const gruposNaoBaixados = grupos.length - gruposBaixados;
 
-  // Contadores da lista de faturados
-  const totalPedidosFat = faturados.reduce((acc, g) => acc + (g.faturados || 0), 0);
-  const hojeBR = new Date().toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
-  const gruposFatHoje = faturados.filter(g =>
-    g.faturadoEm && new Date(g.faturadoEm).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) === hojeBR
-  ).length;
+  // Grupos parados: embalados há mais de DIAS_ATRASO sem nota emitida.
+  const DIAS_ATRASO = 2;
+  const gruposAtrasados = grupos.filter(g => (g.diasParado || 0) >= DIAS_ATRASO);
+  const gruposVis = soAtrasados ? gruposAtrasados : grupos;
+
+  // ── Faturados: filtro de período aplicado por data de faturamento ──
+  const mesDe = (iso) => { const d = new Date(iso); return { ano: d.getFullYear(), mes: d.getMonth() + 1 }; };
+  const todosPedFat = faturados.flatMap(g => (g.pedidosFat || []).filter(p => p.faturadoEm));
+  const anosFat = [...new Set(todosPedFat.map(p => mesDe(p.faturadoEm).ano))].sort((a, b) => b - a);
+  const mesesFat = [...new Set(todosPedFat.map(p => mesDe(p.faturadoEm).mes))].sort((a, b) => a - b);
+
+  const noPeriodo = (p) => {
+    if (!p.faturadoEm) return false;
+    const { ano, mes } = mesDe(p.faturadoEm);
+    return (filtroAno === "todos" || ano === Number(filtroAno))
+        && (filtroMes === "todos" || mes === Number(filtroMes));
+  };
+
+  const fatFiltrados = faturados
+    .map(g => ({ ...g, pedidosVis: (g.pedidosFat || []).filter(noPeriodo) }))
+    .filter(g => g.pedidosVis.length > 0);
+
+  const pedFiltrados  = fatFiltrados.flatMap(g => g.pedidosVis);
+  const totalValorFat = pedFiltrados.reduce((acc, p) => acc + (p.valor || 0), 0);
+  const totalUnidades = pedFiltrados.reduce((acc, p) => acc + (p.unidades || 0), 0);
+  const comTempo      = pedFiltrados.filter(p => p.dias != null);
+  const tempoMedioFat = comTempo.length
+    ? Math.round(comTempo.reduce((acc, p) => acc + p.dias, 0) / comTempo.length)
+    : null;
+
+  const porMesFat = {};
+  pedFiltrados.forEach(p => {
+    const { ano, mes } = mesDe(p.faturadoEm);
+    const k = `${ano}-${String(mes).padStart(2, "0")}`;
+    if (!porMesFat[k]) porMesFat[k] = { ano, mes, pedidos: 0, unidades: 0, valor: 0 };
+    porMesFat[k].pedidos++;
+    porMesFat[k].unidades += p.unidades || 0;
+    porMesFat[k].valor    += p.valor || 0;
+  });
+  const resumoMesesFat = Object.values(porMesFat).sort((a, b) => b.ano - a.ano || b.mes - a.mes);
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3 flex-wrap">
           <button
-            onClick={() => setModo("aguardando")}
-            className={`text-sm font-bold px-4 py-2 rounded-xl ring-1 transition ${
-              modo === "aguardando"
-                ? "bg-[#7F2D92] text-white ring-[#7F2D92]"
-                : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50"
+            onClick={() => { setModo("aguardando"); setSoAtrasados(false); }}
+            className={`text-xs font-semibold px-3 py-1.5 rounded-xl ring-1 transition ${
+              modo === "aguardando" && !soAtrasados
+                ? "bg-orange-100 text-orange-800 ring-orange-300"
+                : "bg-orange-50 text-orange-700 ring-orange-200 hover:bg-orange-100"
             }`}
           >
-            Aguardando faturamento
-            <span className={`ml-1.5 ${modo === "aguardando" ? "opacity-80" : "text-slate-400"}`}>{fmtN(grupos.length)}</span>
+            {fmtN(grupos.length)} aguardando faturamento
           </button>
           <button
             onClick={() => setModo("faturados")}
-            className={`text-sm font-bold px-4 py-2 rounded-xl ring-1 transition ${
+            className={`text-xs font-semibold px-3 py-1.5 rounded-xl ring-1 transition ${
               modo === "faturados"
-                ? "bg-[#7F2D92] text-white ring-[#7F2D92]"
-                : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50"
+                ? "bg-emerald-100 text-emerald-800 ring-emerald-300"
+                : "bg-emerald-50 text-emerald-700 ring-emerald-200 hover:bg-emerald-100"
             }`}
           >
-            Faturados
-            {carregouFat && (
-              <span className={`ml-1.5 ${modo === "faturados" ? "opacity-80" : "text-slate-400"}`}>{fmtN(faturados.length)}</span>
-            )}
+            {carregouFat ? `${fmtN(faturados.length)} faturados` : "Faturados"}
           </button>
+          {gruposAtrasados.length > 0 && (
+            <button
+              onClick={() => { setModo("aguardando"); setSoAtrasados(true); }}
+              className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl ring-1 transition ${
+                soAtrasados
+                  ? "bg-red-100 text-red-800 ring-red-300"
+                  : "bg-red-50 text-red-700 ring-red-200 hover:bg-red-100"
+              }`}
+            >
+              <AlertTriangle className="h-3.5 w-3.5" />
+              {fmtN(gruposAtrasados.length)} parado{gruposAtrasados.length > 1 ? "s" : ""} há {DIAS_ATRASO}+ dias
+            </button>
+          )}
         </div>
         <button
           onClick={() => (modo === "faturados" ? carregarFaturados() : carregar())}
@@ -1409,11 +1458,56 @@ function TabFaturamento() {
       )}
 
       {modo === "faturados" && faturados.length > 0 && (
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-          <KpiMini label="Grupos faturados"  value={fmtN(faturados.length)}   color="bg-slate-50 ring-slate-200 text-slate-700" />
-          <KpiMini label="Pedidos faturados" value={fmtN(totalPedidosFat)}    color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
-          <KpiMini label="Faturados hoje"    value={fmtN(gruposFatHoje)}      color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
-        </div>
+        <>
+          <div className="flex items-center gap-2">
+            <TrendingUp className="h-4 w-4 text-emerald-600" />
+            <h3 className="font-black text-slate-800 text-sm">Pedidos faturados</h3>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            <KpiMini label="Total faturado"     value={fmtR(totalValorFat)} sub={`${fmtN(pedFiltrados.length)} pedidos`} color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
+            <KpiMini label="Produtos faturados" value={fmtN(totalUnidades)} sub="unidades"                                color="bg-purple-50 ring-purple-200 text-purple-700" />
+            <KpiMini label="Tempo médio"        value={tempoMedioFat != null ? `${tempoMedioFat}d` : "—"} sub="do pagamento ao faturamento" color="bg-blue-50 ring-blue-200 text-blue-700" />
+          </div>
+
+          <Card>
+            <div className="flex items-center gap-3 flex-wrap">
+              <Calendar className="h-4 w-4 text-slate-400" />
+              <div className="flex gap-2 flex-wrap">
+                <button onClick={() => setFiltroAno("todos")} className={`text-xs px-3 py-1.5 rounded-xl font-semibold transition-all ${filtroAno === "todos" ? "bg-[#7F2D92] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>Todos os anos</button>
+                {anosFat.map(a => (
+                  <button key={a} onClick={() => setFiltroAno(String(a))} className={`text-xs px-3 py-1.5 rounded-xl font-semibold transition-all ${filtroAno === String(a) ? "bg-[#7F2D92] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>{a}</button>
+                ))}
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                <button onClick={() => setFiltroMes("todos")} className={`text-xs px-3 py-1.5 rounded-xl font-semibold transition-all ${filtroMes === "todos" ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>Todos os meses</button>
+                {mesesFat.map(m => (
+                  <button key={m} onClick={() => setFiltroMes(String(m))} className={`text-xs px-3 py-1.5 rounded-xl font-semibold transition-all ${filtroMes === String(m) ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>{MESES[m - 1]}</button>
+                ))}
+              </div>
+            </div>
+          </Card>
+
+          {resumoMesesFat.length > 0 && (
+            <Card>
+              <h4 className="font-black text-slate-700 text-xs mb-3 flex items-center gap-2">
+                <Calendar className="h-3.5 w-3.5 text-purple-500" /> Resumo por período
+              </h4>
+              <div className="space-y-2">
+                {resumoMesesFat.map(m => (
+                  <div key={`${m.ano}-${m.mes}`} className="flex items-center justify-between text-xs bg-slate-50 rounded-xl px-4 py-3 gap-3 flex-wrap">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <span className="font-black text-slate-700">{MESES[m.mes - 1]}/{m.ano}</span>
+                      <span className="text-slate-500">{fmtN(m.pedidos)} pedido{m.pedidos > 1 ? "s" : ""}</span>
+                      <span className="text-slate-500">{fmtN(m.unidades)} {m.unidades > 1 ? "unidades" : "unidade"}</span>
+                    </div>
+                    <span className="font-black text-emerald-700">{fmtR(m.valor)}</span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+        </>
       )}
 
       {modo === "faturados" && (
@@ -1421,14 +1515,14 @@ function TabFaturamento() {
           <div className="flex items-center justify-center h-32">
             <div className="h-8 w-8 border-4 border-purple-200 border-t-[#7F2D92] rounded-full animate-spin" />
           </div>
-        ) : faturados.length === 0 ? (
+        ) : fatFiltrados.length === 0 ? (
           <div className="text-center py-12 text-slate-400">
             <FileText className="h-8 w-8 mx-auto mb-2 opacity-30" />
-            <p className="text-sm">Nenhum grupo faturado ainda.</p>
+            <p className="text-sm">{faturados.length === 0 ? "Nenhum grupo faturado ainda." : "Nenhum faturamento no período selecionado."}</p>
           </div>
         ) : (
           <div className="space-y-3">
-            {faturados.map(g => {
+            {fatFiltrados.map(g => {
               const aberto = expandido === g.id;
               const lista  = pedidosGrupo[g.id] || [];
               return (
@@ -1437,8 +1531,8 @@ function TabFaturamento() {
                     <div className="min-w-0">
                       <div className="font-black text-slate-800">Grupo #{g.numero}</div>
                       <div className="text-xs text-slate-500 mt-0.5">
-                        <span className="font-semibold text-slate-600">{g.faturados} pedido{g.faturados > 1 ? "s" : ""}</span>
-                        <span className="font-bold text-emerald-700"> · {fmtR(g.valorFaturado)}</span>
+                        <span className="font-semibold text-slate-600">{g.pedidosVis.length} pedido{g.pedidosVis.length > 1 ? "s" : ""}</span>
+                        <span className="font-bold text-emerald-700"> · {fmtR(g.pedidosVis.reduce((a, p) => a + (p.valor || 0), 0))}</span>
                         {g.nfDe && (
                           <span> · NF {g.nfDe}{g.nfAte && g.nfAte !== g.nfDe ? ` a ${g.nfAte}` : ""}</span>
                         )}
@@ -1519,15 +1613,15 @@ function TabFaturamento() {
         <div className="flex items-center justify-center h-32">
           <div className="h-8 w-8 border-4 border-purple-200 border-t-[#7F2D92] rounded-full animate-spin" />
         </div>
-      ) : grupos.length === 0 ? (
+      ) : gruposVis.length === 0 ? (
         <div className="text-center py-12 text-slate-400">
           <FileText className="h-8 w-8 mx-auto mb-2 opacity-30" />
-          <p className="text-sm">Nenhum grupo aguardando faturamento.</p>
+          <p className="text-sm">{soAtrasados ? "Nenhum grupo parado." : "Nenhum grupo aguardando faturamento."}</p>
           <p className="text-xs mt-1">Os grupos aparecem aqui quando o picking é concluído.</p>
         </div>
       ) : (
         <div className="space-y-3">
-          {grupos.map(g => {
+          {gruposVis.map(g => {
             const fb = feedback[g.id];
             const aberto = expandido === g.id;
             const lista = pedidosGrupo[g.id] || [];
@@ -1544,6 +1638,9 @@ function TabFaturamento() {
                       <span className="font-bold text-emerald-700"> · {fmtR(g.valorAFaturar)}</span>
                       {g.emAnalise > 0 && <span className="text-orange-600"> · {g.emAnalise} em análise</span>}
                       {g.faturados > 0 && <span className="text-emerald-600"> · {g.faturados} faturado{g.faturados > 1 ? "s" : ""}</span>}
+                      {g.diasParado >= DIAS_ATRASO && (
+                        <span className="text-red-600 font-bold"> · parado há {g.diasParado}d</span>
+                      )}
                     </div>
                     {g.marketplaces?.length > 0 && (
                       <div className="flex items-center gap-1.5 flex-wrap mt-2">

@@ -1698,7 +1698,7 @@ export async function listarGruposFaturamento() {
   const ids = lista.map(g => g.id);
   const { data: pedidos } = await supabase
     .from("pedidos_b2c")
-    .select("grupo_id, status, marketplace, total_do_pedido")
+    .select("grupo_id, status, marketplace, total_do_pedido, embalado_em")
     .in("grupo_id", ids);
 
   // Histórico de downloads de cada grupo (todos os downloads, mais recente primeiro)
@@ -1722,6 +1722,10 @@ export async function listarGruposFaturamento() {
       c.valorAFaturar += (p.total_do_pedido || 0);
       const nome = p.marketplace || "—";
       c.mp[nome] = (c.mp[nome] || 0) + 1;
+      // Guarda o embalado mais antigo do grupo: é o que define quanto tempo ele está parado sem NF.
+      if (p.embalado_em && (!c.embaladoMaisAntigo || p.embalado_em < c.embaladoMaisAntigo)) {
+        c.embaladoMaisAntigo = p.embalado_em;
+      }
     } else if (p.status === "em_analise") {
       c.emAnalise++;
     } else if (p.status === "em_picking") {
@@ -1748,6 +1752,10 @@ export async function listarGruposFaturamento() {
         marketplaces,
         downloads: dls,              // histórico completo (mais recente primeiro)
         totalDownloads: dls.length,  // quantas vezes já foi baixado
+        embaladoMaisAntigo: c.embaladoMaisAntigo || null,
+        diasParado: c.embaladoMaisAntigo
+          ? Math.floor((Date.now() - new Date(c.embaladoMaisAntigo).getTime()) / 86400000)
+          : null,
       };
     })
     // Só mostra grupos que têm ao menos um pedido pronto para faturar
@@ -1760,7 +1768,7 @@ export async function listarGruposFaturamento() {
 export async function listarGruposFaturados() {
   const { data: pedidos, error } = await supabase
     .from("pedidos_b2c")
-    .select("grupo_id, marketplace, total_do_pedido, numero_nf, faturado_em, faturado_por")
+    .select("grupo_id, id_anymarket, marketplace, total_do_pedido, numero_nf, data_de_pagamento, faturado_em, faturado_por")
     .in("status", ["faturado", "concluido"])
     .not("grupo_id", "is", null);
   if (error) throw new Error(error.message);
@@ -1768,11 +1776,13 @@ export async function listarGruposFaturados() {
   const lista = pedidos || [];
   if (!lista.length) return [];
 
+  // Um pedido pode ter mais de uma linha (multi-item). O valor do pedido é o mesmo
+  // em todas elas, então somar linha a linha inflaria o total: agrupa por id_anymarket
+  // e soma uma vez por pedido, contando as linhas separadamente como unidades.
   const cont = {};
   lista.forEach(p => {
-    const c = (cont[p.grupo_id] ||= { qtd: 0, valor: 0, mp: {}, nfs: [], ultimo: null, porId: null });
-    c.qtd++;
-    c.valor += (p.total_do_pedido || 0);
+    const c = (cont[p.grupo_id] ||= { porPedido: {}, mp: {}, nfs: [], ultimo: null, porId: null, unidades: 0 });
+    c.unidades++;
     const nome = p.marketplace || "—";
     c.mp[nome] = (c.mp[nome] || 0) + 1;
     if (p.numero_nf) c.nfs.push(String(p.numero_nf));
@@ -1780,6 +1790,19 @@ export async function listarGruposFaturados() {
       c.ultimo = p.faturado_em;
       c.porId  = p.faturado_por || null;
     }
+    const chave = String(p.id_anymarket);
+    const ped = (c.porPedido[chave] ||= {
+      id_anymarket: p.id_anymarket,
+      valor: 0,
+      unidades: 0,
+      faturadoEm: null,
+      pagamento: p.data_de_pagamento || null,
+      nfs: [],
+    });
+    ped.unidades++;
+    if (!ped.valor) ped.valor = p.total_do_pedido || 0;
+    if (p.numero_nf) ped.nfs.push(String(p.numero_nf));
+    if (p.faturado_em && (!ped.faturadoEm || p.faturado_em > ped.faturadoEm)) ped.faturadoEm = p.faturado_em;
   });
 
   // Busca os grupos em blocos: lista grande de ids estoura a URL do PostgREST silenciosamente.
@@ -1809,10 +1832,16 @@ export async function listarGruposFaturados() {
     .map(g => {
       const c = cont[g.id];
       const nfs = [...new Set(c.nfs)].sort((a, b) => Number(a) - Number(b));
+      const pedidosFat = Object.values(c.porPedido).map(p => ({
+        ...p,
+        // Dias do pagamento até o faturamento. data_de_pagamento é texto DD/MM/AAAA.
+        dias: diasEntrePagamentoEFaturamento(p.pagamento, p.faturadoEm),
+      }));
       return {
         ...g,
-        faturados: c.qtd,
-        valorFaturado: c.valor,
+        faturados: pedidosFat.length,
+        unidades: c.unidades,
+        valorFaturado: pedidosFat.reduce((acc, p) => acc + (p.valor || 0), 0),
         marketplaces: Object.entries(c.mp)
           .map(([nome, qtd]) => ({ nome, qtd }))
           .sort((a, b) => b.qtd - a.qtd),
@@ -1821,9 +1850,23 @@ export async function listarGruposFaturados() {
         nfAte: nfs[nfs.length - 1] || null,
         faturadoEm: c.ultimo,
         faturadoPorNome: nomes[c.porId] || null,
+        pedidosFat,
       };
     })
     .sort((a, b) => (b.numero || 0) - (a.numero || 0));
+}
+
+// data_de_pagamento vem como texto "DD/MM/AAAA HH:MM:SS" do AnyMarket. Monta a data
+// por partes em vez de deixar o new Date() interpretar — evita o desvio de fuso.
+function diasEntrePagamentoEFaturamento(pagamentoTxt, faturadoIso) {
+  if (!pagamentoTxt || !faturadoIso) return null;
+  const m = String(pagamentoTxt).match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  if (!m) return null;
+  const pag = Date.UTC(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+  const fat = new Date(faturadoIso);
+  const fatUtc = Date.UTC(fat.getUTCFullYear(), fat.getUTCMonth(), fat.getUTCDate());
+  const d = Math.round((fatUtc - pag) / 86400000);
+  return d >= 0 ? d : null;
 }
 
 // Gera e baixa a planilha do grupo com os pedidos prontos para faturar (status embalado).
