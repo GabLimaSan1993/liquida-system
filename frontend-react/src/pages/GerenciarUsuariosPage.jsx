@@ -31,6 +31,7 @@ const TELAS = [
   { id: "/triagens/entrada-oracle",       label: "Triagens — Entrada no Oracle",     grupo: "Assurant" },
   { id: "/triagens/funcional",            label: "Triagens — Funcional",             grupo: "Assurant" },
   { id: "/triagens/laudo",                label: "Triagens — Laudo",                 grupo: "Assurant" },
+  { id: "/triagens/cosmetica",            label: "Triagens — Cosmética",             grupo: "Assurant" },
   { id: "/b2c/embalagem",                 label: "Assurant — Embalagem B2C",         grupo: "Assurant" },
   { id: "/b2c/painel",                    label: "Assurant — Painel Gestor B2C",     grupo: "Assurant" },
   { id: "/b2c/expedicao",                 label: "Assurant — Expedição B2C",         grupo: "Assurant" },

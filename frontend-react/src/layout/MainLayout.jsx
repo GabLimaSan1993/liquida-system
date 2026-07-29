@@ -37,6 +37,7 @@ const PAGE_META = {
   "/triagens/entrada-oracle":      { title: "Entrada no Oracle",         subtitle: "Triagens · Confirmação de entrada, RI e nota por voucher" },
   "/triagens/funcional":           { title: "Triagem Funcional",         subtitle: "Triagens · Validação de IMEI, perguntas e defeitos" },
   "/triagens/laudo":               { title: "Laudo de Triagem",          subtitle: "Triagens · Fotos e documento de divergência" },
+  "/triagens/cosmetica":           { title: "Triagem Cosmética",         subtitle: "Triagens · Tela, laterais, traseira e grade final" },
 };
 
 export default function MainLayout() {
