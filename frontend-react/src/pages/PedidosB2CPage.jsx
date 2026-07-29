@@ -15,6 +15,7 @@ import {
   listarPedidosEmAnalise,
   listarEmAnaliseComOpcao,
   listarGruposFaturamento,
+  listarGruposFaturados,
   gerarPlanilhaFaturamentoGrupo,
   importarNFsGrupo,
   importarNFsXmlGrupo,
@@ -1255,9 +1256,25 @@ function TabFaturamento() {
   const [histAberto, setHistAberto]         = useState(null);
   const [pendencias, setPendencias]         = useState({});
   const [avisosSku, setAvisosSku]           = useState({});
+  const [modo, setModo]                     = useState("aguardando");
+  const [faturados, setFaturados]           = useState([]);
+  const [loadingFat, setLoadingFat]         = useState(false);
+  const [carregouFat, setCarregouFat]       = useState(false);
   const inputRefs = useRef({});
 
   useEffect(() => { carregar(); }, []);
+
+  // A lista de faturados só é buscada quando o operador abre a aba pela primeira vez.
+  useEffect(() => {
+    if (modo === "faturados" && !carregouFat) carregarFaturados();
+  }, [modo]);
+
+  async function carregarFaturados() {
+    setLoadingFat(true);
+    try { setFaturados(await listarGruposFaturados()); setCarregouFat(true); }
+    catch (e) { console.error(e); }
+    finally { setLoadingFat(false); }
+  }
 
   async function carregar() {
     setLoading(true);
@@ -1343,16 +1360,154 @@ function TabFaturamento() {
   const gruposBaixados    = grupos.filter(g => (g.totalDownloads || 0) > 0).length;
   const gruposNaoBaixados = grupos.length - gruposBaixados;
 
+  // Contadores da lista de faturados
+  const totalPedidosFat = faturados.reduce((acc, g) => acc + (g.faturados || 0), 0);
+  const hojeBR = new Date().toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+  const gruposFatHoje = faturados.filter(g =>
+    g.faturadoEm && new Date(g.faturadoEm).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) === hojeBR
+  ).length;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <p className="text-sm text-slate-500">Baixe a planilha do grupo e suba as NFs: os XMLs da NF-e (.zip ou .xml) casam pelo IMEI, ou a planilha com a coluna NUMERO_NF preenchida.</p>
-        <button onClick={carregar} className="text-xs text-slate-500 hover:text-purple-700 font-semibold flex items-center gap-1">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setModo("aguardando")}
+            className={`text-sm font-bold px-4 py-2 rounded-xl ring-1 transition ${
+              modo === "aguardando"
+                ? "bg-[#7F2D92] text-white ring-[#7F2D92]"
+                : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50"
+            }`}
+          >
+            Aguardando faturamento
+            <span className={`ml-1.5 ${modo === "aguardando" ? "opacity-80" : "text-slate-400"}`}>{fmtN(grupos.length)}</span>
+          </button>
+          <button
+            onClick={() => setModo("faturados")}
+            className={`text-sm font-bold px-4 py-2 rounded-xl ring-1 transition ${
+              modo === "faturados"
+                ? "bg-[#7F2D92] text-white ring-[#7F2D92]"
+                : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50"
+            }`}
+          >
+            Faturados
+            {carregouFat && (
+              <span className={`ml-1.5 ${modo === "faturados" ? "opacity-80" : "text-slate-400"}`}>{fmtN(faturados.length)}</span>
+            )}
+          </button>
+        </div>
+        <button
+          onClick={() => (modo === "faturados" ? carregarFaturados() : carregar())}
+          className="text-xs text-slate-500 hover:text-purple-700 font-semibold flex items-center gap-1"
+        >
           <RefreshCw className="h-3.5 w-3.5" /> Atualizar
         </button>
       </div>
 
-      {grupos.length > 0 && (
+      {modo === "aguardando" && (
+        <p className="text-sm text-slate-500">Baixe a planilha do grupo e suba as NFs: os XMLs da NF-e (.zip ou .xml) casam pelo IMEI, ou a planilha com a coluna NUMERO_NF preenchida.</p>
+      )}
+
+      {modo === "faturados" && faturados.length > 0 && (
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+          <KpiMini label="Grupos faturados"  value={fmtN(faturados.length)}   color="bg-slate-50 ring-slate-200 text-slate-700" />
+          <KpiMini label="Pedidos faturados" value={fmtN(totalPedidosFat)}    color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
+          <KpiMini label="Faturados hoje"    value={fmtN(gruposFatHoje)}      color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
+        </div>
+      )}
+
+      {modo === "faturados" && (
+        loadingFat ? (
+          <div className="flex items-center justify-center h-32">
+            <div className="h-8 w-8 border-4 border-purple-200 border-t-[#7F2D92] rounded-full animate-spin" />
+          </div>
+        ) : faturados.length === 0 ? (
+          <div className="text-center py-12 text-slate-400">
+            <FileText className="h-8 w-8 mx-auto mb-2 opacity-30" />
+            <p className="text-sm">Nenhum grupo faturado ainda.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {faturados.map(g => {
+              const aberto = expandido === g.id;
+              const lista  = pedidosGrupo[g.id] || [];
+              return (
+                <Card key={g.id}>
+                  <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
+                    <div className="min-w-0">
+                      <div className="font-black text-slate-800">Grupo #{g.numero}</div>
+                      <div className="text-xs text-slate-500 mt-0.5">
+                        <span className="font-semibold text-slate-600">{g.faturados} pedido{g.faturados > 1 ? "s" : ""}</span>
+                        <span className="font-bold text-emerald-700"> · {fmtR(g.valorFaturado)}</span>
+                        {g.nfDe && (
+                          <span> · NF {g.nfDe}{g.nfAte && g.nfAte !== g.nfDe ? ` a ${g.nfAte}` : ""}</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-wrap mt-2">
+                        {g.marketplaces?.map(mp => (
+                          <span key={mp.nome} className="inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-lg bg-purple-50 text-[#7F2D92] ring-1 ring-purple-200">
+                            {mp.nome} · {mp.qtd}
+                          </span>
+                        ))}
+                        {g.faturadoEm && (
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-lg bg-slate-50 text-slate-600 ring-1 ring-slate-200">
+                            <Clock className="h-3 w-3" />
+                            {fmtData(g.faturadoEm)}
+                            {g.faturadoPorNome ? ` · ${g.faturadoPorNome}` : ""}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <span className="inline-flex items-center text-xs font-bold px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
+                      Faturado
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      onClick={() => handleVerPedidos(g)}
+                      className="text-sm font-bold px-4 py-2 rounded-xl ring-1 ring-slate-200 text-slate-600 hover:bg-slate-50 flex items-center gap-1.5"
+                    >
+                      {aberto ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />} Ver pedidos
+                    </button>
+                    <button
+                      onClick={() => handleBaixar(g)}
+                      disabled={baixando === g.id}
+                      className="text-sm font-bold px-4 py-2 rounded-xl ring-1 ring-slate-200 text-slate-600 hover:bg-slate-50 flex items-center gap-1.5 disabled:opacity-50"
+                    >
+                      {baixando === g.id ? <Loader className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Baixar relatório
+                    </button>
+                  </div>
+
+                  {aberto && (
+                    <div className="mt-3 border-t border-slate-100 pt-3">
+                      {loadingPedidos === g.id ? (
+                        <div className="flex items-center gap-2 text-sm text-slate-400">
+                          <Loader className="h-4 w-4 animate-spin" /> Carregando...
+                        </div>
+                      ) : (
+                        <div className="space-y-1.5">
+                          {lista.map(p => (
+                            <div key={p.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600">
+                              <span className="font-bold text-slate-700">#{p.id_anymarket}</span>
+                              <span className="text-slate-500">{p.marketplace}</span>
+                              {p.numero_nf && <span className="font-semibold text-emerald-700">NF {p.numero_nf}</span>}
+                              {p.imei_alocado && <span className="font-mono text-slate-400">{p.imei_alocado}</span>}
+                              <StatusBadge status={p.status} />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </Card>
+              );
+            })}
+          </div>
+        )
+      )}
+
+      {modo === "aguardando" && grupos.length > 0 && (
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
           <KpiMini label="Grupos a faturar"      value={fmtN(grupos.length)}      color="bg-slate-50 ring-slate-200 text-slate-700" />
           <KpiMini label="Baixados para NF"      value={fmtN(gruposBaixados)}     color="bg-blue-50 ring-blue-200 text-blue-700" />
@@ -1360,7 +1515,7 @@ function TabFaturamento() {
         </div>
       )}
 
-      {loading ? (
+      {modo === "aguardando" && (loading ? (
         <div className="flex items-center justify-center h-32">
           <div className="h-8 w-8 border-4 border-purple-200 border-t-[#7F2D92] rounded-full animate-spin" />
         </div>
@@ -1543,7 +1698,7 @@ function TabFaturamento() {
             );
           })}
         </div>
-      )}
+      ))}
     </div>
   );
 }

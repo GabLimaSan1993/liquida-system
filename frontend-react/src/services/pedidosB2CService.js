@@ -1754,6 +1754,78 @@ export async function listarGruposFaturamento() {
     .filter(g => g.aFaturar > 0);
 }
 
+// Grupos que já têm ao menos um pedido faturado — alimenta a aba "Faturados".
+// Um grupo parcialmente faturado aparece aqui E na lista de aguardando: o que já
+// saiu fica visível sem esconder o que ainda falta.
+export async function listarGruposFaturados() {
+  const { data: pedidos, error } = await supabase
+    .from("pedidos_b2c")
+    .select("grupo_id, marketplace, total_do_pedido, numero_nf, faturado_em, faturado_por")
+    .in("status", ["faturado", "concluido"])
+    .not("grupo_id", "is", null);
+  if (error) throw new Error(error.message);
+
+  const lista = pedidos || [];
+  if (!lista.length) return [];
+
+  const cont = {};
+  lista.forEach(p => {
+    const c = (cont[p.grupo_id] ||= { qtd: 0, valor: 0, mp: {}, nfs: [], ultimo: null, porId: null });
+    c.qtd++;
+    c.valor += (p.total_do_pedido || 0);
+    const nome = p.marketplace || "—";
+    c.mp[nome] = (c.mp[nome] || 0) + 1;
+    if (p.numero_nf) c.nfs.push(String(p.numero_nf));
+    if (p.faturado_em && (!c.ultimo || p.faturado_em > c.ultimo)) {
+      c.ultimo = p.faturado_em;
+      c.porId  = p.faturado_por || null;
+    }
+  });
+
+  // Busca os grupos em blocos: lista grande de ids estoura a URL do PostgREST silenciosamente.
+  const ids = Object.keys(cont);
+  const BLOCO_IDS = 200;
+  const grupos = [];
+  for (let i = 0; i < ids.length; i += BLOCO_IDS) {
+    const { data, error: e2 } = await supabase
+      .from("pedidos_b2c_grupos")
+      .select("*")
+      .in("id", ids.slice(i, i + BLOCO_IDS));
+    if (e2) throw new Error(e2.message);
+    grupos.push(...(data || []));
+  }
+
+  const userIds = [...new Set(Object.values(cont).map(c => c.porId).filter(Boolean))];
+  const nomes = {};
+  for (let i = 0; i < userIds.length; i += BLOCO_IDS) {
+    const { data: perfis } = await supabase
+      .from("user_profiles")
+      .select("id, nome")
+      .in("id", userIds.slice(i, i + BLOCO_IDS));
+    (perfis || []).forEach(u => { nomes[u.id] = u.nome; });
+  }
+
+  return grupos
+    .map(g => {
+      const c = cont[g.id];
+      const nfs = [...new Set(c.nfs)].sort((a, b) => Number(a) - Number(b));
+      return {
+        ...g,
+        faturados: c.qtd,
+        valorFaturado: c.valor,
+        marketplaces: Object.entries(c.mp)
+          .map(([nome, qtd]) => ({ nome, qtd }))
+          .sort((a, b) => b.qtd - a.qtd),
+        totalNfs: nfs.length,
+        nfDe: nfs[0] || null,
+        nfAte: nfs[nfs.length - 1] || null,
+        faturadoEm: c.ultimo,
+        faturadoPorNome: nomes[c.porId] || null,
+      };
+    })
+    .sort((a, b) => (b.numero || 0) - (a.numero || 0));
+}
+
 // Gera e baixa a planilha do grupo com os pedidos prontos para faturar (status embalado).
 // Os que estão em análise ficam de fora — não têm peça para faturar.
 export async function gerarPlanilhaFaturamentoGrupo(grupoId, userId, userNome) {
