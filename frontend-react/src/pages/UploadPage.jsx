@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { FileSpreadsheet, Upload, Landmark, Package, GitBranch, ScanLine, ShoppingCart, CalendarClock } from "lucide-react";
+import { FileSpreadsheet, Upload, Landmark, Package, GitBranch, ScanLine, ShoppingCart, CalendarClock, Store } from "lucide-react";
 import {
   previewFile,
   uploadAgingFile,
@@ -19,6 +19,7 @@ import { importarNFs }        from "../services/b2bNfService.js";
 import { uploadAnymarketZip } from "../services/anymarketService.js";
 import { importarSubinv }     from "../services/subinvService.js";
 import { previewRelatorioAP, uploadRelatorioAP } from "../services/entradaOracleService.js";
+import { previewTradein, uploadTradein } from "../services/tradeinService.js";
 import { supabase }           from "../lib/supabase.js";
 import { useAuth }            from "../AuthContext.jsx";
 
@@ -200,6 +201,13 @@ export default function UploadPage() {
   const [loadingApPreview, setLoadingApPreview]                     = useState(false);
   const [loadingApUpload, setLoadingApUpload]                       = useState(false);
 
+  // ── TradeIn (base da loja) ────────────────────────────
+  const [tdFile, setTdFile]                                         = useState(null);
+  const [tdPreview, setTdPreview]                                   = useState(null);
+  const [tdResultado, setTdResultado]                               = useState(null);
+  const [loadingTdPreview, setLoadingTdPreview]                     = useState(false);
+  const [loadingTdUpload, setLoadingTdUpload]                       = useState(false);
+
   const [status, setStatus]     = useState("");
   const [progress, setProgress] = useState(0);
 
@@ -216,6 +224,7 @@ export default function UploadPage() {
     { type: "AnyMarket",             name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
     { type: "Aging Subinventário",   name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
     { type: "Relatório AP Oracle",   name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+    { type: "TradeIn",               name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
   ]);
 
   useEffect(() => {
@@ -576,6 +585,61 @@ export default function UploadPage() {
       updateHistoryCard("Relatório AP Oracle", { status: "Erro" });
     } finally {
       setLoadingApUpload(false);
+    }
+  }
+
+  // ── Handlers TradeIn ──────────────────────────────────
+  async function handlePreviewTd() {
+    try {
+      if (!tdFile) { setStatus("Selecione a planilha TradeIn (.xlsx)."); return; }
+      setLoadingTdPreview(true);
+      setTdResultado(null);
+      setStatus("Validando estrutura da planilha TradeIn...");
+      const preview = await previewTradein(tdFile);
+      setTdPreview(preview);
+      updateHistoryCard("TradeIn", { name: tdFile.name, status: "Validado", rows: preview.totalLinhas.toLocaleString("pt-BR"), progress: 15 });
+      setStatus(`TradeIn validado. ${preview.vouchers.toLocaleString("pt-BR")} vouchers distintos.`);
+    } catch (error) {
+      setStatus(`Erro ao validar o TradeIn: ${error.message}`);
+    } finally {
+      setLoadingTdPreview(false);
+    }
+  }
+
+  async function handleUploadTd() {
+    try {
+      if (!tdFile) { setStatus("Selecione a planilha TradeIn (.xlsx)."); return; }
+      setLoadingTdUpload(true);
+      setProgress(0);
+      setTdResultado(null);
+      setStatus("Importando base TradeIn...");
+      updateHistoryCard("TradeIn", { name: tdFile.name, status: "Enviando", progress: 5 });
+
+      const result = await uploadTradein(
+        tdFile,
+        user.id,
+        profile?.nome,
+        ({ fase, pct }) => {
+          setProgress(pct);
+          updateHistoryCard("TradeIn", { name: tdFile.name, status: `Gravando ${fase}...`, progress: pct });
+          setStatus(`TradeIn: gravando... ${pct}%`);
+        }
+      );
+
+      updateHistoryCard("TradeIn", {
+        name: tdFile.name, status: "Concluído",
+        rows: result.gravadas.toLocaleString("pt-BR"), progress: 100,
+      });
+      setProgress(100);
+      setTdResultado(result);
+      setTdPreview(null);
+      setStatus(`TradeIn importado! ${result.gravadas.toLocaleString("pt-BR")} vouchers gravados.`);
+      setTdFile(null);
+    } catch (error) {
+      setStatus(`Erro ao importar o TradeIn: ${error.message}`);
+      updateHistoryCard("TradeIn", { status: "Erro" });
+    } finally {
+      setLoadingTdUpload(false);
     }
   }
 
@@ -1016,6 +1080,83 @@ export default function UploadPage() {
                 </div>
                 <p>Vouchers distintos: <span className="font-bold text-[#6B1F87]">{apResultado.vouchers.toLocaleString("pt-BR")}</span></p>
                 {apResultado.semPo > 0 && <p>Linhas sem PO ignoradas: <span className="font-bold text-amber-600">{apResultado.semPo.toLocaleString("pt-BR")}</span></p>}
+              </div>
+            )}
+          </div>
+
+          {/* ── TradeIn ─────────────────────────────────── */}
+          <div className="rounded-[24px] bg-[#FCFAFF] p-5 ring-1 ring-[#E9D5FF]">
+            <div className="flex items-center gap-3">
+              <div className="rounded-2xl bg-[#7F2D92] p-2.5 text-white">
+                <Store className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="text-sm font-black text-[#6B1F87]">TradeIn — Base da Loja</div>
+                <div className="text-xs text-slate-500">Valida o IMEI na Triagem Funcional · só canal YBV</div>
+              </div>
+            </div>
+
+            <div className="mt-4 text-xs text-slate-500 bg-emerald-50 ring-1 ring-emerald-200 rounded-xl px-3 py-2">
+              📋 Planilha TRADEIN_GERAL .xlsx · base diária completa (substitui por voucher, não acumula) · o voucher vem só numérico e vira YBV no banco
+            </div>
+
+            <div className="mt-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-[#E9D5FF]">
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={e => { setTdFile(e.target.files?.[0] || null); setTdPreview(null); setTdResultado(null); }}
+                className="block w-full text-sm text-slate-600"
+              />
+              <div className="mt-3 text-sm font-medium">
+                {tdFile ? tdFile.name : "Nenhum arquivo selecionado"}
+              </div>
+              <div className="mt-1 text-xs text-slate-500">
+                {tdFile ? "Arquivo pronto para envio" : "Selecione a planilha TradeIn"}
+              </div>
+            </div>
+
+            <div className="mt-4 flex gap-2">
+              <Button variant="outline" onClick={handlePreviewTd} disabled={!tdFile || loadingTdPreview || loadingTdUpload}>
+                {loadingTdPreview ? "Validando..." : "Validar"}
+              </Button>
+              <Button onClick={handleUploadTd} disabled={!tdFile || loadingTdUpload}>
+                {loadingTdUpload ? "Importando..." : "Enviar arquivo"}
+              </Button>
+            </div>
+
+            {tdPreview && (
+              <div className="mt-4 rounded-2xl bg-white p-4 ring-1 ring-[#E9D5FF] space-y-1 text-xs text-slate-600">
+                <div className="text-sm font-bold text-[#6B1F87]">
+                  {tdPreview.totalLinhas.toLocaleString("pt-BR")} linhas · {tdPreview.vouchers.toLocaleString("pt-BR")} vouchers
+                </div>
+                {tdPreview.semVoucher > 0 && <p>Sem voucher numérico (ignoradas): <span className="font-bold text-amber-600">{tdPreview.semVoucher.toLocaleString("pt-BR")}</span></p>}
+                {tdPreview.semImei > 0 && <p>Sem IMEI: <span className="font-bold text-amber-600">{tdPreview.semImei.toLocaleString("pt-BR")}</span></p>}
+                {tdPreview.cancelados > 0 && <p>Marcados como cancelados: <span className="font-bold text-amber-600">{tdPreview.cancelados.toLocaleString("pt-BR")}</span></p>}
+                {tdPreview.porStatus && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {Object.entries(tdPreview.porStatus).map(([nome, qtd]) => (
+                      <span key={nome} className="inline-flex items-center rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
+                        {nome} · {qtd.toLocaleString("pt-BR")}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {tdPreview.faltando?.length > 0 && (
+                  <p className="text-amber-700">Colunas esperadas que não vieram: <span className="font-bold">{tdPreview.faltando.join(", ")}</span></p>
+                )}
+                {tdPreview.naoMapeadas?.length > 0 && (
+                  <p className="text-slate-400">Colunas não reconhecidas (serão ignoradas): {tdPreview.naoMapeadas.join(", ")}</p>
+                )}
+              </div>
+            )}
+
+            {tdResultado && (
+              <div className="mt-4 rounded-2xl bg-white p-4 ring-1 ring-[#E9D5FF] space-y-1 text-xs text-slate-600">
+                <div className="text-sm font-bold text-emerald-700">
+                  ✓ {tdResultado.gravadas.toLocaleString("pt-BR")} vouchers gravados
+                </div>
+                {tdResultado.duplicadosNoArquivo > 0 && <p>Repetidos no arquivo (ficou o último): <span className="font-bold text-amber-600">{tdResultado.duplicadosNoArquivo.toLocaleString("pt-BR")}</span></p>}
+                {tdResultado.semVoucher > 0 && <p>Linhas sem voucher ignoradas: <span className="font-bold text-amber-600">{tdResultado.semVoucher.toLocaleString("pt-BR")}</span></p>}
               </div>
             )}
           </div>
