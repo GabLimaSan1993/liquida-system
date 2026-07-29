@@ -10,6 +10,8 @@ import {
   buscarPerguntas,
   listarDefeitos,
   salvarTriagemFuncional,
+  carregarCatalogo,
+  cadastrarModeloPendente,
 } from "../services/triagemFuncionalService.js";
 
 const BATERIA = [
@@ -68,7 +70,7 @@ export default function TriagemFuncionalPage() {
   const [carregando, setCarregando] = useState(false);
   const [feedback, setFeedback]   = useState(null);
 
-  const [ctx, setCtx]             = useState(null);   // retorno do consultarVoucher
+  const [ctx, setCtx]             = useState(null);
   const [produto, setProduto]     = useState({ marca: "", modelo: "", armazenamento: "", cor: "" });
 
   const [imeiDigitado, setImeiDigitado] = useState("");
@@ -77,6 +79,9 @@ export default function TriagemFuncionalPage() {
   const [perguntas, setPerguntas] = useState([]);
   const [idx, setIdx]             = useState(0);
   const [respostas, setRespostas] = useState([]);
+
+  const [catalogo, setCatalogo]   = useState({ produtos: [], cores: [] });
+  const [modeloLivre, setModeloLivre] = useState(false);
 
   const [defeitosCatalogo, setDefeitosCatalogo] = useState([]);
   const [pedindoDefeito, setPedindoDefeito]     = useState(false);
@@ -89,7 +94,17 @@ export default function TriagemFuncionalPage() {
 
   useEffect(() => {
     listarDefeitos().then(setDefeitosCatalogo).catch(() => {});
+    carregarCatalogo().then(setCatalogo).catch(() => {});
   }, []);
+
+  // Listas derivadas: modelo depende da marca, capacidade depende do modelo.
+  const marcas = [...new Set(catalogo.produtos.map(p => p.marca))].sort();
+  const modelos = [...new Set(catalogo.produtos
+    .filter(p => p.marca === produto.marca).map(p => p.modelo))].sort();
+  const capacidades = [...new Set(catalogo.produtos
+    .filter(p => p.marca === produto.marca && p.modelo === produto.modelo)
+    .map(p => p.armazenamento).filter(Boolean))].sort();
+  const produtoCompleto = produto.marca && produto.modelo && produto.armazenamento && produto.cor;
 
   function erro(msg) {
     setFeedback({ tipo: "erro", msg });
@@ -102,6 +117,7 @@ export default function TriagemFuncionalPage() {
     setDefeitosSel([]); setDefeitosTodos([]); setPedindoDefeito(false);
     setPassoBateria(0); setBateria(null); setResultado(null);
     setProduto({ marca: "", modelo: "", armazenamento: "", cor: "" });
+    setModeloLivre(false);
   }
 
   async function handleConsultar() {
@@ -111,15 +127,21 @@ export default function TriagemFuncionalPage() {
       const r = await consultarVoucher(busca);
       if (!r.ok) { erro(r.erro); return; }
       setCtx(r);
-      setProduto({
-        marca:         r.produto?.marca         || "",
-        modelo:        r.produto?.modelo        || "",
-        armazenamento: r.produto?.armazenamento || "",
-        cor:           r.produto?.cor           || "",
-      });
+      // Campos ficam EM BRANCO de propósito: o triador preenche pelo que tem
+      // na mão. Pré-preencher faria ele confirmar em vez de conferir.
+      setProduto({ marca: "", modelo: "", armazenamento: "", cor: "" });
+      setModeloLivre(false);
       setEtapa("produto");
     } catch (e) { erro(e.message); }
     finally { setCarregando(false); }
+  }
+
+  async function handleSalvarProduto() {
+    if (modeloLivre && produto.marca && produto.modelo) {
+      try { await cadastrarModeloPendente(produto.marca, produto.modelo, produto.armazenamento); }
+      catch { /* cadastro pendente não pode travar a bancada */ }
+    }
+    setEtapa("imei");
   }
 
   async function handleValidarImei() {
@@ -139,7 +161,7 @@ export default function TriagemFuncionalPage() {
   }
 
   async function iniciarPerguntas() {
-    const ps = await buscarPerguntas(ctx.canal || "YBV");
+    const ps = await buscarPerguntas(ctx.canal || "YBV", produto.marca);
     if (!ps.length) { erro(`Nenhuma pergunta cadastrada para o canal ${ctx.canal}.`); return; }
     setPerguntas(ps);
     setIdx(0);
@@ -207,6 +229,7 @@ export default function TriagemFuncionalPage() {
         bateria: bat,
         defeitos: defeitosTodos,
         userId: user.id,
+        tradein: ctx.tradein,
       });
       if (!r.ok) { erro(r.erro); return; }
       setResultado({ ...r, bateria: bat, respostas: lista });
@@ -260,14 +283,14 @@ export default function TriagemFuncionalPage() {
               <Aviso tipo="aviso">
                 Este voucher já passou pela triagem funcional em{" "}
                 {new Date(ctx.existente.data_funcional).toLocaleDateString("pt-BR")}
-                {ctx.existente.grade ? ` · grade ${ctx.existente.grade}` : ""}. Seguir cria uma nova triagem.
+                {ctx.existente.grade ? ` · grade ${ctx.existente.grade}` : ""}. Seguir sobrescreve a triagem anterior.
               </Aviso>
             </div>
           )}
           {!ctx.temTradein && ctx.canal === "YBV" && (
             <div className="mb-4">
               <Aviso tipo="aviso">
-                Voucher não encontrado na base TradeIn. Preencha os dados do aparelho manualmente — a validação de IMEI será pulada.
+                Voucher não encontrado na base TradeIn. A validação de IMEI será pulada.
               </Aviso>
             </div>
           )}
@@ -278,27 +301,71 @@ export default function TriagemFuncionalPage() {
           </p>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {[
-              ["Marca", "marca"], ["Modelo", "modelo"],
-              ["Armazenamento", "armazenamento"], ["Cor", "cor"],
-            ].map(([label, campo]) => (
-              <div key={campo}>
-                <label className="mb-1 block text-xs font-bold text-slate-600">{label}</label>
-                <input value={produto[campo]}
-                  onChange={e => setProduto({ ...produto, [campo]: e.target.value.toUpperCase() })}
+            <div>
+              <label className="mb-1 block text-xs font-bold text-slate-600">Marca</label>
+              <select value={produto.marca} className={inputCls}
+                onChange={e => { setProduto({ marca: e.target.value, modelo: "", armazenamento: "", cor: produto.cor }); setModeloLivre(false); }}>
+                <option value="">Selecione...</option>
+                {marcas.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-bold text-slate-600">Modelo</label>
+              {modeloLivre ? (
+                <input autoFocus value={produto.modelo} placeholder="Digite o modelo"
+                  onChange={e => setProduto({ ...produto, modelo: e.target.value.toUpperCase() })}
                   className={inputCls} />
-              </div>
-            ))}
+              ) : (
+                <select value={produto.modelo} disabled={!produto.marca} className={inputCls}
+                  onChange={e => {
+                    if (e.target.value === "__outro__") { setModeloLivre(true); setProduto({ ...produto, modelo: "", armazenamento: "" }); return; }
+                    setProduto({ ...produto, modelo: e.target.value, armazenamento: "" });
+                  }}>
+                  <option value="">{produto.marca ? "Selecione..." : "Escolha a marca"}</option>
+                  {modelos.map(m => <option key={m} value={m}>{m}</option>)}
+                  {produto.marca && <option value="__outro__">Não encontrei o modelo</option>}
+                </select>
+              )}
+              {modeloLivre && (
+                <button onClick={() => { setModeloLivre(false); setProduto({ ...produto, modelo: "" }); }}
+                  className="mt-1 text-[11px] font-semibold text-slate-400 hover:text-slate-600">
+                  Voltar para a lista
+                </button>
+              )}
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-bold text-slate-600">Armazenamento</label>
+              {modeloLivre || (produto.modelo && !capacidades.length) ? (
+                <input value={produto.armazenamento} placeholder="Ex: 128GB"
+                  onChange={e => setProduto({ ...produto, armazenamento: e.target.value.toUpperCase() })}
+                  className={inputCls} />
+              ) : (
+                <select value={produto.armazenamento} disabled={!produto.modelo} className={inputCls}
+                  onChange={e => setProduto({ ...produto, armazenamento: e.target.value })}>
+                  <option value="">{produto.modelo ? "Selecione..." : "Escolha o modelo"}</option>
+                  {capacidades.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              )}
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-bold text-slate-600">Cor</label>
+              <select value={produto.cor} className={inputCls}
+                onChange={e => setProduto({ ...produto, cor: e.target.value })}>
+                <option value="">Selecione...</option>
+                {catalogo.cores.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
           </div>
 
-          {ctx.temTradein && (
-            <p className="mt-3 text-xs text-slate-400">
-              Pré-preenchido pela base TradeIn · {ctx.tradein.loja} · declarado como {ctx.tradein.condicao_aparelho}
-            </p>
-          )}
+          <p className="mt-3 text-xs text-slate-400">
+            Preencha pelo aparelho que está na sua mão. A conferência com a base da loja é feita depois.
+          </p>
 
-          <button onClick={() => setEtapa("imei")}
-            className="mt-5 rounded-xl bg-[#7F2D92] px-5 py-2 text-sm font-bold text-white hover:bg-[#6B1F87]">
+          <button onClick={handleSalvarProduto} disabled={!produtoCompleto}
+            className="mt-5 rounded-xl bg-[#7F2D92] px-5 py-2 text-sm font-bold text-white hover:bg-[#6B1F87] disabled:opacity-40 disabled:cursor-not-allowed">
             Salvar e continuar
           </button>
         </div>
@@ -345,7 +412,7 @@ export default function TriagemFuncionalPage() {
                 </button>
               </div>
               <p className="mt-3 text-[11px] leading-tight text-red-600">
-                Confirmando, o aparelho vai para "{`Aguardando análise Assurant`}" e sai desta fila.
+                Confirmando, o aparelho vai para "Aguardando análise Assurant" e sai desta fila.
               </p>
             </div>
           )}
@@ -466,6 +533,22 @@ export default function TriagemFuncionalPage() {
                   </div>
                 )}
               </div>
+
+              {resultado.conferencia?.divergencias?.length > 0 && (
+                <div className="mt-4">
+                  <Aviso tipo="aviso">
+                    <div>
+                      Divergência com a base da loja:
+                      {resultado.conferencia.divergencias.map((d, i) => (
+                        <div key={i} className="mt-1 font-normal">
+                          {d.campo} — você registrou <span className="font-bold">{d.operador}</span>,
+                          a loja declarou <span className="font-bold">{d.tradein}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </Aviso>
+                </div>
+              )}
 
               {defeitosTodos.length > 0 && (
                 <div className="mt-3">

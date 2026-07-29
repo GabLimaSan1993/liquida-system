@@ -3,22 +3,21 @@ import { validarImeiTradein } from "./tradeinService";
 
 // ══════════════════════════════════════════════════════════
 // TRIAGEM FUNCIONAL
-// Primeira tela em que o Liquida ESCREVE na assurant_triagem — até aqui
-// só o importador do Gaia escrevia. Por isso toda linha gravada leva
-// origem_triagem = 'liquida', para dar pra separar as duas fontes.
+// A assurant_triagem tem UNIQUE (voucher): um voucher, uma linha.
+// Por isso gravamos com upsert — retriagem atualiza a linha existente
+// em vez de criar outra. Colunas fora do payload ficam intactas, então
+// o que a cosmética já preencheu não é apagado.
 // ══════════════════════════════════════════════════════════
 
 const STATUS_APOS_FUNCIONAL = "Aguardando triagem cosmética";
 const STATUS_DIVERGENCIA    = "Aguardando análise Assurant";
 const STATUS_LAUDO          = "Aguardando laudo";
 
-// O canal sai do prefixo do voucher: YBV417755 -> YBV.
 export function canalDoVoucher(voucher) {
   const v = String(voucher || "").trim().toUpperCase();
   const m = v.match(/^([A-Z]+)/);
   const prefixo = m ? m[1] : null;
   if (!prefixo) return null;
-  // SAMV e YBV têm 3 ou 4 letras conforme a época; normaliza.
   if (prefixo.startsWith("SAM")) return "SAMV";
   if (prefixo.startsWith("YBV")) return "YBV";
   if (prefixo.startsWith("GRV")) return "GRV";
@@ -26,16 +25,24 @@ export function canalDoVoucher(voucher) {
   return prefixo;
 }
 
-export async function buscarPerguntas(tipo, etapa = "funcional") {
+// As perguntas vêm do catálogo. so_marcas nulo = vale para todas as marcas;
+// preenchido = só aparece para as marcas listadas. É assim que a pergunta de
+// bateria fica restrita a Apple, sem exceção chumbada no código.
+export async function buscarPerguntas(tipo, marca = null, etapa = "funcional") {
   const { data, error } = await supabase
     .from("triagem_perguntas")
-    .select("id, ordem, texto, tipo_resposta, resposta_ok, exige_defeito, gera_laudo")
+    .select("id, ordem, texto, tipo_resposta, resposta_ok, exige_defeito, gera_laudo, so_marcas")
     .eq("tipo", tipo)
     .eq("etapa", etapa)
     .eq("ativo", true)
     .order("ordem");
   if (error) throw new Error(error.message);
-  return data || [];
+
+  const m = String(marca || "").trim().toUpperCase();
+  return (data || []).filter(p => {
+    if (!p.so_marcas || !p.so_marcas.length) return true;
+    return p.so_marcas.map(x => String(x).toUpperCase()).includes(m);
+  });
 }
 
 export async function listarDefeitos() {
@@ -49,8 +56,6 @@ export async function listarDefeitos() {
   return data || [];
 }
 
-// Tela 1: consulta o voucher. Traz o que a TradeIn sabe e o que já existe
-// na triagem, para não deixar refazer aparelho já triado sem aviso.
 export async function consultarVoucher(voucher) {
   const v = String(voucher || "").trim().toUpperCase();
   if (!v) return { ok: false, erro: "Informe o voucher." };
@@ -61,12 +66,12 @@ export async function consultarVoucher(voucher) {
     .from("assurant_triagem")
     .select("id, imei, sku, modelo, grade, status_atual, data_funcional, local, criado_em")
     .eq("voucher", v)
-    .order("criado_em", { ascending: false })
-    .limit(1)
     .maybeSingle();
   if (errT) throw new Error(errT.message);
 
-  // A TradeIn só cobre YBV. Para os outros canais não há o que validar.
+  // A TradeIn só cobre YBV, e serve apenas para validar o IMEI e para a
+  // conferência silenciosa depois. NÃO alimenta os campos da tela: o triador
+  // preenche pelo que tem na mão, senão a conferência perde a função.
   let tradein = null;
   if (canal === "YBV") {
     const numero = v.replace(/\D/g, "");
@@ -88,69 +93,59 @@ export async function consultarVoucher(voucher) {
     temTradein: !!tradein,
     jaTriado: !!existente?.data_funcional,
     existente: existente || null,
-    // "APPLE IPHONE 12 PRO 128GB PRATA" -> partes separadas para a tela 1
-    produto: tradein ? quebrarAparelho(tradein.aparelho, tradein.marca) : null,
   };
 }
 
-// A TradeIn traz o aparelho como string única. Quebra por regra: a capacidade
-// é o token com GB/TB, a marca vem de coluna própria, o que sobra antes da
-// capacidade é modelo e o que sobra depois é cor. Sem match, devolve nulos e
-// a tela deixa o operador preencher.
-export function quebrarAparelho(aparelho, marca) {
-  const s = String(aparelho || "").trim().toUpperCase();
-  if (!s) return { marca: marca || null, modelo: null, armazenamento: null, cor: null };
+// Compara em silêncio o que o operador preencheu com o que a TradeIn diz.
+// Roda DEPOIS do preenchimento, nunca antes — é conferência, não sugestão.
+export function conferirComTradein(produto, tradein) {
+  if (!tradein) return { verificado: false, divergencias: [] };
+  const ap = String(tradein.aparelho || "").toUpperCase();
+  const div = [];
 
-  const tokens = s.split(/\s+/);
-  const iCap = tokens.findIndex(t => /^\d+\s?(GB|TB)$/.test(t) || /^\d+(GB|TB)$/.test(t));
-  const marcaUp = String(marca || "").trim().toUpperCase();
-
-  let inicio = 0;
-  if (marcaUp && tokens[0] === marcaUp) inicio = 1;
-
-  if (iCap === -1) {
-    return {
-      marca: marca || tokens[0] || null,
-      modelo: tokens.slice(inicio).join(" ") || null,
-      armazenamento: null,
-      cor: null,
-    };
+  const marcaTd = String(tradein.marca || "").toUpperCase().trim();
+  const marcaOp = String(produto?.marca || "").toUpperCase().trim();
+  if (marcaTd && marcaOp && marcaTd !== marcaOp) {
+    div.push({ campo: "Marca", operador: produto.marca, tradein: tradein.marca });
   }
 
-  return {
-    marca:         marca || tokens[0] || null,
-    modelo:        tokens.slice(inicio, iCap).join(" ") || null,
-    armazenamento: tokens[iCap],
-    cor:           tokens.slice(iCap + 1).join(" ") || null,
-  };
+  const modeloOp = String(produto?.modelo || "").toUpperCase().trim();
+  if (modeloOp && ap && !ap.includes(modeloOp)) {
+    div.push({ campo: "Modelo", operador: produto.modelo, tradein: tradein.aparelho });
+  }
+
+  const capOp = String(produto?.armazenamento || "").toUpperCase().replace(/\s/g, "");
+  if (capOp && ap && !ap.replace(/\s/g, "").includes(capOp)) {
+    div.push({ campo: "Armazenamento", operador: produto.armazenamento, tradein: tradein.aparelho });
+  }
+
+  return { verificado: true, divergencias: div };
 }
 
-// Reexporta para a tela 2 não precisar importar de dois lugares.
 export { validarImeiTradein };
 
-// Divergência de IMEI confirmada: sai da fila e vai para análise Assurant.
 export async function registrarDivergenciaImei(voucher, imeiBipado, userId, imeiEsperado) {
   const v = String(voucher || "").trim().toUpperCase();
+  const agora = new Date().toISOString();
   const registro = {
     voucher:        v,
     imei:           imeiBipado || null,
     status_atual:   STATUS_DIVERGENCIA,
     origem_triagem: "liquida",
     funcional_por:  userId,
-    data_funcional: new Date().toISOString(),
+    data_funcional: agora,
     condicao:       `IMEI divergente — TradeIn: ${imeiEsperado || "sem registro"}`,
-    atualizado_em:  new Date().toISOString(),
+    atualizado_em:  agora,
   };
-  const { error } = await supabase.from("assurant_triagem").insert(registro);
+  const { error } = await supabase
+    .from("assurant_triagem")
+    .upsert(registro, { onConflict: "voucher" });
   if (error) throw new Error(error.message);
   return { ok: true, status: STATUS_DIVERGENCIA };
 }
 
-// Grava o resultado da funcional.
-// Toda resposta é guardada (não só as negativas, como o Gaia fazia) em JSON,
-// para o resumo e a auditoria terem de onde sair.
 export async function salvarTriagemFuncional({
-  voucher, imei, canal, produto, respostas, bateria, defeitos, userId,
+  voucher, imei, canal, produto, respostas, bateria, defeitos, userId, tradein,
 }) {
   const v = String(voucher || "").trim().toUpperCase();
   if (!v)    return { ok: false, erro: "Voucher ausente." };
@@ -159,6 +154,7 @@ export async function salvarTriagemFuncional({
   const lista = Array.isArray(respostas) ? respostas : [];
   const negativas = lista.filter(r => r.divergente);
   const temLaudo  = negativas.some(r => r.geraLaudo);
+  const conferencia = conferirComTradein(produto, tradein);
 
   const agora = new Date().toISOString();
 
@@ -173,15 +169,19 @@ export async function salvarTriagemFuncional({
     atualizado_em:  agora,
 
     status_atual: temLaudo ? STATUS_LAUDO : STATUS_APOS_FUNCIONAL,
-
-    // GOOD/BAD é o formato que o Gaia já usava nesta coluna.
     resultado_triagem_funcional: negativas.length ? "BAD" : "GOOD",
 
-    // JSON com TODAS as respostas.
     respostas_funcional: JSON.stringify({
-      versao: 1,
+      versao: 2,
       canal,
       respondido_em: agora,
+      produto: {
+        marca:         produto?.marca         || null,
+        modelo:        produto?.modelo        || null,
+        armazenamento: produto?.armazenamento || null,
+        cor:           produto?.cor           || null,
+      },
+      conferencia_tradein: conferencia,
       respostas: lista.map(r => ({
         pergunta_id: r.perguntaId,
         pergunta:    r.pergunta,
@@ -196,7 +196,7 @@ export async function salvarTriagemFuncional({
 
   const { data, error } = await supabase
     .from("assurant_triagem")
-    .insert(registro)
+    .upsert(registro, { onConflict: "voucher" })
     .select("id, voucher, imei, status_atual")
     .single();
   if (error) throw new Error(error.message);
@@ -207,5 +207,6 @@ export async function salvarTriagemFuncional({
     status: data.status_atual,
     precisaLaudo: temLaudo,
     divergencias: negativas.length,
+    conferencia,
   };
 }
