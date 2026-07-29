@@ -316,12 +316,12 @@ export default function TriagemCosmeticaPage() {
                   </button>
                   <button onClick={() => setDevolvendo(true)}
                     className="block w-full rounded-xl border border-slate-200 px-4 py-3 text-left text-[13px] text-slate-600 transition hover:border-rose-500 hover:bg-rose-50">
-                    - Qualquer problema funcional
+                    - Qualquer problema funcional (volta para a triagem funcional)
                   </button>
                 </div>
               ) : (
                 <div className="rounded-2xl bg-rose-50 p-4 ring-1 ring-rose-200">
-                  <p className="text-sm font-bold text-rose-800">Devolver para laudo</p>
+                  <p className="text-sm font-bold text-rose-800">Devolver para triagem funcional</p>
                   <p className="mb-3 text-xs text-rose-700">
                     Descreva o problema encontrado. As respostas de estética já dadas ficam guardadas.
                   </p>

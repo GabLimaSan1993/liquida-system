@@ -13,7 +13,7 @@ import { supabase } from "../lib/supabase";
 
 const STATUS_ENTRADA = "Aguardando triagem cosmética";
 const STATUS_SAIDA   = "Aguardando armazenagem";
-const STATUS_VOLTA   = "Aguardando laudo";
+const STATUS_VOLTA   = "Aguardando triagem funcional";
 
 const BATERIA_REBAIXA = "Saúde da bateria entre 70 e 79%";
 

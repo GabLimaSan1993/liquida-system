@@ -117,9 +117,15 @@ const ETAPAS = {
   "Aguardando alocação":              { nome: "Aguardando alocação",   onde: "Pronto para ser alocado em pedido" },
 };
 
+// Status em que a retriagem é permitida de propósito. Aparelho devolvido pela
+// cosmética precisa passar pela funcional de novo — sem isso ele bateria no
+// bloqueio de "já foi triado" e travaria na bancada.
+const STATUS_LIBERADOS = ["Aguardando triagem funcional"];
+
 function etapaAtual(existente) {
   if (!existente) return null;
   const st = String(existente.status_atual || "").trim();
+  if (STATUS_LIBERADOS.includes(st)) return null;
   const conhecida = ETAPAS[st];
   if (conhecida) return { ...conhecida, status: st, desde: existente.data_funcional || existente.criado_em };
   if (existente.data_funcional) {
