@@ -307,7 +307,7 @@ function SidebarContent({ profile, onClose, handleLogout }) {
               <SubGroup icon={FlaskConical} label="Triagens" paths={["/triagens"]}>
                 <NavItem to="/triagens/funcional"      icon={Wrench}        label="Triagem Funcional" indent onClick={onClose} />
                 <NavItem to="/triagens/laudo"          icon={FileText}      label="Laudo"             indent onClick={onClose} />
-                <NavItemDisabled icon={Sparkles} label="Triagem Cosmética" indent />
+                <NavItem to="/triagens/cosmetica"      icon={Sparkles}      label="Triagem Cosmética" indent onClick={onClose} />
                 <NavItem to="/triagens/entrada-oracle" icon={ClipboardList} label="Entrada no Oracle" indent onClick={onClose} />
               </SubGroup>
               <SubGroup icon={Box} label="B2B" paths={["/b2b"]}>
