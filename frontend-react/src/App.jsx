@@ -38,6 +38,7 @@ import B2BPainelGestorPage from "./pages/B2BPainelGestorPage.jsx";
 import InventarioPage from "./pages/InventarioPage.jsx";
 import EntradaOraclePage from "./pages/EntradaOraclePage.jsx";
 import TriagemFuncionalPage from "./pages/TriagemFuncionalPage.jsx";
+import LaudoPage from "./pages/LaudoPage.jsx";
 
 function ProtectedRoute({ tela, children }) {
   const { user, loading, hasAccess } = useAuth();
@@ -138,6 +139,7 @@ export default function App() {
 
         {/* Triagens */}
         <Route path="/triagens/funcional" element={<ProtectedRoute tela="/triagens/funcional"><TriagemFuncionalPage /></ProtectedRoute>} />
+        <Route path="/triagens/laudo" element={<ProtectedRoute tela="/triagens/laudo"><LaudoPage /></ProtectedRoute>} />
         <Route path="/triagens/entrada-oracle" element={<ProtectedRoute tela="/triagens/entrada-oracle"><EntradaOraclePage /></ProtectedRoute>} />
 
         {/* Inventário Cíclico */}

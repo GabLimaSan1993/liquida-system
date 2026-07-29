@@ -36,6 +36,7 @@ const PAGE_META = {
   "/inventario":                   { title: "Inventário Cíclico",        subtitle: "Assurant Warehouse · Contagem por endereço, divergências e acuracidade" },
   "/triagens/entrada-oracle":      { title: "Entrada no Oracle",         subtitle: "Triagens · Confirmação de entrada, RI e nota por voucher" },
   "/triagens/funcional":           { title: "Triagem Funcional",         subtitle: "Triagens · Validação de IMEI, perguntas e defeitos" },
+  "/triagens/laudo":               { title: "Laudo de Triagem",          subtitle: "Triagens · Fotos e documento de divergência" },
 };
 
 export default function MainLayout() {

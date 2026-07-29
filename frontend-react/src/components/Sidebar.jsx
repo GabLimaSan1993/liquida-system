@@ -7,7 +7,7 @@ import {
   Truck, TrendingUp, Users, LogOut, X, ShoppingCart,
   Landmark, BarChart2, Lock, TrendingDown, Database,
   Package, Clock, LayoutDashboard, ScanLine, RefreshCw,
-  PlusCircle, Box, Store, Send,
+  PlusCircle, Box, Store, Send, FileText,
 } from "lucide-react";
 import { useAuth } from "../AuthContext.jsx";
 import { signOut } from "../services/authService.js";
@@ -165,10 +165,13 @@ function MenuAssurant({ onClose, telas }) {
             )}
           </SubGroup>
         )}
-        {(tem("/triagens/entrada-oracle") || tem("/triagens/funcional")) && (
+        {(tem("/triagens/entrada-oracle") || tem("/triagens/funcional") || tem("/triagens/laudo")) && (
           <SubGroup icon={FlaskConical} label="Triagens" paths={["/triagens"]}>
             {tem("/triagens/funcional") && (
               <NavItem to="/triagens/funcional" icon={Wrench} label="Triagem Funcional" indent onClick={onClose} />
+            )}
+            {tem("/triagens/laudo") && (
+              <NavItem to="/triagens/laudo" icon={FileText} label="Laudo" indent onClick={onClose} />
             )}
             <NavItemDisabled icon={Sparkles} label="Triagem Cosmética" indent />
             {tem("/triagens/entrada-oracle") && (
@@ -303,6 +306,7 @@ function SidebarContent({ profile, onClose, handleLogout }) {
               </SubGroup>
               <SubGroup icon={FlaskConical} label="Triagens" paths={["/triagens"]}>
                 <NavItem to="/triagens/funcional"      icon={Wrench}        label="Triagem Funcional" indent onClick={onClose} />
+                <NavItem to="/triagens/laudo"          icon={FileText}      label="Laudo"             indent onClick={onClose} />
                 <NavItemDisabled icon={Sparkles} label="Triagem Cosmética" indent />
                 <NavItem to="/triagens/entrada-oracle" icon={ClipboardList} label="Entrada no Oracle" indent onClick={onClose} />
               </SubGroup>
