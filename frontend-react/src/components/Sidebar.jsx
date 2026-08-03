@@ -325,6 +325,9 @@ function SidebarContent({ profile, onClose, handleLogout }) {
                 <NavItem to="/b2c/painel"         icon={LayoutDashboard} label="Painel Gestor B2C" indent onClick={onClose} />
                 <NavItem to="/b2c/expedicao"      icon={Send}            label="Expedição B2C"     indent onClick={onClose} />
               </SubGroup>
+              <SubGroup icon={BarChart3} label="Indicadores" paths={["/indicadores"]}>
+                <NavItem to="/indicadores"        icon={BarChart3}       label="Painel de Indicadores" indent onClick={onClose} />
+              </SubGroup>
               <SubGroup icon={ClipboardCheck} label="Gestão de Estoque" paths={["/inventario"]}>
                 <NavItem to="/inventario"         icon={ClipboardCheck}  label="Inventário Cíclico" indent onClick={onClose} />
               </SubGroup>
