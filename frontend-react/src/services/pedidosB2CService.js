@@ -31,10 +31,13 @@ const BATERIA_RUINS_NAO_OUTLET = [
 
 // Status da triagem em que a peça está fisicamente no armazém e pode ser alocada.
 // "Finalizado" (já vendida/expedida) e os "Reservado para..." ficam de fora de propósito.
+// "Aguardando alocação" também ficou de fora: é a etapa ANTERIOR à armazenagem — a peça
+// terminou a triagem mas ainda não foi guardada na prateleira, então não tem endereço
+// (98% desses registros vêm com `local` vazio). Sugerir essas peças mandava o separador
+// procurar o que não tem endereço, e o pedido morria em "não localizado".
 const STATUS_ALOCAVEIS = [
   "Produto disponível",
   "Em processo de devolução Agd RI",
-  "Aguardando alocação",
   "Aguardando oracle",
 ];
 
