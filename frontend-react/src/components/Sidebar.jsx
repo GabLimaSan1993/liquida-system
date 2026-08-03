@@ -211,6 +211,9 @@ function MenuAssurant({ onClose, telas }) {
             )}
           </SubGroup>
         )}
+        {tem("/indicadores") && (
+          <NavItem to="/indicadores" icon={BarChart3} label="Indicadores" onClick={onClose} />
+        )}
         {tem("/inventario") && (
           <SubGroup icon={ClipboardCheck} label="Gestão de Estoque" paths={["/inventario"]}>
             <NavItem to="/inventario"           icon={ClipboardCheck}  label="Inventário Cíclico" indent onClick={onClose} />

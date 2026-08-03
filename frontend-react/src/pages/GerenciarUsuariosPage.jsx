@@ -38,6 +38,7 @@ const TELAS = [
   { id: "/trocas-b2c/gestao",             label: "Assurant — Trocas B2C (Gestão)",   grupo: "Assurant" },
   { id: "/trocas-b2c/nova",               label: "Assurant — Trocas B2C (Nova)",     grupo: "Assurant" },
   { id: "/inventario",                    label: "Assurant — Inventário Cíclico",    grupo: "Assurant" },
+  { id: "/indicadores",                   label: "Assurant — Painel de Indicadores", grupo: "Assurant" },
   { id: "/inventario/sortear",            label: "Assurant — Inventário: sortear o dia", grupo: "Assurant" },
 ];
 

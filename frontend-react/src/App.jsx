@@ -24,6 +24,7 @@ import CargaHistoricaPage from "./pages/CargaHistoricaPage.jsx";
 import AssurantDashboardPage from "./pages/assurant/AssurantDashboardPage.jsx";
 import AssurantSLAPage from "./pages/assurant/AssurantSLAPage.jsx";
 import AssurantLayoutPage from "./pages/assurant/AssurantLayoutPage.jsx";
+import IndicadoresPage from "./pages/IndicadoresPage.jsx";
 
 import RecebimentoPage from "./pages/RecebimentoPage.jsx";
 import GestaoRecebimentoPage from "./pages/GestaoRecebimentoPage.jsx";
@@ -146,6 +147,9 @@ export default function App() {
 
         {/* Inventário Cíclico */}
         <Route path="/inventario" element={<ProtectedRoute tela="/inventario"><InventarioPage /></ProtectedRoute>} />
+
+        {/* Indicadores */}
+        <Route path="/indicadores" element={<ProtectedRoute tela="/indicadores"><IndicadoresPage /></ProtectedRoute>} />
       </Route>
     </Routes>
   );
