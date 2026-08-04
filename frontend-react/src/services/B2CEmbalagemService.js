@@ -108,8 +108,21 @@ async function registrarEvento(pedidoId, imei, mesa, acao, userId, userNome) {
   });
 }
 
+// Janela da fila: de ontem 12:00 (Brasília) até agora. A fila é do turno, não
+// histórico — sem esse corte entram ~4 mil pedidos antigos que nunca passaram
+// pelo fluxo de mesas e ficaram com emb_etiquetado nulo para sempre.
+// Brasília é UTC-3 fixo (o país não tem horário de verão desde 2019).
+function inicioDaJanela() {
+  const agora = new Date();
+  const brasilia = new Date(agora.getTime() - 3 * 3600 * 1000);
+  const ano = brasilia.getUTCFullYear();
+  const mes = brasilia.getUTCMonth();
+  const dia = brasilia.getUTCDate();
+  return new Date(Date.UTC(ano, mes, dia - 1, 15, 0, 0)).toISOString();  // ontem 12:00 BRT
+}
+
 // ══════════════════════════════════════════════════════════
-// FILA DA MESA — tudo que saiu do picking e ainda não teve etiqueta impressa
+// FILA DA MESA — o que entrou desde ontem 12:00 e ainda não teve etiqueta
 // ══════════════════════════════════════════════════════════
 // Entra na fila quem foi bipado no picking (status embalado ou faturado) e
 // ainda não fechou o passo da etiqueta. Sai da lista assim que a etiqueta é
@@ -119,7 +132,10 @@ export async function listarPendentesMesa() {
     .from("pedidos_b2c")
     .select("id, imei_bipado, imei_alocado, titulo_produto, grade_alocada, grade_produto, cliente, marketplace, status, numero_nf, etapa_embalagem, emb_nf_colada, emb_selado, emb_etiquetado, grupo_id")
     .in("status", ["embalado", "faturado"])
-    .neq("etapa_embalagem", "saida")
+    .gte("embalado_em", inicioDaJanela())
+    // neq sozinho descartaria as linhas com etapa_embalagem NULL (quem nunca
+    // entrou em mesa nenhuma) — no PostgREST, NULL <> 'saida' não é verdadeiro.
+    .or("etapa_embalagem.is.null,etapa_embalagem.neq.saida")
     .or("emb_etiquetado.is.null,emb_etiquetado.eq.false");
   if (error) return { ok: false, erro: error.message, grupos: [], total: 0 };
 
