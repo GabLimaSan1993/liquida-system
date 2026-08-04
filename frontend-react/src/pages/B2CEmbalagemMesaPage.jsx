@@ -1,23 +1,11 @@
 import { useState, useRef, useEffect } from "react";
 import {
-  Search, CheckCircle, AlertTriangle,
-  ArrowLeft, Lock, FileText, Package, Tag, Loader,
-  ListChecks, RefreshCw, Clock, Printer, Download,
+  Search, CheckCircle, AlertTriangle, Lock, FileText, Package, Tag, Loader,
+  ListChecks, RefreshCw, Printer, Download,
 } from "lucide-react";
 import { biparNaMesa, confirmarPassoMesa4, listarPendentesMesa } from "../services/B2CEmbalagemService.js";
 import { buscarEtiqueta, registrarImpressao, baixarZpl } from "../services/etiquetasService.js";
 import { useAuth } from "../AuthContext.jsx";
-
-const MESAS = [
-  { key: "mesa_1", label: "Mesa 1", desc: "Recebimento das listas do picking" },
-  { key: "mesa_2", label: "Mesa 2", desc: "Limpeza + caixa do aparelho" },
-  { key: "mesa_3", label: "Mesa 3", desc: "Caixa parda + saco de transporte" },
-  { key: "mesa_4", label: "Mesa 4", desc: "NF, selagem e etiqueta" },
-];
-
-function mesaLabel(k) {
-  return ({ mesa_1: "Mesa 1", mesa_2: "Mesa 2", mesa_3: "Mesa 3", mesa_4: "Mesa 4" })[k] || k;
-}
 
 function GradeBadge({ grade }) {
   if (!grade) return <span className="text-slate-300 text-xs">—</span>;
@@ -35,28 +23,16 @@ function Card({ children, className = "" }) {
   return <div className={`bg-white rounded-2xl p-5 ring-1 ring-slate-200 shadow-sm ${className}`}>{children}</div>;
 }
 
-function Header() {
-  return (
-    <div className="flex items-center gap-3">
-      <span className="text-2xl">📦</span>
-      <div>
-        <h2 className="text-lg font-black text-slate-800">Embalagem — Mesas</h2>
-        <p className="text-xs text-slate-500">Bipagem por mesa · esteira 1 → 2 → 3 → 4 → saída</p>
-      </div>
-    </div>
-  );
-}
-
 // Bipagem da chave da NF → acha a etiqueta do marketplace → baixa o .zpl p/ a Zebra.
 // A chave carrega o número da NF (posições 26–34), então funciona mesmo antes de o
-// XML daquela nota ter sido importado no sistema.
-function PainelEtiqueta({ pedido, userId, onImpresso }) {
-  const [chave, setChave]   = useState("");
-  const [busca, setBusca]   = useState(null);
-  const [proc, setProc]     = useState(false);
+// XML daquela nota ter sido importado. Imprimir é o gesto que conclui a embalagem.
+function PainelEtiqueta({ pedido, userId, onImpresso, bloqueado }) {
+  const [chave, setChave] = useState("");
+  const [busca, setBusca] = useState(null);
+  const [proc, setProc]   = useState(false);
   const ref = useRef(null);
 
-  useEffect(() => { ref.current?.focus(); }, []);
+  useEffect(() => { if (!bloqueado) ref.current?.focus(); }, [bloqueado]);
 
   async function handleBuscar(e) {
     e.preventDefault();
@@ -77,25 +53,28 @@ function PainelEtiqueta({ pedido, userId, onImpresso }) {
 
   async function handleImprimir(et) {
     baixarZpl(et);
-    try {
-      await registrarImpressao(et.id, userId);
-      setBusca(prev => ({
-        ...prev,
-        etiquetas: prev.etiquetas.map(x =>
-          x.id === et.id ? { ...x, total_impressoes: (x.total_impressoes || 0) + 1 } : x),
-      }));
-      onImpresso?.();
-    } catch (err) { console.error(err); }
+    try { await registrarImpressao(et.id, userId); } catch (err) { console.error(err); }
+    onImpresso?.();   // conclui a embalagem
   }
 
-  // Confere se a etiqueta achada é mesmo a do pedido que está na mesa
   const nfPedido = pedido?.numero_nf ? String(parseInt(pedido.numero_nf, 10)) : null;
   const divergente = busca?.ok && nfPedido && busca.nf !== nfPedido;
 
+  if (bloqueado) {
+    return (
+      <div className="mt-3 rounded-xl bg-slate-50 ring-1 ring-slate-200 p-4 opacity-60">
+        <div className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
+          <Lock className="h-3.5 w-3.5" /> Etiqueta do e-commerce — conclua os passos acima
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="mt-3 rounded-xl bg-slate-50 ring-1 ring-slate-200 p-4">
+    <div className="mt-3 rounded-xl bg-slate-50 ring-1 ring-purple-200 p-4">
       <div className="text-xs font-bold text-slate-600 mb-2 flex items-center gap-1.5">
         <Printer className="h-3.5 w-3.5 text-purple-500" /> Etiqueta do e-commerce
+        <span className="font-normal text-slate-400">· imprimir conclui a embalagem</span>
       </div>
 
       <form onSubmit={handleBuscar} className="flex gap-2">
@@ -134,15 +113,13 @@ function PainelEtiqueta({ pedido, userId, onImpresso }) {
                 {et.volume > 1 && <span className="text-slate-500"> · vol {et.volume}</span>}
                 <span className="text-slate-500"> · {et.marketplace}</span>
                 {et.total_impressoes > 0 && (
-                  <span className="block text-amber-600 font-semibold">
-                    já impressa {et.total_impressoes}x
-                  </span>
+                  <span className="block text-amber-600 font-semibold">já impressa {et.total_impressoes}x</span>
                 )}
               </div>
-              <button onClick={() => handleImprimir(et)}
-                className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 flex items-center gap-1.5">
+              <button onClick={() => handleImprimir(et)} disabled={divergente}
+                className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 disabled:opacity-40 flex items-center gap-1.5">
                 <Download className="h-3.5 w-3.5" />
-                {et.total_impressoes > 0 ? "Imprimir de novo" : "Imprimir etiqueta"}
+                {et.total_impressoes > 0 ? "Imprimir de novo" : "Imprimir e concluir"}
               </button>
             </div>
           ))}
@@ -152,24 +129,26 @@ function PainelEtiqueta({ pedido, userId, onImpresso }) {
   );
 }
 
-// Painel dos 3 passos da mesa 4 (NF colada → selado → etiquetado)
-function Mesa4Panel({ ativo, proc, onPasso, onFechar, userId }) {
+// Painel de finalização do aparelho na mesa
+function PainelAtivo({ ativo, proc, onPasso, onFechar, onEtiquetaImpressa, userId }) {
   const { pedido, passos, semNF } = ativo;
   const imei = pedido.imei_bipado || pedido.imei_alocado;
   const steps = [
-    { key: "nf_colada",  campo: "emb_nf_colada",  label: "NF impressa e colada",     icon: FileText, bloq: semNF },
-    { key: "selado",     campo: "emb_selado",     label: "Saco selado",              icon: Package,  dep: "emb_nf_colada" },
-    { key: "etiquetado", campo: "emb_etiquetado", label: "Etiqueta do e-commerce",   icon: Tag,      dep: "emb_selado" },
+    { key: "nf_colada", campo: "emb_nf_colada", label: "NF impressa e colada", icon: FileText, bloq: semNF },
+    { key: "selado",    campo: "emb_selado",    label: "Saco selado",          icon: Package,  dep: "emb_nf_colada" },
   ];
 
   return (
     <div className="bg-white rounded-2xl p-5 ring-2 ring-[#7F2D92] shadow-sm">
-      <div className="flex items-start justify-between gap-3 mb-4">
+      <div className="flex items-start justify-between gap-3 flex-wrap mb-4">
         <div className="min-w-0">
           <div className="font-mono font-bold text-slate-800 text-sm">{imei}</div>
           <div className="text-xs text-slate-500">
             #{pedido.id_anymarket}{pedido.marketplace ? ` · ${pedido.marketplace}` : ""}{pedido.numero_nf ? ` · NF ${pedido.numero_nf}` : ""}
           </div>
+          {pedido.titulo_produto && (
+            <div className="text-xs text-slate-400 mt-0.5">{pedido.titulo_produto}</div>
+          )}
         </div>
         <button onClick={onFechar} className="text-xs text-slate-400 hover:text-slate-600 shrink-0">Deixar p/ depois</button>
       </div>
@@ -183,8 +162,8 @@ function Mesa4Panel({ ativo, proc, onPasso, onFechar, userId }) {
           return (
             <button key={s.key} disabled={feito || bloqueado || proc} onClick={() => onPasso(s.key)}
               className={`w-full flex items-center gap-3 rounded-xl px-3 py-3 ring-1 transition text-left ${
-                feito       ? "bg-emerald-50 ring-emerald-200" :
-                bloqueado   ? "bg-slate-50 ring-slate-200 opacity-60 cursor-not-allowed" :
+                feito     ? "bg-emerald-50 ring-emerald-200" :
+                bloqueado ? "bg-slate-50 ring-slate-200 opacity-60 cursor-not-allowed" :
                 "bg-white ring-slate-200 hover:bg-purple-50 hover:ring-purple-300"
               }`}>
               {feito ? <CheckCircle className="h-5 w-5 text-emerald-600 shrink-0" />
@@ -199,68 +178,70 @@ function Mesa4Panel({ ativo, proc, onPasso, onFechar, userId }) {
         })}
       </div>
 
-      {/* Etiqueta do marketplace: aparece quando o saco já está selado e falta etiquetar */}
-      {passos.emb_selado && !passos.emb_etiquetado && (
-        <PainelEtiqueta pedido={pedido} userId={userId} />
-      )}
+      <PainelEtiqueta
+        pedido={pedido}
+        userId={userId}
+        bloqueado={!passos.emb_selado}
+        onImpresso={onEtiquetaImpressa}
+      />
     </div>
   );
 }
 
-// Lista de pendentes da mesa, agrupada por lista de picking (grupo)
-function PendentesMesa({ mesa, dados, loading, onAtualizar }) {
-  const total = dados?.total || 0;
-  const grupos = dados?.grupos || [];
-  const titulo = mesa === "mesa_1" ? "Aguardando a Mesa 1" : `Aguardando a ${mesaLabel(mesa)}`;
-
+// Fila da mesa, agrupada por lista de picking
+function FilaMesa({ dados, loading, onAtualizar }) {
   return (
     <Card>
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <ListChecks className="h-4 w-4 text-[#7F2D92]" />
-        <h3 className="font-black text-slate-800 text-sm">{titulo}</h3>
-        {total > 0 && (
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+        <h3 className="font-black text-slate-800 text-sm flex items-center gap-2">
+          <ListChecks className="h-4 w-4 text-[#7F2D92]" /> Aguardando na mesa
           <span className="text-xs font-semibold px-2 py-0.5 rounded-lg bg-purple-50 text-[#7F2D92] ring-1 ring-purple-200">
-            {total} aparelho{total > 1 ? "s" : ""} · {grupos.length} lista{grupos.length > 1 ? "s" : ""}
+            {dados.total} aparelho{dados.total === 1 ? "" : "s"} · {dados.grupos.length} lista{dados.grupos.length === 1 ? "" : "s"}
           </span>
-        )}
-        <button onClick={onAtualizar} className="ml-auto text-xs text-slate-500 hover:text-purple-700 font-semibold flex items-center gap-1">
+        </h3>
+        <button onClick={onAtualizar} className="text-xs text-slate-500 hover:text-purple-700 font-semibold flex items-center gap-1">
           <RefreshCw className="h-3.5 w-3.5" /> Atualizar
         </button>
       </div>
 
       {loading ? (
-        <div className="flex items-center gap-2 text-xs text-slate-500 py-4">
-          <Loader className="h-4 w-4 animate-spin text-purple-500" /> Carregando pendentes...
+        <div className="flex items-center gap-2 text-sm text-slate-400">
+          <Loader className="h-4 w-4 animate-spin" /> Carregando...
         </div>
-      ) : total === 0 ? (
-        <div className="flex items-center gap-2 text-xs text-slate-400 py-4">
-          <Clock className="h-4 w-4 opacity-40" />
-          Nenhum aparelho aguardando esta mesa.
-        </div>
+      ) : dados.grupos.length === 0 ? (
+        <p className="text-sm text-slate-400 text-center py-8">Nada aguardando — tudo etiquetado.</p>
       ) : (
         <div className="space-y-3">
-          {grupos.map((g, gi) => (
-            <div key={g.grupo_id || `sem-grupo-${gi}`} className="rounded-xl ring-1 ring-slate-200 overflow-hidden">
-              <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border-b border-slate-200">
-                <ListChecks className="h-3.5 w-3.5 text-[#7F2D92]" />
-                <span className="text-xs font-black text-slate-700">
-                  {g.numero != null ? `Lista de picking · Grupo #${g.numero}` : "Sem grupo"}
+          {dados.grupos.map(g => (
+            <div key={g.grupo_id || "sem"} className="rounded-xl ring-1 ring-slate-100 overflow-hidden">
+              <div className="flex items-center justify-between bg-slate-50 px-4 py-2">
+                <span className="text-xs font-black text-slate-700 flex items-center gap-2">
+                  <ListChecks className="h-3.5 w-3.5 text-purple-500" />
+                  {g.numero != null ? `Lista de picking · Grupo #${g.numero}` : "Sem lista"}
                 </span>
-                <span className="ml-auto text-xs text-slate-500 font-semibold">
-                  {g.itens.length} aparelho{g.itens.length > 1 ? "s" : ""}
-                </span>
+                <span className="text-xs text-slate-500">{g.itens.length} aparelho{g.itens.length === 1 ? "" : "s"}</span>
               </div>
               <div className="divide-y divide-slate-100">
                 {g.itens.map(it => (
-                  <div key={it.id} className="flex items-center gap-3 px-3 py-2.5">
-                    <div className="min-w-0 flex-1">
+                  <div key={it.id} className="flex items-center justify-between gap-3 flex-wrap px-4 py-2">
+                    <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono font-bold text-slate-800 text-xs">{it.imei || "—"}</span>
+                        <span className="font-mono text-xs font-bold text-slate-700">{it.imei}</span>
                         <GradeBadge grade={it.grade} />
+                        {it.semNF && (
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded-lg bg-amber-50 text-amber-700 ring-1 ring-amber-200">
+                            sem NF
+                          </span>
+                        )}
+                        {it.naMesa && (
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded-lg bg-purple-50 text-[#7F2D92] ring-1 ring-purple-200">
+                            na mesa · {it.passos}/3
+                          </span>
+                        )}
                       </div>
-                      <p className="text-xs text-slate-500 truncate mt-0.5">{it.modelo}</p>
+                      <div className="text-xs text-slate-500 truncate">{it.modelo}</div>
                     </div>
-                    {it.cliente && <span className="text-xs text-slate-400 shrink-0 truncate max-w-[40%]">{it.cliente}</span>}
+                    <span className="text-xs text-slate-400 shrink-0">{it.cliente}</span>
                   </div>
                 ))}
               </div>
@@ -274,26 +255,24 @@ function PendentesMesa({ mesa, dados, loading, onAtualizar }) {
 
 export default function B2CEmbalagemMesaPage() {
   const { user, profile } = useAuth();
-  const [mesa, setMesa]           = useState(null);
   const [imeiInput, setImeiInput] = useState("");
   const [historico, setHistorico] = useState([]);
-  const [ativo, setAtivo]         = useState(null);   // aparelho em finalização na mesa 4
+  const [ativo, setAtivo]         = useState(null);
   const [proc, setProc]           = useState(false);
-  const [pendentes, setPendentes]         = useState({ grupos: [], total: 0 });
-  const [loadingPend, setLoadingPend]     = useState(false);
+  const [pendentes, setPendentes] = useState({ grupos: [], total: 0 });
+  const [loadingPend, setLoadingPend] = useState(false);
   const inputRef = useRef(null);
 
-  useEffect(() => { if (mesa) inputRef.current?.focus(); }, [mesa, ativo]);
-  useEffect(() => { if (mesa) carregarPendentes(); }, [mesa]);
+  useEffect(() => { inputRef.current?.focus(); }, [ativo]);
+  useEffect(() => { carregarPendentes(); }, []);
 
   const nome   = profile?.nome || "Usuário";
   const feitos = historico.filter(h => h.ok).length;
 
   async function carregarPendentes() {
-    if (!mesa) return;
     setLoadingPend(true);
     try {
-      const res = await listarPendentesMesa(mesa);
+      const res = await listarPendentesMesa();
       if (res.ok) setPendentes({ grupos: res.grupos, total: res.total });
       else setPendentes({ grupos: [], total: 0 });
     } catch (e) {
@@ -315,10 +294,10 @@ export default function B2CEmbalagemMesaPage() {
     setImeiInput("");
     setProc(true);
     try {
-      const res = await biparNaMesa(imei, mesa, user.id, nome);
+      const res = await biparNaMesa(imei, "mesa_4", user.id, nome);
       if (!res.ok) {
         addHist({ ok: false, imei, msg: res.erro });
-      } else if (mesa === "mesa_4") {
+      } else {
         setAtivo({
           pedido: res.pedido,
           semNF: res.semNF,
@@ -328,9 +307,7 @@ export default function B2CEmbalagemMesaPage() {
             emb_etiquetado: !!res.pedido.emb_etiquetado,
           },
         });
-        addHist({ ok: true, imei, msg: `${res.reaberto ? "Reaberto" : "Chegou na Mesa 4"} — #${res.pedido.id_anymarket}` });
-      } else {
-        addHist({ ok: true, imei, msg: `Avançou para ${mesaLabel(mesa)} — #${res.pedido.id_anymarket}` });
+        addHist({ ok: true, imei, msg: `${res.reaberto ? "Reaberto" : "Na mesa"} — #${res.pedido.id_anymarket}` });
       }
     } catch (err) {
       addHist({ ok: false, imei, msg: err.message });
@@ -360,85 +337,79 @@ export default function B2CEmbalagemMesaPage() {
     } finally {
       setProc(false);
       inputRef.current?.focus();
+      carregarPendentes();
     }
   }
 
-  // ── Seleção de mesa ──
-  if (!mesa) {
-    return (
-      <div className="space-y-5">
-        <Header />
-        <p className="text-sm text-slate-500">Escolha a sua mesa para começar a bipar:</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {MESAS.map(m => (
-            <button key={m.key} onClick={() => { setMesa(m.key); setHistorico([]); setAtivo(null); }}
-              className="text-left bg-white rounded-2xl p-5 ring-1 ring-slate-200 shadow-sm hover:ring-purple-300 hover:bg-purple-50 transition-all">
-              <div className="font-black text-slate-800">{m.label}</div>
-              <div className="text-xs text-slate-500 mt-1">{m.desc}</div>
-            </button>
-          ))}
-        </div>
-      </div>
-    );
+  // Imprimiu a etiqueta = passo final: conclui a embalagem
+  async function handleEtiquetaImpressa() {
+    await confirmarPasso("etiquetado");
   }
-
-  const mesaAtual = MESAS.find(m => m.key === mesa);
 
   return (
     <div className="space-y-4">
-      <Header />
-
-      <div className="flex items-center gap-3 flex-wrap">
-        <button onClick={() => { setMesa(null); setAtivo(null); }}
-          className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1">
-          <ArrowLeft className="h-3 w-3" /> Trocar mesa
-        </button>
-        <div className="flex-1">
-          <h3 className="font-black text-slate-800 text-sm">{mesaAtual.label}</h3>
-          <p className="text-xs text-slate-500">{mesaAtual.desc}</p>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <span className="text-2xl">📦</span>
+          <div>
+            <h2 className="text-lg font-black text-slate-800">Embalagem B2C</h2>
+            <p className="text-xs text-slate-500">Bipe o IMEI · cole a NF · sele · imprima a etiqueta</p>
+          </div>
         </div>
-        <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
+        <span className="text-xs font-bold px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
           {feitos} nesta sessão
         </span>
       </div>
 
-      {mesa === "mesa_4" && ativo && (
-        <Mesa4Panel ativo={ativo} proc={proc} onPasso={confirmarPasso} onFechar={() => setAtivo(null)} userId={user?.id} />
+      {ativo && (
+        <PainelAtivo
+          ativo={ativo}
+          proc={proc}
+          onPasso={confirmarPasso}
+          onFechar={() => setAtivo(null)}
+          onEtiquetaImpressa={handleEtiquetaImpressa}
+          userId={user?.id}
+        />
       )}
 
       <Card>
-        <h3 className="font-black text-slate-800 text-sm mb-3 flex items-center gap-2">
+        <h3 className="font-black text-slate-800 text-sm flex items-center gap-2 mb-3">
           <Search className="h-4 w-4 text-[#7F2D92]" /> Bipar IMEI
         </h3>
-        <form onSubmit={handleBipar} className="flex gap-3">
-          <input ref={inputRef} type="text" value={imeiInput} onChange={e => setImeiInput(e.target.value)}
-            placeholder="Bipe o IMEI do aparelho..." autoComplete="off"
-            className="flex-1 rounded-xl border border-slate-200 px-4 py-3 text-sm font-mono font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7F2D92]" />
-          <button type="submit" disabled={!imeiInput.trim() || proc}
-            className="flex items-center gap-2 bg-[#7F2D92] text-white px-6 py-3 rounded-xl text-sm font-semibold hover:bg-[#5B1E74] transition disabled:opacity-50">
-            {proc ? <Loader className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />} Confirmar
+        <form onSubmit={handleBipar} className="flex gap-2">
+          <input
+            ref={inputRef}
+            value={imeiInput}
+            onChange={e => setImeiInput(e.target.value)}
+            placeholder="Bipe o IMEI do aparelho..."
+            className="flex-1 rounded-2xl ring-1 ring-slate-200 px-4 py-3 font-mono text-sm focus:ring-2 focus:ring-purple-400 outline-none"
+            disabled={proc}
+          />
+          <button type="submit" disabled={proc || !imeiInput.trim()}
+            className="px-6 py-3 rounded-2xl bg-[#7F2D92] text-white font-bold text-sm disabled:opacity-50 flex items-center gap-2">
+            {proc ? <Loader className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+            Confirmar
           </button>
         </form>
-        {mesa === "mesa_4" && (
-          <p className="text-xs text-slate-400 mt-2">Bipe o aparelho para abrir os 3 passos de finalização. Se faltar a NF, deixe para depois e rebipe quando a NF sair.</p>
-        )}
+        <p className="text-xs text-slate-400 mt-2">
+          Bipe o aparelho para abrir a finalização. Se faltar a NF, deixe para depois e rebipe quando a NF sair.
+        </p>
       </Card>
 
-      <PendentesMesa mesa={mesa} dados={pendentes} loading={loadingPend} onAtualizar={carregarPendentes} />
+      <FilaMesa dados={pendentes} loading={loadingPend} onAtualizar={carregarPendentes} />
 
       <Card>
         <h3 className="font-black text-slate-800 text-sm mb-3">Últimos bipes</h3>
         {historico.length === 0 ? (
-          <p className="text-xs text-slate-400">Nenhum aparelho bipado ainda nesta sessão.</p>
+          <p className="text-sm text-slate-400">Nenhum aparelho bipado ainda nesta sessão.</p>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {historico.map(h => (
-              <div key={h.ts} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 ring-1 ${h.ok ? "bg-emerald-50 ring-emerald-200" : "bg-red-50 ring-red-200"}`}>
-                {h.ok ? <CheckCircle className="h-4 w-4 text-emerald-600 shrink-0" /> : <AlertTriangle className="h-4 w-4 text-red-600 shrink-0" />}
-                <div className="min-w-0">
-                  {h.imei && <div className={`text-xs font-mono font-bold ${h.ok ? "text-emerald-800" : "text-red-800"}`}>{h.imei}</div>}
-                  <div className={`text-xs ${h.ok ? "text-emerald-700" : "text-red-700"}`}>{h.msg}</div>
-                </div>
+              <div key={h.ts} className="flex items-center gap-2 text-xs">
+                {h.ok ? <CheckCircle className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                      : <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0" />}
+                <span className="font-mono text-slate-600">{h.imei}</span>
+                <span className={h.ok ? "text-slate-500" : "text-red-600 font-semibold"}>{h.msg}</span>
               </div>
             ))}
           </div>
