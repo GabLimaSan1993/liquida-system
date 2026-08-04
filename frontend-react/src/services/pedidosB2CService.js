@@ -1283,7 +1283,7 @@ export async function resolverAnaliseParaEmbalagem(pedidoId, { tipo, valorReal, 
     .from("pedidos_b2c")
     .update({
       status:         "alocado",
-      if (error) throw traduzErroAlocacao(error, imeiFinal);
+      imei_alocado:   imeiFinal,
       motivo_analise: motivo || null,
       resolvido_em:   agora,
       resolvido_por:  userId,
@@ -1563,7 +1563,7 @@ export async function definirProduto(pedidoId, { mesmoSku, novoSku, novaGrade, i
 
   if (imeiTrim) {
     // Aloca DIRETO neste IMEI, pula o FIFO. Reserva o aparelho e aponta o pedido.
-    await supabase.from("pedidos_b2c").update({
+    const { error: errDef } = await supabase.from("pedidos_b2c").update({
       ...campos,
       status:        "alocado",
       imei_alocado:  imeiTrim,
@@ -1572,6 +1572,7 @@ export async function definirProduto(pedidoId, { mesmoSku, novoSku, novaGrade, i
       alocado_em:    new Date().toISOString(),
       alocado_por:   userId,
     }).eq("id", pedidoId);
+    if (errDef) throw traduzErroAlocacao(errDef, imeiTrim);
 
     const { error: errTri } = await supabase
       .from("assurant_triagem")
