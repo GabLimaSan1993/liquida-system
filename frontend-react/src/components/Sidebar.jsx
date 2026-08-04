@@ -7,7 +7,7 @@ import {
   Truck, TrendingUp, Users, LogOut, X, ShoppingCart,
   Landmark, BarChart2, Lock, TrendingDown, Database,
   Package, Clock, LayoutDashboard, ScanLine, RefreshCw,
-  PlusCircle, Box, Store, Send, FileText,
+  PlusCircle, Box, Store, Send, FileText, Tag,
 } from "lucide-react";
 import { useAuth } from "../AuthContext.jsx";
 import { signOut } from "../services/authService.js";
@@ -195,7 +195,7 @@ function MenuAssurant({ onClose, telas }) {
             )}
           </SubGroup>
         )}
-        {(tem("/b2c/pedidos") || tem("/b2c/embalagem") || tem("/b2c/painel") || tem("/b2c/expedicao")) && (
+        {(tem("/b2c/pedidos") || tem("/b2c/embalagem") || tem("/b2c/painel") || tem("/b2c/etiquetas") || tem("/b2c/expedicao")) && (
           <SubGroup icon={Store} label="B2C" paths={["/b2c"]}>
             {tem("/b2c/pedidos") && (
               <NavItem to="/b2c/pedidos"        icon={Store}           label="Pedidos B2C"       indent onClick={onClose} />
@@ -205,6 +205,9 @@ function MenuAssurant({ onClose, telas }) {
             )}
             {tem("/b2c/painel") && (
               <NavItem to="/b2c/painel"         icon={LayoutDashboard} label="Painel Gestor B2C" indent onClick={onClose} />
+            )}
+            {tem("/b2c/etiquetas") && (
+              <NavItem to="/b2c/etiquetas"      icon={Tag}             label="Etiquetas de envio" indent onClick={onClose} />
             )}
             {tem("/b2c/expedicao") && (
               <NavItem to="/b2c/expedicao"      icon={Send}            label="Expedição B2C"     indent onClick={onClose} />
@@ -323,6 +326,7 @@ function SidebarContent({ profile, onClose, handleLogout }) {
                 <NavItem to="/b2c/pedidos"        icon={Store}           label="Pedidos B2C"       indent onClick={onClose} />
                 <NavItem to="/b2c/embalagem"      icon={Box}             label="Embalagem B2C"     indent onClick={onClose} />
                 <NavItem to="/b2c/painel"         icon={LayoutDashboard} label="Painel Gestor B2C" indent onClick={onClose} />
+                <NavItem to="/b2c/etiquetas"      icon={Tag}             label="Etiquetas de envio" indent onClick={onClose} />
                 <NavItem to="/b2c/expedicao"      icon={Send}            label="Expedição B2C"     indent onClick={onClose} />
               </SubGroup>
               <SubGroup icon={BarChart3} label="Indicadores" paths={["/indicadores"]}>
