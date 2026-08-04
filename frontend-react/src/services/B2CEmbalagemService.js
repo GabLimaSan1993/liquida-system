@@ -1,23 +1,21 @@
 import { supabase } from "../lib/supabase";
 
-// Esteira física de embalagem: mesa_1 -> mesa_2 -> mesa_3 -> mesa_4 -> saida.
-// A etapa fica em pedidos_b2c.etapa_embalagem (null = bipado no picking, aguardando a mesa 1).
-const SEQUENCIA       = ["mesa_1", "mesa_2", "mesa_3", "mesa_4"];
-const ETAPA_ANTERIOR  = { mesa_1: null, mesa_2: "mesa_1", mesa_3: "mesa_2", mesa_4: "mesa_3" };
-const MESA_LABEL      = { mesa_1: "Mesa 1", mesa_2: "Mesa 2", mesa_3: "Mesa 3", mesa_4: "Mesa 4", saida: "Saída" };
+// Embalagem B2C — mesa única.
+// Antes eram 4 mesas em esteira; hoje tudo acontece num posto só, então
+// etapa_embalagem serve apenas para marcar quem já está na mesa ("mesa_4")
+// e quem já saiu ("saida"). O campo foi mantido para não quebrar o histórico.
+const MESA = "mesa_4";
 
 // ══════════════════════════════════════════════════════════
-// BIPAGEM NAS MESAS (1 a 4) — com validação de ordem
+// BIPAGEM NA MESA
 // ══════════════════════════════════════════════════════════
 export async function biparNaMesa(imeiDigitado, mesa, userId, userNome) {
   const imei = String(imeiDigitado || "").trim();
   if (!imei) return { ok: false, erro: "Bipe um IMEI." };
-  if (!SEQUENCIA.includes(mesa)) return { ok: false, erro: "Mesa inválida." };
 
-  // Acha o aparelho pelo IMEI (o bipado no picking, ou o alocado)
   const { data: encontrados, error } = await supabase
     .from("pedidos_b2c")
-    .select("id, id_anymarket, imei_alocado, imei_bipado, status, etapa_embalagem, titulo_produto, cliente, numero_nf, marketplace, emb_nf_colada, emb_selado, emb_etiquetado")
+    .select("id, id_anymarket, imei_alocado, imei_bipado, status, etapa_embalagem, titulo_produto, cliente, numero_nf, chave_nf, marketplace, emb_nf_colada, emb_selado, emb_etiquetado")
     .or(`imei_bipado.eq.${imei},imei_alocado.eq.${imei}`)
     .limit(1);
   if (error) return { ok: false, erro: error.message };
@@ -25,7 +23,7 @@ export async function biparNaMesa(imeiDigitado, mesa, userId, userNome) {
   const pedido = encontrados?.[0];
   if (!pedido) return { ok: false, erro: `IMEI ${imei} não encontrado.` };
 
-  // Precisa ter sido bipado no picking (entra na esteira a partir do "embalado")
+  // Entra na mesa a partir do "embalado" (bipado no picking)
   if (!["embalado", "faturado", "concluido"].includes(pedido.status)) {
     return { ok: false, erro: "Aparelho ainda não foi bipado no picking." };
   }
@@ -33,39 +31,27 @@ export async function biparNaMesa(imeiDigitado, mesa, userId, userNome) {
     return { ok: false, erro: "Aparelho já finalizado e liberado para saída." };
   }
 
-  // Validação de ordem: a mesa bipada tem que ser a próxima da sequência
-  if (pedido.etapa_embalagem === mesa) {
-    // Mesa 4: reabre o painel de finalização (os 3 passos já salvos) — útil quando faltava a NF
-    if (mesa === "mesa_4") {
-      const semNF = !["faturado", "concluido"].includes(pedido.status);
-      return { ok: true, mesa, pedido, semNF, reaberto: true };
-    }
-    return { ok: false, erro: `Aparelho já está na ${MESA_LABEL[mesa]}.` };
-  }
-  const anterior = ETAPA_ANTERIOR[mesa];
-  if (pedido.etapa_embalagem !== anterior) {
-    const faltou = anterior ? MESA_LABEL[anterior] : "o início";
-    return { ok: false, erro: `Fora de ordem — ainda não passou por ${faltou}.` };
+  const semNF = !["faturado", "concluido"].includes(pedido.status);
+
+  // Já estava na mesa: só reabre o painel com os passos salvos
+  if (pedido.etapa_embalagem === MESA) {
+    return { ok: true, mesa: MESA, pedido, semNF, reaberto: true };
   }
 
-  // Avança a etapa
   const { error: errUpd } = await supabase
     .from("pedidos_b2c")
-    .update({ etapa_embalagem: mesa, atualizado_em: new Date().toISOString() })
+    .update({ etapa_embalagem: MESA, atualizado_em: new Date().toISOString() })
     .eq("id", pedido.id);
   if (errUpd) return { ok: false, erro: errUpd.message };
 
-  await registrarEvento(pedido.id, imei, mesa, "entrada", userId, userNome);
+  await registrarEvento(pedido.id, imei, MESA, "entrada", userId, userNome);
 
-  const atualizado = { ...pedido, etapa_embalagem: mesa };
-  // Sinaliza a trava fiscal já na chegada da mesa 4 (não bloqueia a chegada, só avisa)
-  const semNF = mesa === "mesa_4" && pedido.status !== "faturado" && pedido.status !== "concluido";
-
-  return { ok: true, mesa, pedido: atualizado, semNF };
+  return { ok: true, mesa: MESA, pedido: { ...pedido, etapa_embalagem: MESA }, semNF };
 }
 
 // ══════════════════════════════════════════════════════════
-// MESA 4 — três passos: nf_colada -> selado -> etiquetado -> saída
+// PASSOS: nf_colada -> selado -> etiquetado -> saída
+// O passo "etiquetado" é disparado pela impressão da etiqueta, não por clique.
 // ══════════════════════════════════════════════════════════
 export async function confirmarPassoMesa4(pedidoId, passo, userId, userNome) {
   const CAMPO = { nf_colada: "emb_nf_colada", selado: "emb_selado", etiquetado: "emb_etiquetado" };
@@ -78,8 +64,8 @@ export async function confirmarPassoMesa4(pedidoId, passo, userId, userNome) {
     .eq("id", pedidoId)
     .single();
   if (!pedido) return { ok: false, erro: "Aparelho não encontrado." };
-  if (pedido.etapa_embalagem !== "mesa_4") {
-    return { ok: false, erro: "Aparelho não está na Mesa 4." };
+  if (pedido.etapa_embalagem !== MESA) {
+    return { ok: false, erro: "Aparelho não está na mesa." };
   }
 
   // Trava fiscal: a NF só pode ser colada se o pedido já foi faturado
@@ -105,8 +91,8 @@ export async function confirmarPassoMesa4(pedidoId, passo, userId, userNome) {
   const { error: errUpd } = await supabase.from("pedidos_b2c").update(update).eq("id", pedidoId);
   if (errUpd) return { ok: false, erro: errUpd.message };
 
-  await registrarEvento(pedidoId, imei, "mesa_4", passo, userId, userNome);
-  if (finalizou) await registrarEvento(pedidoId, imei, "mesa_4", "saida", userId, userNome);
+  await registrarEvento(pedidoId, imei, MESA, passo, userId, userNome);
+  if (finalizou) await registrarEvento(pedidoId, imei, MESA, "saida", userId, userNome);
 
   return { ok: true, finalizou, passos };
 }
@@ -123,46 +109,35 @@ async function registrarEvento(pedidoId, imei, mesa, acao, userId, userNome) {
 }
 
 // ══════════════════════════════════════════════════════════
-// PENDENTES POR MESA — listagem agrupada pelas listas de picking
+// FILA DA MESA — tudo que saiu do picking e ainda não teve etiqueta impressa
 // ══════════════════════════════════════════════════════════
-// Mesa 1  -> aparelhos bipados no picking e ainda sem etapa (etapa_embalagem null)
-// Mesa 2+ -> aparelhos cuja etapa atual é a mesa anterior (fila de entrada da mesa)
-// Retorna { ok, total, grupos: [{ grupo_id, numero, itens: [...] }] }
-export async function listarPendentesMesa(mesa) {
-  if (!SEQUENCIA.includes(mesa)) return { ok: false, erro: "Mesa inválida.", grupos: [], total: 0 };
-  const anterior = ETAPA_ANTERIOR[mesa]; // mesa_1 => null
-
-  let query = supabase
+// Entra na fila quem foi bipado no picking (status embalado ou faturado) e
+// ainda não fechou o passo da etiqueta. Sai da lista assim que a etiqueta é
+// impressa — que é o gesto que conclui a embalagem.
+export async function listarPendentesMesa() {
+  const { data: pedidos, error } = await supabase
     .from("pedidos_b2c")
-    .select("id, imei_bipado, imei_alocado, titulo_produto, grade_alocada, grade_produto, cliente, marketplace, status, etapa_embalagem, grupo_id")
-    .neq("status", "concluido"); // concluído = já saiu, não é pendente
-
-  if (anterior === null) {
-    // Aguardando a Mesa 1: bipado no picking mas ainda não entrou na esteira
-    query = query.is("etapa_embalagem", null).in("status", ["embalado", "faturado"]);
-  } else {
-    // Fila da mesa: itens que terminaram a etapa anterior
-    query = query.eq("etapa_embalagem", anterior);
-  }
-
-  const { data: pedidos, error } = await query;
+    .select("id, imei_bipado, imei_alocado, titulo_produto, grade_alocada, grade_produto, cliente, marketplace, status, numero_nf, etapa_embalagem, emb_nf_colada, emb_selado, emb_etiquetado, grupo_id")
+    .in("status", ["embalado", "faturado"])
+    .neq("etapa_embalagem", "saida")
+    .or("emb_etiquetado.is.null,emb_etiquetado.eq.false");
   if (error) return { ok: false, erro: error.message, grupos: [], total: 0 };
 
   const lista = pedidos || [];
   if (lista.length === 0) return { ok: true, grupos: [], total: 0 };
 
-  // Busca o número de cada lista de picking (pedidos_b2c_grupos.numero)
+  // Número de cada lista de picking (pedidos_b2c_grupos.numero), em blocos de 200
   const gruposIds = [...new Set(lista.map(p => p.grupo_id).filter(Boolean))];
   const numeroPorGrupo = {};
-  if (gruposIds.length) {
+  const BLOCO = 200;
+  for (let i = 0; i < gruposIds.length; i += BLOCO) {
     const { data: grupos } = await supabase
       .from("pedidos_b2c_grupos")
       .select("id, numero")
-      .in("id", gruposIds);
+      .in("id", gruposIds.slice(i, i + BLOCO));
     (grupos || []).forEach(g => { numeroPorGrupo[g.id] = g.numero; });
   }
 
-  // Agrupa por lista de picking
   const mapa = {};
   lista.forEach(p => {
     const chave = p.grupo_id || "sem_grupo";
@@ -180,10 +155,13 @@ export async function listarPendentesMesa(mesa) {
       grade:       p.grade_alocada || p.grade_produto,
       cliente:     p.cliente,
       marketplace: p.marketplace,
+      numero_nf:   p.numero_nf,
+      semNF:       p.status !== "faturado",
+      naMesa:      p.etapa_embalagem === "mesa_4",
+      passos:      [p.emb_nf_colada, p.emb_selado, p.emb_etiquetado].filter(Boolean).length,
     });
   });
 
-  // Ordena: listas com número primeiro (crescente), "sem grupo" por último
   const grupos = Object.values(mapa).sort((a, b) => {
     if (a.numero == null && b.numero == null) return 0;
     if (a.numero == null) return 1;
@@ -198,7 +176,6 @@ export async function listarPendentesMesa(mesa) {
 // PAINEL DE ACOMPANHAMENTO
 // ══════════════════════════════════════════════════════════
 export async function listarPainelMesas() {
-  // Quantos aparelhos estão parados em cada mesa agora
   const { data: pedidos } = await supabase
     .from("pedidos_b2c")
     .select("etapa_embalagem")
@@ -207,7 +184,6 @@ export async function listarPainelMesas() {
   const porMesa = { mesa_1: 0, mesa_2: 0, mesa_3: 0, mesa_4: 0 };
   (pedidos || []).forEach(p => { if (porMesa[p.etapa_embalagem] != null) porMesa[p.etapa_embalagem]++; });
 
-  // Eventos de hoje — para liberados na saída e produção por operador
   const inicioHoje = new Date();
   inicioHoje.setHours(0, 0, 0, 0);
   const { data: eventos } = await supabase
@@ -218,7 +194,6 @@ export async function listarPainelMesas() {
   const evs = eventos || [];
   const liberadosHoje = evs.filter(e => e.acao === "saida").length;
 
-  // Produção = 1 por aparelho que entrou numa mesa (conta só "entrada", justo entre as mesas)
   const prod = {};
   evs.forEach(e => {
     if (e.acao !== "entrada") return;
@@ -234,11 +209,8 @@ export async function listarPainelMesas() {
     })
     .sort((a, b) => b.total - a.total);
 
-  // Gargalo = mesa com mais aparelhos parados
   const ordenadas = Object.entries(porMesa).sort((a, b) => b[1] - a[1]);
   const gargalo = ordenadas[0] && ordenadas[0][1] > 0 ? ordenadas[0][0] : null;
 
   return { porMesa, liberadosHoje, producao, gargalo };
 }
-
-export { MESA_LABEL };
