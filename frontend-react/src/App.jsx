@@ -35,6 +35,7 @@ import PedidosB2CPage from "./pages/PedidosB2CPage.jsx";
 import B2CEmbalagemMesaPage from "./pages/B2CEmbalagemMesaPage.jsx";
 import B2CPainelGestorPage from "./pages/B2CPainelGestorPage.jsx";
 import ExpedicaoPage from "./pages/ExpedicaoPage.jsx";
+import EtiquetasEnvioPage from "./pages/EtiquetasEnvioPage.jsx";
 import B2BPainelGestorPage from "./pages/B2BPainelGestorPage.jsx";
 import InventarioPage from "./pages/InventarioPage.jsx";
 import EntradaOraclePage from "./pages/EntradaOraclePage.jsx";
@@ -138,6 +139,7 @@ export default function App() {
         <Route path="/b2c/embalagem" element={<ProtectedRoute tela="/b2c/embalagem"><B2CEmbalagemMesaPage /></ProtectedRoute>} />
         <Route path="/b2c/painel"    element={<ProtectedRoute tela="/b2c/painel"><B2CPainelGestorPage /></ProtectedRoute>} />
         <Route path="/b2c/expedicao" element={<ProtectedRoute tela="/b2c/expedicao"><ExpedicaoPage /></ProtectedRoute>} />
+        <Route path="/b2c/etiquetas" element={<ProtectedRoute tela="/b2c/etiquetas"><EtiquetasEnvioPage /></ProtectedRoute>} />
 
         {/* Triagens */}
         <Route path="/triagens/funcional" element={<ProtectedRoute tela="/triagens/funcional"><TriagemFuncionalPage /></ProtectedRoute>} />

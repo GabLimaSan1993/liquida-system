@@ -2,9 +2,10 @@ import { useState, useRef, useEffect } from "react";
 import {
   Search, CheckCircle, AlertTriangle,
   ArrowLeft, Lock, FileText, Package, Tag, Loader,
-  ListChecks, RefreshCw, Clock,
+  ListChecks, RefreshCw, Clock, Printer, Download,
 } from "lucide-react";
 import { biparNaMesa, confirmarPassoMesa4, listarPendentesMesa } from "../services/B2CEmbalagemService.js";
+import { buscarEtiqueta, registrarImpressao, baixarZpl } from "../services/etiquetasService.js";
 import { useAuth } from "../AuthContext.jsx";
 
 const MESAS = [
@@ -46,8 +47,113 @@ function Header() {
   );
 }
 
+// Bipagem da chave da NF → acha a etiqueta do marketplace → baixa o .zpl p/ a Zebra.
+// A chave carrega o número da NF (posições 26–34), então funciona mesmo antes de o
+// XML daquela nota ter sido importado no sistema.
+function PainelEtiqueta({ pedido, userId, onImpresso }) {
+  const [chave, setChave]   = useState("");
+  const [busca, setBusca]   = useState(null);
+  const [proc, setProc]     = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => { ref.current?.focus(); }, []);
+
+  async function handleBuscar(e) {
+    e.preventDefault();
+    const v = chave.trim();
+    if (!v || proc) return;
+    setProc(true);
+    try {
+      const r = await buscarEtiqueta(v);
+      setBusca(r);
+      if (r.ok) setChave("");
+    } catch (err) {
+      setBusca({ ok: false, erro: err.message });
+    } finally {
+      setProc(false);
+      ref.current?.focus();
+    }
+  }
+
+  async function handleImprimir(et) {
+    baixarZpl(et);
+    try {
+      await registrarImpressao(et.id, userId);
+      setBusca(prev => ({
+        ...prev,
+        etiquetas: prev.etiquetas.map(x =>
+          x.id === et.id ? { ...x, total_impressoes: (x.total_impressoes || 0) + 1 } : x),
+      }));
+      onImpresso?.();
+    } catch (err) { console.error(err); }
+  }
+
+  // Confere se a etiqueta achada é mesmo a do pedido que está na mesa
+  const nfPedido = pedido?.numero_nf ? String(parseInt(pedido.numero_nf, 10)) : null;
+  const divergente = busca?.ok && nfPedido && busca.nf !== nfPedido;
+
+  return (
+    <div className="mt-3 rounded-xl bg-slate-50 ring-1 ring-slate-200 p-4">
+      <div className="text-xs font-bold text-slate-600 mb-2 flex items-center gap-1.5">
+        <Printer className="h-3.5 w-3.5 text-purple-500" /> Etiqueta do e-commerce
+      </div>
+
+      <form onSubmit={handleBuscar} className="flex gap-2">
+        <input
+          ref={ref}
+          value={chave}
+          onChange={e => setChave(e.target.value)}
+          placeholder="Bipe a chave da NF na caixa"
+          className="flex-1 rounded-xl ring-1 ring-slate-200 px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-purple-400 outline-none"
+          disabled={proc}
+        />
+        <button type="submit" disabled={proc || !chave.trim()}
+          className="px-4 py-2 rounded-xl bg-[#7F2D92] text-white text-sm font-bold disabled:opacity-50">
+          {proc ? <Loader className="h-4 w-4 animate-spin" /> : "Buscar"}
+        </button>
+      </form>
+
+      {busca && !busca.ok && (
+        <div className="mt-2 flex items-start gap-2 text-xs font-semibold text-red-700 bg-red-50 ring-1 ring-red-200 rounded-xl px-3 py-2">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" /> {busca.erro}
+        </div>
+      )}
+
+      {busca?.ok && (
+        <div className="mt-2 space-y-2">
+          {divergente && (
+            <div className="flex items-start gap-2 text-xs font-semibold text-amber-800 bg-amber-50 ring-1 ring-amber-200 rounded-xl px-3 py-2">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+              A chave bipada é da NF {busca.nf}, mas o aparelho na mesa é da NF {nfPedido}. Confira a caixa.
+            </div>
+          )}
+          {busca.etiquetas.map(et => (
+            <div key={et.id} className="flex items-center justify-between gap-3 flex-wrap bg-white rounded-xl ring-1 ring-slate-200 px-3 py-2">
+              <div className="text-xs">
+                <span className="font-black text-slate-700">NF {et.numero_nf}</span>
+                {et.volume > 1 && <span className="text-slate-500"> · vol {et.volume}</span>}
+                <span className="text-slate-500"> · {et.marketplace}</span>
+                {et.total_impressoes > 0 && (
+                  <span className="block text-amber-600 font-semibold">
+                    já impressa {et.total_impressoes}x
+                  </span>
+                )}
+              </div>
+              <button onClick={() => handleImprimir(et)}
+                className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 flex items-center gap-1.5">
+                <Download className="h-3.5 w-3.5" />
+                {et.total_impressoes > 0 ? "Imprimir de novo" : "Imprimir etiqueta"}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Painel dos 3 passos da mesa 4 (NF colada → selado → etiquetado)
-function Mesa4Panel({ ativo, proc, onPasso, onFechar }) {
+function Mesa4Panel({ ativo, proc, onPasso, onFechar, userId }) {
   const { pedido, passos, semNF } = ativo;
   const imei = pedido.imei_bipado || pedido.imei_alocado;
   const steps = [
@@ -92,6 +198,11 @@ function Mesa4Panel({ ativo, proc, onPasso, onFechar }) {
           );
         })}
       </div>
+
+      {/* Etiqueta do marketplace: aparece quando o saco já está selado e falta etiquetar */}
+      {passos.emb_selado && !passos.emb_etiquetado && (
+        <PainelEtiqueta pedido={pedido} userId={userId} />
+      )}
     </div>
   );
 }
@@ -292,7 +403,7 @@ export default function B2CEmbalagemMesaPage() {
       </div>
 
       {mesa === "mesa_4" && ativo && (
-        <Mesa4Panel ativo={ativo} proc={proc} onPasso={confirmarPasso} onFechar={() => setAtivo(null)} />
+        <Mesa4Panel ativo={ativo} proc={proc} onPasso={confirmarPasso} onFechar={() => setAtivo(null)} userId={user?.id} />
       )}
 
       <Card>
