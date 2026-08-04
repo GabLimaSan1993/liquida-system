@@ -857,6 +857,22 @@ async function registrarAuditoriaFifo(pedidoId, { sugestao, candidatos, origem, 
   }
 }
 
+// O banco tem um índice único parcial (idx_b2c_imei_unico_ativo) que impede o
+// mesmo IMEI de ficar preso a dois pedidos vivos ao mesmo tempo. Quando dois
+// operadores alocam quase juntos, o segundo bate nessa trava e o Postgres
+// devolve 23505 — traduz para uma mensagem que o operador entenda.
+function traduzErroAlocacao(error, imei) {
+  const cod = error?.code || "";
+  const msg = error?.message || "";
+  if (cod === "23505" || /idx_b2c_imei_unico_ativo|duplicate key/i.test(msg)) {
+    return new Error(
+      `O aparelho ${imei || ""} acabou de ser alocado em outro pedido. ` +
+      `Atualize a lista e escolha outro.`
+    );
+  }
+  return new Error(msg || "Falha ao alocar.");
+}
+
 // O 6º parâmetro (auditoria) é opcional: { sugestao, candidatos, origem, pedido }.
 // Sem ele a alocação funciona igual, só não deixa rastro auditável.
 export async function alocarPedido(pedidoId, imei, sku, grade, userId, auditoria) {
@@ -873,7 +889,7 @@ export async function alocarPedido(pedidoId, imei, sku, grade, userId, auditoria
       atualizado_em: new Date().toISOString(),
     })
     .eq("id", pedidoId);
-  if (errPedido) throw new Error(errPedido.message);
+  if (errPedido) throw traduzErroAlocacao(errPedido, imei);
 
   // 2. Reserva o IMEI na assurant_triagem
   const { error: errTriagem } = await supabase
@@ -1113,7 +1129,7 @@ export async function naoLocalizadoBuscarProximo(pedido, userId, motivo) {
       .update({ status_atual: "Reservado para pedido B2C" })
       .eq("imei", proximo.imei);
 
-    await supabase
+    const { error: errTroca } = await supabase
       .from("pedidos_b2c")
       .update({
         imei_alocado:  proximo.imei,
@@ -1122,6 +1138,7 @@ export async function naoLocalizadoBuscarProximo(pedido, userId, motivo) {
         atualizado_em: new Date().toISOString(),
       })
       .eq("id", pedido.id);
+    if (errTroca) throw traduzErroAlocacao(errTroca, proximo.imei);
 
     // Troca no picking também é decisão do FIFO — registra com a origem certa.
     await registrarAuditoriaFifo(pedido.id, {
@@ -1266,14 +1283,14 @@ export async function resolverAnaliseParaEmbalagem(pedidoId, { tipo, valorReal, 
     .from("pedidos_b2c")
     .update({
       status:         "alocado",
-      imei_alocado:   imeiFinal,
+      if (error) throw traduzErroAlocacao(error, imeiFinal);
       motivo_analise: motivo || null,
       resolvido_em:   agora,
       resolvido_por:  userId,
       atualizado_em:  agora,
     })
     .eq("id", pedidoId);
-  if (error) throw new Error(error.message);
+  if (error) throw traduzErroAlocacao(error, imeiFinal);
 
   // Recolhe numa leva de grupo (respeita pedido inteiro + marketplace, como sempre).
   const grupoFormado = await verificarECriarGrupo(userId);
@@ -1322,7 +1339,7 @@ export async function seguirComOpcaoFifo(pedido, userId) {
       atualizado_em: agora,
     })
     .eq("id", pedido.id);
-  if (error) throw new Error(error.message);
+  if (error) throw traduzErroAlocacao(error, proximo.imei);
 
   const grupoFormado = await verificarECriarGrupo(userId);
   return { ok: true, novoImei: proximo.imei, local: proximo.local, grade: proximo.grade, grupoFormado };
