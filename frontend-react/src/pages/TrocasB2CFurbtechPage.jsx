@@ -790,6 +790,11 @@ function CardFaturamento({ troca, onAtualizar }) {
   const [feedback, setFeedback] = useState(null);
   const op = troca.trocas_b2c_assurant_operacao?.[0] || {};
 
+  const [baixando, setBaixando] = useState(false);
+  const [subindo, setSubindo]   = useState(false);
+  const inputXml = useRef(null);
+
+  // A NF não é digitada: vem do XML. Aqui só entram os dados da transportadora.
   const [form, setForm] = useState({
     nf:           op.nf           || "",
     aut_postagem: op.aut_postagem || "",
@@ -798,8 +803,41 @@ function CardFaturamento({ troca, onAtualizar }) {
 
   function setField(f, v) { setForm(prev => ({ ...prev, [f]: v })); }
 
+  async function handleBaixar() {
+    if (baixando) return;
+    setBaixando(true);
+    setFeedback(null);
+    try {
+      const r = await gerarPlanilhaTrocas(troca.id);
+      setFeedback(r.ok
+        ? { tipo: "ok",   msg: `Planilha ${r.nomeArquivo} gerada.` }
+        : { tipo: "erro", msg: r.erro });
+    } catch (e) { setFeedback({ tipo: "erro", msg: e.message }); }
+    finally { setBaixando(false); }
+  }
+
+  async function handleXml(e) {
+    const file = e.target.files?.[0];
+    if (!file || subindo) return;
+    setSubindo(true);
+    setFeedback(null);
+    try {
+      const r = await importarXmlsTrocas(file, user.id, troca.id);
+      if (r.faturadas > 0) {
+        setFeedback({ tipo: "ok", msg: "NF importada do XML." });
+        setTimeout(() => onAtualizar?.(), 1200);
+      } else {
+        const motivo = r.ignorados?.[0]?.motivo || "Nenhum item casou com esta troca.";
+        setFeedback({ tipo: "erro", msg: motivo });
+      }
+    } catch (err) { setFeedback({ tipo: "erro", msg: err.message }); }
+    finally {
+      setSubindo(false);
+      if (inputXml.current) inputXml.current.value = "";
+    }
+  }
+
   async function handleSalvar() {
-    if (!form.nf.trim()) return setFeedback({ tipo: "erro", msg: "Informe o número da NF." });
     setSalvando(true);
     setFeedback(null);
     try {
@@ -842,13 +880,25 @@ function CardFaturamento({ troca, onAtualizar }) {
 
       {aberto && !concluido && (
         <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
+          <div className="flex gap-2 flex-wrap">
+            <button onClick={handleBaixar} disabled={baixando}
+              className="flex items-center gap-1.5 text-xs font-bold px-4 py-2.5 rounded-xl bg-[#7F2D92] text-white hover:bg-[#5B1E74] disabled:opacity-50">
+              {baixando ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              Baixar planilha
+            </button>
+            <label className="flex items-center gap-1.5 text-xs font-bold px-4 py-2.5 rounded-xl ring-1 ring-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer">
+              <input ref={inputXml} type="file" accept=".xml,.zip" onChange={handleXml} className="hidden" disabled={subindo} />
+              {subindo ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+              Subir XML
+            </label>
+            {op.nf && (
+              <span className="flex items-center gap-1.5 text-xs font-bold px-3 py-2.5 rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
+                <CheckCircle className="h-3.5 w-3.5" /> NF {op.nf}
+              </span>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-slate-600 mb-1">NF *</label>
-              <input value={form.nf} onChange={e => setField("nf", e.target.value)}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#7F2D92]"
-                placeholder="Número da NF" />
-            </div>
             <div>
               <label className="block text-xs font-bold text-slate-600 mb-1">Autorização de Postagem</label>
               <input value={form.aut_postagem} onChange={e => setField("aut_postagem", e.target.value)}
@@ -1246,7 +1296,7 @@ export default function TrocasB2CFurbtechPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {aba === "faturamento" && <PainelFaturamento onAtualizar={carregar} />}
+          
           {aba === "trocas"      && lista.map(t => <CardAlocacao    key={t.id} troca={t} onAtualizar={carregar} />)}
           {aba === "teste"       && lista.map(t => <CardTeste       key={t.id} troca={t} onAtualizar={carregar} />)}
           {aba === "faturamento" && lista.map(t => <CardFaturamento key={t.id} troca={t} onAtualizar={carregar} />)}
