@@ -593,10 +593,6 @@ export default function B2BPainelGestorPage() {
                       return linhas;
                     })()}
                   </tbody>
-                  return linhas;
-                    })()}
-                  </tbody>
-                </table>
                 </table>
                 {lista.length === 0 && (
                   <p className="text-xs text-slate-400 text-center py-6">Nenhum pedido com esse filtro.</p>
