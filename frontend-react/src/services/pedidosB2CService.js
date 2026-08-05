@@ -1078,6 +1078,19 @@ export async function marcarNaoLocalizado(pedidoId, motivo, userId, destino = "e
   if (destino === "aguardando_definicao_produto") {
     campos.definicao_solicitada_em  = agora;
     campos.definicao_solicitada_por = userId;
+    // O pedido volta para a fila de definição, então a definição anterior precisa ser
+    // reaberta: a aba só lista definicao_status nulo ou pendente, e um "concluido"
+    // remanescente deixaria o pedido invisível em todas as telas.
+    campos.definicao_status         = "pendente";
+    campos.definicao_resolvido_em   = null;
+    campos.definicao_resolvido_por  = null;
+    campos.definicao_resumo         = null;
+    // Solta o aparelho que ninguém achou — segurá-lo bloqueia o FIFO para os outros.
+    campos.imei_alocado             = null;
+    campos.sku_alocado              = null;
+    campos.grade_alocada            = null;
+    campos.alocado_em               = null;
+    campos.alocado_por              = null;
   } else {
     campos.analise_em  = agora;
     campos.analise_por = userId;
