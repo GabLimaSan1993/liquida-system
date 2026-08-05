@@ -480,6 +480,167 @@ export async function registrarSeparacao(trocaId, imei, skuEscolhido, userId) {
   await atualizarStatusTroca(trocaId, "em_aberto");
 }
 
+// ════════════════════════════════════════════════════════
+// FATURAMENTO — planilha e importação dos XMLs (igual ao B2C)
+// ════════════════════════════════════════════════════════
+
+// Baixa a planilha das trocas prontas para faturar (aprovadas no teste).
+// Trocas não têm agrupamento como os pedidos B2C, então sai tudo de uma vez.
+export async function gerarPlanilhaTrocas() {
+  const { data: trocas, error } = await supabase
+    .from("trocas_b2c_assurant")
+    .select("*, trocas_b2c_assurant_skus(*), trocas_b2c_assurant_operacao(*)")
+    .order("data_solicitacao", { ascending: true });
+  if (error) throw new Error(error.message);
+
+  const prontas = (trocas || []).filter(t => {
+    const op = t.trocas_b2c_assurant_operacao?.[0];
+    return op?.imei && op.status_furbtech === "aprovado" && !op.nf;
+  });
+  if (!prontas.length) return { ok: false, erro: "Nenhuma troca aprovada aguardando faturamento." };
+
+  // O voucher vive na triagem — busca pelo IMEI, em blocos de 200.
+  const imeis = [...new Set(prontas.map(t => t.trocas_b2c_assurant_operacao[0].imei))];
+  const voucherPorImei = {};
+  for (let i = 0; i < imeis.length; i += 200) {
+    const { data: tri } = await supabase
+      .from("assurant_triagem")
+      .select("imei, voucher, criado_em")
+      .in("imei", imeis.slice(i, i + 200))
+      .order("criado_em", { ascending: false });
+    (tri || []).forEach(t => {
+      if (t.voucher && !voucherPorImei[t.imei]) voucherPorImei[t.imei] = t.voucher;
+    });
+  }
+
+  const rows = prontas.map(t => {
+    const op  = t.trocas_b2c_assurant_operacao[0];
+    const sku = (t.trocas_b2c_assurant_skus || []).sort((a, b) => a.ordem - b.ordem)[0] || {};
+    return {
+      "ID_TROCA":           t.id,
+      "PEDIDO_ANY":         t.id_anymarket || "",
+      "CLIENTE":            t.nome_cliente || "",
+      "CPF":                t.cpf || "",
+      "ENDERECO":           t.endereco || "",
+      "PRODUTO_ORIGINAL":   t.produto_original || "",
+      "SKU_SUBSTITUTO":     op.sku_escolhido || t.novo_sku || sku.sku || "",
+      "PRODUTO_SUBSTITUTO": t.produto_substituto || sku.descricao || "",
+      "GRADE":              sku.grade_alvo || sku.grade || "",
+      "IMEI":               op.imei || "",
+      "VOUCHER":            voucherPorImei[op.imei] || "",
+      "VALOR":              t.valor_total != null
+        ? Number(t.valor_total).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        : "",
+      "NUMERO_NF":          "",
+    };
+  });
+
+  const XLSX = await import("xlsx");
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(rows);
+  XLSX.utils.book_append_sheet(wb, ws, "Trocas");
+  const hoje = new Date().toISOString().split("T")[0];
+  const nomeArquivo = `faturamento_trocas_${hoje}.xlsx`;
+  XLSX.writeFile(wb, nomeArquivo);
+
+  return { ok: true, total: rows.length, nomeArquivo };
+}
+
+// O IMEI vem no fim da descrição do produto (xProd). <nProt> também tem 15 dígitos,
+// por isso o IMEI é lido só de dentro de det/prod/xProd, nunca do XML inteiro.
+function imeiDoXProd(xProd) {
+  const m = String(xProd || "").match(/(\d{15})\s*$/);
+  return m ? m[1] : null;
+}
+
+function parseNFeXml(texto) {
+  const doc = new DOMParser().parseFromString(texto, "application/xml");
+  if (doc.getElementsByTagName("parsererror").length) return null;
+  const um = (ctx, tag) => ctx?.getElementsByTagNameNS("*", tag)[0]?.textContent?.trim() || null;
+
+  const infNFe = doc.getElementsByTagNameNS("*", "infNFe")[0];
+  if (!infNFe) return null;
+  const ide = infNFe.getElementsByTagNameNS("*", "ide")[0];
+  const chave = um(doc, "chNFe")
+    || String(infNFe.getAttribute("Id") || "").replace(/^NFe/i, "") || null;
+
+  const itens = [];
+  const dets = infNFe.getElementsByTagNameNS("*", "det");
+  for (let i = 0; i < dets.length; i++) {
+    const prod = dets[i].getElementsByTagNameNS("*", "prod")[0];
+    if (!prod) continue;
+    const xProd = um(prod, "xProd") || "";
+    itens.push({ imei: imeiDoXProd(xProd), xProd });
+  }
+  return { numeroNf: um(ide, "nNF"), serie: um(ide, "serie"), chave, itens };
+}
+
+// Sobe XMLs (um .xml ou um .zip com vários) e fatura casando pelo IMEI.
+export async function importarXmlsTrocas(file, userId) {
+  const arquivos = [];
+  if (/\.zip$/i.test(file.name)) {
+    const JSZip = (await import("jszip")).default;
+    const zip = await JSZip.loadAsync(file);
+    for (const nome of Object.keys(zip.files)) {
+      const entrada = zip.files[nome];
+      if (entrada.dir || !/\.xml$/i.test(nome)) continue;
+      arquivos.push({ nome: nome.split("/").pop(), texto: await entrada.async("string") });
+    }
+    if (!arquivos.length) throw new Error("Nenhum arquivo .xml dentro do ZIP.");
+  } else {
+    arquivos.push({ nome: file.name, texto: await file.text() });
+  }
+
+  const { data: ops } = await supabase
+    .from("trocas_b2c_assurant_operacao")
+    .select("troca_id, imei, nf")
+    .not("imei", "is", null);
+  const porImei = {};
+  (ops || []).forEach(o => { porImei[String(o.imei).trim()] = o; });
+
+  let faturadas = 0, totalItens = 0;
+  const ignorados = [];
+
+  for (const arq of arquivos) {
+    const nfe = parseNFeXml(arq.texto);
+    if (!nfe) { ignorados.push({ arquivo: arq.nome, motivo: "XML inválido ou fora do padrão NF-e" }); continue; }
+    if (!nfe.itens.length) { ignorados.push({ arquivo: arq.nome, motivo: "NF sem itens" }); continue; }
+
+    for (const item of nfe.itens) {
+      totalItens++;
+      if (!item.imei) {
+        ignorados.push({ arquivo: arq.nome, nf: nfe.numeroNf, motivo: "IMEI não encontrado na descrição" });
+        continue;
+      }
+      const op = porImei[item.imei];
+      if (!op) {
+        ignorados.push({ arquivo: arq.nome, nf: nfe.numeroNf, imei: item.imei, motivo: "IMEI não está em nenhuma troca" });
+        continue;
+      }
+      if (op.nf) {
+        ignorados.push({ arquivo: arq.nome, nf: nfe.numeroNf, imei: item.imei, motivo: `Já faturada com a NF ${op.nf}` });
+        continue;
+      }
+
+      const agora = new Date().toISOString();
+      const { error } = await supabase
+        .from("trocas_b2c_assurant_operacao")
+        .update({
+          nf:              nfe.numeroNf,
+          data_nf:         agora.split("T")[0],
+          status_furbtech: "faturado",
+          atualizado_em:   agora,
+          atualizado_por:  userId,
+        })
+        .eq("troca_id", op.troca_id);
+      if (error) throw new Error(error.message);
+      faturadas++;
+    }
+  }
+
+  return { ok: true, faturadas, totalItens, arquivos: arquivos.length, ignorados };
+}
+
 export async function registrarFaturamento(trocaId, dados, userId) {
   const { error } = await supabase
     .from("trocas_b2c_assurant_operacao")

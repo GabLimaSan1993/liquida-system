@@ -479,10 +479,13 @@ function FormNovaSolicitacao() {
 // ══════════════════════════════════════════════════════════
 // ACOMPANHAMENTO (read-only) — SLA D+2
 // ══════════════════════════════════════════════════════════
-const ETAPAS = ["em_aberto", "em_separacao", "faturado", "postado", "concluido"];
+// Espelha o fluxo da Furbtech: alocação → separação → teste → faturamento → postagem.
+const ETAPAS = ["em_aberto", "alocado", "em_separacao", "aprovado", "faturado", "postado", "concluido"];
 const ETAPA_LABEL = {
   em_aberto:    "Em aberto",
-  em_separacao: "Em separação",
+  alocado:      "Alocado",
+  em_separacao: "Separado",
+  aprovado:     "Testado",
   faturado:     "Faturado",
   postado:      "Postado",
   concluido:    "Concluído",
@@ -520,7 +523,11 @@ function calcularSLA(troca) {
 function StatusBadge({ status }) {
   const map = {
     em_aberto:        { label: "Em aberto",    cls: "bg-blue-50 text-blue-700 ring-blue-200"          },
-    em_separacao:     { label: "Em separação", cls: "bg-yellow-50 text-yellow-700 ring-yellow-200"    },
+    alocado:          { label: "Alocado",      cls: "bg-blue-50 text-blue-700 ring-blue-200"          },
+    em_separacao:     { label: "Separado",     cls: "bg-yellow-50 text-yellow-700 ring-yellow-200"    },
+    aprovado:         { label: "Testado",      cls: "bg-teal-50 text-teal-700 ring-teal-200"          },
+    reprovado:        { label: "Reprovado",    cls: "bg-red-50 text-red-700 ring-red-200"             },
+    nao_localizado:   { label: "Não localizado", cls: "bg-orange-50 text-orange-700 ring-orange-200"  },
     faturado:         { label: "Faturado",     cls: "bg-purple-50 text-purple-700 ring-purple-200"    },
     postado:          { label: "Postado",      cls: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
     movido_reembolso: { label: "Reembolso",    cls: "bg-red-50 text-red-700 ring-red-200"             },
