@@ -270,7 +270,7 @@ export async function listarEmAnaliseComOpcao() {
   // Busca só o estoque alocável DESSES SKUs (não o estoque inteiro).
   const { data: triagem } = await supabase
     .from("assurant_triagem")
-    .select("imei, sku, grade, local, status_atual, criado_em")
+    .select("imei, sku, grade, local, status_atual, status_bateria, criado_em")
     .in("status_atual", STATUS_ALOCAVEIS)
     .in("sku", [...skusAlvo])
     .limit(5000);
@@ -291,6 +291,20 @@ export async function listarEmAnaliseComOpcao() {
     (data || []).forEach(s => subinv.set(s.imei, s));
   }
 
+  // TRAVA DE DONO: mesma regra do FIFO. Sem isso o selo conta como candidato peça que já
+  // está amarrada a outro pedido — inclusive a própria peça do pedido em análise, que
+  // continua "Reservado para pedido B2C". Era o que fazia o selo prometer opção que o
+  // modal (que chama o FIFO de verdade) depois não encontrava.
+  const emUso = new Set();
+  for (let i = 0; i < imeis.length; i += 200) {
+    const { data: donos } = await supabase
+      .from("pedidos_b2c")
+      .select("imei_alocado")
+      .in("status", ["alocado", "em_picking", "embalado", "em_analise", "aguardando_definicao_produto"])
+      .in("imei_alocado", imeis.slice(i, i + 200));
+    (donos || []).forEach(d => { if (d.imei_alocado) emUso.add(String(d.imei_alocado).trim()); });
+  }
+
   // Índice do estoque sugerível por SKU (só o que o FIFO ofereceria).
   const temLocal = (t) => !!(t.local && String(t.local).trim());
   const wh2ok = (loc) => loc == null || String(loc).trim() === "" || String(loc).trim().toUpperCase().startsWith("WH2");
@@ -298,6 +312,7 @@ export async function listarEmAnaliseComOpcao() {
   for (const t of porImei.values()) {
     const st = subinv.get(t.imei);
     if (!st?.data_subinv || !temLocal(t) || !wh2ok(st.local_subinv)) continue;
+    if (emUso.has(String(t.imei).trim())) continue;
     if (!porSku.has(t.sku)) porSku.set(t.sku, []);
     porSku.get(t.sku).push(t);
   }
@@ -326,7 +341,11 @@ export async function listarEmAnaliseComOpcao() {
     const skuBase = skuBasePorPedido.get(p.id);
     const gradeAlvo = p.grade_definida || p.grade_produto;
     const candidatos = porSku.get(skuBase) || [];
-    const temOpcaoFifo = candidatos.some(c => gradeAceita(c.grade, gradeAlvo));
+    // itemElegivel aplica grade E bateria — gradeAceita sozinho deixava passar peça
+    // Outlet (bateria 70–79%) para pedido que não é Outlet.
+    const gradeAlvoNorm = String(gradeAlvo || "").trim();
+    const ehOutlet = /outlet/i.test(gradeAlvoNorm);
+    const temOpcaoFifo = candidatos.some(c => itemElegivel(c, ehOutlet, gradeAlvoNorm));
     const est = locVouch.get(p.imei_alocado);
     return {
       ...p, temOpcaoFifo,
