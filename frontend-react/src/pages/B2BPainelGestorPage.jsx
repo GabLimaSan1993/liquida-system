@@ -593,27 +593,10 @@ export default function B2BPainelGestorPage() {
                       return linhas;
                     })()}
                   </tbody>
-                          {p.lote && <span className="block text-[10px] font-normal text-slate-400">{p.lote}</span>}
-                        </td>
-                        <td className="px-2 py-2 text-slate-600">{fmtDia(p.dataPedido)}</td>
-                        <td className="px-2 py-2 text-right font-semibold text-slate-700">{p.total}</td>
-                        <td className="px-2 py-2 text-right text-slate-600">{p.separado}</td>
-                        <td className="px-2 py-2 text-center">
-                          <span className={`inline-block text-[10px] font-black px-2 py-1 rounded ${CORES_STATUS[p.status] || "bg-slate-200 text-slate-600"}`}>
-                            {p.status}
-                          </span>
-                        </td>
-                        <td className="px-2 py-2 text-slate-600">{fmtDia(p.dataFaturamento)}</td>
-                        <td className={`px-2 py-2 text-right font-semibold ${p.agingAberto && p.aging > 2 ? "text-red-600" : "text-slate-600"}`}>
-                          {p.aging != null ? `${p.aging}d` : "—"}
-                        </td>
-                        <td className={`px-2 py-2 text-right font-bold ${p.diferenca > 0 ? "text-amber-700" : "text-slate-400"}`}>
-                          {p.diferenca}
-                        </td>
-                        <td className="px-2 py-2 text-slate-500 max-w-[220px]">{p.observacoes || "—"}</td>
-                      </tr>
-                    ))}
+                  return linhas;
+                    })()}
                   </tbody>
+                </table>
                 </table>
                 {lista.length === 0 && (
                   <p className="text-xs text-slate-400 text-center py-6">Nenhum pedido com esse filtro.</p>
