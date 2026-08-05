@@ -486,7 +486,8 @@ export async function registrarSeparacao(trocaId, imei, skuEscolhido, userId) {
 
 // Baixa a planilha das trocas prontas para faturar (aprovadas no teste).
 // Trocas não têm agrupamento como os pedidos B2C, então sai tudo de uma vez.
-export async function gerarPlanilhaTrocas() {
+// trocaId opcional: com ele a planilha sai só daquela troca (uma linha).
+export async function gerarPlanilhaTrocas(trocaId = null) {
   const { data: trocas, error } = await supabase
     .from("trocas_b2c_assurant")
     .select("*, trocas_b2c_assurant_skus(*), trocas_b2c_assurant_operacao(*)")
@@ -494,10 +495,15 @@ export async function gerarPlanilhaTrocas() {
   if (error) throw new Error(error.message);
 
   const prontas = (trocas || []).filter(t => {
+    if (trocaId && t.id !== trocaId) return false;
     const op = t.trocas_b2c_assurant_operacao?.[0];
-    return op?.imei && op.status_furbtech === "aprovado" && !op.nf;
+    return op?.imei && (trocaId ? true : op.status_furbtech === "aprovado" && !op.nf);
   });
-  if (!prontas.length) return { ok: false, erro: "Nenhuma troca aprovada aguardando faturamento." };
+  if (!prontas.length) {
+    return { ok: false, erro: trocaId
+      ? "Esta troca ainda não tem aparelho separado."
+      : "Nenhuma troca aprovada aguardando faturamento." };
+  }
 
   // O voucher vive na triagem — busca pelo IMEI, em blocos de 200.
   const imeis = [...new Set(prontas.map(t => t.trocas_b2c_assurant_operacao[0].imei))];
@@ -540,7 +546,9 @@ export async function gerarPlanilhaTrocas() {
   const ws = XLSX.utils.json_to_sheet(rows);
   XLSX.utils.book_append_sheet(wb, ws, "Trocas");
   const hoje = new Date().toISOString().split("T")[0];
-  const nomeArquivo = `faturamento_trocas_${hoje}.xlsx`;
+  const nomeArquivo = trocaId
+    ? `troca_${prontas[0].id_anymarket || hoje}.xlsx`
+    : `faturamento_trocas_${hoje}.xlsx`;
   XLSX.writeFile(wb, nomeArquivo);
 
   return { ok: true, total: rows.length, nomeArquivo };
@@ -576,7 +584,9 @@ function parseNFeXml(texto) {
 }
 
 // Sobe XMLs (um .xml ou um .zip com vários) e fatura casando pelo IMEI.
-export async function importarXmlsTrocas(file, userId) {
+// trocaId opcional: restringe o casamento àquela troca, evitando que um XML de
+// outra nota no mesmo arquivo fature a troca errada.
+export async function importarXmlsTrocas(file, userId, trocaId = null) {
   const arquivos = [];
   if (/\.zip$/i.test(file.name)) {
     const JSZip = (await import("jszip")).default;
@@ -591,10 +601,12 @@ export async function importarXmlsTrocas(file, userId) {
     arquivos.push({ nome: file.name, texto: await file.text() });
   }
 
-  const { data: ops } = await supabase
+  let q = supabase
     .from("trocas_b2c_assurant_operacao")
     .select("troca_id, imei, nf")
     .not("imei", "is", null);
+  if (trocaId) q = q.eq("troca_id", trocaId);
+  const { data: ops } = await q;
   const porImei = {};
   (ops || []).forEach(o => { porImei[String(o.imei).trim()] = o; });
 
