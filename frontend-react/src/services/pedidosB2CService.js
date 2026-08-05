@@ -433,7 +433,7 @@ export async function buscarSugestaoFifo(skuProduto, gradePedido) {
     const { data: donos, error: errDonos } = await supabase
       .from("pedidos_b2c")
       .select("imei_alocado")
-      .in("status", ["alocado", "em_picking", "embalado"])
+      .in("status", ["alocado", "em_picking", "embalado", "em_analise", "aguardando_definicao_produto"])
       .in("imei_alocado", candidatosImei.slice(i, i + BLOCO_DONO));
     if (errDonos) throw new Error(`Falha ao verificar IMEIs em uso: ${errDonos.message}`);
     (donos || []).forEach(d => {
@@ -1078,7 +1078,7 @@ export async function marcarNaoLocalizado(pedidoId, motivo, userId, destino = "e
     .select("id, grupo_id, status")
     .eq("id_anymarket", alvo.id_anymarket)
     .neq("id", pedidoId)
-    .in("status", ["alocado", "em_picking", "embalado"]);
+    .in("status", ["alocado", "em_picking", "embalado", "em_analise", "aguardando_definicao_produto"]);
 
   for (const irmao of (irmaos || [])) {
     if (irmao.grupo_id) gruposAfetados.add(irmao.grupo_id);
