@@ -93,8 +93,8 @@ function CardSeparacao({ troca, onAtualizar }) {
   const [feedback, setFeedback]         = useState(null);
   const [bipando, setBipando]           = useState(false);
   const inputRef                        = useRef(null);
-  const op = troca.trocas_b2c_operacao?.[0] || {};
-  const skus = (troca.trocas_b2c_skus || []).sort((a, b) => a.ordem - b.ordem);
+  const op = troca.trocas_b2c_assurant_operacao?.[0] || {};
+  const skus = (troca.trocas_b2c_assurant_skus || []).sort((a, b) => a.ordem - b.ordem);
   const jaSeparado = !!op.imei;
 
   async function carregarSugestoes() {
@@ -322,7 +322,7 @@ function CardFaturamento({ troca, onAtualizar }) {
   const [aberto, setAberto]   = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [feedback, setFeedback] = useState(null);
-  const op = troca.trocas_b2c_operacao?.[0] || {};
+  const op = troca.trocas_b2c_assurant_operacao?.[0] || {};
 
   const [form, setForm] = useState({
     nf:           op.nf           || "",
@@ -450,13 +450,13 @@ export default function TrocasB2CFurbtechPage() {
     if (aba === "trocas") return matchBusca;
 
     if (aba === "separacao") {
-      const op = t.trocas_b2c_operacao?.[0];
+      const op = t.trocas_b2c_assurant_operacao?.[0];
       const semImei = !op?.imei;
       return matchBusca && semImei && t.status !== "movido_reembolso" && t.status !== "concluido";
     }
 
     if (aba === "faturamento") {
-      const op = t.trocas_b2c_operacao?.[0];
+      const op = t.trocas_b2c_assurant_operacao?.[0];
       const temImei = !!op?.imei;
       return matchBusca && temImei;
     }
@@ -465,9 +465,9 @@ export default function TrocasB2CFurbtechPage() {
   });
 
   const contadores = {
-    emAberto:    trocas.filter(t => t.status === "em_aberto").length,
-    separacao:   trocas.filter(t => { const op = t.trocas_b2c_operacao?.[0]; return !op?.imei && t.status !== "movido_reembolso" && t.status !== "concluido"; }).length,
-    faturamento: trocas.filter(t => { const op = t.trocas_b2c_operacao?.[0]; return !!op?.imei; }).length,
+    emAberto:    trocas.filter(t => t.status === "Em aberto" || t.status === "em_aberto").length,
+    separacao:   trocas.filter(t => { const op = t.trocas_b2c_assurant_operacao?.[0]; return !op?.imei && t.status !== "movido_reembolso" && t.status !== "concluido"; }).length,
+    faturamento: trocas.filter(t => { const op = t.trocas_b2c_assurant_operacao?.[0]; return !!op?.imei; }).length,
     concluidos:  trocas.filter(t => t.status === "concluido").length,
   };
 
@@ -539,19 +539,19 @@ export default function TrocasB2CFurbtechPage() {
                   <div className="text-sm font-semibold text-slate-700">{t.nome_cliente}</div>
                   <div className="text-xs text-slate-400 mt-0.5 truncate">{t.produto_original}</div>
                   <div className="text-xs text-slate-400 mt-0.5">Solicitado em {fmtData(t.criado_em)}</div>
-                  {t.trocas_b2c_skus?.length > 0 && (
+                  {t.trocas_b2c_assurant_skus?.length > 0 && (
                     <div className="flex gap-1 flex-wrap mt-2">
-                      {t.trocas_b2c_skus.sort((a, b) => a.ordem - b.ordem).map(s => (
+                      {t.trocas_b2c_assurant_skus.sort((a, b) => a.ordem - b.ordem).map(s => (
                         <span key={s.id} className="text-xs bg-purple-50 text-purple-700 px-2 py-0.5 rounded-lg font-semibold">
                           {s.sku}{(s.grade_alvo || s.grade) && ` · ${s.grade_alvo || s.grade}`}
                         </span>
                       ))}
                     </div>
                   )}
-                  {t.trocas_b2c_operacao?.[0]?.imei && (
+                  {t.trocas_b2c_assurant_operacao?.[0]?.imei && (
                     <div className="text-xs text-emerald-600 font-semibold mt-1 flex items-center gap-1">
-                      <CheckCircle className="h-3 w-3" /> IMEI: {t.trocas_b2c_operacao[0].imei}
-                      {t.trocas_b2c_operacao[0].rastreio && <><Truck className="h-3 w-3 ml-1" />{t.trocas_b2c_operacao[0].rastreio}</>}
+                      <CheckCircle className="h-3 w-3" /> IMEI: {t.trocas_b2c_assurant_operacao[0].imei}
+                      {t.trocas_b2c_assurant_operacao[0].rastreio && <><Truck className="h-3 w-3 ml-1" />{t.trocas_b2c_assurant_operacao[0].rastreio}</>}
                     </div>
                   )}
                 </div>

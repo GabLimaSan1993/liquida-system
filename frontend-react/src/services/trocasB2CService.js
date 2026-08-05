@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase";
+import { buscarSugestaoFifo } from "./pedidosB2CService.js";
 
 // ════════════════════════════════════════════════════════
 // Parsing do SKU AnyMarket: extrai SKU limpo + grade-alvo do sufixo -ccN
@@ -155,39 +156,66 @@ export async function buscarDescricaoPorSku(sku) {
 // SUGESTÃO FIFO (visão Oracle via estoque_subinv)
 // Passa a grade_alvo de cada SKU para a RPC, que destaca/filtra.
 // ════════════════════════════════════════════════════════
-export async function buscarSugestoesFIFO(skus, limite = 5) {
+// A grade das trocas é gravada em caixa alta e com a variante "EXCELENTE/LIKE NEW";
+// o FIFO do B2C espera a grade como aparece no pedido.
+function gradeParaB2C(gradeAlvo) {
+  const g = String(gradeAlvo || "").trim().toUpperCase();
+  if (!g) return null;
+  if (g.startsWith("EXCELENTE")) return "Excelente";
+  if (g === "LIKE NEW")          return "Like New";
+  if (g === "MUITO BOM")         return "Muito Bom";
+  if (g === "BOM")               return "Bom";
+  if (g.startsWith("OUTLET"))    return "Outlet";
+  return gradeAlvo;
+}
+
+// IMEIs já presos a outra troca (o FIFO do B2C só enxerga pedidos_b2c).
+async function imeisEmTroca() {
+  const { data } = await supabase
+    .from("trocas_b2c_assurant_operacao")
+    .select("imei, status_furbtech")
+    .not("imei", "is", null);
+  const usados = new Set();
+  (data || []).forEach(o => {
+    if (o.status_furbtech !== "reprovado") usados.add(String(o.imei).trim());
+  });
+  return usados;
+}
+
+// Antes isto chamava a RPC buscar_fifo_sku, que aceitava status não alocáveis
+// ("Finalizado", "Reservado para pedido B2C") e checava a tabela errada na trava
+// de dono. Reusar a função do B2C mantém uma regra só: quando corrigimos lá,
+// vale aqui também — status, subinv, local, WH2, grade, bateria e dono.
+export async function buscarSugestoesFIFO(skus, limite = 5, excluirImeis = []) {
   if (!skus?.length) return {};
 
+  const emTroca = await imeisEmTroca();
+  const excluir = new Set([...emTroca, ...excluirImeis.map(i => String(i).trim())]);
+
   const resultado = {};
-
   for (const skuObj of skus) {
-    const sku = skuObj.sku?.trim();
-    if (!sku) continue;
+    const bruto = skuObj.sku?.trim();
+    if (!bruto) continue;
 
-    // grade_alvo já gravada na troca; se vier vazia, deriva do sufixo
-    const gradeAlvo = skuObj.grade_alvo || parseSkuGrade(sku).gradeAlvo || null;
-    const { sku: skuLimpo } = parseSkuGrade(sku);
+    const { sku: skuLimpo } = parseSkuGrade(bruto);
+    const gradeAlvo = skuObj.grade_alvo || parseSkuGrade(bruto).gradeAlvo || null;
 
-    const { data, error } = await supabase
-      .rpc("buscar_fifo_sku", {
-        p_sku:        skuLimpo,
-        p_grade_alvo: gradeAlvo,
-        p_limite:     limite,
-      });
-
-    if (error) {
-      resultado[skuLimpo] = { erro: error.message, candidatos: [], gradeAlvo };
-      continue;
+    try {
+      // O -CCx do SKU original já codifica a grade; passa o SKU cru para o FIFO
+      // aproveitar a mesma leitura que faz nos pedidos.
+      const candidatos = await buscarSugestaoFifo(bruto, gradeParaB2C(gradeAlvo));
+      resultado[skuLimpo] = {
+        erro: null,
+        gradeAlvo,
+        observacao: skuObj.observacao || null,
+        candidatos: (candidatos || [])
+          .filter(c => !excluir.has(String(c.imei).trim()))
+          .slice(0, limite),
+      };
+    } catch (e) {
+      resultado[skuLimpo] = { erro: e.message, candidatos: [], gradeAlvo };
     }
-
-    resultado[skuLimpo] = {
-      erro:       null,
-      gradeAlvo,
-      observacao: skuObj.observacao || null,
-      candidatos: data || [],
-    };
   }
-
   return resultado;
 }
 
@@ -303,6 +331,110 @@ export async function registrarFaturamento(trocaId, dados, userId) {
   if (error) throw new Error(error.message);
 
   await atualizarStatusTroca(trocaId, dados.rastreio ? "concluido" : "em_aberto");
+}
+
+// ════════════════════════════════════════════════════════
+// TESTE FUNCIONAL — entre a separação e o faturamento
+// ════════════════════════════════════════════════════════
+
+// Aprovado: libera a troca para o faturamento.
+export async function aprovarTeste(trocaId, userId) {
+  const agora = new Date().toISOString();
+  const { error } = await supabase
+    .from("trocas_b2c_assurant_operacao")
+    .update({
+      teste_resultado: "aprovado",
+      teste_motivos:   null,
+      teste_em:        agora,
+      teste_por:       userId,
+      status_furbtech: "aprovado",
+      atualizado_em:   agora,
+      atualizado_por:  userId,
+    })
+    .eq("troca_id", trocaId);
+  if (error) throw new Error(error.message);
+  return { ok: true };
+}
+
+// Reprovado: devolve a peça ao estoque, guarda a tentativa no histórico e busca
+// o próximo do FIFO — excluindo os IMEIs que já falharam nesta troca.
+export async function reprovarTeste(trocaId, motivos, userId) {
+  const lista = (motivos || []).map(m => String(m).trim()).filter(Boolean);
+  if (!lista.length) return { ok: false, erro: "Informe ao menos um motivo." };
+
+  const { data: op } = await supabase
+    .from("trocas_b2c_assurant_operacao")
+    .select("id, imei, tentativas")
+    .eq("troca_id", trocaId)
+    .single();
+  if (!op?.imei) return { ok: false, erro: "Nenhum aparelho separado nesta troca." };
+
+  const agora = new Date().toISOString();
+  const imeiReprovado = String(op.imei).trim();
+
+  // 1. Peça volta ao estoque
+  const { error: errTri } = await supabase
+    .from("assurant_triagem")
+    .update({ status_atual: "Produto disponível", atualizado_em: agora })
+    .eq("imei", imeiReprovado);
+  if (errTri) throw new Error(errTri.message);
+
+  // 2. Histórico da tentativa — mantém o rastro de quantos aparelhos falharam
+  const tentativas = [
+    ...(Array.isArray(op.tentativas) ? op.tentativas : []),
+    { imei: imeiReprovado, motivos: lista, em: agora, por: userId || null },
+  ];
+
+  // 3. Solta o IMEI da operação; a troca volta para a separação
+  const { error: errOp } = await supabase
+    .from("trocas_b2c_assurant_operacao")
+    .update({
+      imei:            null,
+      sku_escolhido:   null,
+      data_separacao:  null,
+      teste_resultado: "reprovado",
+      teste_motivos:   lista,
+      teste_em:        agora,
+      teste_por:       userId,
+      tentativas,
+      status_furbtech: "reprovado",
+      atualizado_em:   agora,
+      atualizado_por:  userId,
+    })
+    .eq("troca_id", trocaId);
+  if (errOp) throw new Error(errOp.message);
+
+  // 4. Próxima sugestão, sem repetir nenhum dos que já falharam
+  const jaFalharam = tentativas.map(t => t.imei);
+  const { data: troca } = await supabase
+    .from("trocas_b2c_assurant")
+    .select("*, trocas_b2c_assurant_skus(*)")
+    .eq("id", trocaId)
+    .single();
+
+  const sugestoes = await buscarSugestoesFIFO(
+    troca?.trocas_b2c_assurant_skus || [], 5, jaFalharam,
+  );
+
+  return { ok: true, imeiReprovado, motivos: lista, sugestoes, tentativas: tentativas.length };
+}
+
+// Lista os motivos já usados em reprovações — alimenta o autocomplete do campo.
+export async function motivosUsados(limite = 40) {
+  const { data } = await supabase
+    .from("trocas_b2c_assurant_operacao")
+    .select("teste_motivos")
+    .not("teste_motivos", "is", null)
+    .limit(500);
+  const cont = {};
+  (data || []).forEach(r => (r.teste_motivos || []).forEach(m => {
+    const k = String(m).trim();
+    if (k) cont[k] = (cont[k] || 0) + 1;
+  }));
+  return Object.entries(cont)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limite)
+    .map(([motivo, vezes]) => ({ motivo, vezes }));
 }
 
 export async function moverParaReembolso(trocaId) {
