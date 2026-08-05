@@ -80,8 +80,9 @@ function separarEtiquetas(texto) {
 
 // Descobre NF, marketplace e identificadores de UMA etiqueta ZPL
 function lerEtiqueta(zpl) {
-  // Mercado Livre: NF em texto puro
-  const meli = zpl.match(/\^FDNF:\s*(\d+)/);
+  // Mercado Livre: NF em texto puro. O rótulo muda conforme a origem do arquivo —
+  // "NF:" nos lotes com vários pedidos, "NFe:" quando a etiqueta é baixada avulsa.
+  const meli = zpl.match(/\^FDNFe?:\s*(\d+)/i);
   if (meli) {
     const sid = zpl.match(/"id":"(\d+)"/);
     return {
