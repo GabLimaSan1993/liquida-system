@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import {
   buscarPainelGestorB2B, fmtDuracao, fmtCadencia,
-  buscarVisaoGeralB2B, agruparPor, agruparMotivos,
+  buscarVisaoGeralB2B, agruparPor, agruparMotivos, listarPedidosAcompanhamento,
 } from "../services/B2BPainelGestorService.js";
 
 const ABAS = [
@@ -14,7 +14,21 @@ const ABAS = [
   { key: "picking",     label: "Picking"     },
   { key: "embalagem",   label: "Embalagem"   },
   { key: "faturamento", label: "Faturamento" },
+  { key: "pedidos",     label: "Pedidos"     },
 ];
+
+const CORES_STATUS = {
+  "FATURADO":                 "bg-emerald-500 text-white",
+  "EM FATURAMENTO (PARCIAL)": "bg-red-800 text-white",
+  "AGUARDANDO FATURAMENTO":   "bg-blue-500 text-white",
+  "EM SEPARAÇÃO":             "bg-yellow-300 text-yellow-900",
+};
+
+const fmtDia = (iso) => {
+  if (!iso) return "—";
+  const [a, m, d] = iso.split("-");
+  return `${d}/${m}/${a}`;
+};
 
 const brl = v => "R$ " + Math.round(Number(v) || 0).toLocaleString("pt-BR");
 
@@ -205,8 +219,24 @@ export default function B2BPainelGestorPage() {
   const [semana, setSemana]     = useState(null);
   const [sel, setSel]           = useState([]);
 
+  // Aba Pedidos — o acompanhamento que hoje é planilha.
+  const [pedidosAcomp, setPedidosAcomp] = useState(null);
+  const [loadPed, setLoadPed]           = useState(false);
+  const [filtroStatus, setFiltroStatus] = useState(null);
+  const [buscaPed, setBuscaPed]         = useState("");
+
   useEffect(() => { carregar(); }, [periodo]);
   useEffect(() => { if (aba === "geral" && !geral) carregarGeral(); }, [aba]);
+  useEffect(() => { if (aba === "pedidos" && !pedidosAcomp) carregarPedidos(); }, [aba]);
+
+  async function carregarPedidos() {
+    setLoadPed(true);
+    try {
+      const r = await listarPedidosAcompanhamento();
+      setPedidosAcomp(r.ok ? r.pedidos : []);
+    } catch (e) { console.error(e); setPedidosAcomp([]); }
+    finally { setLoadPed(false); }
+  }
 
   async function carregarGeral() {
     setLoadGeral(true);
@@ -383,6 +413,98 @@ export default function B2BPainelGestorPage() {
             </div>
           </>
         )
+      )}
+
+      {aba === "pedidos" && (
+        loadPed ? (
+          <div className="flex items-center justify-center h-40">
+            <div className="h-8 w-8 border-4 border-purple-200 border-t-[#7F2D92] rounded-full animate-spin" />
+          </div>
+        ) : !pedidosAcomp?.length ? (
+          <div className="text-center py-12 text-slate-400">
+            <Package className="h-8 w-8 mx-auto mb-2 opacity-30" />
+            <p className="text-sm">Nenhum pedido encontrado.</p>
+          </div>
+        ) : (() => {
+          const cont = {};
+          pedidosAcomp.forEach(p => { cont[p.status] = (cont[p.status] || 0) + 1; });
+          const q = buscaPed.trim().toLowerCase();
+          const lista = pedidosAcomp.filter(p =>
+            (!filtroStatus || p.status === filtroStatus) &&
+            (!q || p.cliente.toLowerCase().includes(q) || String(p.lote || "").toLowerCase().includes(q))
+          );
+          return (
+            <>
+              <Card>
+                <div className="flex items-center gap-2 flex-wrap mb-3">
+                  <button onClick={() => setFiltroStatus(null)}
+                    className={`text-xs font-bold px-3 py-1.5 rounded-xl transition ${!filtroStatus ? "bg-[#7F2D92] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
+                    Todos · {pedidosAcomp.length}
+                  </button>
+                  {Object.keys(CORES_STATUS).filter(k => cont[k]).map(k => (
+                    <button key={k} onClick={() => setFiltroStatus(filtroStatus === k ? null : k)}
+                      className={`text-xs font-bold px-3 py-1.5 rounded-xl transition ${filtroStatus === k ? CORES_STATUS[k] : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
+                      {k} · {cont[k]}
+                    </button>
+                  ))}
+                </div>
+                <div className="relative">
+                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                  <input value={buscaPed} onChange={e => setBuscaPed(e.target.value)}
+                    placeholder="Buscar por cliente ou lote..."
+                    className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#7F2D92]" />
+                </div>
+              </Card>
+
+              <Card className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-left text-slate-500 border-b border-slate-200">
+                      <th className="px-2 py-2 font-bold">Cliente</th>
+                      <th className="px-2 py-2 font-bold">Data pedido</th>
+                      <th className="px-2 py-2 font-bold text-right">Pedido</th>
+                      <th className="px-2 py-2 font-bold text-right">Separado</th>
+                      <th className="px-2 py-2 font-bold text-center">Status</th>
+                      <th className="px-2 py-2 font-bold">Dt faturamento</th>
+                      <th className="px-2 py-2 font-bold text-right">Aging</th>
+                      <th className="px-2 py-2 font-bold text-right">Diferença</th>
+                      <th className="px-2 py-2 font-bold">Observações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lista.map(p => (
+                      <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50">
+                        <td className="px-2 py-2 font-semibold text-slate-700">
+                          {p.cliente}
+                          {p.lote && <span className="block text-[10px] font-normal text-slate-400">{p.lote}</span>}
+                        </td>
+                        <td className="px-2 py-2 text-slate-600">{fmtDia(p.dataPedido)}</td>
+                        <td className="px-2 py-2 text-right font-semibold text-slate-700">{p.total}</td>
+                        <td className="px-2 py-2 text-right text-slate-600">{p.separado}</td>
+                        <td className="px-2 py-2 text-center">
+                          <span className={`inline-block text-[10px] font-black px-2 py-1 rounded ${CORES_STATUS[p.status] || "bg-slate-200 text-slate-600"}`}>
+                            {p.status}
+                          </span>
+                        </td>
+                        <td className="px-2 py-2 text-slate-600">{fmtDia(p.dataFaturamento)}</td>
+                        <td className={`px-2 py-2 text-right font-semibold ${p.agingAberto && p.aging > 2 ? "text-red-600" : "text-slate-600"}`}>
+                          {p.aging != null ? `${p.aging}d` : "—"}
+                        </td>
+                        <td className={`px-2 py-2 text-right font-bold ${p.diferenca > 0 ? "text-amber-700" : "text-slate-400"}`}>
+                          {p.diferenca}
+                        </td>
+                        <td className="px-2 py-2 text-slate-500 max-w-[220px]">{p.observacoes || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {lista.length === 0 && (
+                  <p className="text-xs text-slate-400 text-center py-6">Nenhum pedido com esse filtro.</p>
+                )}
+              </Card>
+            </>
+          );
+        })()
       )}
 
       {loading ? (
