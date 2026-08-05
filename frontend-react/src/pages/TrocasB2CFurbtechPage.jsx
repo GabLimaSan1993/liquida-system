@@ -544,6 +544,11 @@ function CardTeste({ troca, onAtualizar }) {
     </Card>
   );
 }
+
+// ══════════════════════════════════════════════════════════
+// ABA SEPARAÇÃO — card antigo (não usado)
+// ══════════════════════════════════════════════════════════
+function CardSeparacao({ troca, onAtualizar }) {
   const { user }                        = useAuth();
   const [aberto, setAberto]             = useState(false);
   const [sugestoes, setSugestoes]       = useState({});
@@ -878,7 +883,7 @@ function CardFaturamento({ troca, onAtualizar }) {
 // ══════════════════════════════════════════════════════════
 // PÁGINA PRINCIPAL
 // ══════════════════════════════════════════════════════════
-export default function TrocasB2CFurbtechPageAntigo() {
+function TrocasB2CFurbtechPageAntigo() {
   const [aba, setAba]           = useState("trocas");
   const [trocas, setTrocas]     = useState([]);
   const [loading, setLoading]   = useState(true);
