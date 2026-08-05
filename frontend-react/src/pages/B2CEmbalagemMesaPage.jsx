@@ -374,14 +374,14 @@ export default function B2CEmbalagemMesaPage() {
 
       <Card>
         <h3 className="font-black text-slate-800 text-sm flex items-center gap-2 mb-3">
-          <Search className="h-4 w-4 text-[#7F2D92]" /> Bipar IMEI
+          <Search className="h-4 w-4 text-[#7F2D92]" /> Bipar aparelho ou nota
         </h3>
         <form onSubmit={handleBipar} className="flex gap-2">
           <input
             ref={inputRef}
             value={imeiInput}
             onChange={e => setImeiInput(e.target.value)}
-            placeholder="Bipe o IMEI do aparelho..."
+            placeholder="Bipe o IMEI, a chave da NF ou digite o número da nota..."
             className="flex-1 rounded-2xl ring-1 ring-slate-200 px-4 py-3 font-mono text-sm focus:ring-2 focus:ring-purple-400 outline-none"
             disabled={proc}
           />
@@ -392,7 +392,7 @@ export default function B2CEmbalagemMesaPage() {
           </button>
         </form>
         <p className="text-xs text-slate-400 mt-2">
-          Bipe o aparelho para abrir a finalização. Se faltar a NF, deixe para depois e rebipe quando a NF sair.
+          Aceita IMEI (15 dígitos), chave da NF (44) ou o número da nota. Se faltar a NF, deixe para depois e rebipe quando a NF sair.
         </p>
       </Card>
 

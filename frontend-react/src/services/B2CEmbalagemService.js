@@ -9,19 +9,64 @@ const MESA = "mesa_4";
 // ══════════════════════════════════════════════════════════
 // BIPAGEM NA MESA
 // ══════════════════════════════════════════════════════════
+const COLUNAS_PEDIDO =
+  "id, id_anymarket, imei_alocado, imei_bipado, status, etapa_embalagem, " +
+  "titulo_produto, cliente, numero_nf, chave_nf, marketplace, " +
+  "emb_nf_colada, emb_selado, emb_etiquetado";
+
+// O operador tem em mãos a caixa fechada com o DANFE colado, então o que ele consegue
+// bipar varia: o IMEI do aparelho (15 dígitos), a chave de acesso da NF-e (44) ou o
+// número da nota digitado. Descobre pelo formato o que veio e busca pela coluna certa.
+async function acharPedidoPorCodigo(codigo) {
+  const bruto   = String(codigo || "").trim();
+  const digitos = bruto.replace(/\D/g, "");
+
+  // Chave de acesso: 44 dígitos
+  if (digitos.length === 44) {
+    const { data, error } = await supabase
+      .from("pedidos_b2c").select(COLUNAS_PEDIDO)
+      .eq("chave_nf", digitos).limit(1);
+    if (error) return { erro: error.message };
+    if (data?.length) return { pedido: data[0] };
+    // A chave carrega o número da NF nas posições 26–34 — tenta por ele.
+    const nf = String(parseInt(digitos.slice(25, 34), 10));
+    const { data: porNf } = await supabase
+      .from("pedidos_b2c").select(COLUNAS_PEDIDO)
+      .eq("numero_nf", nf).limit(1);
+    if (porNf?.length) return { pedido: porNf[0] };
+    return { erro: `Nenhum pedido para a chave bipada (NF ${nf}).` };
+  }
+
+  // IMEI: 15 dígitos
+  if (digitos.length === 15) {
+    const { data, error } = await supabase
+      .from("pedidos_b2c").select(COLUNAS_PEDIDO)
+      .or(`imei_bipado.eq.${digitos},imei_alocado.eq.${digitos}`).limit(1);
+    if (error) return { erro: error.message };
+    if (data?.length) return { pedido: data[0] };
+    return { erro: `IMEI ${digitos} não encontrado.` };
+  }
+
+  // Número da NF: qualquer coisa curta e numérica
+  if (digitos.length >= 1 && digitos.length <= 12) {
+    const nf = String(parseInt(digitos, 10));
+    const { data, error } = await supabase
+      .from("pedidos_b2c").select(COLUNAS_PEDIDO)
+      .eq("numero_nf", nf).limit(1);
+    if (error) return { erro: error.message };
+    if (data?.length) return { pedido: data[0] };
+    return { erro: `Nenhum pedido com a NF ${nf}.` };
+  }
+
+  return { erro: "Bipe o IMEI (15 dígitos), a chave da NF (44) ou o número da nota." };
+}
+
 export async function biparNaMesa(imeiDigitado, mesa, userId, userNome) {
   const imei = String(imeiDigitado || "").trim();
-  if (!imei) return { ok: false, erro: "Bipe um IMEI." };
+  if (!imei) return { ok: false, erro: "Bipe o IMEI, a chave da NF ou o número da nota." };
 
-  const { data: encontrados, error } = await supabase
-    .from("pedidos_b2c")
-    .select("id, id_anymarket, imei_alocado, imei_bipado, status, etapa_embalagem, titulo_produto, cliente, numero_nf, chave_nf, marketplace, emb_nf_colada, emb_selado, emb_etiquetado")
-    .or(`imei_bipado.eq.${imei},imei_alocado.eq.${imei}`)
-    .limit(1);
-  if (error) return { ok: false, erro: error.message };
-
-  const pedido = encontrados?.[0];
-  if (!pedido) return { ok: false, erro: `IMEI ${imei} não encontrado.` };
+  const { pedido, erro } = await acharPedidoPorCodigo(imei);
+  if (erro) return { ok: false, erro };
 
   // Entra na mesa a partir do "embalado" (bipado no picking)
   if (!["embalado", "faturado", "concluido"].includes(pedido.status)) {
@@ -44,7 +89,7 @@ export async function biparNaMesa(imeiDigitado, mesa, userId, userNome) {
     .eq("id", pedido.id);
   if (errUpd) return { ok: false, erro: errUpd.message };
 
-  await registrarEvento(pedido.id, imei, MESA, "entrada", userId, userNome);
+  await registrarEvento(pedido.id, pedido.imei_bipado || pedido.imei_alocado, MESA, "entrada", userId, userNome);
 
   return { ok: true, mesa: MESA, pedido: { ...pedido, etapa_embalagem: MESA }, semNF };
 }
