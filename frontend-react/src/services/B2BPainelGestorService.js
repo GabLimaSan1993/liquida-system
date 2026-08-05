@@ -341,3 +341,161 @@ async function calcularWip() {
 
   return wip;
 }
+// ══════════════════════════════════════════════════════════
+// VISÃO GERAL — faturamento navegável por ano › mês › semana › dia
+//
+// Puxa os itens faturados uma vez e monta a árvore de períodos no cliente.
+// Cada nó carrega itens, valor e o conjunto de NFs, para o painel somar
+// qualquer combinação de seleção sem ir ao banco de novo.
+// ══════════════════════════════════════════════════════════
+const MESES_NOME = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho",
+                    "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+
+// Semana dentro do mês (1 a 5), contada a partir do dia 1 — mais intuitiva para a
+// operação do que a semana ISO do ano, que cruza a virada do mês.
+function semanaDoMes(dia) {
+  return Math.floor((dia - 1) / 7) + 1;
+}
+
+// Timestamps naive do Supabase são hora de São Paulo; lê as partes sem deixar o
+// new Date() aplicar fuso e mudar o dia.
+function partesData(valor) {
+  if (!valor) return null;
+  const m = String(valor).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return null;
+  return { ano: Number(m[1]), mes: Number(m[2]), dia: Number(m[3]) };
+}
+
+export async function buscarVisaoGeralB2B() {
+  // 1. Itens já faturados (têm NF). Paginado: a base passa de 1000 linhas.
+  const itens = [];
+  const PAGINA = 1000;
+  for (let inicio = 0; ; inicio += PAGINA) {
+    const { data, error } = await supabase
+      .from("b2b_itens")
+      .select("pedido_id, modelo, grade, valor, nf, bipado_em, motivo_nao_faturar, nao_faturar_em")
+      .range(inicio, inicio + PAGINA - 1);
+    if (error) return { ok: false, erro: error.message };
+    itens.push(...(data || []));
+    if (!data || data.length < PAGINA) break;
+  }
+
+  // 2. NFs — a data_faturamento é o marco do período (não o bipe do item).
+  const nfs = [];
+  for (let inicio = 0; ; inicio += PAGINA) {
+    const { data, error } = await supabase
+      .from("b2b_nfs")
+      .select("pedido_id, numero_nf, data_faturamento, importado_em, valor_total, status")
+      .range(inicio, inicio + PAGINA - 1);
+    if (error) return { ok: false, erro: error.message };
+    nfs.push(...(data || []));
+    if (!data || data.length < PAGINA) break;
+  }
+
+  // 3. Cliente vem do pedido
+  const { data: pedidos } = await supabase
+    .from("b2b_pedidos")
+    .select("id, lote, cliente");
+  const clientePorPedido = {};
+  (pedidos || []).forEach(p => { clientePorPedido[p.id] = p.cliente || "—"; });
+
+  // Data de faturamento por NF: prioriza data_faturamento, cai para importado_em.
+  const dataPorNf = {};
+  nfs.forEach(n => {
+    if (!n.numero_nf) return;
+    const d = n.data_faturamento || n.importado_em;
+    if (d && (!dataPorNf[n.numero_nf] || d < dataPorNf[n.numero_nf])) dataPorNf[n.numero_nf] = d;
+  });
+
+  // 4. Árvore de períodos + cortes, numa passada só.
+  const arvore = {};
+  const linhas = [];   // uma por item faturado, já com o período resolvido
+
+  for (const it of itens) {
+    if (!it.nf) continue;
+    const bruta = dataPorNf[it.nf] || it.bipado_em;
+    const p = partesData(bruta);
+    if (!p) continue;
+
+    const valor = Number(it.valor) || 0;
+    const chaveMes    = MESES_NOME[p.mes - 1];
+    const chaveSemana = `Semana ${semanaDoMes(p.dia)}`;
+    const chaveDia    = String(p.dia).padStart(2, "0");
+
+    const a = (arvore[p.ano] ||= { itens: 0, valor: 0, nfs: new Set(), meses: {} });
+    a.itens++; a.valor += valor; a.nfs.add(it.nf);
+
+    const m = (a.meses[chaveMes] ||= { itens: 0, valor: 0, nfs: new Set(), semanas: {} });
+    m.itens++; m.valor += valor; m.nfs.add(it.nf);
+
+    const s = (m.semanas[chaveSemana] ||= { itens: 0, valor: 0, nfs: new Set(), dias: {} });
+    s.itens++; s.valor += valor; s.nfs.add(it.nf);
+
+    const d = (s.dias[chaveDia] ||= { itens: 0, valor: 0, nfs: new Set() });
+    d.itens++; d.valor += valor; d.nfs.add(it.nf);
+
+    linhas.push({
+      ano: p.ano, mes: chaveMes, semana: chaveSemana, dia: chaveDia,
+      cliente: clientePorPedido[it.pedido_id] || "—",
+      modelo: it.modelo || "—",
+      grade: (it.grade || "—").toUpperCase(),
+      valor,
+    });
+  }
+
+  // Set não sobrevive ao JSON; troca por contagem antes de devolver.
+  const limpar = (no) => {
+    const out = { itens: no.itens, valor: no.valor, nfs: no.nfs.size };
+    if (no.meses)   out.meses   = Object.fromEntries(Object.entries(no.meses).map(([k, v]) => [k, limpar(v)]));
+    if (no.semanas) out.semanas = Object.fromEntries(Object.entries(no.semanas).map(([k, v]) => [k, limpar(v)]));
+    if (no.dias)    out.dias    = Object.fromEntries(Object.entries(no.dias).map(([k, v]) => [k, limpar(v)]));
+    return out;
+  };
+  const periodos = Object.fromEntries(
+    Object.entries(arvore)
+      .sort((a, b) => Number(b[0]) - Number(a[0]))
+      .map(([k, v]) => [k, limpar(v)]),
+  );
+
+  // 5. Não faturados com motivo — para o corte de motivos, com o período do bipe.
+  const naoFaturados = itens
+    .filter(i => i.nao_faturar_em)
+    .map(i => {
+      const p = partesData(i.nao_faturar_em);
+      return p ? {
+        ano: p.ano, mes: MESES_NOME[p.mes - 1],
+        semana: `Semana ${semanaDoMes(p.dia)}`, dia: String(p.dia).padStart(2, "0"),
+        motivo: i.motivo_nao_faturar || "Sem motivo informado",
+      } : null;
+    })
+    .filter(Boolean);
+
+  return { ok: true, periodos, linhas, naoFaturados };
+}
+
+// Agrega as linhas já filtradas pelo período escolhido na tela.
+// campo: "cliente" | "modelo" | "grade"
+export function agruparPor(linhas, campo, limite = 10) {
+  const mapa = {};
+  linhas.forEach(l => {
+    const k = l[campo] || "—";
+    if (!mapa[k]) mapa[k] = { nome: k, itens: 0, valor: 0 };
+    mapa[k].itens++;
+    mapa[k].valor += l.valor;
+  });
+  return Object.values(mapa)
+    .sort((a, b) => b.valor - a.valor || b.itens - a.itens)
+    .slice(0, limite);
+}
+
+export function agruparMotivos(naoFaturados, limite = 10) {
+  const mapa = {};
+  naoFaturados.forEach(n => {
+    const k = n.motivo || "Sem motivo informado";
+    mapa[k] = (mapa[k] || 0) + 1;
+  });
+  return Object.entries(mapa)
+    .map(([nome, itens]) => ({ nome, itens }))
+    .sort((a, b) => b.itens - a.itens)
+    .slice(0, limite);
+}

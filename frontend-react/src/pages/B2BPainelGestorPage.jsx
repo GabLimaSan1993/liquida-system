@@ -4,7 +4,53 @@ import {
   Package, FileText, ScanLine, PackageCheck, Search, MapPin, Ban,
   Zap, GitCommitHorizontal, PauseCircle,
 } from "lucide-react";
-import { buscarPainelGestorB2B, fmtDuracao, fmtCadencia } from "../services/B2BPainelGestorService.js";
+import {
+  buscarPainelGestorB2B, fmtDuracao, fmtCadencia,
+  buscarVisaoGeralB2B, agruparPor, agruparMotivos,
+} from "../services/B2BPainelGestorService.js";
+
+const ABAS = [
+  { key: "geral",       label: "Visão geral" },
+  { key: "picking",     label: "Picking"     },
+  { key: "embalagem",   label: "Embalagem"   },
+  { key: "faturamento", label: "Faturamento" },
+];
+
+const brl = v => "R$ " + Math.round(Number(v) || 0).toLocaleString("pt-BR");
+
+// Barras horizontais dos cortes da visão geral.
+function Ranking({ titulo, icone: Icone, dados, mostrarValor = true, cor = "bg-[#7F2D92]" }) {
+  const max = Math.max(1, ...dados.map(d => (mostrarValor ? d.valor : d.itens)));
+  return (
+    <Card>
+      <h3 className="font-black text-slate-800 text-sm mb-4 flex items-center gap-2">
+        <Icone className="h-4 w-4 text-[#7F2D92]" /> {titulo}
+      </h3>
+      {dados.length === 0 ? (
+        <p className="text-xs text-slate-400">Sem dados no período.</p>
+      ) : (
+        <div className="space-y-3">
+          {dados.map(d => {
+            const base = mostrarValor ? d.valor : d.itens;
+            return (
+              <div key={d.nome}>
+                <div className="flex justify-between items-baseline text-xs mb-1 gap-2">
+                  <span className="font-semibold text-slate-700 truncate">{d.nome}</span>
+                  <span className="text-slate-500 shrink-0">
+                    {mostrarValor ? `${brl(d.valor)} · ${d.itens}` : `${d.itens} ${d.itens === 1 ? "item" : "itens"}`}
+                  </span>
+                </div>
+                <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                  <div className={`h-full ${cor} rounded-full`} style={{ width: `${Math.round(base / max * 100)}%` }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Card>
+  );
+}
 
 const PERIODOS = [
   { key: "7d",   label: "7 dias"  },
@@ -96,8 +142,77 @@ export default function B2BPainelGestorPage() {
   const [periodo, setPeriodo] = useState("30d");
   const [dados, setDados]     = useState(null);
   const [loading, setLoading] = useState(true);
+  const [aba, setAba]         = useState("geral");
+
+  // Visão geral: árvore de períodos + linhas por item, carregadas uma vez.
+  const [geral, setGeral]       = useState(null);
+  const [loadGeral, setLoadGeral] = useState(false);
+  const [nivel, setNivel]       = useState("ano");
+  const [ano, setAno]           = useState(null);
+  const [mes, setMes]           = useState(null);
+  const [semana, setSemana]     = useState(null);
+  const [sel, setSel]           = useState([]);
 
   useEffect(() => { carregar(); }, [periodo]);
+  useEffect(() => { if (aba === "geral" && !geral) carregarGeral(); }, [aba]);
+
+  async function carregarGeral() {
+    setLoadGeral(true);
+    try {
+      const r = await buscarVisaoGeralB2B();
+      setGeral(r.ok ? r : null);
+    } catch (e) { console.error(e); setGeral(null); }
+    finally { setLoadGeral(false); }
+  }
+
+  // Opções do nível aberto e o nó de cada uma.
+  const noDe = (k) => {
+    if (!geral) return null;
+    if (nivel === "ano")    return geral.periodos[k];
+    if (nivel === "mes")    return geral.periodos[ano]?.meses?.[k];
+    if (nivel === "semana") return geral.periodos[ano]?.meses?.[mes]?.semanas?.[k];
+    return geral.periodos[ano]?.meses?.[mes]?.semanas?.[semana]?.dias?.[k];
+  };
+  const opcoesNivel = !geral ? [] :
+    nivel === "ano"    ? Object.keys(geral.periodos) :
+    nivel === "mes"    ? Object.keys(geral.periodos[ano]?.meses || {}) :
+    nivel === "semana" ? Object.keys(geral.periodos[ano]?.meses?.[mes]?.semanas || {}) :
+                         Object.keys(geral.periodos[ano]?.meses?.[mes]?.semanas?.[semana]?.dias || {});
+
+  function abrirNivel(k) {
+    if (nivel === "dia") {
+      setSel(s => s.includes(k) ? s.filter(x => x !== k) : [...s, k]);
+      return;
+    }
+    if (nivel === "ano")      { setAno(k); setNivel("mes"); }
+    else if (nivel === "mes") { setMes(k); setNivel("semana"); }
+    else                      { setSemana(k); setNivel("dia"); }
+    setSel([]);
+  }
+
+  function voltarPara(alvo) {
+    if (alvo === "ano")    { setNivel("ano");    setAno(null); setMes(null); setSemana(null); }
+    if (alvo === "mes")    { setNivel("mes");    setMes(null); setSemana(null); }
+    if (alvo === "semana") { setNivel("semana"); setSemana(null); }
+    setSel([]);
+  }
+
+  // Filtra as linhas pelo recorte aberto (e pela seleção múltipla, quando houver).
+  const noRecorte = (l) => {
+    if (ano    && String(l.ano) !== String(ano)) return false;
+    if (mes    && l.mes    !== mes)    return false;
+    if (semana && l.semana !== semana) return false;
+    if (sel.length) {
+      const campo = nivel === "dia" ? "dia" : nivel === "semana" ? "semana" : nivel === "mes" ? "mes" : "ano";
+      if (!sel.map(String).includes(String(l[campo]))) return false;
+    }
+    return true;
+  };
+
+  const linhasFiltradas = (geral?.linhas || []).filter(noRecorte);
+  const naoFatFiltrados = (geral?.naoFaturados || []).filter(noRecorte);
+  const totalValor = linhasFiltradas.reduce((s, l) => s + l.valor, 0);
+  const ticket = linhasFiltradas.length ? totalValor / linhasFiltradas.length : 0;
 
   async function carregar() {
     setLoading(true);
@@ -145,6 +260,74 @@ export default function B2BPainelGestorPage() {
         </div>
       </div>
 
+      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+        {ABAS.map(a => (
+          <button key={a.key} onClick={() => setAba(a.key)}
+            className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all whitespace-nowrap ${
+              aba === a.key ? "bg-[#7F2D92] text-white shadow-md" : "text-slate-500 hover:bg-slate-100"
+            }`}>
+            {a.label}
+          </button>
+        ))}
+      </div>
+
+      {aba === "geral" && (
+        loadGeral ? (
+          <div className="flex items-center justify-center h-40">
+            <div className="h-8 w-8 border-4 border-purple-200 border-t-[#7F2D92] rounded-full animate-spin" />
+          </div>
+        ) : !geral ? (
+          <div className="text-center py-12 text-slate-400">
+            <AlertTriangle className="h-8 w-8 mx-auto mb-2 opacity-30" />
+            <p className="text-sm">Não foi possível carregar a visão geral.</p>
+          </div>
+        ) : (
+          <>
+            <Card>
+              <div className="text-xs text-slate-500 mb-2.5">
+                <button onClick={() => voltarPara("ano")} className="text-purple-700 font-semibold hover:underline">Todos os anos</button>
+                {ano && <> › <button onClick={() => voltarPara("mes")} className="text-purple-700 font-semibold hover:underline">{ano}</button></>}
+                {mes && <> › <button onClick={() => voltarPara("semana")} className="text-purple-700 font-semibold hover:underline">{mes}</button></>}
+                {semana && <> › <span className="font-semibold text-slate-600">{semana}</span></>}
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                {opcoesNivel.map(k => {
+                  const no = noDe(k);
+                  const on = sel.map(String).includes(String(k));
+                  return (
+                    <button key={k} onClick={() => abrirNivel(k)}
+                      className={`text-xs font-semibold px-3 py-1.5 rounded-xl transition ring-1 ${
+                        on ? "bg-[#7F2D92] text-white ring-[#7F2D92]" : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50"
+                      }`}>
+                      {k} · {no?.itens ?? 0}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-slate-400 mt-2">
+                {nivel === "dia"
+                  ? "Clique nos dias para somar · clique de novo para tirar"
+                  : "Clique para abrir o nível seguinte"}
+              </p>
+            </Card>
+
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <KpiCard label="Faturado"      value={brl(totalValor)} sub={`${linhasFiltradas.length} itens`} />
+              <KpiCard label="Itens"         value={linhasFiltradas.length} sub="no recorte" />
+              <KpiCard label="Ticket médio"  value={brl(ticket)} sub="por item" />
+              <KpiCard label="Não faturados" value={naoFatFiltrados.length} sub="com motivo" destaque={naoFatFiltrados.length > 0} />
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <Ranking titulo="Faturamento por cliente" icone={TrendingUp} dados={agruparPor(linhasFiltradas, "cliente")} />
+              <Ranking titulo="Por grade" icone={Package} dados={agruparPor(linhasFiltradas, "grade")} mostrarValor={false} cor="bg-blue-500" />
+              <Ranking titulo="Por produto" icone={ScanLine} dados={agruparPor(linhasFiltradas, "modelo")} cor="bg-emerald-600" />
+              <Ranking titulo="Motivos de não faturamento" icone={Ban} dados={agruparMotivos(naoFatFiltrados)} mostrarValor={false} cor="bg-amber-500" />
+            </div>
+          </>
+        )
+      )}
+
       {loading ? (
         <div className="flex items-center justify-center h-40">
           <div className="h-8 w-8 border-4 border-purple-200 border-t-[#7F2D92] rounded-full animate-spin" />
@@ -157,7 +340,7 @@ export default function B2BPainelGestorPage() {
       ) : (
         <>
           {/* KPIs */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className={`grid grid-cols-2 lg:grid-cols-4 gap-3 ${aba === "geral" ? "hidden" : ""}`}>
             <KpiCard label="Tempo médio total"  value={fmtDuracao(kpis.tempoMedioTotalMin)} sub="data do pedido → faturado" />
             <KpiCard label="Itens faturados"     value={kpis.itensFaturados}                 sub="no período" />
             <KpiCard label="Em processo agora"   value={emProcesso}                          sub="itens em aberto" />
@@ -165,7 +348,7 @@ export default function B2BPainelGestorPage() {
           </div>
 
           {/* Tempo médio por etapa */}
-          <Card>
+          <Card className={aba === "geral" ? "hidden" : ""}>
             <h3 className="font-black text-slate-800 text-sm mb-4 flex items-center gap-2">
               <TrendingUp className="h-4 w-4 text-[#7F2D92]" /> Tempo médio por etapa
             </h3>
@@ -180,9 +363,9 @@ export default function B2BPainelGestorPage() {
           </Card>
 
           {/* Dentro do picking — linha inteira */}
-          <Card>
+          <Card className={aba === "picking" ? "" : "hidden"}>
             <h3 className="font-black text-slate-800 text-sm mb-4 flex items-center gap-2">
-              <ScanLine className="h-4 w-4 text-[#7F2D92]" /> Dentro do picking · tempos e ritmo
+              <ScanLine className="h-4 w-4 text-[#7F2D92]" data-aba-picking /> Dentro do picking · tempos e ritmo
             </h3>
 
             {/* Separação + cadência */}
@@ -253,7 +436,7 @@ export default function B2BPainelGestorPage() {
           </Card>
 
           {/* Embalagem + NFs */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className={`grid grid-cols-1 lg:grid-cols-2 gap-4 ${["embalagem","faturamento"].includes(aba) ? "" : "hidden"}`}>
             <Card>
               <h3 className="font-black text-slate-800 text-sm mb-4 flex items-center gap-2">
                 <Package className="h-4 w-4 text-[#7F2D92]" /> Dentro da embalagem · caixas
@@ -290,7 +473,7 @@ export default function B2BPainelGestorPage() {
           </div>
 
           {/* WIP agora */}
-          <Card>
+          <Card className={aba === "geral" ? "hidden" : ""}>
             <h3 className="font-black text-slate-800 text-sm mb-4 flex items-center gap-2">
               <Clock className="h-4 w-4 text-[#7F2D92]" /> Onde os itens estão agora
             </h3>
