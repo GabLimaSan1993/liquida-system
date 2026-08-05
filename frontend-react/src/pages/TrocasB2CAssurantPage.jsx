@@ -495,7 +495,11 @@ function etapaEfetiva(troca) {
   const op = troca.trocas_b2c_assurant_operacao?.[0] || {};
   if (troca.status === "concluido" || op.status_furbtech === "postado" || op.rastreio) return "postado";
   if (op.nf || op.status_furbtech === "faturado") return "faturado";
-  if (op.imei || op.status_furbtech === "em_separacao") return "em_separacao";
+  // Aprovado no teste é a etapa entre a separação e o faturamento.
+  if (op.status_furbtech === "aprovado" || op.teste_resultado === "aprovado") return "aprovado";
+  if (op.status_furbtech === "em_separacao" || op.data_separacao) return "em_separacao";
+  // Reprovado e não localizado devolvem a troca para a alocação — o IMEI foi solto.
+  if (op.imei) return "alocado";
   return "em_aberto";
 }
 
