@@ -286,6 +286,171 @@ export async function validarImeiTroca(imei, skusAceitos) {
   return { ok: true, item: { ...triagem, data_subinv: subinv.data_subinv, aging_oracle: agingOracle } };
 }
 
+// ════════════════════════════════════════════════════════
+// ALOCAÇÃO (aba Trocas) → SEPARAÇÃO (aba Separação)
+//
+// São dois momentos distintos: quem atende escolhe a peça do FIFO (alocação) e
+// o separador vai na rua buscar e bipa (separação). Antes as duas coisas
+// aconteciam no mesmo passo, o que obrigava o separador a decidir o aparelho.
+// ════════════════════════════════════════════════════════
+
+// Escolhe a peça do FIFO e reserva. A troca passa a aparecer na aba Separação.
+export async function alocarTroca(trocaId, imei, skuEscolhido, userId) {
+  const imeiTrim = String(imei || "").trim();
+  if (!imeiTrim) return { ok: false, erro: "IMEI vazio." };
+
+  // Ninguém mais pode estar com esta peça
+  const { data: emUso } = await supabase
+    .from("trocas_b2c_assurant_operacao")
+    .select("troca_id, status_furbtech")
+    .eq("imei", imeiTrim);
+  const ocupada = (emUso || []).find(
+    o => o.troca_id !== trocaId && o.status_furbtech !== "reprovado",
+  );
+  if (ocupada) return { ok: false, erro: "Este aparelho já está em outra troca." };
+
+  const { data: noPedido } = await supabase
+    .from("pedidos_b2c")
+    .select("id_anymarket")
+    .eq("imei_alocado", imeiTrim)
+    .in("status", ["alocado", "em_picking", "embalado", "em_analise", "aguardando_definicao_produto"])
+    .limit(1);
+  if (noPedido?.length) {
+    return { ok: false, erro: `Aparelho já alocado no pedido #${noPedido[0].id_anymarket}.` };
+  }
+
+  const agora = new Date().toISOString();
+  const payload = {
+    sku_escolhido:   skuEscolhido,
+    imei:            imeiTrim,
+    status_furbtech: "alocado",
+    teste_resultado: null,
+    atualizado_em:   agora,
+    atualizado_por:  userId,
+  };
+
+  const { data: existente } = await supabase
+    .from("trocas_b2c_assurant_operacao")
+    .select("id").eq("troca_id", trocaId).maybeSingle();
+
+  if (existente) {
+    const { error } = await supabase
+      .from("trocas_b2c_assurant_operacao").update(payload).eq("troca_id", trocaId);
+    if (error) throw new Error(error.message);
+  } else {
+    const { error } = await supabase
+      .from("trocas_b2c_assurant_operacao").insert({ troca_id: trocaId, ...payload });
+    if (error) throw new Error(error.message);
+  }
+
+  await supabase
+    .from("assurant_triagem")
+    .update({ status_atual: "Reservado para pedido B2C", atualizado_em: agora })
+    .eq("imei", imeiTrim);
+
+  return { ok: true, imei: imeiTrim };
+}
+
+// Traz o endereço de cada peça alocada, para a lista da separação e o filtro de rua.
+export async function listarParaSeparacao() {
+  const { data: ops } = await supabase
+    .from("trocas_b2c_assurant_operacao")
+    .select("troca_id, imei, sku_escolhido, status_furbtech")
+    .in("status_furbtech", ["alocado"])
+    .not("imei", "is", null);
+  if (!ops?.length) return {};
+
+  const imeis = ops.map(o => o.imei);
+  const locais = {};
+  const BLOCO = 200;
+  for (let i = 0; i < imeis.length; i += BLOCO) {
+    const { data: tri } = await supabase
+      .from("assurant_triagem")
+      .select("imei, local, modelo, grade, voucher, criado_em")
+      .in("imei", imeis.slice(i, i + BLOCO))
+      .order("criado_em", { ascending: false });
+    (tri || []).forEach(t => { if (!locais[t.imei]) locais[t.imei] = t; });
+  }
+
+  const mapa = {};
+  ops.forEach(o => {
+    mapa[o.troca_id] = { ...o, ...(locais[o.imei] || {}) };
+  });
+  return mapa;
+}
+
+// O separador achou a peça e bipou: confere se é a alocada e libera para o teste.
+export async function confirmarSeparacao(trocaId, imeiBipado, userId) {
+  const bipado = String(imeiBipado || "").trim();
+  const { data: op } = await supabase
+    .from("trocas_b2c_assurant_operacao")
+    .select("imei").eq("troca_id", trocaId).single();
+
+  if (!op?.imei) return { ok: false, erro: "Esta troca ainda não tem aparelho alocado." };
+  if (String(op.imei).trim() !== bipado) {
+    return { ok: false, erro: `IMEI diferente do alocado (${op.imei}).` };
+  }
+
+  const agora = new Date().toISOString();
+  const { error } = await supabase
+    .from("trocas_b2c_assurant_operacao")
+    .update({
+      data_separacao:  agora.split("T")[0],
+      status_furbtech: "em_separacao",
+      atualizado_em:   agora,
+      atualizado_por:  userId,
+    })
+    .eq("troca_id", trocaId);
+  if (error) throw new Error(error.message);
+  return { ok: true };
+}
+
+// Separador foi na rua e não achou a peça. Diferente da reprovação no teste:
+// aqui o aparelho NÃO volta como disponível — se ninguém acha, o endereço está
+// errado ou ele sumiu, então sai do pool até alguém conferir. A troca volta para
+// a aba Trocas para receber outra alocação, sem repetir este IMEI.
+export async function naoLocalizadoSeparacao(trocaId, userId, observacao) {
+  const { data: op } = await supabase
+    .from("trocas_b2c_assurant_operacao")
+    .select("imei, tentativas").eq("troca_id", trocaId).single();
+  if (!op?.imei) return { ok: false, erro: "Nenhum aparelho alocado nesta troca." };
+
+  const agora = new Date().toISOString();
+  const imeiSumido = String(op.imei).trim();
+
+  await supabase
+    .from("assurant_triagem")
+    .update({ status_atual: "Em análise de estoque", atualizado_em: agora })
+    .eq("imei", imeiSumido);
+
+  const tentativas = [
+    ...(Array.isArray(op.tentativas) ? op.tentativas : []),
+    {
+      imei: imeiSumido,
+      motivos: ["Não localizado na separação" + (observacao ? ` — ${observacao}` : "")],
+      em: agora,
+      por: userId || null,
+      tipo: "nao_localizado",
+    },
+  ];
+
+  const { error } = await supabase
+    .from("trocas_b2c_assurant_operacao")
+    .update({
+      imei:            null,
+      sku_escolhido:   null,
+      data_separacao:  null,
+      status_furbtech: "nao_localizado",
+      tentativas,
+      atualizado_em:   agora,
+      atualizado_por:  userId,
+    })
+    .eq("troca_id", trocaId);
+  if (error) throw new Error(error.message);
+
+  return { ok: true, imeiSumido, jaTentados: tentativas.map(t => t.imei) };
+}
+
 export async function registrarSeparacao(trocaId, imei, skuEscolhido, userId) {
   const { data: existente } = await supabase
     .from("trocas_b2c_assurant_operacao")
