@@ -38,7 +38,7 @@ export function parseSkuGrade(bruto) {
 
 export async function criarTroca(dados, skus, userId) {
   const { data: troca, error } = await supabase
-    .from("trocas_b2c")
+    .from("trocas_b2c_assurant")
     .insert({
       id_anymarket:          dados.id_anymarket,
       nome_cliente:          dados.nome_cliente,
@@ -64,7 +64,7 @@ export async function criarTroca(dados, skus, userId) {
 
   if (skus?.length > 0) {
     const { error: errSkus } = await supabase
-      .from("trocas_b2c_skus")
+      .from("trocas_b2c_assurant_skus")
       .insert(
         skus.map((s, idx) => {
           const { sku, gradeAlvo, obs } = parseSkuGrade(s.sku);
@@ -88,8 +88,8 @@ export async function criarTroca(dados, skus, userId) {
 
 export async function listarTrocas(filtroStatus = null) {
   let query = supabase
-    .from("trocas_b2c")
-    .select("*, trocas_b2c_skus(*), trocas_b2c_operacao(*)")
+    .from("trocas_b2c_assurant")
+    .select("*, trocas_b2c_assurant_skus(*), trocas_b2c_assurant_operacao(*)")
     .order("criado_em", { ascending: false });
 
   if (filtroStatus) query = query.eq("status", filtroStatus);
@@ -101,8 +101,8 @@ export async function listarTrocas(filtroStatus = null) {
 
 export async function buscarTroca(id) {
   const { data, error } = await supabase
-    .from("trocas_b2c")
-    .select("*, trocas_b2c_skus(*), trocas_b2c_operacao(*)")
+    .from("trocas_b2c_assurant")
+    .select("*, trocas_b2c_assurant_skus(*), trocas_b2c_assurant_operacao(*)")
     .eq("id", id)
     .single();
   if (error) throw new Error(error.message);
@@ -111,7 +111,7 @@ export async function buscarTroca(id) {
 
 export async function atualizarStatusTroca(id, status) {
   const { error } = await supabase
-    .from("trocas_b2c")
+    .from("trocas_b2c_assurant")
     .update({ status })
     .eq("id", id);
   if (error) throw new Error(error.message);
@@ -119,20 +119,20 @@ export async function atualizarStatusTroca(id, status) {
 
 export async function salvarOperacao(trocaId, dados, userId) {
   const { data: existente } = await supabase
-    .from("trocas_b2c_operacao")
+    .from("trocas_b2c_assurant_operacao")
     .select("id")
     .eq("troca_id", trocaId)
     .single();
 
   if (existente) {
     const { error } = await supabase
-      .from("trocas_b2c_operacao")
+      .from("trocas_b2c_assurant_operacao")
       .update({ ...dados, atualizado_em: new Date().toISOString(), atualizado_por: userId })
       .eq("troca_id", trocaId);
     if (error) throw new Error(error.message);
   } else {
     const { error } = await supabase
-      .from("trocas_b2c_operacao")
+      .from("trocas_b2c_assurant_operacao")
       .insert({ troca_id: trocaId, ...dados, atualizado_por: userId });
     if (error) throw new Error(error.message);
   }
@@ -243,7 +243,7 @@ export async function validarImeiTroca(imei, skusAceitos) {
   if (b2bItem) return { ok: false, erro: "IMEI reservado em pedido B2B ativo — não disponível para troca." };
 
   const { data: trocaAtiva } = await supabase
-    .from("trocas_b2c_operacao")
+    .from("trocas_b2c_assurant_operacao")
     .select("id")
     .eq("imei", imeiTrim)
     .in("status_furbtech", ["em_separacao", "faturado", "postado"])
@@ -260,7 +260,7 @@ export async function validarImeiTroca(imei, skusAceitos) {
 
 export async function registrarSeparacao(trocaId, imei, skuEscolhido, userId) {
   const { data: existente } = await supabase
-    .from("trocas_b2c_operacao")
+    .from("trocas_b2c_assurant_operacao")
     .select("id")
     .eq("troca_id", trocaId)
     .single();
@@ -276,11 +276,11 @@ export async function registrarSeparacao(trocaId, imei, skuEscolhido, userId) {
 
   if (existente) {
     const { error } = await supabase
-      .from("trocas_b2c_operacao").update(payload).eq("troca_id", trocaId);
+      .from("trocas_b2c_assurant_operacao").update(payload).eq("troca_id", trocaId);
     if (error) throw new Error(error.message);
   } else {
     const { error } = await supabase
-      .from("trocas_b2c_operacao").insert({ troca_id: trocaId, ...payload });
+      .from("trocas_b2c_assurant_operacao").insert({ troca_id: trocaId, ...payload });
     if (error) throw new Error(error.message);
   }
 
@@ -289,7 +289,7 @@ export async function registrarSeparacao(trocaId, imei, skuEscolhido, userId) {
 
 export async function registrarFaturamento(trocaId, dados, userId) {
   const { error } = await supabase
-    .from("trocas_b2c_operacao")
+    .from("trocas_b2c_assurant_operacao")
     .update({
       nf:              dados.nf,
       aut_postagem:    dados.aut_postagem,
