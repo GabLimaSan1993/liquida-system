@@ -288,15 +288,25 @@ export async function listarAguardandoOracle() {
 
 // Lista o histórico do que já foi confirmado no Oracle. Mesmo cruzamento com o
 // relatório AP, mais quem confirmou e quando.
-export async function listarConfirmadosOracle({ limite = 1000 } = {}) {
-  const { data: triagem, error: errT } = await supabase
-    .from("assurant_triagem")
-    .select("*")
-    .not("oracle_confirmado_em", "is", null)
-    .order("oracle_confirmado_em", { ascending: false })
-    .limit(limite);
-  if (errT) throw new Error(errT.message);
-  if (!triagem?.length) return [];
+export async function listarConfirmadosOracle({ limite = null } = {}) {
+  // Sem paginação a lista para no teto do PostgREST e o total congela (era 1000).
+  // Puxa em páginas até acabar, ou até o limite pedido quando houver um.
+  const PAGINA = 1000;
+  const triagem = [];
+  for (let inicio = 0; ; inicio += PAGINA) {
+    const fim = inicio + PAGINA - 1;
+    const { data, error: errT } = await supabase
+      .from("assurant_triagem")
+      .select("*")
+      .not("oracle_confirmado_em", "is", null)
+      .order("oracle_confirmado_em", { ascending: false })
+      .range(inicio, fim);
+    if (errT) throw new Error(errT.message);
+    triagem.push(...(data || []));
+    if (!data || data.length < PAGINA) break;
+    if (limite && triagem.length >= limite) break;
+  }
+  if (!triagem.length) return [];
 
   // Dedupe por IMEI, mantendo a confirmação mais recente.
   const porImei = new Map();

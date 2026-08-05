@@ -43,6 +43,8 @@ function TabEntrada() {
   const [busca, setBusca]         = useState("");
   const [selecao, setSelecao]     = useState(() => new Set());
   const [filtroRi, setFiltroRi]   = useState(null); // null | "sem_ri" | "com_ri"
+  // Multi-seleção: vazio = todos. Guarda os códigos Oracle (200, 201, ... 5).
+  const [gradesSel, setGradesSel] = useState(() => new Set());
   const [confirmando, setConfirmando] = useState(false);
   const [feedback, setFeedback]   = useState(null);
 
@@ -70,6 +72,20 @@ function TabEntrada() {
   const semRi = pendentesLista.filter(i => i.pendenteRi).length;
   const comRi = pendentesLista.length - semRi;
 
+  // Quantos itens por código Oracle, respeitando o filtro de RI já aplicado.
+  const contagemGrades = useMemo(() => {
+    const mapa = new Map();
+    for (const i of base) {
+      if (visao === "pendente") {
+        if (filtroRi === "sem_ri" && !i.pendenteRi) continue;
+        if (filtroRi === "com_ri" &&  i.pendenteRi) continue;
+      }
+      const k = i.gradeOracle ?? "sem";
+      mapa.set(k, (mapa.get(k) || 0) + 1);
+    }
+    return mapa;
+  }, [base, filtroRi, visao]);
+
   const filtrados = useMemo(() => {
     const q = busca.trim().toLowerCase();
     return base.filter(i => {
@@ -77,11 +93,22 @@ function TabEntrada() {
         if (filtroRi === "sem_ri" && !i.pendenteRi) return false;
         if (filtroRi === "com_ri" &&  i.pendenteRi) return false;
       }
+      // Set vazio = sem filtro de grade (mostra tudo).
+      if (gradesSel.size && !gradesSel.has(i.gradeOracle ?? "sem")) return false;
       if (!q) return true;
       return [i.voucher, i.imei, i.sku, i.produto, i.documento, i.ri, i.nf]
         .some(v => String(v || "").toLowerCase().includes(q));
     });
-  }, [base, busca, filtroRi, visao]);
+  }, [base, busca, filtroRi, visao, gradesSel]);
+
+  function alternarGrade(codigo) {
+    setGradesSel(prev => {
+      const novo = new Set(prev);
+      if (novo.has(codigo)) novo.delete(codigo);
+      else novo.add(codigo);
+      return novo;
+    });
+  }
 
   const podeSelecionar = visao === "pendente";
   const todosMarcados = podeSelecionar && filtrados.length > 0 && filtrados.every(i => selecao.has(i.imei));
@@ -104,6 +131,7 @@ function TabEntrada() {
     setVisao(nova);
     setSelecao(new Set());
     setFiltroRi(null);
+    setGradesSel(new Set());
   }
 
   function alternarFiltro(valor) {
@@ -254,6 +282,32 @@ function TabEntrada() {
         </div>
       )}
 
+      {/* Filtro por código Oracle — dá para marcar mais de um; nenhum marcado = todos. */}
+      {contagemGrades.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[13px] font-semibold text-slate-500">Oracle:</span>
+          {GRADES_ORACLE_FILTRO
+            .filter(g => contagemGrades.has(g.codigo))
+            .map(g => {
+              const ativo = gradesSel.has(g.codigo);
+              return (
+                <button key={String(g.codigo)} onClick={() => alternarGrade(g.codigo)}
+                  className={`rounded-xl px-3 py-1.5 text-[13px] font-bold ring-1 transition ${
+                    ativo ? g.ativo : g.inativo
+                  }`}>
+                  {g.rotulo} · {contagemGrades.get(g.codigo)}
+                </button>
+              );
+            })}
+          {gradesSel.size > 0 && (
+            <button onClick={() => setGradesSel(new Set())}
+              className="rounded-xl px-3 py-1.5 text-[13px] font-semibold text-slate-500 hover:bg-slate-100">
+              Limpar grades
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="relative">
         <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
         <input value={busca} onChange={e => setBusca(e.target.value)}
@@ -347,6 +401,19 @@ function AbaEmBreve({ nome }) {
     </div>
   );
 }
+
+// Códigos Oracle na ordem da hierarquia de grade. "sem" cobre a grade desconhecida,
+// que a conversão devolve como null.
+const GRADES_ORACLE_FILTRO = [
+  { codigo: 200,   rotulo: "200 · Like New",  ativo: "bg-emerald-600 text-white ring-emerald-600", inativo: "bg-white text-emerald-700 ring-emerald-200 hover:bg-emerald-50" },
+  { codigo: 201,   rotulo: "201 · Excelente", ativo: "bg-blue-600 text-white ring-blue-600",       inativo: "bg-white text-blue-700 ring-blue-200 hover:bg-blue-50" },
+  { codigo: 202,   rotulo: "202 · Muito Bom", ativo: "bg-[#7F2D92] text-white ring-[#7F2D92]",     inativo: "bg-white text-[#7F2D92] ring-purple-200 hover:bg-purple-50" },
+  { codigo: 203,   rotulo: "203 · Bom",       ativo: "bg-yellow-500 text-white ring-yellow-500",   inativo: "bg-white text-yellow-700 ring-yellow-200 hover:bg-yellow-50" },
+  { codigo: 204,   rotulo: "204 · Outlet",    ativo: "bg-orange-500 text-white ring-orange-500",   inativo: "bg-white text-orange-700 ring-orange-200 hover:bg-orange-50" },
+  { codigo: 4,     rotulo: "4 · Regular",     ativo: "bg-slate-600 text-white ring-slate-600",     inativo: "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50" },
+  { codigo: 5,     rotulo: "5 · Quebrado",    ativo: "bg-red-600 text-white ring-red-600",         inativo: "bg-white text-red-700 ring-red-200 hover:bg-red-50" },
+  { codigo: "sem", rotulo: "Sem código",      ativo: "bg-slate-400 text-white ring-slate-400",     inativo: "bg-white text-slate-500 ring-slate-200 hover:bg-slate-50" },
+];
 
 export default function EntradaOraclePage() {
   const [aba, setAba] = useState("entrada");
