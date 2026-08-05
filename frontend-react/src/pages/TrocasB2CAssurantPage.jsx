@@ -489,7 +489,7 @@ const ETAPA_LABEL = {
 };
 
 function etapaEfetiva(troca) {
-  const op = troca.trocas_b2c_operacao?.[0] || {};
+  const op = troca.trocas_b2c_assurant_operacao?.[0] || {};
   if (troca.status === "concluido" || op.status_furbtech === "postado" || op.rastreio) return "postado";
   if (op.nf || op.status_furbtech === "faturado") return "faturado";
   if (op.imei || op.status_furbtech === "em_separacao") return "em_separacao";
@@ -568,8 +568,8 @@ function Timeline({ etapaAtual, reembolso }) {
 
 function CardAcompanhamento({ troca }) {
   const [aberto, setAberto] = useState(false);
-  const op     = troca.trocas_b2c_operacao?.[0] || {};
-  const skus   = (troca.trocas_b2c_skus || []).sort((a, b) => a.ordem - b.ordem);
+  const op     = troca.trocas_b2c_assurant_operacao?.[0] || {};
+  const skus   = (troca.trocas_b2c_assurant_skus || []).sort((a, b) => a.ordem - b.ordem);
   const etapa  = etapaEfetiva(troca);
   const reembolso = troca.status === "movido_reembolso";
   const concluido = etapa === "postado" || troca.status === "concluido";
