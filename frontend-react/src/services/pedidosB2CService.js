@@ -1030,7 +1030,10 @@ async function verificarConclusaoGrupo(grupoId) {
 // EM ANÁLISE
 // ══════════════════════════════════════════════════════════
 
-export async function marcarNaoLocalizado(pedidoId, motivo, userId) {
+// destino: "em_analise" (padrão) ou "aguardando_definicao_produto". O picking usa o
+// segundo quando o FIFO não tem substituto: não é caso de investigar estoque, é falta de
+// produto — quem decide o que fazer é a definição de produto, não a análise.
+export async function marcarNaoLocalizado(pedidoId, motivo, userId, destino = "em_analise") {
   // REGRA: pedido multi-item anda SEMPRE junto. Se um item cai em análise, os irmãos que
   // já avançaram (alocado em grupo, em picking, embalado) RECUAM para "alocado" sem grupo
   // e esperam a resolução — mantendo o IMEI reservado (não perdem a peça já achada).
@@ -1046,17 +1049,24 @@ export async function marcarNaoLocalizado(pedidoId, motivo, userId) {
   const gruposAfetados = new Set();
   if (alvo.grupo_id) gruposAfetados.add(alvo.grupo_id);
 
-  // 1. O item vai para análise (sai do grupo).
+  // 1. O item sai do grupo e vai para o destino pedido (análise ou definição de produto).
+  const campos = {
+    status:         destino,
+    grupo_id:       null,
+    motivo_analise: motivo || "Não localizado",
+    atualizado_em:  agora,
+  };
+  if (destino === "aguardando_definicao_produto") {
+    campos.definicao_solicitada_em  = agora;
+    campos.definicao_solicitada_por = userId;
+  } else {
+    campos.analise_em  = agora;
+    campos.analise_por = userId;
+  }
+
   const { error: errItem } = await supabase
     .from("pedidos_b2c")
-    .update({
-      status:         "em_analise",
-      grupo_id:       null,
-      motivo_analise: motivo || "Não localizado",
-      analise_em:     agora,
-      analise_por:    userId,
-      atualizado_em:  agora,
-    })
+    .update(campos)
     .eq("id", pedidoId);
   if (errItem) throw new Error(errItem.message);
 
@@ -1150,8 +1160,14 @@ export async function naoLocalizadoBuscarProximo(pedido, userId, motivo) {
     return { trocado: true, novoImei: proximo.imei, local: proximo.local, grade: proximo.grade };
   }
 
-  // 3b. Sem segunda opção: manda o pedido para análise, preservando o motivo real.
-  await marcarNaoLocalizado(pedido.id, `${motivoFinal} (sem segunda opção no FIFO)`, userId);
+  // 3b. Sem segunda opção: não é caso de análise de estoque — é falta de produto.
+  // Vai para "Aguardando definição" para alguém decidir o substituto.
+  await marcarNaoLocalizado(
+    pedido.id,
+    `${motivoFinal} (sem segunda opção no FIFO)`,
+    userId,
+    "aguardando_definicao_produto",
+  );
   return { trocado: false };
 }
 
