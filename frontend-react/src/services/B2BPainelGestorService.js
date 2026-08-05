@@ -579,10 +579,15 @@ export async function listarPedidosAcompanhamento() {
     const dtFat     = soData(dataNf[p.id]);
 
     // O status sai da contagem, não do campo: é o que a planilha faz na mão.
+    // Item marcado como "não faturar" saiu do fluxo — não é pendência. Então o
+    // alvo real do pedido é o total menos esses; sem isso um pedido resolvido
+    // fica eternamente "parcial" por causa de itens que nunca vão faturar.
+    const alvo = Math.max(0, total - c.naoFaturar);
     let status;
-    if (total > 0 && faturados >= total)        status = "FATURADO";
+    if (alvo === 0 && total > 0)                status = "FATURADO";
+    else if (faturados >= alvo && alvo > 0)     status = "FATURADO";
     else if (faturados > 0)                     status = "EM FATURAMENTO (PARCIAL)";
-    else if (separado >= total && total > 0)    status = "AGUARDANDO FATURAMENTO";
+    else if (separado >= alvo && alvo > 0)      status = "AGUARDANDO FATURAMENTO";
     else                                        status = "EM SEPARAÇÃO";
 
     return {
@@ -600,7 +605,8 @@ export async function listarPedidosAcompanhamento() {
       aging: diasEntre(dtPedido, dtFat || new Date().toISOString().slice(0, 10)),
       agingAberto: !dtFat,
       // Diferença: o que falta separar (é assim que a planilha usa hoje).
-      diferenca: Math.max(0, total - separado),
+      alvo,
+      diferenca: Math.max(0, alvo - separado),
       // Observações = o que ficou em análise: motivos de não faturar e peças na rua.
       motivos: Object.entries(c.motivos)
         .map(([motivo, qtd]) => ({ motivo, qtd }))

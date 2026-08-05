@@ -24,6 +24,9 @@ const CORES_STATUS = {
   "EM SEPARAÇÃO":             "bg-yellow-300 text-yellow-900",
 };
 
+const MESES_TABELA = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho",
+                      "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+
 const fmtDia = (iso) => {
   if (!iso) return "—";
   const [a, m, d] = iso.split("-");
@@ -224,6 +227,16 @@ export default function B2BPainelGestorPage() {
   const [loadPed, setLoadPed]           = useState(false);
   const [filtroStatus, setFiltroStatus] = useState(null);
   const [buscaPed, setBuscaPed]         = useState("");
+  // Nós abertos da tabela dinâmica: "2026", "2026|Agosto", "2026|Agosto|05"
+  const [abertos, setAbertos]           = useState(() => new Set());
+
+  function alternarNo(chave) {
+    setAbertos(prev => {
+      const n = new Set(prev);
+      n.has(chave) ? n.delete(chave) : n.add(chave);
+      return n;
+    });
+  }
 
   useEffect(() => { carregar(); }, [periodo]);
   useEffect(() => { if (aba === "geral" && !geral) carregarGeral(); }, [aba]);
@@ -460,7 +473,7 @@ export default function B2BPainelGestorPage() {
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="text-left text-slate-500 border-b border-slate-200">
-                      <th className="px-2 py-2 font-bold">Cliente</th>
+                      <th className="px-2 py-2 font-bold">Período / cliente</th>
                       <th className="px-2 py-2 font-bold">Data pedido</th>
                       <th className="px-2 py-2 font-bold text-right">Pedido</th>
                       <th className="px-2 py-2 font-bold text-right">Separado</th>
@@ -472,10 +485,114 @@ export default function B2BPainelGestorPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {lista.map(p => (
-                      <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50">
-                        <td className="px-2 py-2 font-semibold text-slate-700">
-                          {p.cliente}
+                    {(() => {
+                      // Agrupa em ano › mês › dia; o pedido continua sendo a linha final,
+                      // para não perder cliente, status e observação no caminho.
+                      const arv = {};
+                      lista.forEach(p => {
+                        const [a, m, d] = (p.dataPedido || "0000-00-00").split("-");
+                        const mesNome = MESES_TABELA[Number(m) - 1] || m;
+                        ((((arv[a] ||= {})[mesNome] ||= {})[d] ||= [])).push(p);
+                      });
+
+                      const soma = (peds) => peds.reduce((s, p) => ({
+                        total: s.total + p.total, separado: s.separado + p.separado,
+                        diferenca: s.diferenca + p.diferenca, qtd: s.qtd + 1,
+                      }), { total: 0, separado: 0, diferenca: 0, qtd: 0 });
+
+                      const linhas = [];
+                      Object.keys(arv).sort((x, y) => y.localeCompare(x)).forEach(ano => {
+                        const dosAno = Object.values(arv[ano]).flatMap(m => Object.values(m).flat());
+                        const tA = soma(dosAno);
+                        const chaveA = ano;
+                        linhas.push(
+                          <tr key={chaveA} className="border-b border-slate-200 bg-slate-50 cursor-pointer hover:bg-slate-100"
+                              onClick={() => alternarNo(chaveA)}>
+                            <td className="px-2 py-2 font-black text-slate-800">
+                              {abertos.has(chaveA) ? "▾" : "▸"} {ano}
+                            </td>
+                            <td className="px-2 py-2 text-slate-400">{tA.qtd} pedidos</td>
+                            <td className="px-2 py-2 text-right font-bold">{tA.total}</td>
+                            <td className="px-2 py-2 text-right">{tA.separado}</td>
+                            <td colSpan={3} />
+                            <td className="px-2 py-2 text-right font-bold text-amber-700">{tA.diferenca || ""}</td>
+                            <td />
+                          </tr>,
+                        );
+                        if (!abertos.has(chaveA)) return;
+
+                        Object.keys(arv[ano])
+                          .sort((x, y) => MESES_TABELA.indexOf(y) - MESES_TABELA.indexOf(x))
+                          .forEach(mes => {
+                            const dosMes = Object.values(arv[ano][mes]).flat();
+                            const tM = soma(dosMes);
+                            const chaveM = `${ano}|${mes}`;
+                            linhas.push(
+                              <tr key={chaveM} className="border-b border-slate-100 cursor-pointer hover:bg-slate-50"
+                                  onClick={() => alternarNo(chaveM)}>
+                                <td className="px-2 py-2 pl-6 font-bold text-slate-700">
+                                  {abertos.has(chaveM) ? "▾" : "▸"} {mes}
+                                </td>
+                                <td className="px-2 py-2 text-slate-400">{tM.qtd} pedidos</td>
+                                <td className="px-2 py-2 text-right font-semibold">{tM.total}</td>
+                                <td className="px-2 py-2 text-right">{tM.separado}</td>
+                                <td colSpan={3} />
+                                <td className="px-2 py-2 text-right font-semibold text-amber-700">{tM.diferenca || ""}</td>
+                                <td />
+                              </tr>,
+                            );
+                            if (!abertos.has(chaveM)) return;
+
+                            Object.keys(arv[ano][mes]).sort((x, y) => y.localeCompare(x)).forEach(dia => {
+                              const peds = arv[ano][mes][dia];
+                              const tD = soma(peds);
+                              const chaveD = `${ano}|${mes}|${dia}`;
+                              linhas.push(
+                                <tr key={chaveD} className="border-b border-slate-100 cursor-pointer hover:bg-slate-50"
+                                    onClick={() => alternarNo(chaveD)}>
+                                  <td className="px-2 py-2 pl-12 font-semibold text-slate-600">
+                                    {abertos.has(chaveD) ? "▾" : "▸"} dia {dia}
+                                  </td>
+                                  <td className="px-2 py-2 text-slate-400">{tD.qtd} pedidos</td>
+                                  <td className="px-2 py-2 text-right">{tD.total}</td>
+                                  <td className="px-2 py-2 text-right">{tD.separado}</td>
+                                  <td colSpan={3} />
+                                  <td className="px-2 py-2 text-right text-amber-700">{tD.diferenca || ""}</td>
+                                  <td />
+                                </tr>,
+                              );
+                              if (!abertos.has(chaveD)) return;
+
+                              peds.forEach(p => linhas.push(
+                                <tr key={p.id} className="border-b border-slate-100 hover:bg-purple-50/40">
+                                  <td className="px-2 py-2 pl-16 font-semibold text-slate-700">
+                                    {p.cliente}
+                                    {p.lote && <span className="block text-[10px] font-normal text-slate-400">{p.lote}</span>}
+                                  </td>
+                                  <td className="px-2 py-2 text-slate-600">{fmtDia(p.dataPedido)}</td>
+                                  <td className="px-2 py-2 text-right font-semibold text-slate-700">{p.total}</td>
+                                  <td className="px-2 py-2 text-right text-slate-600">{p.separado}</td>
+                                  <td className="px-2 py-2 text-center">
+                                    <span className={`inline-block text-[10px] font-black px-2 py-1 rounded ${CORES_STATUS[p.status] || "bg-slate-200 text-slate-600"}`}>
+                                      {p.status}
+                                    </span>
+                                  </td>
+                                  <td className="px-2 py-2 text-slate-600">{fmtDia(p.dataFaturamento)}</td>
+                                  <td className={`px-2 py-2 text-right font-semibold ${p.agingAberto && p.aging > 2 ? "text-red-600" : "text-slate-600"}`}>
+                                    {p.aging != null ? `${p.aging}d` : "—"}
+                                  </td>
+                                  <td className={`px-2 py-2 text-right font-bold ${p.diferenca > 0 ? "text-amber-700" : "text-slate-400"}`}>
+                                    {p.diferenca}
+                                  </td>
+                                  <td className="px-2 py-2 text-slate-500 max-w-[220px]">{p.observacoes || "—"}</td>
+                                </tr>,
+                              ));
+                            });
+                          });
+                      });
+                      return linhas;
+                    })()}
+                  </tbody>
                           {p.lote && <span className="block text-[10px] font-normal text-slate-400">{p.lote}</span>}
                         </td>
                         <td className="px-2 py-2 text-slate-600">{fmtDia(p.dataPedido)}</td>
