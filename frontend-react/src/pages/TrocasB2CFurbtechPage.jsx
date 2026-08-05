@@ -3,11 +3,12 @@ import {
   Search, CheckCircle, AlertTriangle, Package,
   ChevronDown, ChevronUp, X, ScanLine, FileText,
   Truck, RefreshCw, MapPin, Clock, Wrench, Loader, Filter, FlaskConical,
+  Download, Upload,
 } from "lucide-react";
 import {
   listarTrocas, buscarSugestoesFIFO, registrarFaturamento, moverParaReembolso,
   alocarTroca, listarParaSeparacao, confirmarSeparacao, naoLocalizadoSeparacao,
-  aprovarTeste, reprovarTeste,
+  aprovarTeste, reprovarTeste, gerarPlanilhaTrocas, importarXmlsTrocas,
 } from "../services/trocasB2CService.js";
 import { useAuth } from "../AuthContext.jsx";
 
@@ -1038,6 +1039,97 @@ function TrocasB2CFurbtechPageAntigo() {
 }
 
 // ══════════════════════════════════════════════════════════
+// ABA FATURAMENTO — planilha para o fiscal e volta dos XMLs
+// ══════════════════════════════════════════════════════════
+function PainelFaturamento({ onAtualizar }) {
+  const { user }              = useAuth();
+  const [baixando, setBaixando] = useState(false);
+  const [subindo, setSubindo]   = useState(false);
+  const [resultado, setResultado] = useState(null);
+  const inputRef = useRef(null);
+
+  async function handleBaixar() {
+    if (baixando) return;
+    setBaixando(true);
+    setResultado(null);
+    try {
+      const r = await gerarPlanilhaTrocas();
+      if (!r.ok) setResultado({ tipo: "erro", msg: r.erro });
+      else setResultado({ tipo: "ok", msg: `${r.total} troca(s) na planilha ${r.nomeArquivo}.` });
+    } catch (e) { setResultado({ tipo: "erro", msg: e.message }); }
+    finally { setBaixando(false); }
+  }
+
+  async function handleXml(e) {
+    const file = e.target.files?.[0];
+    if (!file || subindo) return;
+    setSubindo(true);
+    setResultado(null);
+    try {
+      const r = await importarXmlsTrocas(file, user.id);
+      const ign = r.ignorados?.length || 0;
+      setResultado({
+        tipo: r.faturadas > 0 ? "ok" : "erro",
+        msg: `${r.faturadas} troca(s) faturada(s) de ${r.totalItens} item(ns)` +
+             (ign ? ` · ${ign} ignorado(s)` : ""),
+        ignorados: r.ignorados || [],
+      });
+      if (r.faturadas > 0) setTimeout(() => onAtualizar?.(), 1200);
+    } catch (err) { setResultado({ tipo: "erro", msg: err.message }); }
+    finally {
+      setSubindo(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h3 className="font-black text-slate-800 text-sm">Faturamento das trocas</h3>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Baixe a planilha, emita as notas e suba os XMLs — o casamento é pelo IMEI.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={handleBaixar} disabled={baixando}
+            className="flex items-center gap-1.5 text-xs font-bold px-4 py-2.5 rounded-xl bg-[#7F2D92] text-white hover:bg-[#5B1E74] disabled:opacity-50">
+            {baixando ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+            Baixar planilha
+          </button>
+          <label className="flex items-center gap-1.5 text-xs font-bold px-4 py-2.5 rounded-xl ring-1 ring-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer">
+            <input ref={inputRef} type="file" accept=".xml,.zip" onChange={handleXml} className="hidden" disabled={subindo} />
+            {subindo ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+            Subir XMLs
+          </label>
+        </div>
+      </div>
+
+      {resultado && (
+        <div className={`mt-3 rounded-xl px-4 py-3 ring-1 text-xs ${resultado.tipo === "ok" ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-red-50 text-red-700 ring-red-200"}`}>
+          <div className="flex items-start gap-2">
+            {resultado.tipo === "ok" ? <CheckCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" /> : <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />}
+            <p className="font-semibold">{resultado.msg}</p>
+          </div>
+          {resultado.ignorados?.length > 0 && (
+            <div className="mt-2 border-t border-current/10 pt-2 space-y-0.5">
+              {resultado.ignorados.slice(0, 12).map((i, k) => (
+                <div key={k} className="text-[11px] opacity-80">
+                  {i.arquivo}{i.imei ? ` · ${i.imei}` : ""} — {i.motivo}
+                </div>
+              ))}
+              {resultado.ignorados.length > 12 && (
+                <div className="text-[11px] opacity-60">e mais {resultado.ignorados.length - 12}...</div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// ══════════════════════════════════════════════════════════
 // PÁGINA PRINCIPAL
 // ══════════════════════════════════════════════════════════
 export default function TrocasB2CFurbtechPage() {
@@ -1154,6 +1246,7 @@ export default function TrocasB2CFurbtechPage() {
         </div>
       ) : (
         <div className="space-y-3">
+          {aba === "faturamento" && <PainelFaturamento onAtualizar={carregar} />}
           {aba === "trocas"      && lista.map(t => <CardAlocacao    key={t.id} troca={t} onAtualizar={carregar} />)}
           {aba === "teste"       && lista.map(t => <CardTeste       key={t.id} troca={t} onAtualizar={carregar} />)}
           {aba === "faturamento" && lista.map(t => <CardFaturamento key={t.id} troca={t} onAtualizar={carregar} />)}
