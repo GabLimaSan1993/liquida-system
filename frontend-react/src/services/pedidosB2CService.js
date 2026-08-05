@@ -1945,6 +1945,24 @@ export async function gerarPlanilhaFaturamentoGrupo(grupoId, userId, userNome) {
   if (error) throw new Error(error.message);
   if (!pedidos?.length) return { ok: false, erro: "Nenhum pedido pronto para faturar neste grupo." };
 
+  // O voucher fica na triagem, não no pedido — busca pelo IMEI de cada linha.
+  // Blocos de 200: lista grande em .in() estoura a URL do PostgREST em silêncio.
+  const imeisPlanilha = [...new Set(
+    pedidos.map(p => p.imei_bipado || p.imei_alocado).filter(Boolean),
+  )];
+  const voucherPorImei = {};
+  for (let i = 0; i < imeisPlanilha.length; i += 200) {
+    const { data: tri } = await supabase
+      .from("assurant_triagem")
+      .select("imei, voucher, criado_em")
+      .in("imei", imeisPlanilha.slice(i, i + 200))
+      .order("criado_em", { ascending: false });
+    // A primeira ocorrência é a mais recente (order desc), que é a que vale.
+    (tri || []).forEach(t => {
+      if (t.voucher && !voucherPorImei[t.imei]) voucherPorImei[t.imei] = t.voucher;
+    });
+  }
+
   const rows = pedidos.map(p => ({
     "ID_PEDIDO":   p.id,
     "PEDIDO_ML":   p.id_anymarket,
@@ -1954,6 +1972,7 @@ export async function gerarPlanilhaFaturamentoGrupo(grupoId, userId, userNome) {
     "SKU":         p.sku_alocado || p.sku_produto || "",
     "GRADE":       p.grade_alocada || p.grade_produto || "",
     "IMEI":        p.imei_bipado || p.imei_alocado || "",
+    "VOUCHER":     voucherPorImei[p.imei_bipado || p.imei_alocado] || "",
     "VALOR":       p.total_do_pedido != null ? Number(p.total_do_pedido).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "",
     "NUMERO_NF":   "",
   }));
