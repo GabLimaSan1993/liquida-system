@@ -18,26 +18,78 @@ const ABAS = [
 
 const brl = v => "R$ " + Math.round(Number(v) || 0).toLocaleString("pt-BR");
 
+// Curva do nível aberto: uma linha com o faturado de cada período, em SVG puro
+// (nenhuma biblioteca) para não pesar a página.
+function CurvaPeriodo({ pontos, selecionados, onClicar }) {
+  if (pontos.length < 2) return null;
+  const L = 640, A = 130, PAD = 8;
+  const max = Math.max(1, ...pontos.map(p => p.valor));
+  const passo = pontos.length > 1 ? (L - PAD * 2) / (pontos.length - 1) : 0;
+  const xy = pontos.map((p, i) => ({
+    ...p,
+    x: PAD + i * passo,
+    y: A - PAD - (p.valor / max) * (A - PAD * 3),
+  }));
+  const linha = xy.map((p, i) => `${i ? "L" : "M"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+  const area = `${linha} L${xy[xy.length - 1].x.toFixed(1)},${A - PAD} L${xy[0].x.toFixed(1)},${A - PAD} Z`;
+
+  return (
+    <div className="mt-3">
+      <svg viewBox={`0 0 ${L} ${A}`} className="w-full" style={{ height: 130 }}>
+        <path d={area}  fill="#7F2D92" opacity="0.08" />
+        <path d={linha} fill="none" stroke="#7F2D92" strokeWidth="2" />
+        {xy.map(p => {
+          const on = selecionados.map(String).includes(String(p.nome));
+          return (
+            <g key={p.nome} onClick={() => onClicar?.(p.nome)} style={{ cursor: "pointer" }}>
+              <circle cx={p.x} cy={p.y} r={on ? 5 : 3.5} fill={on ? "#7F2D92" : "#fff"} stroke="#7F2D92" strokeWidth="2" />
+              <text x={p.x} y={A - 1} textAnchor="middle" fontSize="9" fill="#94a3b8">{p.nome}</text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
 // Barras horizontais dos cortes da visão geral.
-function Ranking({ titulo, icone: Icone, dados, mostrarValor = true, cor = "bg-[#7F2D92]" }) {
-  const max = Math.max(1, ...dados.map(d => (mostrarValor ? d.valor : d.itens)));
+function Ranking({ titulo, icone: Icone, dados, mostrarValor = true, cor = "bg-[#7F2D92]", temValor = true }) {
+  // Cada card ordena sozinho: por valor faturado ou por volume de itens.
+  const [ordem, setOrdem] = useState(mostrarValor ? "valor" : "itens");
+  const porValor = ordem === "valor" && temValor;
+  const lista = [...dados].sort((a, b) => porValor ? b.valor - a.valor : b.itens - a.itens);
+  const max = Math.max(1, ...lista.map(d => (porValor ? d.valor : d.itens)));
   return (
     <Card>
-      <h3 className="font-black text-slate-800 text-sm mb-4 flex items-center gap-2">
-        <Icone className="h-4 w-4 text-[#7F2D92]" /> {titulo}
-      </h3>
-      {dados.length === 0 ? (
+      <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
+        <h3 className="font-black text-slate-800 text-sm flex items-center gap-2">
+          <Icone className="h-4 w-4 text-[#7F2D92]" /> {titulo}
+        </h3>
+        {temValor && (
+          <div className="flex gap-1">
+            <button onClick={() => setOrdem("valor")}
+              className={`text-[11px] font-bold px-2.5 py-1 rounded-lg transition ${ordem === "valor" ? "bg-[#7F2D92] text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}>
+              Valor
+            </button>
+            <button onClick={() => setOrdem("itens")}
+              className={`text-[11px] font-bold px-2.5 py-1 rounded-lg transition ${ordem === "itens" ? "bg-[#7F2D92] text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}>
+              Volume
+            </button>
+          </div>
+        )}
+      </div>
+      {lista.length === 0 ? (
         <p className="text-xs text-slate-400">Sem dados no período.</p>
       ) : (
         <div className="space-y-3">
-          {dados.map(d => {
-            const base = mostrarValor ? d.valor : d.itens;
+          {lista.map(d => {
+            const base = porValor ? d.valor : d.itens;
             return (
               <div key={d.nome}>
                 <div className="flex justify-between items-baseline text-xs mb-1 gap-2">
                   <span className="font-semibold text-slate-700 truncate">{d.nome}</span>
                   <span className="text-slate-500 shrink-0">
-                    {mostrarValor ? `${brl(d.valor)} · ${d.itens}` : `${d.itens} ${d.itens === 1 ? "item" : "itens"}`}
+                    {temValor ? `${brl(d.valor)} · ${d.itens}` : `${d.itens} ${d.itens === 1 ? "item" : "itens"}`}
                   </span>
                 </div>
                 <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
@@ -304,6 +356,11 @@ export default function B2BPainelGestorPage() {
                   );
                 })}
               </div>
+              <CurvaPeriodo
+                pontos={opcoesNivel.map(k => ({ nome: k, valor: noDe(k)?.valor || 0, itens: noDe(k)?.itens || 0 }))}
+                selecionados={sel}
+                onClicar={k => setSel(s => s.includes(k) ? s.filter(x => x !== k) : [...s, k])}
+              />
               <p className="text-[11px] text-slate-400 mt-2">
                 {nivel === "dia"
                   ? "Clique nos dias para somar · clique de novo para tirar"
@@ -320,9 +377,9 @@ export default function B2BPainelGestorPage() {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <Ranking titulo="Faturamento por cliente" icone={TrendingUp} dados={agruparPor(linhasFiltradas, "cliente")} />
-              <Ranking titulo="Por grade" icone={Package} dados={agruparPor(linhasFiltradas, "grade")} mostrarValor={false} cor="bg-blue-500" />
+              <Ranking titulo="Por grade" icone={Package} dados={agruparPor(linhasFiltradas, "grade")} cor="bg-blue-500" />
               <Ranking titulo="Por produto" icone={ScanLine} dados={agruparPor(linhasFiltradas, "modelo")} cor="bg-emerald-600" />
-              <Ranking titulo="Motivos de não faturamento" icone={Ban} dados={agruparMotivos(naoFatFiltrados)} mostrarValor={false} cor="bg-amber-500" />
+              <Ranking titulo="Motivos de não faturamento" icone={Ban} dados={agruparMotivos(naoFatFiltrados)} temValor={false} mostrarValor={false} cor="bg-amber-500" />
             </div>
           </>
         )
