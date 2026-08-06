@@ -1102,6 +1102,16 @@ export async function marcarNaoLocalizado(pedidoId, motivo, userId, destino = "e
     .eq("id", pedidoId);
   if (errItem) throw new Error(errItem.message);
 
+  // Tira a peça de circulação: se o separador foi na rua e não achou, o endereço
+  // está errado ou ela sumiu. Deixá-la "Produto disponível" faz o FIFO oferecer de
+  // novo amanhã e o próximo separador perder a mesma viagem.
+  if (imeiSolto) {
+    await supabase
+      .from("assurant_triagem")
+      .update({ status_atual: "Em análise de estoque", atualizado_em: agora })
+      .eq("imei", imeiSolto);
+  }
+
   // 2. Puxa os IRMÃOS que já avançaram de volta para "alocado" sem grupo. Mantém o IMEI
   //    reservado (imei_alocado, sku_alocado, grade_alocada intactos). Limpa só bipagem/
   //    embalagem, porque eles recuam de etapa. Não toca em item já faturado/concluído.
