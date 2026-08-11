@@ -165,7 +165,13 @@ function MenuAssurant({ onClose, telas }) {
             )}
           </SubGroup>
         )}
-        {(tem("/triagens/entrada-oracle") || tem("/triagens/funcional") || tem("/triagens/laudo")) && (
+        {(
+  tem("/triagens/entrada-oracle") ||
+  tem("/triagens/funcional") ||
+  tem("/triagens/laudo") ||
+  tem("/triagens/cosmetica") ||
+  tem("/triagens/armazenagem")
+) && (
           <SubGroup icon={FlaskConical} label="Triagens" paths={["/triagens"]}>
             {tem("/triagens/funcional") && (
               <NavItem to="/triagens/funcional" icon={Wrench} label="Triagem Funcional" indent onClick={onClose} />
@@ -173,7 +179,25 @@ function MenuAssurant({ onClose, telas }) {
             {tem("/triagens/laudo") && (
               <NavItem to="/triagens/laudo" icon={FileText} label="Laudo" indent onClick={onClose} />
             )}
-            <NavItemDisabled icon={Sparkles} label="Triagem Cosmética" indent />
+            {tem("/triagens/cosmetica") && (
+  <NavItem
+    to="/triagens/cosmetica"
+    icon={Sparkles}
+    label="Triagem Cosmética"
+    indent
+    onClick={onClose}
+  />
+)}
+
+{tem("/triagens/armazenagem") && (
+  <NavItem
+    to="/triagens/armazenagem"
+    icon={Package}
+    label="Armazenagem"
+    indent
+    onClick={onClose}
+  />
+)}
             {tem("/triagens/entrada-oracle") && (
               <NavItem to="/triagens/entrada-oracle" icon={ClipboardList} label="Entrada no Oracle" indent onClick={onClose} />
             )}
@@ -314,6 +338,7 @@ function SidebarContent({ profile, onClose, handleLogout }) {
                 <NavItem to="/triagens/funcional"      icon={Wrench}        label="Triagem Funcional" indent onClick={onClose} />
                 <NavItem to="/triagens/laudo"          icon={FileText}      label="Laudo"             indent onClick={onClose} />
                 <NavItem to="/triagens/cosmetica"      icon={Sparkles}      label="Triagem Cosmética" indent onClick={onClose} />
+                <NavItem to="/triagens/armazenagem" icon={Package} label="Armazenagem" indent onClick={onClose} />
                 <NavItem to="/triagens/entrada-oracle" icon={ClipboardList} label="Entrada no Oracle" indent onClick={onClose} />
               </SubGroup>
               <SubGroup icon={Box} label="B2B" paths={["/b2b"]}>

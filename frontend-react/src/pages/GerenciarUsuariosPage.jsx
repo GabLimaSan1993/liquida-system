@@ -32,6 +32,7 @@ const TELAS = [
   { id: "/triagens/funcional",            label: "Triagens — Funcional",             grupo: "Assurant" },
   { id: "/triagens/laudo",                label: "Triagens — Laudo",                 grupo: "Assurant" },
   { id: "/triagens/cosmetica",            label: "Triagens — Cosmética",             grupo: "Assurant" },
+  { id: "/triagens/armazenagem", label: "WMS — Armazenagem", grupo: "Assurant" },
   { id: "/b2c/embalagem",                 label: "Assurant — Embalagem B2C",         grupo: "Assurant" },
   { id: "/b2c/painel",                    label: "Assurant — Painel Gestor B2C",     grupo: "Assurant" },
   { id: "/b2c/etiquetas",                 label: "Assurant — Etiquetas de envio",    grupo: "Assurant" },

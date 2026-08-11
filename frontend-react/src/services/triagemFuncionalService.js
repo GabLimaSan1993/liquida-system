@@ -132,6 +132,10 @@ const ETAPAS = {
   "Aguardando análise Assurant":      { nome: "Análise Assurant",      onde: "Aguardando tratativa da Assurant" },
   "Aguardando laudo":                 { nome: "Laudo",                 onde: "Tela de Laudo" },
   "Aguardando triagem cosmética":     { nome: "Triagem Cosmética",     onde: "Tela de Triagem Cosmética" },
+  "Aguardando armazenagem": {
+  nome: "Armazenagem",
+  onde: "Tela de Armazenagem",
+},
   "Aguardando oracle":                { nome: "Entrada no Oracle",     onde: "Tela de Entrada no Oracle" },
   "Produto disponível":               { nome: "Disponível em estoque", onde: "Já entrou no Oracle e está no FIFO" },
   "Em análise de estoque":            { nome: "Análise de estoque",    onde: "Aparelho não localizado na prateleira" },

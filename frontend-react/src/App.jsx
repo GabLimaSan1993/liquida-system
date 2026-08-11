@@ -42,6 +42,7 @@ import EntradaOraclePage from "./pages/EntradaOraclePage.jsx";
 import TriagemFuncionalPage from "./pages/TriagemFuncionalPage.jsx";
 import LaudoPage from "./pages/LaudoPage.jsx";
 import TriagemCosmeticaPage from "./pages/TriagemCosmeticaPage.jsx";
+import ArmazenagemPage from "./pages/ArmazenagemPage.jsx";
 
 function ProtectedRoute({ tela, children }) {
   const { user, loading, hasAccess } = useAuth();
@@ -145,6 +146,7 @@ export default function App() {
         <Route path="/triagens/funcional" element={<ProtectedRoute tela="/triagens/funcional"><TriagemFuncionalPage /></ProtectedRoute>} />
         <Route path="/triagens/laudo" element={<ProtectedRoute tela="/triagens/laudo"><LaudoPage /></ProtectedRoute>} />
         <Route path="/triagens/cosmetica" element={<ProtectedRoute tela="/triagens/cosmetica"><TriagemCosmeticaPage /></ProtectedRoute>} />
+        <Route path="/triagens/armazenagem" element={<ProtectedRoute tela="/triagens/armazenagem"><ArmazenagemPage /></ProtectedRoute>} />
         <Route path="/triagens/entrada-oracle" element={<ProtectedRoute tela="/triagens/entrada-oracle"><EntradaOraclePage /></ProtectedRoute>} />
 
         {/* Inventário Cíclico */}

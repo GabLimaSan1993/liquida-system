@@ -38,6 +38,7 @@ const PAGE_META = {
   "/triagens/funcional":           { title: "Triagem Funcional",         subtitle: "Triagens · Validação de IMEI, perguntas e defeitos" },
   "/triagens/laudo":               { title: "Laudo de Triagem",          subtitle: "Triagens · Fotos e documento de divergência" },
   "/triagens/cosmetica":           { title: "Triagem Cosmética",         subtitle: "Triagens · Tela, laterais, traseira e grade final" },
+  "/triagens/armazenagem": { title: "Armazenagem", subtitle: "WMS · Endereçamento automático e validação física por bipagem" },
 };
 
 export default function MainLayout() {
