@@ -32,18 +32,15 @@ const TELAS = [
   { id: "/triagens/funcional",            label: "Triagens — Funcional",             grupo: "Assurant" },
   { id: "/triagens/laudo",                label: "Triagens — Laudo",                 grupo: "Assurant" },
   { id: "/triagens/cosmetica",            label: "Triagens — Cosmética",             grupo: "Assurant" },
-  { id: "/triagens/armazenagem", label: "WMS — Armazenagem", grupo: "Assurant" },
-  {
-  id: "/wms/estoque",
-  label: "WMS — Consulta e mapa do estoque",
-  grupo: "Assurant"
-},
+  { id: "/triagens/armazenagem",          label: "WMS — Armazenagem",                grupo: "Assurant" },
+  { id: "/wms/estoque",                   label: "WMS — Consulta e mapa do estoque", grupo: "Assurant" },
   { id: "/b2c/embalagem",                 label: "Assurant — Embalagem B2C",         grupo: "Assurant" },
   { id: "/b2c/painel",                    label: "Assurant — Painel Gestor B2C",     grupo: "Assurant" },
   { id: "/b2c/etiquetas",                 label: "Assurant — Etiquetas de envio",    grupo: "Assurant" },
   { id: "/b2c/expedicao",                 label: "Assurant — Expedição B2C",         grupo: "Assurant" },
-  { id: "/trocas-b2c/gestao",             label: "Assurant — Trocas B2C (Gestão)",   grupo: "Assurant" },
-  { id: "/trocas-b2c/nova",               label: "Assurant — Trocas B2C (Nova)",     grupo: "Assurant" },
+  { id: "/trocas-devolucoes/assurant",    label: "Trocas e Devoluções — Portal Assurant", grupo: "Trocas e Devoluções" },
+  { id: "/trocas-devolucoes/furbtech",    label: "Trocas e Devoluções — Portal Furbtech", grupo: "Trocas e Devoluções" },
+  { id: "/trocas-devolucoes/gestao",      label: "Trocas e Devoluções — Gestão e Acompanhamento", grupo: "Trocas e Devoluções" },
   { id: "/inventario",                    label: "Assurant — Inventário Cíclico",    grupo: "Assurant" },
   { id: "/indicadores",                   label: "Assurant — Painel de Indicadores", grupo: "Assurant" },
   { id: "/inventario/sortear",            label: "Assurant — Inventário: sortear o dia", grupo: "Assurant" },
@@ -52,7 +49,7 @@ const TELAS = [
 const AREAS_TECNICAS = [
   { value: "",                label: "Nenhuma (não é técnico)"  },
   { value: "assurant",        label: "Operador Assurant"        },
-  { value: "assurant_trocas", label: "Assurant — Trocas"        },
+  { value: "assurant_trocas", label: "Assurant — Trocas e Devoluções" },
   { value: "refrigeracao",    label: "Refrigeração"             },
   { value: "climatizacao",    label: "Climatização"             },
   { value: "lavadoras",       label: "Lavadoras"                },
@@ -93,7 +90,7 @@ function AreaBadge({ area }) {
   };
   const labels = {
     assurant:        "Operador Assurant",
-    assurant_trocas: "Assurant — Trocas",
+    assurant_trocas: "Assurant — Trocas e Devoluções",
     refrigeracao:    "Refrigeração",
     climatizacao:    "Climatização",
     lavadoras:       "Lavadoras",
@@ -377,7 +374,7 @@ function ModalPermissoes({ usuario, onSave, onCancel }) {
 
 export default function GerenciarUsuariosPage() {
   const [usuarios, setUsuarios] = useState([]);
-  const [loading, setLoading]   = useState(false);
+  const [loading, setLoading]   = useState(true);
   const [showNovo, setShowNovo] = useState(false);
   const [editando, setEditando] = useState(null);
   const [status, setStatus]     = useState("");
@@ -394,7 +391,22 @@ export default function GerenciarUsuariosPage() {
     }
   }
 
-  useEffect(() => { loadUsuarios(); }, []);
+  useEffect(() => {
+    let cancelado = false;
+
+    fetchAllProfiles()
+      .then(data => {
+        if (!cancelado) setUsuarios(data);
+      })
+      .catch(err => {
+        if (!cancelado) setStatus(`Erro: ${err.message}`);
+      })
+      .finally(() => {
+        if (!cancelado) setLoading(false);
+      });
+
+    return () => { cancelado = true; };
+  }, []);
 
   async function handleCreateUser(email, senha, nome, isMaster, telas, areaTecnica) {
     await createUser(email, senha, nome, isMaster, telas, areaTecnica);

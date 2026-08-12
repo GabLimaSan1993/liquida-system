@@ -38,11 +38,11 @@ const PAGE_META = {
   "/triagens/funcional":           { title: "Triagem Funcional",         subtitle: "Triagens · Validação de IMEI, perguntas e defeitos" },
   "/triagens/laudo":               { title: "Laudo de Triagem",          subtitle: "Triagens · Fotos e documento de divergência" },
   "/triagens/cosmetica":           { title: "Triagem Cosmética",         subtitle: "Triagens · Tela, laterais, traseira e grade final" },
-  "/triagens/armazenagem": { title: "Armazenagem", subtitle: "WMS · Endereçamento automático e validação física por bipagem" },
-  "/wms/estoque": {
-  title: "Consulta do Estoque",
-  subtitle: "WMS · Mapa físico, ocupação e localização de produtos"
-},
+  "/triagens/armazenagem":         { title: "Armazenagem",               subtitle: "WMS · Endereçamento automático e validação física por bipagem" },
+  "/wms/estoque":                  { title: "Consulta do Estoque",        subtitle: "WMS · Mapa físico, ocupação e localização de produtos" },
+  "/trocas-devolucoes/assurant":    { title: "Portal Assurant",            subtitle: "Trocas e Devoluções · Solicitações e acompanhamento da Assurant" },
+  "/trocas-devolucoes/furbtech":    { title: "Portal Furbtech",            subtitle: "Trocas e Devoluções · Recebimento, triagem e execução operacional" },
+  "/trocas-devolucoes/gestao":      { title: "Gestão e Acompanhamento",    subtitle: "Trocas e Devoluções · Visão consolidada dos processos" },
 };
 
 export default function MainLayout() {

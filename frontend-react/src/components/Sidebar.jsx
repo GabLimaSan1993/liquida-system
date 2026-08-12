@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { createElement, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   Upload, BarChart3, Bell, DollarSign, ClipboardList,
@@ -7,7 +7,7 @@ import {
   Truck, TrendingUp, Users, LogOut, X, ShoppingCart,
   Landmark, BarChart2, Lock, TrendingDown, Database,
   Package, Clock, LayoutDashboard, ScanLine, RefreshCw,
-  PlusCircle, Box, Store, Send, FileText, Tag, Warehouse,
+  Box, Store, Send, FileText, Tag, Warehouse,
 } from "lucide-react";
 import { useAuth } from "../AuthContext.jsx";
 import { signOut } from "../services/authService.js";
@@ -37,7 +37,7 @@ function NavItem({ to, icon: Icon, label, indent = false, onClick }) {
         }`
       }
     >
-      <Icon className="h-4 w-4 shrink-0" />
+      {createElement(Icon, { className: "h-4 w-4 shrink-0" })}
       <span className="font-medium">{label}</span>
     </NavLink>
   );
@@ -46,7 +46,7 @@ function NavItem({ to, icon: Icon, label, indent = false, onClick }) {
 function NavItemDisabled({ icon: Icon, label, indent = false }) {
   return (
     <div className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3 text-white/30 cursor-not-allowed ${indent ? "pl-6" : ""}`}>
-      <Icon className="h-4 w-4 shrink-0" />
+      {createElement(Icon, { className: "h-4 w-4 shrink-0" })}
       <span className="font-medium">{label}</span>
       <Lock className="h-3 w-3 ml-auto" />
     </div>
@@ -67,7 +67,7 @@ function CollapseGroup({ icon: Icon, label, paths, children }) {
         }`}
       >
         <div className="flex items-center gap-3">
-          <Icon className="h-4 w-4 shrink-0" />
+          {createElement(Icon, { className: "h-4 w-4 shrink-0" })}
           <span className="font-semibold">{label}</span>
         </div>
         {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -95,7 +95,7 @@ function SubGroup({ icon: Icon, label, paths, children }) {
         }`}
       >
         <div className="flex items-center gap-2">
-          <Icon className="h-3.5 w-3.5 shrink-0" />
+          {createElement(Icon, { className: "h-3.5 w-3.5 shrink-0" })}
           <span className="font-semibold">{label}</span>
         </div>
         {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
@@ -154,7 +154,7 @@ function MenuAssurant({ onClose, telas }) {
       {tem("/upload") && (
         <NavItem to="/upload" icon={Upload} label="Uploads" onClick={onClose} />
       )}
-      <CollapseGroup icon={Package} label="Assurant Warehouse" paths={["/assurant", "/recebimento", "/triagens", "/wms", "/b2b", "/b2c", "/trocas-b2c", "/inventario"]}>
+      <CollapseGroup icon={Package} label="Assurant Warehouse" paths={["/assurant", "/recebimento", "/triagens", "/wms", "/b2b", "/b2c", "/trocas-devolucoes", "/inventario"]}>
         {(tem("/recebimento") || tem("/recebimento/gestao")) && (
           <SubGroup icon={Truck} label="Recebimento" paths={["/recebimento"]}>
             {tem("/recebimento") && (
@@ -232,9 +232,17 @@ function MenuAssurant({ onClose, telas }) {
             )}
           </SubGroup>
         )}
-        {tem("/trocas-b2c/gestao") && (
-          <SubGroup icon={RefreshCw} label="Trocas" paths={["/trocas-b2c"]}>
-            <NavItem to="/trocas-b2c/gestao"    icon={RefreshCw}       label="Trocas B2C"        indent onClick={onClose} />
+        {(tem("/trocas-devolucoes/assurant") || tem("/trocas-devolucoes/furbtech") || tem("/trocas-devolucoes/gestao")) && (
+          <SubGroup icon={RefreshCw} label="Trocas e Devoluções" paths={["/trocas-devolucoes"]}>
+            {tem("/trocas-devolucoes/assurant") && (
+              <NavItem to="/trocas-devolucoes/assurant" icon={ShieldCheck} label="Portal Assurant" indent onClick={onClose} />
+            )}
+            {tem("/trocas-devolucoes/furbtech") && (
+              <NavItem to="/trocas-devolucoes/furbtech" icon={Warehouse} label="Portal Furbtech" indent onClick={onClose} />
+            )}
+            {tem("/trocas-devolucoes/gestao") && (
+              <NavItem to="/trocas-devolucoes/gestao" icon={BarChart3} label="Gestão e Acompanhamento" indent onClick={onClose} />
+            )}
           </SubGroup>
         )}
       </CollapseGroup>
@@ -245,8 +253,8 @@ function MenuAssurant({ onClose, telas }) {
 // ── Menu Assurant Trocas (usuário externo) ────────────────
 function MenuAssurantTrocas({ onClose }) {
   return (
-    <CollapseGroup icon={RefreshCw} label="Trocas B2C" paths={["/trocas-b2c"]}>
-      <NavItem to="/trocas-b2c/nova" icon={PlusCircle} label="Nova Solicitação" indent onClick={onClose} />
+    <CollapseGroup icon={RefreshCw} label="Trocas e Devoluções" paths={["/trocas-devolucoes"]}>
+      <NavItem to="/trocas-devolucoes/assurant" icon={ShieldCheck} label="Portal Assurant" indent onClick={onClose} />
     </CollapseGroup>
   );
 }
@@ -315,7 +323,7 @@ function SidebarContent({ profile, onClose, handleLogout }) {
               <NavItem to="/abertura-os" icon={ClipboardList} label="Abertura de OS" indent onClick={onClose} />
             </CollapseGroup>
 
-            <CollapseGroup icon={Package} label="Assurant Warehouse" paths={["/assurant", "/recebimento", "/triagens", "/wms", "/b2b", "/b2c", "/trocas-b2c", "/inventario"]}>
+            <CollapseGroup icon={Package} label="Assurant Warehouse" paths={["/assurant", "/recebimento", "/triagens", "/wms", "/b2b", "/b2c", "/trocas-devolucoes", "/inventario"]}>
               <SubGroup icon={Truck} label="Recebimento" paths={["/recebimento"]}>
                 <NavItem to="/recebimento"        icon={Truck}           label="Recebimento YBV"    indent onClick={onClose} />
                 <NavItem to="/recebimento/gestao" icon={ClipboardList}   label="Gestão Recebimento" indent onClick={onClose} />
@@ -347,9 +355,10 @@ function SidebarContent({ profile, onClose, handleLogout }) {
                 <NavItem to="/wms/estoque"           icon={Warehouse}      label="Consulta do Estoque" indent onClick={onClose} />
                 <NavItem to="/inventario"             icon={ClipboardCheck} label="Inventário Cíclico" indent onClick={onClose} />
               </SubGroup>
-              <SubGroup icon={RefreshCw} label="Trocas" paths={["/trocas-b2c"]}>
-                <NavItem to="/trocas-b2c/nova"    icon={PlusCircle}      label="Trocas — Assurant" indent onClick={onClose} />
-                <NavItem to="/trocas-b2c/gestao"  icon={RefreshCw}       label="Trocas — Furbtech" indent onClick={onClose} />
+              <SubGroup icon={RefreshCw} label="Trocas e Devoluções" paths={["/trocas-devolucoes"]}>
+                <NavItem to="/trocas-devolucoes/assurant" icon={ShieldCheck} label="Portal Assurant" indent onClick={onClose} />
+                <NavItem to="/trocas-devolucoes/furbtech" icon={Warehouse} label="Portal Furbtech" indent onClick={onClose} />
+                <NavItem to="/trocas-devolucoes/gestao" icon={BarChart3} label="Gestão e Acompanhamento" indent onClick={onClose} />
               </SubGroup>
             </CollapseGroup>
           </>

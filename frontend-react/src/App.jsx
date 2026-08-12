@@ -44,6 +44,9 @@ import LaudoPage from "./pages/LaudoPage.jsx";
 import TriagemCosmeticaPage from "./pages/TriagemCosmeticaPage.jsx";
 import ArmazenagemPage from "./pages/ArmazenagemPage.jsx";
 import EstoqueWmsPage from "./pages/EstoqueWmsPage.jsx";
+import PortalTrocasDevolucoesAssurantPage from "./pages/PortalTrocasDevolucoesAssurantPage.jsx";
+import PortalTrocasDevolucoesFurbtechPage from "./pages/PortalTrocasDevolucoesFurbtechPage.jsx";
+import GestaoTrocasDevolucoesPage from "./pages/GestaoTrocasDevolucoesPage.jsx";
 
 function ProtectedRoute({ tela, children }) {
   const { user, loading, hasAccess } = useAuth();
@@ -58,7 +61,7 @@ function DefaultRedirect() {
   if (loading) return <div className="min-h-screen flex items-center justify-center text-purple-700 font-bold">Carregando...</div>;
   if (!profile) return <Navigate to="/login" replace />;
   if (profile.is_master)                                                        return <Navigate to="/upload" replace />;
-  if (profile.area_tecnica === "assurant_trocas")                               return <Navigate to="/trocas-b2c/nova" replace />;
+  if (profile.area_tecnica === "assurant_trocas")                               return <Navigate to="/trocas-devolucoes/assurant" replace />;
   if (profile.area_tecnica === "refrigeracao")                                  return <Navigate to="/linha-branca/triagem" replace />;
   if (["climatizacao", "lavadoras", "diversos"].includes(profile.area_tecnica)) return <Navigate to="/linha-branca/triagem-reparos" replace />;
   if (profile.area_tecnica === "assurant") {
@@ -136,6 +139,32 @@ export default function App() {
         <Route path="/trocas-b2c/nova"   element={<ProtectedRoute tela="/trocas-b2c/nova"><TrocasB2CAssurantPage /></ProtectedRoute>} />
         <Route path="/trocas-b2c/gestao" element={<ProtectedRoute tela="/trocas-b2c/gestao"><TrocasB2CFurbtechPage /></ProtectedRoute>} />
 
+        {/* Trocas e Devoluções — portais unificados */}
+        <Route
+          path="/trocas-devolucoes/assurant"
+          element={
+            <ProtectedRoute tela="/trocas-devolucoes/assurant">
+              <PortalTrocasDevolucoesAssurantPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/trocas-devolucoes/furbtech"
+          element={
+            <ProtectedRoute tela="/trocas-devolucoes/furbtech">
+              <PortalTrocasDevolucoesFurbtechPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/trocas-devolucoes/gestao"
+          element={
+            <ProtectedRoute tela="/trocas-devolucoes/gestao">
+              <GestaoTrocasDevolucoesPage />
+            </ProtectedRoute>
+          }
+        />
+
         {/* Pedidos B2C — novo módulo */}
         <Route path="/b2c/pedidos"   element={<ProtectedRoute tela="/b2c/pedidos"><PedidosB2CPage /></ProtectedRoute>} />
         <Route path="/b2c/embalagem" element={<ProtectedRoute tela="/b2c/embalagem"><B2CEmbalagemMesaPage /></ProtectedRoute>} />
@@ -150,7 +179,7 @@ export default function App() {
         <Route path="/triagens/armazenagem" element={<ProtectedRoute tela="/triagens/armazenagem"><ArmazenagemPage /></ProtectedRoute>} />
         <Route path="/triagens/entrada-oracle" element={<ProtectedRoute tela="/triagens/entrada-oracle"><EntradaOraclePage /></ProtectedRoute>} />
 
-        {/* Gestão de Estoque WMS */}
+        {/* WMS */}
         <Route path="/wms/estoque" element={<ProtectedRoute tela="/wms/estoque"><EstoqueWmsPage /></ProtectedRoute>} />
 
         {/* Inventário Cíclico */}
