@@ -38,7 +38,6 @@ const BATERIA_RUINS_NAO_OUTLET = [
 const STATUS_ALOCAVEIS = [
   "Produto disponível",
   "Em processo de devolução Agd RI",
-  "Aguardando oracle",
 ];
 
 function normalizeGrade(grade) {
@@ -300,7 +299,7 @@ export async function listarEmAnaliseComOpcao() {
     const { data: donos } = await supabase
       .from("pedidos_b2c")
       .select("imei_alocado")
-      .in("status", ["alocado", "em_picking", "embalado", "em_analise", "aguardando_definicao_produto"])
+      .in("status", ["alocado", "em_picking", "embalado", "faturado", "em_analise", "aguardando_definicao_produto"])
       .in("imei_alocado", imeis.slice(i, i + 200));
     (donos || []).forEach(d => { if (d.imei_alocado) emUso.add(String(d.imei_alocado).trim()); });
   }
@@ -452,7 +451,7 @@ export async function buscarSugestaoFifo(skuProduto, gradePedido) {
     const { data: donos, error: errDonos } = await supabase
       .from("pedidos_b2c")
       .select("imei_alocado")
-      .in("status", ["alocado", "em_picking", "embalado", "em_analise", "aguardando_definicao_produto"])
+      .in("status", ["alocado", "em_picking", "embalado", "faturado", "em_analise", "aguardando_definicao_produto"])
       .in("imei_alocado", candidatosImei.slice(i, i + BLOCO_DONO));
     if (errDonos) throw new Error(`Falha ao verificar IMEIs em uso: ${errDonos.message}`);
     (donos || []).forEach(d => {

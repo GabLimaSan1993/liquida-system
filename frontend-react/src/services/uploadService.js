@@ -1,643 +1,1488 @@
-import Papa from "papaparse";
-import * as XLSX from "xlsx";
-import { supabase } from "../lib/supabase";
+import { useState, useEffect } from "react";
+import { FileSpreadsheet, Upload, Landmark, Package, GitBranch, ScanLine, ShoppingCart, CalendarClock, Store, Tags } from "lucide-react";
+import {
+  previewFile,
+  uploadAgingFile,
+  uploadFaturamentoFile,
+  uploadOfxFile,
+} from "../services/uploadService.js";
+import {
+  previewTriagemAssurant,
+  uploadTriagemAssurant,
+} from "../services/assurantUploadService.js";
+import {
+  previewMovimentacao,
+  uploadMovimentacao,
+} from "../services/assurantMovimentacaoService.js";
+import { importarPedidoB2B } from "../services/b2bService.js";
+import { importarNFs }        from "../services/b2bNfService.js";
+import { uploadAnymarketZip } from "../services/anymarketService.js";
+import { alocarPedidosAutomaticamente } from "../services/alocacaoAutomaticaService.js";
+import { importarSubinv }     from "../services/subinvService.js";
+import { previewRelatorioAP, uploadRelatorioAP } from "../services/entradaOracleService.js";
+import { previewTradein, uploadTradein } from "../services/tradeinService.js";
+import { previewSkus, uploadSkus } from "../services/skuCatalogoService.js";
+import { supabase }           from "../lib/supabase.js";
+import { useAuth }            from "../AuthContext.jsx";
 
-const AGING_ALLOWED_COLUMNS = [
-  "unique_key",
-  "num_os",
-  "num_nf",
-  "operacao",
-  "marca",
-  "tag",
-  "serial_in",
-  "serial_out",
-  "imei",
-  "chave_item",
-  "categoria_produto",
-  "tipo_prod",
-  "etapa",
-  "modelo",
-  "descricao_produto",
-  "part_number_modelo",
-  "cor",
-  "banda",
-  "num_tecnico",
-  "nome_tecnico",
-  "dt_abert",
-  "aging_day",
-  "gradeqa_antigo",
-  "subgradeqa_antigo",
-  "gradelimpeza_antigo",
-  "subgradelimpeza_antigo",
-  "gradeembalagem_antigo",
-  "subgradeembalagem_antigo",
-  "grade_funcional",
-  "grade_cosmetica",
-  "grade_acessorio",
-  "id_lote",
-  "dt_lote",
-  "pallet",
-  "sku",
-  "observacoes",
-  "dt_ult_log",
-  "desc_ult_log",
-  "local",
-  "motivo",
-  "desc_atendimento",
-  "desc_proc",
-  "nome_cliente",
-  "os_anterior",
-  "dt_enc_os_anterior",
-  "servico_os_anterior",
-  "tela_trincada",
-  "custo_net",
-  "serial_number",
-  "usuario_ult_log",
-  "desc_laudo",
-  "problema",
-  "subproblema",
-  "informacao_scrap",
-  "st",
-  "ipi",
-  "unit_imposto",
-  "cliente_origem",
-  "item_disponivel_venda",
-  "status_os",
-];
-
-const AGING_COLUMN_ALIASES = {
-  num_OS: "num_os",
-  num_NF: "num_nf",
-  Marca: "marca",
-  Tag: "tag",
-  SerialIn: "serial_in",
-  SerialOut: "serial_out",
-  IMEI: "imei",
-  ETAPA: "etapa",
-  Modelo: "modelo",
-  descricaoProduto: "descricao_produto",
-  PartNumberModelo: "part_number_modelo",
-  Cor: "cor",
-  Banda: "banda",
-  numTecnico: "num_tecnico",
-  NomeTecnico: "nome_tecnico",
-  Dt_Abert: "dt_abert",
-  Aging_Day: "aging_day",
-  gradeQa_ANTIGO: "gradeqa_antigo",
-  subgradeQA_ANTIGO: "subgradeqa_antigo",
-  gradeLimpeza_ANTIGO: "gradelimpeza_antigo",
-  subGradeLimpeza_ANTIGO: "subgradelimpeza_antigo",
-  gradeEmbalagem_ANTIGO: "gradeembalagem_antigo",
-  subGradeEmbalagem_ANTIGO: "subgradeembalagem_antigo",
-  GradeFuncional: "grade_funcional",
-  GradeCosmetica: "grade_cosmetica",
-  GradeAcessorio: "grade_acessorio",
-  idLote: "id_lote",
-  dtLote: "dt_lote",
-  Pallet: "pallet",
-  SKU: "sku",
-  OBSERVACOES: "observacoes",
-  dtUltLog: "dt_ult_log",
-  descUltLog: "desc_ult_log",
-  descAtendimento: "desc_atendimento",
-  descProc: "desc_proc",
-  nome_cliente: "nome_cliente",
-  osAnterior: "os_anterior",
-  dtEncOsAnterior: "dt_enc_os_anterior",
-  servicoOsAnterior: "servico_os_anterior",
-  telaTrincada: "tela_trincada",
-  Custo_Net: "custo_net",
-  serialNumber: "serial_number",
-  UsuarioUltLog: "usuario_ult_log",
-  descLaudo: "desc_laudo",
-  clienteOrigem: "cliente_origem",
-  ST: "st",
-  IPI: "ipi",
-  UnitImposto: "unit_imposto",
-};
-
-const FATURAMENTO_ALLOWED_COLUMNS = [
-  "file_name",
-  "file_hash",
-  "row_hash",
-  "unique_key",
-  "data_emissao",
-  "numero_nf",
-  "cliente",
-  "telefone",
-  "sku",
-  "grade",
-  "descricao",
-  "serial",
-  "valor_produto",
-  "valor_vendido",
-  "garantia_estendida",
-  "valor_garantia_estendida",
-  "valor_final",
-  "devolvido",
-  "fornecedor",
-  "lote",
-  "custo",
-  "cidade_cliente",
-  "cidade_empresa",
-  "cnpj_empresa",
-  "marca",
-  "natureza_operacao",
-  "pagamento",
-  "qtde",
-  "categoria",
-  "sub_categoria",
-  "vendedor",
-  "caixa",
-  "split",
-  "resumo_marca",
-  "fornecedor_xpcell",
-  "resumo_fornecedor",
-  "resumo_sub_cat",
-  "operacao",
-  "semana",
-  "dia_semana",
-  "mkup",
-  "vendedor_correto",
-  "fornecedor_correto",
-  "sn_correto",
-  "local_operacao",
-  "pmv",
-  "estado",
-  "tipo",
-  "mc",
-  "cmv",
-  "fornecedor_corr",
-];
-
-const FATURAMENTO_COLUMN_ALIASES = {
-  "DATA DE EMISSAO": "data_emissao",
-  "NUMERO DE NF": "numero_nf",
-  CLIENTE: "cliente",
-  TELEFONE: "telefone",
-  SKU: "sku",
-  GRADE: "grade",
-  DESCRICAO: "descricao",
-  SERIAL: "serial",
-  "VALOR DO PRODUTO": "valor_produto",
-  "VALOR VENDIDO": "valor_vendido",
-  "GARANTIA ESTENDIDA": "garantia_estendida",
-  "VALOR GARANTIA ESTENDIDA": "valor_garantia_estendida",
-  "VALOR FINAL": "valor_final",
-  DEVOLVIDO: "devolvido",
-  FORNECEDOR: "fornecedor",
-  LOTE: "lote",
-  CUSTO: "custo",
-  "CIDADE CLIENTE": "cidade_cliente",
-  "CIDADE EMPRESA": "cidade_empresa",
-  "CNPJ EMPRESA": "cnpj_empresa",
-  MARCA: "marca",
-  "NATUREZA DA OPERACAO": "natureza_operacao",
-  PAGAMENTO: "pagamento",
-  QTDE: "qtde",
-  CATEGORIA: "categoria",
-  "SUB CATEGORIA": "sub_categoria",
-  VENDEDOR: "vendedor",
-  CAIXA: "caixa",
-  SPLIT: "split",
-  "RESUMO MARCA": "resumo_marca",
-  "FORNECEDOR XPCELL": "fornecedor_xpcell",
-  "RESUMO FORNECEDOR": "resumo_fornecedor",
-  "RESUMO SUB CAT.": "resumo_sub_cat",
-  OPERACAO: "operacao",
-  SEMANA: "semana",
-  "DIA SEMANA": "dia_semana",
-  Mkup: "mkup",
-  MKUP: "mkup",
-  "VENDEDOR CORRETO": "vendedor_correto",
-  "FORNECEDOR CORRETO": "fornecedor_correto",
-  "SN CORRETO": "sn_correto",
-  "LOCAL OPERACAO": "local_operacao",
-  PMV: "pmv",
-  ESTADO: "estado",
-  TIPO: "tipo",
-  MC: "mc",
-  CMV: "cmv",
-  "FORNECEDOR CORR": "fornecedor_corr",
-};
-
-function normalizeIdentifier(value) {
-  if (value === null || value === undefined || value === "") return null;
-  const text = String(value).trim();
-  return text === "" || text.toLowerCase() === "nan" ? null : text;
+function SectionCard({ children, className = "" }) {
+  return (
+    <div className={`rounded-[28px] bg-white shadow-xl shadow-violet-100/80 ${className}`}>
+      {children}
+    </div>
+  );
 }
 
-function isValidYear(year) {
-  return year >= 2000 && year <= 2100;
+function Button({ children, variant = "primary", className = "", ...props }) {
+  const base = "inline-flex items-center justify-center rounded-2xl px-4 py-2.5 text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed";
+  const styles = variant === "outline"
+    ? "border border-[#E9D5FF] text-[#6B1F87] bg-white hover:bg-[#FCFAFF]"
+    : "bg-[linear-gradient(135deg,#F97316_0%,#F59E0B_100%)] text-white hover:opacity-95";
+  return (
+    <button className={`${base} ${styles} ${className}`} {...props}>
+      {children}
+    </button>
+  );
 }
 
-function excelSerialToIso(serial) {
-  const value = Number(serial);
-  if (!Number.isFinite(value)) return null;
-  if (value < 1 || value > 80000) return null;
-  const excelEpoch = new Date(Date.UTC(1899, 11, 30));
-  const millis = Math.round(value * 24 * 60 * 60 * 1000);
-  const date = new Date(excelEpoch.getTime() + millis);
-  if (!isValidYear(date.getUTCFullYear())) return null;
-  return date.toISOString();
+function Badge({ children, color = "purple" }) {
+  const colors = {
+    purple: "bg-[#7F2D92] text-white",
+    orange: "bg-[#F59E0B] text-white",
+    blue:   "bg-blue-600 text-white",
+    teal:   "bg-teal-600 text-white",
+  };
+  return (
+    <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${colors[color]}`}>
+      {children}
+    </span>
+  );
 }
 
-function parseDateMaybe(value) {
-  if (value === null || value === undefined || value === "") return null;
-  if (value instanceof Date && !Number.isNaN(value.getTime())) {
-    return isValidYear(value.getUTCFullYear()) ? value.toISOString() : null;
-  }
-  if (typeof value === "number") return excelSerialToIso(value);
-  const text = String(value).trim();
-  if (!text) return null;
-  if (/^\d+(\.\d+)?$/.test(text)) {
-    const serialIso = excelSerialToIso(Number(text));
-    if (serialIso) return serialIso;
-  }
-  const br = text.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/);
-  if (br) {
-    const [, dd, mm, yyyy, hh = "00", mi = "00", ss = "00"] = br;
-    const year = Number(yyyy);
-    if (!isValidYear(year)) return null;
-    const iso = `${yyyy}-${mm}-${dd}T${hh}:${mi}:${ss}Z`;
-    const parsed = new Date(iso);
-    if (!Number.isNaN(parsed.getTime()) && isValidYear(parsed.getUTCFullYear())) return parsed.toISOString();
-    return null;
-  }
-  const parsedIso = new Date(text);
-  if (!Number.isNaN(parsedIso.getTime()) && isValidYear(parsedIso.getUTCFullYear())) return parsedIso.toISOString();
-  return null;
+function ProgressBar({ value }) {
+  return (
+    <div className="h-2 w-full overflow-hidden rounded-full bg-[#F3E8FF]">
+      <div
+        className="h-full rounded-full bg-[linear-gradient(90deg,#7F2D92_0%,#F97316_100%)]"
+        style={{ width: `${value}%` }}
+      />
+    </div>
+  );
 }
 
-function parseDateOnly(value) {
-  const iso = parseDateMaybe(value);
-  return iso ? iso.slice(0, 10) : null;
+function UploadBox({
+  title, description, icon, accept, file, onChangeFile,
+  onPreview, onUpload, preview, loadingPreview, loadingUpload,
+  showPreview = true, extra = null,
+}) {
+  const Icon = icon;
+  return (
+    <div className="rounded-[24px] border border-dashed border-[#D8B4FE] bg-[#FCFAFF] p-5">
+      <div className="flex items-start justify-between">
+        <div>
+          <div className="text-lg font-bold text-[#6B1F87]">{title}</div>
+          <div className="mt-1 text-sm text-slate-500">{description}</div>
+        </div>
+        <div className="rounded-2xl bg-[linear-gradient(135deg,#F97316_0%,#F59E0B_100%)] p-3 text-white shadow-lg shrink-0 ml-3">
+          <Icon className="h-5 w-5" />
+        </div>
+      </div>
+
+      {extra && <div className="mt-4">{extra}</div>}
+
+      <div className="mt-5 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-[#E9D5FF]">
+        <input
+          type="file"
+          accept={accept}
+          onChange={(e) => onChangeFile(e.target.files?.[0] || null)}
+          className="block w-full text-sm text-slate-600"
+        />
+        <div className="mt-3 text-sm font-medium">
+          {file ? file.name : "Nenhum arquivo selecionado"}
+        </div>
+        <div className="mt-1 text-xs text-slate-500">
+          {file ? "Arquivo pronto para envio" : `Selecione um arquivo ${accept}`}
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        {showPreview && (
+          <Button onClick={onPreview} variant="outline"
+            disabled={!file || loadingPreview || loadingUpload}>
+            {loadingPreview ? "Validando..." : "Validar estrutura"}
+          </Button>
+        )}
+        <Button onClick={onUpload} disabled={!file || loadingUpload || loadingPreview}>
+          {loadingUpload ? "Enviando..." : "Enviar arquivo"}
+        </Button>
+      </div>
+
+      {preview && (
+        <div className="mt-4 rounded-2xl bg-white p-4 ring-1 ring-[#E9D5FF]">
+          <div className="text-sm font-semibold text-[#6B1F87]">
+            {preview.totalRows != null
+              ? `Linhas válidas encontradas: ${preview.totalRows.toLocaleString("pt-BR")}`
+              : preview.mensagem || "Importação concluída"}
+          </div>
+          {preview.previewRows?.length > 0 && (
+            <pre className="mt-3 max-h-72 overflow-auto rounded-2xl bg-slate-950 p-4 text-xs text-slate-100">
+              {JSON.stringify(preview.previewRows, null, 2)}
+            </pre>
+          )}
+          {preview.lote && (
+            <div className="mt-3 space-y-1 text-xs text-slate-600">
+              <p><span className="font-semibold">Lote:</span> {preview.lote}</p>
+              <p><span className="font-semibold">Cliente:</span> {preview.cliente}</p>
+              <p><span className="font-semibold">Itens:</span> {preview.total?.toLocaleString("pt-BR")}</p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
-function parseNumberBr(value) {
-  if (value === null || value === undefined || value === "") return null;
-  if (typeof value === "number") return Number.isFinite(value) ? value : null;
-  let text = String(value).trim().replace(/\s/g, "");
-  if (!text) return null;
-  const hasComma = text.includes(",");
-  const hasDot = text.includes(".");
-  if (hasComma && hasDot) {
-    if (text.lastIndexOf(",") > text.lastIndexOf(".")) {
-      const n = Number(text.replace(/\./g, "").replace(",", "."));
-      return Number.isFinite(n) ? n : null;
+export default function UploadPage() {
+  const { profile, user } = useAuth();
+  const isMaster = profile?.is_master;
+
+  const [agingFile, setAgingFile]                                   = useState(null);
+  const [faturamentoFile, setFaturamentoFile]                       = useState(null);
+  const [ofxFile, setOfxFile]                                       = useState(null);
+  const [agingPreview, setAgingPreview]                             = useState(null);
+  const [faturamentoPreview, setFaturamentoPreview]                 = useState(null);
+  const [loadingAgingPreview, setLoadingAgingPreview]               = useState(false);
+  const [loadingFaturamentoPreview, setLoadingFaturamentoPreview]   = useState(false);
+  const [loadingAgingUpload, setLoadingAgingUpload]                 = useState(false);
+  const [loadingFaturamentoUpload, setLoadingFaturamentoUpload]     = useState(false);
+  const [loadingOfxUpload, setLoadingOfxUpload]                     = useState(false);
+
+  const [triagemFile, setTriagemFile]                               = useState(null);
+  const [triagemPreview, setTriagemPreview]                         = useState(null);
+  const [loadingTriagemPreview, setLoadingTriagemPreview]           = useState(false);
+  const [loadingTriagemUpload, setLoadingTriagemUpload]             = useState(false);
+  const [mesRefTriagem, setMesRefTriagem]                           = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  });
+
+  const [movFile, setMovFile]                                       = useState(null);
+  const [movPreview, setMovPreview]                                 = useState(null);
+  const [loadingMovPreview, setLoadingMovPreview]                   = useState(false);
+  const [loadingMovUpload, setLoadingMovUpload]                     = useState(false);
+
+  // ── Pedido B2B ────────────────────────────────────────
+  const [b2bFile, setB2bFile]                                       = useState(null);
+  const [b2bPreview, setB2bPreview]                                 = useState(null);
+  const [loadingB2bUpload, setLoadingB2bUpload]                     = useState(false);
+  const [b2bCondicaoPagamento, setB2bCondicaoPagamento]             = useState("");
+  const [b2bCnpjAgregado, setB2bCnpjAgregado]                       = useState("");
+
+  // ── NF B2B ────────────────────────────────────────────
+  const [nfFile, setNfFile]                                         = useState(null);
+  const [nfPedidoId, setNfPedidoId]                                 = useState("");
+  const [nfPreview, setNfPreview]                                   = useState(null);
+  const [loadingNfUpload, setLoadingNfUpload]                       = useState(false);
+  const [pedidosB2B, setPedidosB2B]                                 = useState([]);
+
+  // ── AnyMarket ─────────────────────────────────────────
+  const [anyFile, setAnyFile]                                       = useState(null);
+  const [anyPreview, setAnyPreview]                                 = useState(null);
+  const [loadingAnyUpload, setLoadingAnyUpload]                     = useState(false);
+  const [anyHoraCorte, setAnyHoraCorte]                             = useState("");
+
+  // ── Aging Subinventário (Assurant) ────────────────────
+  const [subinvFile, setSubinvFile]                                 = useState(null);
+  const [subinvPreview, setSubinvPreview]                           = useState(null);
+  const [loadingSubinvUpload, setLoadingSubinvUpload]               = useState(false);
+
+  // ── Relatório AP (Entrada Oracle) ─────────────────────
+  const [apFile, setApFile]                                         = useState(null);
+  const [apPreview, setApPreview]                                   = useState(null);
+  const [apResultado, setApResultado]                               = useState(null);
+  const [loadingApPreview, setLoadingApPreview]                     = useState(false);
+  const [loadingApUpload, setLoadingApUpload]                       = useState(false);
+
+  // ── TradeIn (base da loja) ────────────────────────────
+  const [tdFile, setTdFile]                                         = useState(null);
+  const [tdPreview, setTdPreview]                                   = useState(null);
+  const [tdResultado, setTdResultado]                               = useState(null);
+  const [loadingTdPreview, setLoadingTdPreview]                     = useState(false);
+  const [loadingTdUpload, setLoadingTdUpload]                       = useState(false);
+
+  // ── Base de SKU (catálogo Assurant) ───────────────────
+  const [skuFile, setSkuFile]                                       = useState(null);
+  const [skuPreview, setSkuPreview]                                 = useState(null);
+  const [skuResultado, setSkuResultado]                             = useState(null);
+  const [loadingSkuPreview, setLoadingSkuPreview]                   = useState(false);
+  const [loadingSkuUpload, setLoadingSkuUpload]                     = useState(false);
+
+  const [status, setStatus]     = useState("");
+  const [progress, setProgress] = useState(0);
+
+  const [historyCards, setHistoryCards] = useState([
+    ...(isMaster ? [
+      { type: "Aging",       name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+      { type: "Faturamento", name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+      { type: "Extrato OFX", name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+    ] : []),
+    { type: "Triagem Assurant",      name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+    { type: "Movimentação Assurant", name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+    { type: "Pedido B2B",            name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+    { type: "NF B2B",                name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+    { type: "AnyMarket",             name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+    { type: "Aging Subinventário",   name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+    { type: "Relatório AP Oracle",   name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+    { type: "TradeIn",               name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+    { type: "Base de SKU",           name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+  ]);
+
+  useEffect(() => {
+    async function carregarPedidos() {
+      const { data } = await supabase
+        .from("b2b_pedidos")
+        .select("id, lote")
+        .order("criado_em", { ascending: false });
+      setPedidosB2B(data || []);
     }
-    const n = Number(text.replace(/,/g, ""));
-    return Number.isFinite(n) ? n : null;
+    carregarPedidos();
+  }, []);
+
+  function updateHistoryCard(type, payload) {
+    setHistoryCards(current =>
+      current.map(card => card.type === type ? { ...card, ...payload } : card)
+    );
   }
-  if (hasComma && !hasDot) {
-    const n = Number(text.replace(",", "."));
-    return Number.isFinite(n) ? n : null;
-  }
-  if (hasDot && !hasComma) {
-    const parts = text.split(".");
-    if (parts.length === 2 && parts[1].length !== 3) {
-      const n = Number(text);
-      return Number.isFinite(n) ? n : null;
+
+  // ── Handlers master ───────────────────────────────────
+  async function handlePreviewAging() {
+    try {
+      if (!agingFile) { setStatus("Selecione um arquivo de Aging."); return; }
+      setLoadingAgingPreview(true);
+      setStatus("Validando estrutura do Aging...");
+      const preview = await previewFile(agingFile, "aging");
+      setAgingPreview(preview);
+      updateHistoryCard("Aging", { name: agingFile.name, status: "Validado", rows: preview.totalRows.toLocaleString("pt-BR"), progress: 15 });
+      setStatus(`Aging validado. ${preview.totalRows.toLocaleString("pt-BR")} linhas válidas.`);
+    } catch (error) {
+      setStatus(`Erro ao validar Aging: ${error.message}`);
+    } finally {
+      setLoadingAgingPreview(false);
     }
-    const n = Number(text.replace(/\./g, ""));
-    return Number.isFinite(n) ? n : null;
   }
-  const n = Number(text);
-  return Number.isFinite(n) ? n : null;
-}
 
-function isEncerrado(row) {
-  const joined = `${row.etapa || ""} | ${row.desc_ult_log || ""} | ${row.desc_proc || ""}`.toUpperCase();
-  const palavras = ["ENCERRADO","ENCERRADA","FINALIZADO","FINALIZADA","FECHADO","FECHADA","CONCLUIDO","CONCLUÍDO","CONCLUIDA","CONCLUÍDA","DISPONIVEL","DISPONÍVEL","LIBERADO","LIBERADA"];
-  return palavras.some((p) => joined.includes(p));
-}
-
-function buildAgingUniqueKey(row) {
-  return `${row.num_os || ""}|${row.chave_item || ""}|${row.dt_ult_log || ""}`;
-}
-
-async function generateHash(text) {
-  if (!window.crypto?.subtle) return text;
-  const encoder = new TextEncoder();
-  const data = encoder.encode(text);
-  const hashBuffer = await window.crypto.subtle.digest("SHA-256", data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
-async function generateFileHash(file) {
-  const buffer = await file.arrayBuffer();
-  const bytes = new Uint8Array(buffer);
-  const sample = bytes.slice(0, Math.min(bytes.length, 1024 * 1024));
-  const text = `${file.name}|${file.size}|${sample.length}|${Array.from(sample).join(",")}`;
-  return generateHash(text);
-}
-
-async function readFileToRows(file) {
-  const lowerName = file.name.toLowerCase();
-  if (lowerName.endsWith(".csv")) {
-    return new Promise((resolve, reject) => {
-      Papa.parse(file, {
-        header: true,
-        skipEmptyLines: true,
-        encoding: "utf-8",
-        complete: (results) => resolve(results.data || []),
-        error: reject,
+  async function handleUploadAging() {
+    try {
+      if (!agingFile) { setStatus("Selecione um arquivo de Aging."); return; }
+      setLoadingAgingUpload(true);
+      setProgress(0);
+      setStatus("Iniciando upload do Aging...");
+      updateHistoryCard("Aging", { name: agingFile.name, status: "Enviando", progress: 5 });
+      const result = await uploadAgingFile(agingFile, ({ inserted, duplicates, total }) => {
+        const pct = total ? Math.round((inserted + duplicates) / total * 100) : 0;
+        setProgress(pct);
+        updateHistoryCard("Aging", { name: agingFile.name, status: "Enviando", rows: total.toLocaleString("pt-BR"), progress: pct });
+        setStatus(`Aging: ${inserted.toLocaleString("pt-BR")} inseridos, ${duplicates.toLocaleString("pt-BR")} duplicados.`);
       });
-    });
-  }
-  if (lowerName.endsWith(".xlsx") || lowerName.endsWith(".xls")) {
-    const buffer = await file.arrayBuffer();
-    const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
-    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-    return XLSX.utils.sheet_to_json(firstSheet, { defval: null, raw: false });
-  }
-  throw new Error("Formato não suportado. Envie CSV, XLSX ou XLS.");
-}
-
-function mapAgingRow(raw) {
-  const row = {};
-  Object.keys(raw).forEach((key) => {
-    const trimmed = String(key).trim();
-    if (trimmed.toLowerCase().startsWith("unnamed:")) return;
-    const mapped = AGING_COLUMN_ALIASES[trimmed] || trimmed;
-    row[mapped] = raw[key];
-  });
-
-  const normalized = {
-    num_os: normalizeIdentifier(row.num_os),
-    num_nf: normalizeIdentifier(row.num_nf),
-    operacao: normalizeIdentifier(row.operacao),
-    marca: normalizeIdentifier(row.marca),
-    tag: normalizeIdentifier(row.tag),
-    serial_in: normalizeIdentifier(row.serial_in),
-    serial_out: normalizeIdentifier(row.serial_out),
-    imei: normalizeIdentifier(row.imei),
-    categoria_produto: normalizeIdentifier(row.categoria_produto),
-    tipo_prod: normalizeIdentifier(row.tipo_prod),
-    etapa: normalizeIdentifier(row.etapa),
-    modelo: normalizeIdentifier(row.modelo),
-    descricao_produto: normalizeIdentifier(row.descricao_produto),
-    part_number_modelo: normalizeIdentifier(row.part_number_modelo),
-    cor: normalizeIdentifier(row.cor),
-    banda: normalizeIdentifier(row.banda),
-    num_tecnico: normalizeIdentifier(row.num_tecnico),
-    nome_tecnico: normalizeIdentifier(row.nome_tecnico),
-    dt_abert: parseDateMaybe(row.dt_abert),
-    gradeqa_antigo: normalizeIdentifier(row.gradeqa_antigo),
-    subgradeqa_antigo: normalizeIdentifier(row.subgradeqa_antigo),
-    gradelimpeza_antigo: normalizeIdentifier(row.gradelimpeza_antigo),
-    subgradelimpeza_antigo: normalizeIdentifier(row.subgradelimpeza_antigo),
-    gradeembalagem_antigo: normalizeIdentifier(row.gradeembalagem_antigo),
-    subgradeembalagem_antigo: normalizeIdentifier(row.subgradeembalagem_antigo),
-    grade_funcional: normalizeIdentifier(row.grade_funcional),
-    grade_cosmetica: normalizeIdentifier(row.grade_cosmetica),
-    grade_acessorio: normalizeIdentifier(row.grade_acessorio),
-    id_lote: normalizeIdentifier(row.id_lote),
-    dt_lote: parseDateMaybe(row.dt_lote),
-    pallet: normalizeIdentifier(row.pallet),
-    sku: normalizeIdentifier(row.sku),
-    observacoes: normalizeIdentifier(row.observacoes),
-    dt_ult_log: parseDateMaybe(row.dt_ult_log),
-    desc_ult_log: normalizeIdentifier(row.desc_ult_log),
-    local: normalizeIdentifier(row.local),
-    motivo: normalizeIdentifier(row.motivo),
-    desc_atendimento: normalizeIdentifier(row.desc_atendimento),
-    desc_proc: normalizeIdentifier(row.desc_proc),
-    nome_cliente: normalizeIdentifier(row.nome_cliente),
-    os_anterior: normalizeIdentifier(row.os_anterior),
-    dt_enc_os_anterior: parseDateMaybe(row.dt_enc_os_anterior),
-    servico_os_anterior: normalizeIdentifier(row.servico_os_anterior),
-    tela_trincada: normalizeIdentifier(row.tela_trincada),
-    custo_net: parseNumberBr(row.custo_net),
-    serial_number: normalizeIdentifier(row.serial_number),
-    usuario_ult_log: normalizeIdentifier(row.usuario_ult_log),
-    desc_laudo: normalizeIdentifier(row.desc_laudo),
-    problema: normalizeIdentifier(row.problema),
-    subproblema: normalizeIdentifier(row.subproblema),
-    informacao_scrap: normalizeIdentifier(row.informacao_scrap),
-    st: parseNumberBr(row.st),
-    ipi: parseNumberBr(row.ipi),
-    unit_imposto: parseNumberBr(row.unit_imposto),
-    cliente_origem: normalizeIdentifier(row.cliente_origem),
-  };
-
-  const aging = parseNumberBr(row.aging_day);
-  normalized.aging_day = aging !== null ? Math.trunc(aging) : null;
-  normalized.chave_item = normalized.imei || normalized.serial_out || null;
-  normalized.item_disponivel_venda = isEncerrado(normalized);
-  normalized.status_os = normalized.item_disponivel_venda ? "Encerrado/Disponível para venda" : "Em processo / não disponível";
-  normalized.unique_key = buildAgingUniqueKey(normalized);
-
-  const filtered = {};
-  AGING_ALLOWED_COLUMNS.forEach((column) => { filtered[column] = normalized[column] ?? null; });
-  return filtered;
-}
-
-function mapFaturamentoRow(raw) {
-  const row = {};
-  Object.keys(raw).forEach((key) => {
-    const trimmed = String(key).trim();
-    if (trimmed.toLowerCase().startsWith("unnamed:")) return;
-    const mapped = FATURAMENTO_COLUMN_ALIASES[trimmed] || trimmed;
-    row[mapped] = raw[key];
-  });
-
-  const normalized = {
-    data_emissao: parseDateOnly(row.data_emissao),
-    numero_nf: normalizeIdentifier(row.numero_nf),
-    cliente: normalizeIdentifier(row.cliente),
-    telefone: normalizeIdentifier(row.telefone),
-    sku: normalizeIdentifier(row.sku),
-    grade: normalizeIdentifier(row.grade),
-    descricao: normalizeIdentifier(row.descricao),
-    serial: normalizeIdentifier(row.serial),
-    valor_produto: parseNumberBr(row.valor_produto),
-    valor_vendido: parseNumberBr(row.valor_vendido),
-    garantia_estendida: normalizeIdentifier(row.garantia_estendida),
-    valor_garantia_estendida: parseNumberBr(row.valor_garantia_estendida),
-    valor_final: parseNumberBr(row.valor_final),
-    devolvido: normalizeIdentifier(row.devolvido),
-    fornecedor: normalizeIdentifier(row.fornecedor),
-    lote: normalizeIdentifier(row.lote),
-    custo: parseNumberBr(row.custo),
-    cidade_cliente: normalizeIdentifier(row.cidade_cliente),
-    cidade_empresa: normalizeIdentifier(row.cidade_empresa),
-    cnpj_empresa: normalizeIdentifier(row.cnpj_empresa),
-    marca: normalizeIdentifier(row.marca),
-    natureza_operacao: normalizeIdentifier(row.natureza_operacao),
-    pagamento: normalizeIdentifier(row.pagamento),
-    qtde: parseNumberBr(row.qtde),
-    categoria: normalizeIdentifier(row.categoria),
-    sub_categoria: normalizeIdentifier(row.sub_categoria),
-    vendedor: normalizeIdentifier(row.vendedor),
-    caixa: normalizeIdentifier(row.caixa),
-    split: normalizeIdentifier(row.split),
-    resumo_marca: normalizeIdentifier(row.resumo_marca),
-    fornecedor_xpcell: normalizeIdentifier(row.fornecedor_xpcell),
-    resumo_fornecedor: normalizeIdentifier(row.resumo_fornecedor),
-    resumo_sub_cat: normalizeIdentifier(row.resumo_sub_cat),
-    operacao: normalizeIdentifier(row.operacao),
-    semana: normalizeIdentifier(row.semana),
-    dia_semana: normalizeIdentifier(row.dia_semana),
-    mkup: parseNumberBr(row.mkup),
-    vendedor_correto: normalizeIdentifier(row.vendedor_correto),
-    fornecedor_correto: normalizeIdentifier(row.fornecedor_correto),
-    sn_correto: normalizeIdentifier(row.sn_correto),
-    local_operacao: normalizeIdentifier(row.local_operacao),
-    pmv: parseNumberBr(row.pmv),
-    estado: normalizeIdentifier(row.estado),
-    tipo: normalizeIdentifier(row.tipo),
-    mc: parseNumberBr(row.mc),
-    cmv: parseNumberBr(row.cmv),
-    fornecedor_corr: normalizeIdentifier(row.fornecedor_corr),
-  };
-
-  const keyParts = [
-    normalized.data_emissao || "",
-    normalized.numero_nf || "",
-    normalized.cliente || "",
-    normalized.sku || "",
-    normalized.serial || "",
-    normalized.sn_correto || "",
-    normalized.lote || "",
-    normalized.fornecedor_correto || "",
-    normalized.fornecedor_corr || "",
-    normalized.fornecedor || "",
-    normalized.qtde ?? "",
-    normalized.valor_final ?? "",
-    normalized.custo ?? "",
-  ];
-
-  normalized.unique_key = keyParts.join("|");
-
-  const filtered = {};
-  FATURAMENTO_ALLOWED_COLUMNS.forEach((column) => { filtered[column] = normalized[column] ?? null; });
-  return filtered;
-}
-
-async function enrichRowsWithHashes(rows, file) {
-  const fileHash = await generateFileHash(file);
-  const enriched = [];
-  for (const row of rows) {
-    const rowHash = await generateHash(JSON.stringify(row));
-    enriched.push({ ...row, file_name: file.name, file_hash: fileHash, row_hash: rowHash });
-  }
-  return enriched;
-}
-
-async function insertInBatches(table, records, onProgress) {
-  const batchSize = 500;
-  let inserted = 0;
-  for (let i = 0; i < records.length; i += batchSize) {
-    const batch = records.slice(i, i + batchSize);
-    const { error } = await supabase.from(table).insert(batch);
-    if (error) throw error;
-    inserted += batch.length;
-    if (onProgress) onProgress({ inserted, duplicates: 0, total: records.length });
-  }
-  return { inserted, duplicates: 0, total: records.length };
-}
-
-export async function previewFile(file, type) {
-  const rawRows = await readFileToRows(file);
-  let mappedRows = [];
-  if (type === "aging") {
-    mappedRows = rawRows.map(mapAgingRow).filter((row) => row.num_os || row.chave_item || row.modelo);
-  } else if (type === "faturamento") {
-    mappedRows = rawRows.map(mapFaturamentoRow).filter((row) => row.data_emissao && (row.numero_nf || row.sku || row.cliente));
-  } else {
-    throw new Error("Tipo de arquivo inválido.");
-  }
-
-  if (type === "faturamento") {
-    return {
-      totalRows: mappedRows.length,
-      previewRows: mappedRows.slice(0, 5).map((row) => ({
-        unique_key: row.unique_key,
-        data_emissao: row.data_emissao,
-        numero_nf: row.numero_nf,
-        cliente: row.cliente,
-        sku: row.sku,
-        serial: row.serial,
-        sn_correto: row.sn_correto,
-        lote: row.lote,
-        qtde: row.qtde,
-        valor_vendido: row.valor_vendido,
-        valor_final: row.valor_final,
-        custo: row.custo,
-      })),
-    };
-  }
-
-  return { totalRows: mappedRows.length, previewRows: mappedRows.slice(0, 5) };
-}
-
-export async function uploadAgingFile(file, onProgress) {
-  const rawRows = await readFileToRows(file);
-  const mappedRows = rawRows.map(mapAgingRow).filter((row) => row.num_os || row.chave_item || row.modelo);
-  const enrichedRows = await enrichRowsWithHashes(mappedRows, file);
-  return insertInBatches("aging_raw", enrichedRows, onProgress);
-}
-
-export async function uploadFaturamentoFile(file, onProgress) {
-  const rawRows = await readFileToRows(file);
-  const mappedRows = rawRows.map(mapFaturamentoRow).filter((row) => row.data_emissao && (row.numero_nf || row.sku || row.cliente));
-  const enrichedRows = await enrichRowsWithHashes(mappedRows, file);
-  return insertInBatches("faturamento_raw", enrichedRows, onProgress);
-}
-
-export async function uploadOfxFile(file, criado_por, onProgress) {
-  const text = await file.text();
-  const transactions = [];
-  const regex = /<STMTTRN>([\s\S]*?)<\/STMTTRN>/g;
-  let match;
-
-  const bankid = text.match(/<BANKID>([^\n<]+)/)?.[1]?.trim() || "";
-  const acctid = text.match(/<ACCTID>([^\n<]+)/)?.[1]?.trim() || "";
-
-  while ((match = regex.exec(text)) !== null) {
-    const t = match[1];
-    const get = (tag) => {
-      const m = t.match(new RegExp(`<${tag}>([^\\n<]+)`));
-      return m ? m[1].trim() : null;
-    };
-
-    const dtposted = get("DTPOSTED")?.slice(0, 8);
-    const trnamt = parseFloat(get("TRNAMT") || "0");
-    const memo = get("MEMO");
-    const trntype = get("TRNTYPE");
-
-    let data = null;
-    if (dtposted && dtposted.length === 8) {
-      data = `${dtposted.slice(0, 4)}-${dtposted.slice(4, 6)}-${dtposted.slice(6, 8)}`;
+      updateHistoryCard("Aging", { name: agingFile.name, status: "Concluído", rows: result.total.toLocaleString("pt-BR"), progress: 100 });
+      setProgress(100);
+      setStatus(`Upload do Aging concluído. Inseridos: ${result.inserted.toLocaleString("pt-BR")} | Total: ${result.total.toLocaleString("pt-BR")}.`);
+    } catch (error) {
+      setStatus(`Erro no upload de Aging: ${error.message}`);
+      updateHistoryCard("Aging", { status: "Erro" });
+    } finally {
+      setLoadingAgingUpload(false);
     }
-
-    transactions.push({
-      data,
-      historico: memo,
-      credito: trnamt > 0 ? trnamt : null,
-      debito: trnamt < 0 ? Math.abs(trnamt) : null,
-      tipo: trntype === "CREDIT" ? "Crédito" : "Débito",
-      banco: bankid,
-      conta: acctid,
-      arquivo_origem: file.name,
-      criado_por,
-    });
   }
 
-  if (transactions.length === 0) throw new Error("Nenhuma transação encontrada no OFX.");
-
-  const batchSize = 500;
-  let inserted = 0;
-
-  for (let i = 0; i < transactions.length; i += batchSize) {
-    const batch = transactions.slice(i, i + batchSize);
-    const { error } = await supabase.from("extrato_ofx").insert(batch);
-    if (error) throw error;
-    inserted += batch.length;
-    if (onProgress) onProgress({ inserted, total: transactions.length });
+  async function handlePreviewFaturamento() {
+    try {
+      if (!faturamentoFile) { setStatus("Selecione um arquivo de Faturamento."); return; }
+      setLoadingFaturamentoPreview(true);
+      setStatus("Validando estrutura do Faturamento...");
+      const preview = await previewFile(faturamentoFile, "faturamento");
+      setFaturamentoPreview(preview);
+      updateHistoryCard("Faturamento", { name: faturamentoFile.name, status: "Validado", rows: preview.totalRows.toLocaleString("pt-BR"), progress: 15 });
+      setStatus(`Faturamento validado. ${preview.totalRows.toLocaleString("pt-BR")} linhas válidas.`);
+    } catch (error) {
+      setStatus(`Erro ao validar Faturamento: ${error.message}`);
+    } finally {
+      setLoadingFaturamentoPreview(false);
+    }
   }
 
-  return { inserted, total: transactions.length };
+  async function handleUploadFaturamento() {
+    try {
+      if (!faturamentoFile) { setStatus("Selecione um arquivo de Faturamento."); return; }
+      setLoadingFaturamentoUpload(true);
+      setProgress(0);
+      setStatus("Iniciando upload do Faturamento...");
+      updateHistoryCard("Faturamento", { name: faturamentoFile.name, status: "Enviando", progress: 5 });
+      const result = await uploadFaturamentoFile(faturamentoFile, ({ inserted, duplicates, total }) => {
+        const pct = total ? Math.round((inserted + duplicates) / total * 100) : 0;
+        setProgress(pct);
+        updateHistoryCard("Faturamento", { name: faturamentoFile.name, status: "Enviando", rows: total.toLocaleString("pt-BR"), progress: pct });
+        setStatus(`Faturamento: ${inserted.toLocaleString("pt-BR")} inseridos, ${duplicates.toLocaleString("pt-BR")} duplicados.`);
+      });
+      updateHistoryCard("Faturamento", { name: faturamentoFile.name, status: "Concluído", rows: result.total.toLocaleString("pt-BR"), progress: 100 });
+      setProgress(100);
+      setStatus(`Upload do Faturamento concluído. Inseridos: ${result.inserted.toLocaleString("pt-BR")} | Total: ${result.total.toLocaleString("pt-BR")}.`);
+    } catch (error) {
+      setStatus(`Erro no upload de Faturamento: ${error.message}`);
+      updateHistoryCard("Faturamento", { status: "Erro" });
+    } finally {
+      setLoadingFaturamentoUpload(false);
+    }
+  }
+
+  async function handleUploadOfx() {
+    try {
+      if (!ofxFile) { setStatus("Selecione um arquivo OFX."); return; }
+      setLoadingOfxUpload(true);
+      setProgress(0);
+      setStatus("Processando extrato OFX...");
+      updateHistoryCard("Extrato OFX", { name: ofxFile.name, status: "Enviando", progress: 5 });
+      const result = await uploadOfxFile(ofxFile, profile?.nome, ({ inserted, total }) => {
+        const pct = total ? Math.round(inserted / total * 100) : 0;
+        setProgress(pct);
+        updateHistoryCard("Extrato OFX", { name: ofxFile.name, status: "Enviando", rows: total.toLocaleString("pt-BR"), progress: pct });
+        setStatus(`OFX: ${inserted.toLocaleString("pt-BR")} de ${total.toLocaleString("pt-BR")} transações enviadas.`);
+      });
+      updateHistoryCard("Extrato OFX", { name: ofxFile.name, status: "Concluído", rows: result.total.toLocaleString("pt-BR"), progress: 100 });
+      setProgress(100);
+      setStatus(`Extrato OFX importado! ${result.inserted.toLocaleString("pt-BR")} transações inseridas.`);
+    } catch (error) {
+      setStatus(`Erro no upload do OFX: ${error.message}`);
+      updateHistoryCard("Extrato OFX", { status: "Erro" });
+    } finally {
+      setLoadingOfxUpload(false);
+    }
+  }
+
+  // ── Handlers Assurant ─────────────────────────────────
+  async function handlePreviewTriagem() {
+    try {
+      if (!triagemFile) { setStatus("Selecione um arquivo de Triagem."); return; }
+      setLoadingTriagemPreview(true);
+      setStatus("Validando estrutura da Triagem Assurant...");
+      const preview = await previewTriagemAssurant(triagemFile);
+      setTriagemPreview(preview);
+      updateHistoryCard("Triagem Assurant", { name: triagemFile.name, status: "Validado", rows: preview.totalRows.toLocaleString("pt-BR"), progress: 15 });
+      setStatus(`Triagem validada. ${preview.totalRows.toLocaleString("pt-BR")} linhas encontradas.`);
+    } catch (error) {
+      setStatus(`Erro ao validar Triagem: ${error.message}`);
+    } finally {
+      setLoadingTriagemPreview(false);
+    }
+  }
+
+  async function handleUploadTriagem() {
+    try {
+      if (!triagemFile) { setStatus("Selecione um arquivo de Triagem."); return; }
+      if (!mesRefTriagem) { setStatus("Selecione o mês de referência."); return; }
+      setLoadingTriagemUpload(true);
+      setProgress(0);
+      setStatus("Iniciando upload da Triagem Assurant...");
+      updateHistoryCard("Triagem Assurant", { name: triagemFile.name, status: "Enviando", progress: 5 });
+      const result = await uploadTriagemAssurant(
+        triagemFile, user.id, mesRefTriagem,
+        ({ inserted, duplicates, total }) => {
+          const pct = total ? Math.round((inserted + duplicates) / total * 100) : 0;
+          setProgress(pct);
+          updateHistoryCard("Triagem Assurant", { name: triagemFile.name, status: "Enviando", rows: total.toLocaleString("pt-BR"), progress: pct });
+          setStatus(`Triagem: ${inserted.toLocaleString("pt-BR")} inseridos, ${duplicates.toLocaleString("pt-BR")} duplicados.`);
+        }
+      );
+      updateHistoryCard("Triagem Assurant", { name: triagemFile.name, status: "Concluído", rows: result.total.toLocaleString("pt-BR"), progress: 100 });
+      setProgress(100);
+      setStatus(`Upload da Triagem Assurant concluído! Inseridos: ${result.inserted.toLocaleString("pt-BR")} | Total: ${result.total.toLocaleString("pt-BR")}.`);
+    } catch (error) {
+      setStatus(`Erro no upload da Triagem: ${error.message}`);
+      updateHistoryCard("Triagem Assurant", { status: "Erro" });
+    } finally {
+      setLoadingTriagemUpload(false);
+    }
+  }
+
+  async function handlePreviewMovimentacao() {
+    try {
+      if (!movFile) { setStatus("Selecione um arquivo de Movimentação."); return; }
+      setLoadingMovPreview(true);
+      setStatus("Validando estrutura da Movimentação Assurant...");
+      const preview = await previewMovimentacao(movFile);
+      setMovPreview(preview);
+      updateHistoryCard("Movimentação Assurant", { name: movFile.name, status: "Validado", rows: preview.totalRows.toLocaleString("pt-BR"), progress: 15 });
+      setStatus(`Movimentação validada. ${preview.totalRows.toLocaleString("pt-BR")} linhas encontradas.`);
+    } catch (error) {
+      setStatus(`Erro ao validar Movimentação: ${error.message}`);
+    } finally {
+      setLoadingMovPreview(false);
+    }
+  }
+
+  async function handleUploadMovimentacao() {
+    try {
+      if (!movFile) { setStatus("Selecione um arquivo de Movimentação."); return; }
+      setLoadingMovUpload(true);
+      setProgress(0);
+      setStatus("Iniciando upload da Movimentação Assurant...");
+      updateHistoryCard("Movimentação Assurant", { name: movFile.name, status: "Enviando", progress: 5 });
+      const result = await uploadMovimentacao(
+        movFile, user.id,
+        ({ inserted, duplicates, total }) => {
+          const pct = total ? Math.round((inserted + duplicates) / total * 100) : 0;
+          setProgress(pct);
+          updateHistoryCard("Movimentação Assurant", { name: movFile.name, status: "Enviando", rows: total.toLocaleString("pt-BR"), progress: pct });
+          setStatus(`Movimentação: ${inserted.toLocaleString("pt-BR")} inseridos.`);
+        }
+      );
+      updateHistoryCard("Movimentação Assurant", { name: movFile.name, status: "Concluído", rows: result.total.toLocaleString("pt-BR"), progress: 100 });
+      setProgress(100);
+      setStatus(`Upload da Movimentação concluído! ${result.inserted.toLocaleString("pt-BR")} registros inseridos.`);
+    } catch (error) {
+      setStatus(`Erro no upload da Movimentação: ${error.message}`);
+      updateHistoryCard("Movimentação Assurant", { status: "Erro" });
+    } finally {
+      setLoadingMovUpload(false);
+    }
+  }
+
+  // ── Handler B2B ───────────────────────────────────────
+  async function handleUploadB2B() {
+    try {
+      if (!b2bFile) { setStatus("Selecione uma planilha de Pedido B2B."); return; }
+      setLoadingB2bUpload(true);
+      setProgress(0);
+      setStatus("Importando pedido B2B...");
+      updateHistoryCard("Pedido B2B", { name: b2bFile.name, status: "Enviando", progress: 10 });
+      const result = await importarPedidoB2B(b2bFile, user.id, {
+        condicao_pagamento: b2bCondicaoPagamento.trim() || null,
+        cnpj_agregado:      b2bCnpjAgregado.trim()      || null,
+      });
+      setB2bPreview({
+        lote:     result.lote,
+        cliente:  result.cliente,
+        total:    result.total,
+        mensagem: "Pedido importado com sucesso!",
+      });
+      updateHistoryCard("Pedido B2B", { name: b2bFile.name, status: "Concluído", rows: result.total.toLocaleString("pt-BR"), progress: 100 });
+      setProgress(100);
+      setStatus(`Pedido B2B importado! ${result.total.toLocaleString("pt-BR")} itens — Lote: ${result.lote}`);
+      setB2bCondicaoPagamento("");
+      setB2bCnpjAgregado("");
+      const { data } = await supabase.from("b2b_pedidos").select("id, lote").order("criado_em", { ascending: false });
+      setPedidosB2B(data || []);
+    } catch (error) {
+      setStatus(`Erro ao importar Pedido B2B: ${error.message}`);
+      updateHistoryCard("Pedido B2B", { status: "Erro" });
+    } finally {
+      setLoadingB2bUpload(false);
+    }
+  }
+
+  async function handleUploadNF() {
+    try {
+      if (!nfFile)     { setStatus("Selecione a planilha de NF."); return; }
+      if (!nfPedidoId) { setStatus("Selecione o pedido correspondente."); return; }
+      setLoadingNfUpload(true);
+      setProgress(0);
+      setStatus("Importando NFs...");
+      updateHistoryCard("NF B2B", { name: nfFile.name, status: "Enviando", progress: 10 });
+      const result = await importarNFs(nfFile, nfPedidoId, user.id);
+      setNfPreview({
+        mensagem:       "NFs importadas com sucesso!",
+        atualizados:    result.atualizados,
+        naoEncontrados: result.naoEncontrados,
+        nfs:            result.nfs,
+      });
+      updateHistoryCard("NF B2B", { name: nfFile.name, status: "Concluído", rows: result.atualizados, progress: 100 });
+      setProgress(100);
+      setStatus(`NFs importadas! ${result.atualizados} IMEIs vinculados em ${result.nfs.length} NF(s).`);
+    } catch (e) {
+      setStatus(`Erro ao importar NFs: ${e.message}`);
+      updateHistoryCard("NF B2B", { status: "Erro" });
+    } finally {
+      setLoadingNfUpload(false);
+    }
+  }
+
+  // ── Handler Aging Subinventário ───────────────────────
+  async function handleUploadSubinv() {
+    try {
+      if (!subinvFile) { setStatus("Selecione a planilha de aging (.xlsx)."); return; }
+      setLoadingSubinvUpload(true);
+      setProgress(0);
+      setSubinvPreview(null);
+      setStatus("Importando aging do subinventário...");
+      updateHistoryCard("Aging Subinventário", { name: subinvFile.name, status: "Enviando", progress: 5 });
+
+      const result = await importarSubinv(
+        subinvFile,
+        user.id,
+        profile?.nome,
+        ({ fase, pct }) => {
+          setProgress(pct);
+          updateHistoryCard("Aging Subinventário", { name: subinvFile.name, status: `Gravando ${fase}...`, progress: pct });
+          setStatus(`Aging: gravando ${fase}... ${pct}%`);
+        }
+      );
+
+      updateHistoryCard("Aging Subinventário", {
+        name: subinvFile.name, status: "Concluído",
+        rows: result.inseridas.toLocaleString("pt-BR"), progress: 100,
+      });
+      setProgress(100);
+      setSubinvPreview(result);
+      setStatus(`Aging importado! ${result.inseridas.toLocaleString("pt-BR")} IMEIs · extração de ${result.dataExtracao}.`);
+      setSubinvFile(null);
+    } catch (error) {
+      setStatus(`Erro ao importar aging: ${error.message}`);
+      updateHistoryCard("Aging Subinventário", { status: "Erro" });
+    } finally {
+      setLoadingSubinvUpload(false);
+    }
+  }
+
+  // ── Handlers Relatório AP (Entrada Oracle) ────────────
+  async function handlePreviewAp() {
+    try {
+      if (!apFile) { setStatus("Selecione o Relatório AP (.xlsx)."); return; }
+      setLoadingApPreview(true);
+      setApResultado(null);
+      setStatus("Validando estrutura do Relatório AP...");
+      const preview = await previewRelatorioAP(apFile);
+      setApPreview(preview);
+      updateHistoryCard("Relatório AP Oracle", { name: apFile.name, status: "Validado", rows: preview.totalLinhas.toLocaleString("pt-BR"), progress: 15 });
+      setStatus(`Relatório AP validado. ${preview.comPo.toLocaleString("pt-BR")} linhas com PO.`);
+    } catch (error) {
+      setStatus(`Erro ao validar o Relatório AP: ${error.message}`);
+    } finally {
+      setLoadingApPreview(false);
+    }
+  }
+
+  async function handleUploadAp() {
+    try {
+      if (!apFile) { setStatus("Selecione o Relatório AP (.xlsx)."); return; }
+      setLoadingApUpload(true);
+      setProgress(0);
+      setApResultado(null);
+      setStatus("Importando Relatório AP...");
+      updateHistoryCard("Relatório AP Oracle", { name: apFile.name, status: "Enviando", progress: 5 });
+
+      const result = await uploadRelatorioAP(
+        apFile,
+        user.id,
+        profile?.nome,
+        ({ fase, pct }) => {
+          setProgress(pct);
+          updateHistoryCard("Relatório AP Oracle", { name: apFile.name, status: `Gravando ${fase}...`, progress: pct });
+          setStatus(`Relatório AP: gravando... ${pct}%`);
+        }
+      );
+
+      updateHistoryCard("Relatório AP Oracle", {
+        name: apFile.name, status: "Concluído",
+        rows: result.inseridas.toLocaleString("pt-BR"), progress: 100,
+      });
+      setProgress(100);
+      setApResultado(result);
+      setApPreview(null);
+      setStatus(`Relatório AP importado! ${result.inseridas.toLocaleString("pt-BR")} linhas · ${result.vouchers.toLocaleString("pt-BR")} vouchers.`);
+      setApFile(null);
+    } catch (error) {
+      setStatus(`Erro ao importar o Relatório AP: ${error.message}`);
+      updateHistoryCard("Relatório AP Oracle", { status: "Erro" });
+    } finally {
+      setLoadingApUpload(false);
+    }
+  }
+
+  // ── Handlers TradeIn ──────────────────────────────────
+  async function handlePreviewTd() {
+    try {
+      if (!tdFile) { setStatus("Selecione a planilha TradeIn (.xlsx)."); return; }
+      setLoadingTdPreview(true);
+      setTdResultado(null);
+      setStatus("Validando estrutura da planilha TradeIn...");
+      const preview = await previewTradein(tdFile);
+      setTdPreview(preview);
+      updateHistoryCard("TradeIn", { name: tdFile.name, status: "Validado", rows: preview.totalLinhas.toLocaleString("pt-BR"), progress: 15 });
+      setStatus(`TradeIn validado. ${preview.vouchers.toLocaleString("pt-BR")} vouchers distintos.`);
+    } catch (error) {
+      setStatus(`Erro ao validar o TradeIn: ${error.message}`);
+    } finally {
+      setLoadingTdPreview(false);
+    }
+  }
+
+  async function handleUploadTd() {
+    try {
+      if (!tdFile) { setStatus("Selecione a planilha TradeIn (.xlsx)."); return; }
+      setLoadingTdUpload(true);
+      setProgress(0);
+      setTdResultado(null);
+      setStatus("Importando base TradeIn...");
+      updateHistoryCard("TradeIn", { name: tdFile.name, status: "Enviando", progress: 5 });
+
+      const result = await uploadTradein(
+        tdFile,
+        user.id,
+        profile?.nome,
+        ({ fase, pct }) => {
+          setProgress(pct);
+          updateHistoryCard("TradeIn", { name: tdFile.name, status: `Gravando ${fase}...`, progress: pct });
+          setStatus(`TradeIn: gravando... ${pct}%`);
+        }
+      );
+
+      updateHistoryCard("TradeIn", {
+        name: tdFile.name, status: "Concluído",
+        rows: result.gravadas.toLocaleString("pt-BR"), progress: 100,
+      });
+      setProgress(100);
+      setTdResultado(result);
+      setTdPreview(null);
+      setStatus(`TradeIn importado! ${result.gravadas.toLocaleString("pt-BR")} vouchers gravados.`);
+      setTdFile(null);
+    } catch (error) {
+      setStatus(`Erro ao importar o TradeIn: ${error.message}`);
+      updateHistoryCard("TradeIn", { status: "Erro" });
+    } finally {
+      setLoadingTdUpload(false);
+    }
+  }
+
+  // ── Handlers Base de SKU ──────────────────────────────
+  async function handlePreviewSku() {
+    try {
+      if (!skuFile) { setStatus("Selecione a base de SKU (.xlsx)."); return; }
+      setLoadingSkuPreview(true);
+      setSkuResultado(null);
+      setStatus("Validando estrutura da base de SKU...");
+      const preview = await previewSkus(skuFile);
+      setSkuPreview(preview);
+      updateHistoryCard("Base de SKU", { name: skuFile.name, status: "Validado", rows: preview.totalLinhas.toLocaleString("pt-BR"), progress: 15 });
+      setStatus(`Base de SKU validada. ${preview.aparelhos.toLocaleString("pt-BR")} aparelhos.`);
+    } catch (error) {
+      setStatus(`Erro ao validar a base de SKU: ${error.message}`);
+    } finally {
+      setLoadingSkuPreview(false);
+    }
+  }
+
+  async function handleUploadSku() {
+    try {
+      if (!skuFile) { setStatus("Selecione a base de SKU (.xlsx)."); return; }
+      setLoadingSkuUpload(true);
+      setProgress(0);
+      setSkuResultado(null);
+      setStatus("Importando base de SKU...");
+      updateHistoryCard("Base de SKU", { name: skuFile.name, status: "Enviando", progress: 5 });
+
+      const result = await uploadSkus(
+        skuFile,
+        user.id,
+        profile?.nome,
+        ({ fase, pct }) => {
+          setProgress(pct);
+          updateHistoryCard("Base de SKU", { name: skuFile.name, status: `Gravando ${fase}...`, progress: pct });
+          setStatus(`Base de SKU: gravando... ${pct}%`);
+        }
+      );
+
+      updateHistoryCard("Base de SKU", {
+        name: skuFile.name, status: "Concluído",
+        rows: result.gravadas.toLocaleString("pt-BR"), progress: 100,
+      });
+      setProgress(100);
+      setSkuResultado(result);
+      setSkuPreview(null);
+      setStatus(`Base de SKU importada! ${result.gravadas.toLocaleString("pt-BR")} SKUs · ${result.aparelhos.toLocaleString("pt-BR")} aparelhos.`);
+      setSkuFile(null);
+    } catch (error) {
+      setStatus(`Erro ao importar a base de SKU: ${error.message}`);
+      updateHistoryCard("Base de SKU", { status: "Erro" });
+    } finally {
+      setLoadingSkuUpload(false);
+    }
+  }
+
+  // ── Handler AnyMarket ─────────────────────────────────
+  async function handleUploadAnymarket() {
+    try {
+      if (!anyFile) { setStatus("Selecione um arquivo .zip do AnyMarket."); return; }
+      if (!anyHoraCorte) { setStatus("Informe a hora de corte antes de importar."); return; }
+      setLoadingAnyUpload(true);
+      setProgress(0);
+      setStatus("Processando exportação AnyMarket...");
+      updateHistoryCard("AnyMarket", { name: anyFile.name, status: "Enviando", progress: 5 });
+
+      const result = await uploadAnymarketZip(
+        anyFile,
+        user.id,
+        anyHoraCorte,
+        ({ inserted, total, fase }) => {
+          if (fase === "anymarket") {
+            const pct = total ? Math.round(inserted / total * 50) : 0; // 0-50%
+            setProgress(pct);
+            updateHistoryCard("AnyMarket", { name: anyFile.name, status: "Inserindo base...", rows: total.toLocaleString("pt-BR"), progress: pct });
+            setStatus(`AnyMarket: ${inserted.toLocaleString("pt-BR")} de ${total.toLocaleString("pt-BR")} linhas inseridas na base...`);
+          } else {
+            setProgress(75);
+            updateHistoryCard("AnyMarket", { name: anyFile.name, status: "Sincronizando pedidos B2C...", progress: 75 });
+            setStatus("Sincronizando pedidos B2C...");
+          }
+        }
+      );
+
+      setStatus("AnyMarket importado. Executando alocação automática por FIFO...");
+      updateHistoryCard("AnyMarket", {
+        name: anyFile.name,
+        status: "Alocando IMEIs por FIFO...",
+        rows: result.total.toLocaleString("pt-BR"),
+        progress: 80,
+      });
+      setProgress(80);
+
+      const automatico = await alocarPedidosAutomaticamente({
+        idsAnymarket: result.idsAnymarket,
+        userId: user.id,
+        horaCorte: anyHoraCorte,
+        onProgress: ({ atual, total, pedido }) => {
+          const parte = total ? atual / total : 1;
+          const pct = Math.min(98, 80 + Math.round(parte * 18));
+          setProgress(pct);
+          updateHistoryCard("AnyMarket", {
+            name: anyFile.name,
+            status: `Alocando pedido ${atual} de ${total}`,
+            rows: result.total.toLocaleString("pt-BR"),
+            progress: pct,
+          });
+          setStatus(`FIFO automático: pedido ${pedido} · ${atual} de ${total}...`);
+        },
+      });
+
+      updateHistoryCard("AnyMarket", {
+        name: anyFile.name,
+        status: automatico.falhas > 0 ? "Concluído com pendências" : "Concluído",
+        rows: result.total.toLocaleString("pt-BR"),
+        progress: 100,
+      });
+      setProgress(100);
+      setAnyPreview({
+        mensagem:   `✓ ${result.total.toLocaleString("pt-BR")} linhas importadas`,
+        inseridos:  result.inseridos,
+        atualizados: result.atualizados,
+        elegiveis: automatico.total,
+        alocados: automatico.alocados,
+        semProduto: automatico.semProduto,
+        falhas: automatico.falhas,
+        gruposCriados: automatico.gruposCriados,
+        grupos: automatico.grupos,
+        pendencias: automatico.pendencias,
+      });
+      setStatus(
+        `Processo concluído! ${automatico.alocados} IMEIs alocados · ` +
+        `${automatico.gruposCriados} listas criadas · ` +
+        `${automatico.semProduto + automatico.falhas} pendências.`
+      );
+      setAnyHoraCorte("");
+      setAnyFile(null);
+    } catch (error) {
+      setStatus(`Erro ao importar AnyMarket: ${error.message}`);
+      updateHistoryCard("AnyMarket", { status: "Erro" });
+    } finally {
+      setLoadingAnyUpload(false);
+    }
+  }
+
+  const inputCls = "w-full rounded-xl border border-[#D8B4FE] px-3 py-2 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-400 disabled:opacity-50 bg-white";
+
+  return (
+    <SectionCard>
+      <div className="p-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-bold text-[#6B1F87]">Central de Upload</h2>
+          <Badge color="orange">Operacional</Badge>
+        </div>
+
+        <div className="mt-4 grid gap-4 xl:grid-cols-2">
+
+          {/* ── Blocos só para Master ── */}
+          {isMaster && (
+            <>
+              <UploadBox
+                title="Base de Aging"
+                description="Entrada de itens, OS, custos e disponibilidade."
+                icon={Upload}
+                accept=".csv,.xlsx,.xls"
+                file={agingFile}
+                onChangeFile={file => { setAgingFile(file); setAgingPreview(null); }}
+                onPreview={handlePreviewAging}
+                onUpload={handleUploadAging}
+                preview={agingPreview}
+                loadingPreview={loadingAgingPreview}
+                loadingUpload={loadingAgingUpload}
+              />
+
+              <UploadBox
+                title="Base de Faturamento"
+                description="Vendas, cliente, fornecedor, lote e rentabilidade."
+                icon={FileSpreadsheet}
+                accept=".csv,.xlsx,.xls"
+                file={faturamentoFile}
+                onChangeFile={file => { setFaturamentoFile(file); setFaturamentoPreview(null); }}
+                onPreview={handlePreviewFaturamento}
+                onUpload={handleUploadFaturamento}
+                preview={faturamentoPreview}
+                loadingPreview={loadingFaturamentoPreview}
+                loadingUpload={loadingFaturamentoUpload}
+              />
+
+              <UploadBox
+                title="Extrato Bancário (OFX)"
+                description="Importe o extrato bancário para o fluxo de caixa realizado."
+                icon={Landmark}
+                accept=".ofx,.OFX"
+                file={ofxFile}
+                onChangeFile={file => setOfxFile(file)}
+                onUpload={handleUploadOfx}
+                loadingPreview={false}
+                loadingUpload={loadingOfxUpload}
+                showPreview={false}
+              />
+            </>
+          )}
+
+          {/* ── Triagem Assurant ── */}
+          <UploadBox
+            title="Triagem Assurant — Diária"
+            description="Importe a planilha de triagem, recebimento e expedição do Warehouse."
+            icon={Package}
+            accept=".csv,.xlsx,.xls"
+            file={triagemFile}
+            onChangeFile={file => { setTriagemFile(file); setTriagemPreview(null); }}
+            onPreview={handlePreviewTriagem}
+            onUpload={handleUploadTriagem}
+            preview={triagemPreview}
+            loadingPreview={loadingTriagemPreview}
+            loadingUpload={loadingTriagemUpload}
+            extra={
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Mês de referência</label>
+                <input
+                  type="month"
+                  value={mesRefTriagem}
+                  onChange={e => setMesRefTriagem(e.target.value)}
+                  disabled={loadingTriagemUpload || loadingTriagemPreview}
+                  className={inputCls}
+                />
+              </div>
+            }
+          />
+
+          {/* ── Movimentação Assurant ── */}
+          <UploadBox
+            title="Movimentação Assurant — Histórico"
+            description="Importe o histórico de etapas por voucher para análise de SLA e rastreabilidade."
+            icon={GitBranch}
+            accept=".csv,.txt,.xlsx,.xls"
+            file={movFile}
+            onChangeFile={file => { setMovFile(file); setMovPreview(null); }}
+            onPreview={handlePreviewMovimentacao}
+            onUpload={handleUploadMovimentacao}
+            preview={movPreview}
+            loadingPreview={loadingMovPreview}
+            loadingUpload={loadingMovUpload}
+            extra={
+              <div className="text-xs text-slate-500 bg-blue-50 ring-1 ring-blue-200 rounded-xl px-3 py-2">
+                📋 Formato esperado: Usuário · Etapa · Voucher · Serial/IMEI · Data (separado por ponto e vírgula)
+              </div>
+            }
+          />
+
+          {/* ── Pedido B2B ── */}
+          <div className="rounded-[24px] border border-dashed border-[#D8B4FE] bg-[#FCFAFF] p-5">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="text-lg font-bold text-[#6B1F87]">Pedido B2B — Picking</div>
+                <div className="mt-1 text-sm text-slate-500">
+                  Importe a planilha de picking B2B recebida por e-mail da Assurant para iniciar a separação.
+                </div>
+              </div>
+              <div className="rounded-2xl bg-[linear-gradient(135deg,#F97316_0%,#F59E0B_100%)] p-3 text-white shadow-lg shrink-0 ml-3">
+                <ScanLine className="h-5 w-5" />
+              </div>
+            </div>
+
+            <div className="mt-4 text-xs text-slate-500 bg-purple-50 ring-1 ring-purple-200 rounded-xl px-3 py-2">
+              📋 Formato: planilha PICKING_*.xlsx recebida por e-mail · Após importar, acesse Picking B2B para separação
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Condição de Pagamento</label>
+                <input
+                  type="text"
+                  value={b2bCondicaoPagamento}
+                  onChange={e => setB2bCondicaoPagamento(e.target.value)}
+                  disabled={loadingB2bUpload}
+                  placeholder="Ex: 30/60/90 dias"
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">CNPJ do Agregado</label>
+                <input
+                  type="text"
+                  value={b2bCnpjAgregado}
+                  onChange={e => setB2bCnpjAgregado(e.target.value)}
+                  disabled={loadingB2bUpload}
+                  placeholder="Ex: 00.000.000/0001-00"
+                  className={inputCls}
+                />
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-[#E9D5FF]">
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={e => { setB2bFile(e.target.files?.[0] || null); setB2bPreview(null); }}
+                className="block w-full text-sm text-slate-600"
+              />
+              <div className="mt-3 text-sm font-medium">
+                {b2bFile ? b2bFile.name : "Nenhum arquivo selecionado"}
+              </div>
+              <div className="mt-1 text-xs text-slate-500">
+                {b2bFile ? "Arquivo pronto para envio" : "Selecione um arquivo .xlsx"}
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <Button onClick={handleUploadB2B} disabled={!b2bFile || loadingB2bUpload}>
+                {loadingB2bUpload ? "Importando..." : "Enviar arquivo"}
+              </Button>
+            </div>
+
+            {b2bPreview && (
+              <div className="mt-4 rounded-2xl bg-white p-4 ring-1 ring-[#E9D5FF] space-y-1 text-xs text-slate-600">
+                <div className="text-sm font-bold text-emerald-700">✓ {b2bPreview.mensagem}</div>
+                <p><span className="font-semibold">Lote:</span> {b2bPreview.lote}</p>
+                <p><span className="font-semibold">Cliente:</span> {b2bPreview.cliente}</p>
+                <p><span className="font-semibold">Itens:</span> {b2bPreview.total?.toLocaleString("pt-BR")}</p>
+              </div>
+            )}
+          </div>
+
+          {/* ── NF B2B ── */}
+          <div className="rounded-[24px] border border-dashed border-[#D8B4FE] bg-[#FCFAFF] p-5">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="text-lg font-bold text-[#6B1F87]">NF B2B — Vínculo de Notas Fiscais</div>
+                <div className="mt-1 text-sm text-slate-500">
+                  Importe a planilha com a coluna Nº NF preenchida para vincular as notas aos romaneios.
+                </div>
+              </div>
+              <div className="rounded-2xl bg-[linear-gradient(135deg,#F97316_0%,#F59E0B_100%)] p-3 text-white shadow-lg shrink-0 ml-3">
+                <FileSpreadsheet className="h-5 w-5" />
+              </div>
+            </div>
+
+            <div className="mt-4 text-xs text-slate-500 bg-blue-50 ring-1 ring-blue-200 rounded-xl px-3 py-2">
+              📋 Mesma planilha de picking com a coluna <strong>Nº NF</strong> preenchida pelo time de faturamento
+            </div>
+
+            <div className="mt-4">
+              <label className="block text-xs font-bold text-slate-600 mb-1">Pedido correspondente</label>
+              <select
+                value={nfPedidoId}
+                onChange={e => setNfPedidoId(e.target.value)}
+                disabled={loadingNfUpload}
+                className={inputCls}
+              >
+                <option value="">Selecione o pedido...</option>
+                {pedidosB2B.map(p => (
+                  <option key={p.id} value={p.id}>{p.lote}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="mt-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-[#E9D5FF]">
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={e => { setNfFile(e.target.files?.[0] || null); setNfPreview(null); }}
+                className="block w-full text-sm text-slate-600"
+              />
+              <div className="mt-3 text-sm font-medium">
+                {nfFile ? nfFile.name : "Nenhum arquivo selecionado"}
+              </div>
+              <div className="mt-1 text-xs text-slate-500">
+                {nfFile ? "Arquivo pronto para envio" : "Selecione um arquivo .xlsx"}
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <Button onClick={handleUploadNF} disabled={!nfFile || !nfPedidoId || loadingNfUpload}>
+                {loadingNfUpload ? "Importando..." : "Importar NFs"}
+              </Button>
+            </div>
+
+            {nfPreview && (
+              <div className="mt-4 rounded-2xl bg-white p-4 ring-1 ring-[#E9D5FF] space-y-3">
+                <div className="text-sm font-bold text-emerald-700">✓ {nfPreview.mensagem}</div>
+                <div className="text-xs text-slate-600 space-y-1">
+                  <p>IMEIs vinculados: <span className="font-bold">{nfPreview.atualizados}</span></p>
+                  {nfPreview.naoEncontrados > 0 && (
+                    <p>IMEIs não encontrados: <span className="font-bold text-orange-600">{nfPreview.naoEncontrados}</span></p>
+                  )}
+                </div>
+                {nfPreview.nfs?.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-bold text-slate-500">Resumo por NF:</p>
+                    {nfPreview.nfs.map(nf => (
+                      <div key={nf.numero_nf}
+                        className="flex items-center justify-between text-xs bg-slate-50 rounded-xl px-3 py-2">
+                        <span className="font-mono font-bold text-[#7F2D92]">NF {nf.numero_nf}</span>
+                        <div className="flex gap-4 text-slate-500">
+                          <span><span className="font-bold text-slate-700">{nf.total_itens}</span> aparelhos</span>
+                          <span><span className="font-bold text-slate-700">{nf.total_caixas}</span> caixas</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ── AnyMarket ── */}
+          <div className="rounded-[24px] border border-dashed border-[#D8B4FE] bg-[#FCFAFF] p-5">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="text-lg font-bold text-[#6B1F87]">AnyMarket — Pedidos B2C</div>
+                <div className="mt-1 text-sm text-slate-500">
+                  Importe o arquivo .zip exportado do AnyMarket. Pedidos pagos serão sincronizados para o fluxo B2C.
+                </div>
+              </div>
+              <div className="rounded-2xl bg-[linear-gradient(135deg,#F97316_0%,#F59E0B_100%)] p-3 text-white shadow-lg shrink-0 ml-3">
+                <ShoppingCart className="h-5 w-5" />
+              </div>
+            </div>
+
+            <div className="mt-4 text-xs text-slate-500 bg-emerald-50 ring-1 ring-emerald-200 rounded-xl px-3 py-2">
+              📋 Arquivo .zip exportado direto do AnyMarket · Pedidos existentes têm o status atualizado automaticamente
+            </div>
+
+            {/* Hora de corte */}
+            <div className="mt-4">
+              <label className="block text-xs font-bold text-slate-600 mb-1">
+                Hora de corte <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="time"
+                value={anyHoraCorte}
+                onChange={e => setAnyHoraCorte(e.target.value)}
+                disabled={loadingAnyUpload}
+                className={inputCls}
+              />
+              <p className="text-xs text-slate-400 mt-1">
+                Apenas pedidos pagos até este horário entrarão para alocação B2C.
+              </p>
+            </div>
+
+            <div className="mt-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-[#E9D5FF]">
+              <input
+                type="file"
+                accept=".zip"
+                onChange={e => { setAnyFile(e.target.files?.[0] || null); setAnyPreview(null); }}
+                className="block w-full text-sm text-slate-600"
+              />
+              <div className="mt-3 text-sm font-medium">
+                {anyFile ? anyFile.name : "Nenhum arquivo selecionado"}
+              </div>
+              <div className="mt-1 text-xs text-slate-500">
+                {anyFile ? "Arquivo pronto para envio" : "Selecione um arquivo .zip"}
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <Button
+                onClick={handleUploadAnymarket}
+                disabled={!anyFile || !anyHoraCorte || loadingAnyUpload}>
+                {loadingAnyUpload ? "Importando..." : "Enviar arquivo"}
+              </Button>
+            </div>
+
+            {anyPreview && (
+              <div className="mt-4 rounded-2xl bg-white p-4 ring-1 ring-[#E9D5FF] space-y-1 text-xs text-slate-600">
+                <div className="text-sm font-bold text-emerald-700">{anyPreview.mensagem}</div>
+                <p>Pedidos B2C novos: <span className="font-bold text-emerald-700">{anyPreview.inseridos?.toLocaleString("pt-BR")}</span></p>
+                <p>Pedidos atualizados: <span className="font-bold text-blue-700">{anyPreview.atualizados?.toLocaleString("pt-BR")}</span></p>
+                <div className="mt-3 border-t border-slate-100 pt-3">
+                  <p className="font-bold text-[#6B1F87]">Alocação automática</p>
+                  <p>Pedidos dentro do corte: <span className="font-bold">{anyPreview.elegiveis?.toLocaleString("pt-BR")}</span></p>
+                  <p>IMEIs alocados: <span className="font-bold text-emerald-700">{anyPreview.alocados?.toLocaleString("pt-BR")}</span></p>
+                  <p>Listas criadas: <span className="font-bold text-blue-700">{anyPreview.gruposCriados?.toLocaleString("pt-BR")}</span></p>
+                  <p>Sem opção no FIFO: <span className="font-bold text-amber-600">{anyPreview.semProduto?.toLocaleString("pt-BR")}</span></p>
+                  {anyPreview.falhas > 0 && (
+                    <p>Falhas técnicas: <span className="font-bold text-red-600">{anyPreview.falhas.toLocaleString("pt-BR")}</span></p>
+                  )}
+                </div>
+
+                {anyPreview.grupos?.length > 0 && (
+                  <div className="mt-3 rounded-xl bg-blue-50 p-3 ring-1 ring-blue-100">
+                    <p className="font-bold text-blue-800 mb-1">Listas liberadas para separação</p>
+                    {anyPreview.grupos.map(grupo => (
+                      <p key={grupo.id}>
+                        Lista #{grupo.numero} · {grupo.marketplace} · {grupo.total} aparelho{grupo.total !== 1 ? "s" : ""}
+                      </p>
+                    ))}
+                  </div>
+                )}
+
+                {anyPreview.pendencias?.length > 0 && (
+                  <div className="mt-3 rounded-xl bg-amber-50 p-3 ring-1 ring-amber-100">
+                    <p className="font-bold text-amber-800 mb-1">Pendências enviadas para tratamento</p>
+                    {anyPreview.pendencias.slice(0, 10).map((item, indice) => (
+                      <p key={`${item.pedido}-${indice}`}>
+                        Pedido {item.pedido} · {item.sku || "SKU não informado"} · {item.motivo}
+                      </p>
+                    ))}
+                    {anyPreview.pendencias.length > 10 && (
+                      <p className="font-bold mt-1">+ {anyPreview.pendencias.length - 10} pendências</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ── Relatório AP (Entrada Oracle) ───────────── */}
+          <div className="rounded-[24px] bg-[#FCFAFF] p-5 ring-1 ring-[#E9D5FF]">
+            <div className="flex items-center gap-3">
+              <div className="rounded-2xl bg-[#7F2D92] p-2.5 text-white">
+                <FileSpreadsheet className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="text-sm font-black text-[#6B1F87]">Relatório AP Oracle</div>
+                <div className="text-xs text-slate-500">Base da Entrada no Oracle — RI, nota e documento por voucher</div>
+              </div>
+            </div>
+
+            <div className="mt-4 text-xs text-slate-500 bg-emerald-50 ring-1 ring-emerald-200 rounded-xl px-3 py-2">
+              📋 Planilha .xlsx do AP · casa com o Gaia pela coluna PO- GERADA (= voucher) · cada importação acumula histórico
+            </div>
+
+            <div className="mt-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-[#E9D5FF]">
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={e => { setApFile(e.target.files?.[0] || null); setApPreview(null); setApResultado(null); }}
+                className="block w-full text-sm text-slate-600"
+              />
+              <div className="mt-3 text-sm font-medium">
+                {apFile ? apFile.name : "Nenhum arquivo selecionado"}
+              </div>
+              <div className="mt-1 text-xs text-slate-500">
+                {apFile ? "Arquivo pronto para envio" : "Selecione o Relatório AP"}
+              </div>
+            </div>
+
+            <div className="mt-4 flex gap-2">
+              <Button variant="outline" onClick={handlePreviewAp} disabled={!apFile || loadingApPreview || loadingApUpload}>
+                {loadingApPreview ? "Validando..." : "Validar"}
+              </Button>
+              <Button onClick={handleUploadAp} disabled={!apFile || loadingApUpload}>
+                {loadingApUpload ? "Importando..." : "Enviar arquivo"}
+              </Button>
+            </div>
+
+            {apPreview && (
+              <div className="mt-4 rounded-2xl bg-white p-4 ring-1 ring-[#E9D5FF] space-y-1 text-xs text-slate-600">
+                <div className="text-sm font-bold text-[#6B1F87]">
+                  {apPreview.totalLinhas.toLocaleString("pt-BR")} linhas na planilha
+                </div>
+                <p>Com PO (serão importadas): <span className="font-bold text-emerald-700">{apPreview.comPo.toLocaleString("pt-BR")}</span></p>
+                {apPreview.semPo > 0 && <p>Sem PO (serão ignoradas): <span className="font-bold text-amber-600">{apPreview.semPo.toLocaleString("pt-BR")}</span></p>}
+                {apPreview.faltando?.length > 0 && (
+                  <p className="text-amber-700">Colunas esperadas que não vieram: <span className="font-bold">{apPreview.faltando.join(", ")}</span></p>
+                )}
+                {apPreview.naoMapeadas?.length > 0 && (
+                  <p className="text-slate-400">Colunas não reconhecidas (serão ignoradas): {apPreview.naoMapeadas.join(", ")}</p>
+                )}
+              </div>
+            )}
+
+            {apResultado && (
+              <div className="mt-4 rounded-2xl bg-white p-4 ring-1 ring-[#E9D5FF] space-y-1 text-xs text-slate-600">
+                <div className="text-sm font-bold text-emerald-700">
+                  ✓ {apResultado.inseridas.toLocaleString("pt-BR")} linhas importadas
+                </div>
+                <p>Vouchers distintos: <span className="font-bold text-[#6B1F87]">{apResultado.vouchers.toLocaleString("pt-BR")}</span></p>
+                {apResultado.semPo > 0 && <p>Linhas sem PO ignoradas: <span className="font-bold text-amber-600">{apResultado.semPo.toLocaleString("pt-BR")}</span></p>}
+              </div>
+            )}
+          </div>
+
+          {/* ── TradeIn ─────────────────────────────────── */}
+          <div className="rounded-[24px] bg-[#FCFAFF] p-5 ring-1 ring-[#E9D5FF]">
+            <div className="flex items-center gap-3">
+              <div className="rounded-2xl bg-[#7F2D92] p-2.5 text-white">
+                <Store className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="text-sm font-black text-[#6B1F87]">TradeIn — Base da Loja</div>
+                <div className="text-xs text-slate-500">Valida o IMEI na Triagem Funcional · só canal YBV</div>
+              </div>
+            </div>
+
+            <div className="mt-4 text-xs text-slate-500 bg-emerald-50 ring-1 ring-emerald-200 rounded-xl px-3 py-2">
+              📋 Planilha TRADEIN_GERAL .xlsx · base diária completa (substitui por voucher, não acumula) · o voucher vem só numérico e vira YBV no banco
+            </div>
+
+            <div className="mt-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-[#E9D5FF]">
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={e => { setTdFile(e.target.files?.[0] || null); setTdPreview(null); setTdResultado(null); }}
+                className="block w-full text-sm text-slate-600"
+              />
+              <div className="mt-3 text-sm font-medium">
+                {tdFile ? tdFile.name : "Nenhum arquivo selecionado"}
+              </div>
+              <div className="mt-1 text-xs text-slate-500">
+                {tdFile ? "Arquivo pronto para envio" : "Selecione a planilha TradeIn"}
+              </div>
+            </div>
+
+            <div className="mt-4 flex gap-2">
+              <Button variant="outline" onClick={handlePreviewTd} disabled={!tdFile || loadingTdPreview || loadingTdUpload}>
+                {loadingTdPreview ? "Validando..." : "Validar"}
+              </Button>
+              <Button onClick={handleUploadTd} disabled={!tdFile || loadingTdUpload}>
+                {loadingTdUpload ? "Importando..." : "Enviar arquivo"}
+              </Button>
+            </div>
+
+            {tdPreview && (
+              <div className="mt-4 rounded-2xl bg-white p-4 ring-1 ring-[#E9D5FF] space-y-1 text-xs text-slate-600">
+                <div className="text-sm font-bold text-[#6B1F87]">
+                  {tdPreview.totalLinhas.toLocaleString("pt-BR")} linhas · {tdPreview.vouchers.toLocaleString("pt-BR")} vouchers
+                </div>
+                {tdPreview.semVoucher > 0 && <p>Sem voucher numérico (ignoradas): <span className="font-bold text-amber-600">{tdPreview.semVoucher.toLocaleString("pt-BR")}</span></p>}
+                {tdPreview.semImei > 0 && <p>Sem IMEI: <span className="font-bold text-amber-600">{tdPreview.semImei.toLocaleString("pt-BR")}</span></p>}
+                {tdPreview.cancelados > 0 && <p>Marcados como cancelados: <span className="font-bold text-amber-600">{tdPreview.cancelados.toLocaleString("pt-BR")}</span></p>}
+                {tdPreview.porStatus && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {Object.entries(tdPreview.porStatus).map(([nome, qtd]) => (
+                      <span key={nome} className="inline-flex items-center rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
+                        {nome} · {qtd.toLocaleString("pt-BR")}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {tdPreview.faltando?.length > 0 && (
+                  <p className="text-amber-700">Colunas esperadas que não vieram: <span className="font-bold">{tdPreview.faltando.join(", ")}</span></p>
+                )}
+                {tdPreview.naoMapeadas?.length > 0 && (
+                  <p className="text-slate-400">Colunas não reconhecidas (serão ignoradas): {tdPreview.naoMapeadas.join(", ")}</p>
+                )}
+              </div>
+            )}
+
+            {tdResultado && (
+              <div className="mt-4 rounded-2xl bg-white p-4 ring-1 ring-[#E9D5FF] space-y-1 text-xs text-slate-600">
+                <div className="text-sm font-bold text-emerald-700">
+                  ✓ {tdResultado.gravadas.toLocaleString("pt-BR")} vouchers gravados
+                </div>
+                {tdResultado.duplicadosNoArquivo > 0 && <p>Repetidos no arquivo (ficou o último): <span className="font-bold text-amber-600">{tdResultado.duplicadosNoArquivo.toLocaleString("pt-BR")}</span></p>}
+                {tdResultado.semVoucher > 0 && <p>Linhas sem voucher ignoradas: <span className="font-bold text-amber-600">{tdResultado.semVoucher.toLocaleString("pt-BR")}</span></p>}
+              </div>
+            )}
+          </div>
+
+          {/* ── Base de SKU ─────────────────────────────── */}
+          <div className="rounded-[24px] bg-[#FCFAFF] p-5 ring-1 ring-[#E9D5FF]">
+            <div className="flex items-center gap-3">
+              <div className="rounded-2xl bg-[#7F2D92] p-2.5 text-white">
+                <Tags className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="text-sm font-black text-[#6B1F87]">Base de SKU</div>
+                <div className="text-xs text-slate-500">Catálogo Assurant — alimenta os dropdowns da Triagem Funcional</div>
+              </div>
+            </div>
+
+            <div className="mt-4 text-xs text-slate-500 bg-emerald-50 ring-1 ring-emerald-200 rounded-xl px-3 py-2">
+              📋 Planilha .xlsx com Tipo, SKU Oracle, SKU ALS, Marca, Modelo, Capacidade e Cor · substitui a base inteira (modelos cadastrados na bancada são preservados)
+            </div>
+
+            <div className="mt-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-[#E9D5FF]">
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={e => { setSkuFile(e.target.files?.[0] || null); setSkuPreview(null); setSkuResultado(null); }}
+                className="block w-full text-sm text-slate-600"
+              />
+              <div className="mt-3 text-sm font-medium">
+                {skuFile ? skuFile.name : "Nenhum arquivo selecionado"}
+              </div>
+              <div className="mt-1 text-xs text-slate-500">
+                {skuFile ? "Arquivo pronto para envio" : "Selecione a base de SKU"}
+              </div>
+            </div>
+
+            <div className="mt-4 flex gap-2">
+              <Button variant="outline" onClick={handlePreviewSku} disabled={!skuFile || loadingSkuPreview || loadingSkuUpload}>
+                {loadingSkuPreview ? "Validando..." : "Validar"}
+              </Button>
+              <Button onClick={handleUploadSku} disabled={!skuFile || loadingSkuUpload}>
+                {loadingSkuUpload ? "Importando..." : "Enviar arquivo"}
+              </Button>
+            </div>
+
+            {skuPreview && (
+              <div className="mt-4 rounded-2xl bg-white p-4 ring-1 ring-[#E9D5FF] space-y-1 text-xs text-slate-600">
+                <div className="text-sm font-bold text-[#6B1F87]">
+                  {skuPreview.totalLinhas.toLocaleString("pt-BR")} SKUs na planilha
+                </div>
+                {skuPreview.porTipo && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {Object.entries(skuPreview.porTipo).map(([nome, qtd]) => (
+                      <span key={nome} className={`inline-flex items-center rounded-lg px-2 py-0.5 text-xs font-semibold ${
+                        nome === "APARELHO" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"
+                      }`}>
+                        {nome} · {qtd.toLocaleString("pt-BR")}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {skuPreview.semSku > 0 && <p>Sem SKU ALS: <span className="font-bold text-amber-600">{skuPreview.semSku.toLocaleString("pt-BR")}</span></p>}
+                {skuPreview.semMarca > 0 && <p>Sem marca (serão ignoradas): <span className="font-bold text-amber-600">{skuPreview.semMarca.toLocaleString("pt-BR")}</span></p>}
+                {skuPreview.faltando?.length > 0 && (
+                  <p className="text-amber-700">Colunas esperadas que não vieram: <span className="font-bold">{skuPreview.faltando.join(", ")}</span></p>
+                )}
+                {skuPreview.naoMapeadas?.length > 0 && (
+                  <p className="text-slate-400">Colunas não reconhecidas (serão ignoradas): {skuPreview.naoMapeadas.join(", ")}</p>
+                )}
+              </div>
+            )}
+
+            {skuResultado && (
+              <div className="mt-4 rounded-2xl bg-white p-4 ring-1 ring-[#E9D5FF] space-y-1 text-xs text-slate-600">
+                <div className="text-sm font-bold text-emerald-700">
+                  ✓ {skuResultado.gravadas.toLocaleString("pt-BR")} SKUs gravados
+                </div>
+                <p>Aparelhos (entram na triagem): <span className="font-bold text-[#6B1F87]">{skuResultado.aparelhos.toLocaleString("pt-BR")}</span></p>
+                {skuResultado.ignoradas > 0 && <p>Linhas sem marca ou modelo ignoradas: <span className="font-bold text-amber-600">{skuResultado.ignoradas.toLocaleString("pt-BR")}</span></p>}
+              </div>
+            )}
+          </div>
+
+          {/* ── Aging Subinventário ─────────────────────── */}
+          <div className="rounded-[24px] bg-[#FCFAFF] p-5 ring-1 ring-[#E9D5FF]">
+            <div className="flex items-center gap-3">
+              <div className="rounded-2xl bg-[#7F2D92] p-2.5 text-white">
+                <CalendarClock className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="text-sm font-black text-[#6B1F87]">Aging Subinventário</div>
+                <div className="text-xs text-slate-500">Base de aging do Oracle — usada no FIFO</div>
+              </div>
+            </div>
+
+            <div className="mt-4 text-xs text-slate-500 bg-emerald-50 ring-1 ring-emerald-200 rounded-xl px-3 py-2">
+              📋 Planilha .xlsx com as colunas NUM_IMEI, LOCAL e DATA_SUBINV · Só o estoque do WH2 (WH2 B2C e WH2 CENTER CELL) entra no FIFO
+            </div>
+
+            <div className="mt-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-[#E9D5FF]">
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={e => { setSubinvFile(e.target.files?.[0] || null); setSubinvPreview(null); }}
+                className="block w-full text-sm text-slate-600"
+              />
+              <div className="mt-3 text-sm font-medium">
+                {subinvFile ? subinvFile.name : "Nenhum arquivo selecionado"}
+              </div>
+              <div className="mt-1 text-xs text-slate-500">
+                {subinvFile ? "Arquivo pronto para envio" : "Selecione a planilha de aging"}
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <Button onClick={handleUploadSubinv} disabled={!subinvFile || loadingSubinvUpload}>
+                {loadingSubinvUpload ? "Importando..." : "Enviar arquivo"}
+              </Button>
+            </div>
+
+            {subinvPreview && (
+              <div className="mt-4 rounded-2xl bg-white p-4 ring-1 ring-[#E9D5FF] space-y-1 text-xs text-slate-600">
+                <div className="text-sm font-bold text-emerald-700">
+                  ✓ {subinvPreview.inseridas?.toLocaleString("pt-BR")} IMEIs importados
+                </div>
+                <p>Data da extração: <span className="font-bold text-[#6B1F87]">{subinvPreview.dataExtracao}</span> <span className="text-slate-400">({subinvPreview.origemData})</span></p>
+                {subinvPreview.totalWH2 != null && (
+                  <p>
+                    No WH2 (entram no FIFO): <span className="font-bold text-emerald-700">{subinvPreview.totalWH2.toLocaleString("pt-BR")}</span>
+                    {subinvPreview.totalForaWH2 > 0 && (
+                      <> · fora do WH2 (não entram): <span className="font-bold text-amber-600">{subinvPreview.totalForaWH2.toLocaleString("pt-BR")}</span></>
+                    )}
+                  </p>
+                )}
+                {subinvPreview.locais?.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {subinvPreview.locais.map(l => (
+                      <span key={l.nome} className={`inline-flex items-center rounded-lg px-2 py-0.5 text-xs font-semibold ring-1 ${
+                        l.wh2 ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-amber-50 text-amber-700 ring-amber-200"
+                      }`}>
+                        {l.nome} · {l.qtd.toLocaleString("pt-BR")}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {subinvPreview.duplicadas > 0 && <p>IMEIs repetidos (última linha venceu): <span className="font-bold text-amber-600">{subinvPreview.duplicadas}</span></p>}
+                {subinvPreview.invalidas > 0 && <p>Linhas ignoradas: <span className="font-bold text-amber-600">{subinvPreview.invalidas}</span></p>}
+              </div>
+            )}
+          </div>
+
+        </div>
+
+        {/* Status global */}
+        <div className="mt-4 rounded-2xl bg-[#FCFAFF] p-4 ring-1 ring-[#E9D5FF]">
+          <div className="text-sm font-semibold text-[#6B1F87]">Status do upload</div>
+          <div className="mt-1 text-sm text-slate-600">
+            {status || "Selecione um arquivo, valide a estrutura e depois envie a base."}
+          </div>
+          <div className="mt-3">
+            <ProgressBar value={progress} />
+          </div>
+        </div>
+
+        {/* Cards de histórico */}
+        <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {historyCards.map(item => (
+            <div key={item.type} className="rounded-[24px] bg-[#FCFAFF] p-4 ring-1 ring-[#E9D5FF]">
+              <div className="flex items-center justify-between">
+                <span className="inline-flex rounded-full border border-[#D8B4FE] px-3 py-1 text-xs font-semibold text-[#6B1F87]">
+                  {item.type}
+                </span>
+                <span className="text-xs text-slate-500">{item.rows} linhas</span>
+              </div>
+              <div className="mt-3 font-semibold text-sm">{item.name}</div>
+              <div className="mt-1 text-sm text-slate-500">{item.status}</div>
+              <div className="mt-4">
+                <ProgressBar value={item.progress} />
+              </div>
+            </div>
+          ))}
+        </div>
+
+      </div>
+    </SectionCard>
+  );
 }

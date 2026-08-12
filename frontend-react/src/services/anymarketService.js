@@ -347,7 +347,21 @@ export async function uploadAnymarketZip(file, userId, horaCorte, onProgress) {
 
   if (onProgress) onProgress({ inserted: 1, total: 1, fase: "b2c" });
 
-  return { total: rows.length, arquivo: xlsxEntry.name, inseridos, atualizados, ignorados, inalterados };
+  // A tela usa esta lista para alocar automaticamente somente os pedidos
+  // que pertencem ao arquivo que acabou de ser importado.
+  const idsAnymarket = [
+    ...new Set(rows.map(row => row.id_anymarket).filter(id => id != null)),
+  ];
+
+  return {
+    total: rows.length,
+    arquivo: xlsxEntry.name,
+    inseridos,
+    atualizados,
+    ignorados,
+    inalterados,
+    idsAnymarket,
+  };
 }
 
 export async function buscarPedidoAnymarket(idAnymarket) {
