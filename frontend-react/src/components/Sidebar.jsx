@@ -154,7 +154,7 @@ function MenuAssurant({ onClose, telas }) {
       {tem("/upload") && (
         <NavItem to="/upload" icon={Upload} label="Uploads" onClick={onClose} />
       )}
-      <CollapseGroup icon={Package} label="Assurant Warehouse" paths={["/assurant", "/recebimento", "/triagens", "/b2b", "/b2c", "/trocas-b2c", "/inventario"]}>
+      <CollapseGroup icon={Package} label="Assurant Warehouse" paths={["/assurant", "/recebimento", "/triagens", "/wms", "/b2b", "/b2c", "/trocas-b2c", "/inventario"]}>
         {(tem("/recebimento") || tem("/recebimento/gestao")) && (
           <SubGroup icon={Truck} label="Recebimento" paths={["/recebimento"]}>
             {tem("/recebimento") && (
@@ -170,9 +170,10 @@ function MenuAssurant({ onClose, telas }) {
   tem("/triagens/funcional") ||
   tem("/triagens/laudo") ||
   tem("/triagens/cosmetica") ||
-  tem("/triagens/armazenagem")
+  tem("/triagens/armazenagem") ||
+  tem("/wms/estoque")
 ) && (
-          <SubGroup icon={FlaskConical} label="Triagens" paths={["/triagens"]}>
+          <SubGroup icon={FlaskConical} label="Triagens" paths={["/triagens", "/wms"]}>
             {tem("/triagens/funcional") && (
               <NavItem to="/triagens/funcional" icon={Wrench} label="Triagem Funcional" indent onClick={onClose} />
             )}
@@ -194,6 +195,15 @@ function MenuAssurant({ onClose, telas }) {
     to="/triagens/armazenagem"
     icon={Package}
     label="Armazenagem"
+    indent
+    onClick={onClose}
+  />
+)}
+{tem("/wms/estoque") && (
+  <NavItem
+    to="/wms/estoque"
+    icon={Package}
+    label="Consulta Estoque WMS"
     indent
     onClick={onClose}
   />
@@ -329,16 +339,17 @@ function SidebarContent({ profile, onClose, handleLogout }) {
               <NavItem to="/abertura-os" icon={ClipboardList} label="Abertura de OS" indent onClick={onClose} />
             </CollapseGroup>
 
-            <CollapseGroup icon={Package} label="Assurant Warehouse" paths={["/assurant", "/recebimento", "/triagens", "/b2b", "/b2c", "/trocas-b2c", "/inventario"]}>
+            <CollapseGroup icon={Package} label="Assurant Warehouse" paths={["/assurant", "/recebimento", "/triagens", "/wms", "/b2b", "/b2c", "/trocas-b2c", "/inventario"]}>
               <SubGroup icon={Truck} label="Recebimento" paths={["/recebimento"]}>
                 <NavItem to="/recebimento"        icon={Truck}           label="Recebimento YBV"    indent onClick={onClose} />
                 <NavItem to="/recebimento/gestao" icon={ClipboardList}   label="Gestão Recebimento" indent onClick={onClose} />
               </SubGroup>
-              <SubGroup icon={FlaskConical} label="Triagens" paths={["/triagens"]}>
+              <SubGroup icon={FlaskConical} label="Triagens" paths={["/triagens", "/wms"]}>
                 <NavItem to="/triagens/funcional"      icon={Wrench}        label="Triagem Funcional" indent onClick={onClose} />
                 <NavItem to="/triagens/laudo"          icon={FileText}      label="Laudo"             indent onClick={onClose} />
                 <NavItem to="/triagens/cosmetica"      icon={Sparkles}      label="Triagem Cosmética" indent onClick={onClose} />
                 <NavItem to="/triagens/armazenagem" icon={Package} label="Armazenagem" indent onClick={onClose} />
+                <NavItem to="/wms/estoque" icon={Package} label="Consulta Estoque WMS" indent onClick={onClose} />
                 <NavItem to="/triagens/entrada-oracle" icon={ClipboardList} label="Entrada no Oracle" indent onClick={onClose} />
               </SubGroup>
               <SubGroup icon={Box} label="B2B" paths={["/b2b"]}>

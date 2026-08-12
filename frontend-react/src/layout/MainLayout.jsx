@@ -39,6 +39,10 @@ const PAGE_META = {
   "/triagens/laudo":               { title: "Laudo de Triagem",          subtitle: "Triagens · Fotos e documento de divergência" },
   "/triagens/cosmetica":           { title: "Triagem Cosmética",         subtitle: "Triagens · Tela, laterais, traseira e grade final" },
   "/triagens/armazenagem": { title: "Armazenagem", subtitle: "WMS · Endereçamento automático e validação física por bipagem" },
+  "/wms/estoque": {
+  title: "Consulta do Estoque",
+  subtitle: "WMS · Mapa físico, ocupação e localização de produtos"
+},
 };
 
 export default function MainLayout() {
