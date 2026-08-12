@@ -7,6 +7,7 @@ export const STATUS_DEVOLUCAO = {
   aguardando_recebimento: "Aguardando recebimento",
   aguardando_triagem: "Aguardando triagem",
   em_triagem: "Em triagem",
+  aguardando_definicao_assurant: "Aguardando definição Assurant",
   bloqueado_aguardando_cliente: "Bloqueado — aguardando cliente",
   aguardando_rma_aut: "Aguardando RMA/AUT",
   aguardando_ri: "Aguardando RI",
@@ -112,15 +113,38 @@ export async function atualizarPostagemDevolucao({
   return validarRetornoRpc(data, "Não foi possível atualizar a postagem.");
 }
 
-export async function informarRiDevolucao(devolucaoId, numeroRi, usuarioId) {
-  const { data, error } = await supabase.rpc("devolucao_informar_ri", {
+export async function informarRiDestinoDevolucao(
+  devolucaoId,
+  numeroRi,
+  destinoFinal,
+  usuarioId
+) {
+  const { data, error } = await supabase.rpc("devolucao_informar_ri_destino", {
     p_devolucao_id: devolucaoId,
     p_numero_ri: String(numeroRi || "").trim(),
+    p_destino_final: destinoFinal,
     p_usuario: usuarioId,
   });
 
-  if (error) throw new Error(erroMensagem(error, "Não foi possível informar a RI."));
-  return validarRetornoRpc(data, "Não foi possível informar a RI.");
+  if (error) throw new Error(erroMensagem(error, "Não foi possível informar a RI e o destino."));
+  return validarRetornoRpc(data, "Não foi possível informar a RI e o destino.");
+}
+
+export async function definirImeiDivergenteDevolucao({
+  devolucaoId,
+  decisao,
+  observacao = "",
+  usuarioId,
+}) {
+  const { data, error } = await supabase.rpc("devolucao_definir_imei_divergente", {
+    p_devolucao_id: devolucaoId,
+    p_decisao: decisao,
+    p_observacao: observacao || null,
+    p_usuario: usuarioId,
+  });
+
+  if (error) throw new Error(erroMensagem(error, "Não foi possível registrar a definição do IMEI."));
+  return validarRetornoRpc(data, "Não foi possível registrar a definição do IMEI.");
 }
 
 export async function resolverBloqueioDevolucao(devolucaoId, resolucao, usuarioId) {
@@ -204,14 +228,12 @@ export async function bloquearDevolucaoAguardandoCliente(devolucaoId, motivo, us
 export async function finalizarDevolucaoFurbtech({
   devolucaoId,
   dataFinalizacao,
-  destinoFinal,
   comentarios = "",
   usuarioId,
 }) {
-  const { data, error } = await supabase.rpc("devolucao_finalizar_furbtech", {
+  const { data, error } = await supabase.rpc("devolucao_finalizar_furbtech_v2", {
     p_devolucao_id: devolucaoId,
     p_data_finalizacao: dataFinalizacao,
-    p_destino_final: destinoFinal,
     p_comentarios: comentarios || null,
     p_usuario: usuarioId,
   });
@@ -268,6 +290,35 @@ export async function buscarDevolucaoPorId(devolucaoId) {
 
   if (error) throw new Error(erroMensagem(error, "Devolução não encontrada."));
   return data;
+}
+
+export async function buscarTriagemDevolucao(devolucaoId) {
+  const { data, error } = await supabase
+    .from("assurant_triagem")
+    .select([
+      "id",
+      "voucher",
+      "imei",
+      "status_atual",
+      "data_funcional",
+      "resultado_triagem_funcional",
+      "status_bateria",
+      "bateria_percentual",
+      "defeitos_adicionais",
+      "respostas_funcional",
+      "data_cosmetico",
+      "tela",
+      "laterais",
+      "traseira",
+      "grade",
+      "grade_cosmetica",
+      "rebaixado_bateria",
+    ].join(","))
+    .eq("devolucao_id", devolucaoId)
+    .maybeSingle();
+
+  if (error) throw new Error(erroMensagem(error, "Não foi possível carregar as triagens da devolução."));
+  return data || null;
 }
 
 export async function listarHistoricoDevolucao(devolucaoId) {

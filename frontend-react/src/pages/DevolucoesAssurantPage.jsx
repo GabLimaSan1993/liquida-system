@@ -23,7 +23,8 @@ import {
   atualizarPostagemDevolucao,
   buscarPedidoParaDevolucao,
   criarSolicitacaoDevolucao,
-  informarRiDevolucao,
+  definirImeiDivergenteDevolucao,
+  informarRiDestinoDevolucao,
   listarDevolucoes,
   listarHistoricoDevolucao,
   resolverBloqueioDevolucao,
@@ -34,6 +35,15 @@ import {
 const inputCls =
   "w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-purple-400 focus:ring-2 focus:ring-purple-100 disabled:cursor-not-allowed disabled:bg-slate-100";
 const labelCls = "mb-1 block text-xs font-bold text-slate-600";
+
+const DESTINOS_FINAIS = [
+  ["estoque", "Retornar ao estoque"],
+  ["cliente", "Retornar ao cliente"],
+  ["reembolso", "Reembolso"],
+  ["reparo", "Enviar para reparo"],
+  ["descarte", "Descarte"],
+  ["outro", "Outro destino"],
+];
 
 function agoraLocal() {
   const data = new Date();
@@ -100,6 +110,7 @@ const CORES_STATUS = {
   aguardando_recebimento: "bg-sky-50 text-sky-700 ring-sky-200",
   aguardando_triagem: "bg-violet-50 text-violet-700 ring-violet-200",
   em_triagem: "bg-violet-50 text-violet-700 ring-violet-200",
+  aguardando_definicao_assurant: "bg-red-50 text-red-700 ring-red-200",
   bloqueado_aguardando_cliente: "bg-red-50 text-red-700 ring-red-200",
   aguardando_rma_aut: "bg-orange-50 text-orange-700 ring-orange-200",
   aguardando_ri: "bg-amber-50 text-amber-700 ring-amber-200",
@@ -427,6 +438,8 @@ function AcaoAssurant({ devolucao, userId, onConcluida }) {
   const [rastreio, setRastreio] = useState(devolucao.codigo_rastreio_retorno || "");
   const [statusPostagem, setStatusPostagem] = useState(devolucao.status_postagem || "Postado");
   const [numeroRi, setNumeroRi] = useState("");
+  const [destinoFinal, setDestinoFinal] = useState("estoque");
+  const [observacaoDefinicao, setObservacaoDefinicao] = useState("");
   const [resolucao, setResolucao] = useState("");
 
   async function executar(acao) {
@@ -445,7 +458,15 @@ function AcaoAssurant({ devolucao, userId, onConcluida }) {
       }
       if (acao === "ri") {
         if (!numeroRi.trim()) throw new Error("Informe o número da RI.");
-        await informarRiDevolucao(devolucao.id, numeroRi, userId);
+        await informarRiDestinoDevolucao(devolucao.id, numeroRi, destinoFinal, userId);
+      }
+      if (acao === "autorizar_imei" || acao === "devolver_imei") {
+        await definirImeiDivergenteDevolucao({
+          devolucaoId: devolucao.id,
+          decisao: acao === "autorizar_imei" ? "autorizar" : "devolver_cliente",
+          observacao: observacaoDefinicao,
+          usuarioId: userId,
+        });
       }
       if (acao === "bloqueio") {
         if (!resolucao.trim()) throw new Error("Descreva a resolução informada pelo cliente.");
@@ -478,14 +499,45 @@ function AcaoAssurant({ devolucao, userId, onConcluida }) {
     );
   }
 
+  if (devolucao.status === "aguardando_definicao_assurant") {
+    return (
+      <div className="mt-4 rounded-2xl bg-red-50 p-4 ring-1 ring-red-200">
+        <p className="text-xs font-black uppercase tracking-wide text-red-700">Ação Assurant: definir IMEI divergente</p>
+        <p className="mt-1 text-xs text-red-600">A triagem está bloqueada até esta decisão.</p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          <Campo rotulo="IMEI da solicitação" valor={devolucao.imei_esperado_definicao || devolucao.imei_vendido} mono />
+          <Campo rotulo="IMEI bipado na funcional" valor={devolucao.imei_bipado_funcional} mono />
+        </div>
+        <textarea
+          value={observacaoDefinicao}
+          onChange={e => setObservacaoDefinicao(e.target.value)}
+          className={`${inputCls} mt-3 min-h-20 resize-y`}
+          placeholder="Observação da decisão (opcional)"
+        />
+        {erro && <p className="mt-2 text-xs font-bold text-red-600">{erro}</p>}
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+          <button onClick={() => executar("autorizar_imei")} disabled={salvando} className="flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50">
+            {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} Autorizar IMEI bipado e continuar
+          </button>
+          <button onClick={() => executar("devolver_imei")} disabled={salvando} className="flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50">
+            {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowLeft className="h-4 w-4" />} Não autorizar — devolver ao cliente
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (devolucao.status === "aguardando_ri") {
     return (
       <div className="mt-4 rounded-2xl bg-amber-50 p-4 ring-1 ring-amber-200">
-        <p className="mb-3 text-xs font-black uppercase tracking-wide text-amber-700">Ação Assurant: informar RI</p>
-        <div className="flex flex-col gap-2 sm:flex-row">
+        <p className="mb-3 text-xs font-black uppercase tracking-wide text-amber-700">Ação Assurant: informar RI e destino final</p>
+        <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
           <input value={numeroRi} onChange={e => setNumeroRi(e.target.value)} className={inputCls} placeholder="Número da RI" />
+          <select value={destinoFinal} onChange={e => setDestinoFinal(e.target.value)} className={inputCls}>
+            {DESTINOS_FINAIS.map(([valor, rotulo]) => <option key={valor} value={valor}>{rotulo}</option>)}
+          </select>
           <button onClick={() => executar("ri")} disabled={salvando} className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-amber-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
-            {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Salvar RI
+            {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Salvar RI e destino
           </button>
         </div>
         {erro && <p className="mt-2 text-xs font-bold text-red-600">{erro}</p>}

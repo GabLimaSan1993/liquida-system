@@ -36,6 +36,7 @@ const STATUS_DEV_CORES = {
   aguardando_recebimento: "bg-cyan-50 text-cyan-700 ring-cyan-200",
   aguardando_triagem: "bg-violet-50 text-violet-700 ring-violet-200",
   em_triagem: "bg-violet-50 text-violet-700 ring-violet-200",
+  aguardando_definicao_assurant: "bg-red-50 text-red-700 ring-red-200",
   bloqueado_aguardando_cliente: "bg-red-50 text-red-700 ring-red-200",
   aguardando_rma_aut: "bg-orange-50 text-orange-700 ring-orange-200",
   aguardando_ri: "bg-amber-50 text-amber-700 ring-amber-200",

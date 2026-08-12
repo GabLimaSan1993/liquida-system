@@ -52,7 +52,7 @@ export async function listarAguardandoFuncional() {
     .from("assurant_triagem")
     .select("voucher, imei, modelo, status_atual, data_recebimento, condicao, reanalise, criado_em")
     .eq("status_atual", "Aguardando triagem funcional")
-    .eq("origem_triagem", "liquida")
+    .in("origem_triagem", ["liquida", "devolucao_b2c"])
     .order("data_recebimento", { ascending: true, nullsFirst: false });
   if (error) throw new Error(error.message);
 
@@ -85,7 +85,7 @@ export async function consultarVoucher(voucher) {
 
   const { data: existente, error: errT } = await supabase
     .from("assurant_triagem")
-    .select("id, imei, sku, modelo, grade, status_atual, data_funcional, local, criado_em")
+    .select("id, imei, sku, modelo, grade, status_atual, data_funcional, local, criado_em, devolucao_id")
     .eq("voucher", v)
     .maybeSingle();
   if (errT) throw new Error(errT.message);
@@ -106,6 +106,17 @@ export async function consultarVoucher(voucher) {
     }
   }
 
+  let devolucao = null;
+  if (existente?.devolucao_id) {
+    const { data, error } = await supabase
+      .from("devolucoes_b2c")
+      .select("id, imei_vendido, imei_recebido, voucher_origem, status, definicao_assurant_status")
+      .eq("id", existente.devolucao_id)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    devolucao = data || null;
+  }
+
   // Aparelho que já passou pela funcional não pode ser retriado por aqui:
   // o UNIQUE (voucher) faria o upsert apagar a triagem anterior. Em vez de
   // sobrescrever, a tela informa em que etapa ele está e manda o operador
@@ -118,6 +129,10 @@ export async function consultarVoucher(voucher) {
     canal,
     tradein,
     temTradein: !!tradein,
+    devolucao,
+    tipoPerguntas: canal === "DEV"
+      ? (canalDoVoucher(devolucao?.voucher_origem) || "YBV")
+      : canal,
     jaTriado: !!existente?.data_funcional,
     bloqueado: !!etapa,
     etapa,
@@ -130,12 +145,10 @@ export async function consultarVoucher(voucher) {
 // de liberar a triagem por engano.
 const ETAPAS = {
   "Aguardando análise Assurant":      { nome: "Análise Assurant",      onde: "Aguardando tratativa da Assurant" },
+  "Aguardando definição Assurant - IMEI divergente": { nome: "Definição de IMEI", onde: "Aguardando decisão da Assurant" },
   "Aguardando laudo":                 { nome: "Laudo",                 onde: "Tela de Laudo" },
   "Aguardando triagem cosmética":     { nome: "Triagem Cosmética",     onde: "Tela de Triagem Cosmética" },
-  "Aguardando armazenagem": {
-  nome: "Armazenagem",
-  onde: "Tela de Armazenagem",
-},
+  "Aguardando armazenagem":           { nome: "Armazenagem",           onde: "Tela de Armazenagem" },
   "Aguardando oracle":                { nome: "Entrada no Oracle",     onde: "Tela de Entrada no Oracle" },
   "Produto disponível":               { nome: "Disponível em estoque", onde: "Já entrou no Oracle e está no FIFO" },
   "Em análise de estoque":            { nome: "Análise de estoque",    onde: "Aparelho não localizado na prateleira" },
@@ -258,7 +271,10 @@ export async function salvarTriagemFuncional({
     condicaoDeclarada: tradein?.condicao_aparelho,
     respostas: lista,
   });
-  const temLaudo  = decisao.laudo;
+  // Na devolução, a etapa imediatamente seguinte é sempre a Cosmética.
+  // A análise consolidada da Furbtech usa os dois resultados depois.
+  const ehDevolucao = String(canal || "").toUpperCase() === "DEV";
+  const temLaudo  = ehDevolucao ? false : decisao.laudo;
   const conferencia = conferirComTradein(produto, tradein);
 
   const agora = new Date().toISOString();
@@ -268,7 +284,7 @@ export async function salvarTriagemFuncional({
     imei:           String(imei).trim(),
     sku:            produto?.sku    || null,
     modelo:         produto?.modelo || null,
-    origem_triagem: "liquida",
+    origem_triagem: ehDevolucao ? "devolucao_b2c" : "liquida",
     funcional_por:  userId,
     data_funcional: agora,
     atualizado_em:  agora,
@@ -287,7 +303,7 @@ export async function salvarTriagemFuncional({
         cor:           produto?.cor           || null,
       },
       conferencia_tradein: conferencia,
-      destino: { laudo: decisao.laudo, motivo: decisao.motivo, condicao_declarada: tradein?.condicao_aparelho || null },
+      destino: { laudo: temLaudo, motivo: ehDevolucao ? "Devolução segue para triagem cosmética" : decisao.motivo, condicao_declarada: tradein?.condicao_aparelho || null },
       bateria: { percentual: bateriaPercentual ?? null, faixa: bateria || null },
       respostas: lista.map(r => ({
         pergunta_id: r.perguntaId,
@@ -314,7 +330,7 @@ export async function salvarTriagemFuncional({
     id: data.id,
     status: data.status_atual,
     precisaLaudo: temLaudo,
-    motivoDestino: decisao.motivo,
+    motivoDestino: ehDevolucao ? "Devolução segue para triagem cosmética" : decisao.motivo,
     divergencias: negativas.length,
     conferencia,
   };
@@ -399,4 +415,15 @@ export function classificarBateria(faixas, valor) {
   if (!Number.isFinite(n) || n < 0 || n > 100) return null;
   const f = (faixas || []).find(x => n >= x.minimo && n <= x.maximo);
   return f ? f.rotulo : null;
+}
+
+export async function registrarDivergenciaImeiDevolucao(devolucaoId, imeiBipado, userId) {
+  const { data, error } = await supabase.rpc("devolucao_registrar_divergencia_imei", {
+    p_devolucao_id: devolucaoId,
+    p_imei_bipado: String(imeiBipado || "").replace(/\D/g, ""),
+    p_usuario: userId,
+  });
+  if (error) throw new Error(error.message);
+  if (data?.ok === false) throw new Error(data.erro || "Não foi possível registrar a divergência.");
+  return data;
 }

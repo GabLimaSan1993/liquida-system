@@ -7,6 +7,7 @@ import {
   consultarVoucher,
   validarImeiTradein,
   registrarDivergenciaImei,
+  registrarDivergenciaImeiDevolucao,
   buscarPerguntas,
   listarDefeitos,
   salvarTriagemFuncional,
@@ -179,6 +180,25 @@ export default function TriagemFuncionalPage() {
     if (!imeiDigitado.trim()) return;
     setCarregando(true);
     try {
+      if (ctx.devolucao) {
+        const imeiAutorizado = ctx.devolucao.definicao_assurant_status === "autorizado";
+        const imeiEsperado = String(
+          imeiAutorizado ? ctx.devolucao.imei_recebido : ctx.devolucao.imei_vendido
+        ).replace(/\D/g, "");
+        const imeiBipado = String(imeiDigitado || "").replace(/\D/g, "");
+        if (imeiEsperado.length !== 15) {
+          throw new Error("A solicitação de devolução não possui um IMEI vendido válido.");
+        }
+        const r = {
+          ok: true,
+          confere: imeiBipado === imeiEsperado,
+          tipoBase: "devolucao",
+          imeiEsperado,
+        };
+        setValidacao(r);
+        if (r.confere) await iniciarPerguntas();
+        return;
+      }
       if (ctx.canal !== "YBV" || !ctx.temTradein) {
         setValidacao({ ok: true, confere: true, semBase: true });
         await iniciarPerguntas();
@@ -192,8 +212,9 @@ export default function TriagemFuncionalPage() {
   }
 
   async function iniciarPerguntas() {
-    const ps = await buscarPerguntas(ctx.canal || "YBV", produto.marca);
-    if (!ps.length) { erro(`Nenhuma pergunta cadastrada para o canal ${ctx.canal}.`); return; }
+    const tipoPerguntas = ctx.tipoPerguntas || ctx.canal || "YBV";
+    const ps = await buscarPerguntas(tipoPerguntas, produto.marca);
+    if (!ps.length) { erro(`Nenhuma pergunta cadastrada para o canal ${tipoPerguntas}.`); return; }
     setPerguntas(ps);
     setIdx(0);
     setEtapa("perguntas");
@@ -202,8 +223,13 @@ export default function TriagemFuncionalPage() {
   async function handleConfirmarDivergencia() {
     setCarregando(true);
     try {
-      await registrarDivergenciaImei(ctx.voucher, imeiDigitado, user.id, validacao?.imeiTradein);
-      setResultado({ divergencia: true });
+      if (ctx.devolucao) {
+        await registrarDivergenciaImeiDevolucao(ctx.devolucao.id, imeiDigitado, user.id);
+        setResultado({ divergencia: true, devolucao: true });
+      } else {
+        await registrarDivergenciaImei(ctx.voucher, imeiDigitado, user.id, validacao?.imeiTradein);
+        setResultado({ divergencia: true, devolucao: false });
+      }
       setEtapa("fim");
     } catch (e) { erro(e.message); }
     finally { setCarregando(false); }
@@ -520,10 +546,12 @@ export default function TriagemFuncionalPage() {
             <div className="mt-4 rounded-2xl bg-red-50 p-4 ring-1 ring-red-200">
               <p className="text-sm font-bold text-red-700">
                 <AlertTriangle className="mr-1 inline h-4 w-4" />
-                IMEI diverge do cadastrado na loja
+                {validacao.tipoBase === "devolucao"
+                  ? "IMEI diverge da solicitação de devolução"
+                  : "IMEI diverge do cadastrado na loja"}
               </p>
               <p className="mt-2 font-mono text-xs text-red-700">
-                TradeIn: {validacao.imeiTradein || "sem registro"}<br />
+                {validacao.tipoBase === "devolucao" ? "IMEI da solicitação" : "TradeIn"}: {validacao.imeiEsperado || validacao.imeiTradein || "sem registro"}<br />
                 Bipado: {imeiDigitado}
               </p>
               <div className="mt-3 flex gap-2">
@@ -537,7 +565,7 @@ export default function TriagemFuncionalPage() {
                 </button>
               </div>
               <p className="mt-3 text-[11px] leading-tight text-red-600">
-                Confirmando, o aparelho vai para "Aguardando análise Assurant" e sai desta fila.
+                Confirmando, o processo fica bloqueado em "Aguardando definição Assurant".
               </p>
             </div>
           )}
@@ -631,7 +659,9 @@ export default function TriagemFuncionalPage() {
         <div>
           {resultado.divergencia ? (
             <Aviso tipo="aviso">
-              Divergência registrada. O aparelho foi para "Aguardando análise Assurant".
+              Divergência registrada. {resultado.devolucao
+                ? "O processo foi bloqueado e enviado para definição da Assurant."
+                : "O aparelho foi para Aguardando análise Assurant."}
             </Aviso>
           ) : (
             <>

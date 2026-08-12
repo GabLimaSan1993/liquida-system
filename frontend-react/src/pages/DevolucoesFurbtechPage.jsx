@@ -23,6 +23,7 @@ import {
 import { useAuth } from "../AuthContext.jsx";
 import {
   bloquearDevolucaoAguardandoCliente,
+  buscarTriagemDevolucao,
   finalizarDevolucaoFurbtech,
   informarRmaAutDevolucao,
   listarDevolucoes,
@@ -47,14 +48,14 @@ const STATUS_RECLAMACAO = [
   "Outro",
 ];
 
-const DESTINOS_FINAIS = [
-  ["estoque", "Retornar ao estoque"],
-  ["cliente", "Retornar ao cliente"],
-  ["reembolso", "Reembolso"],
-  ["reparo", "Enviar para reparo"],
-  ["descarte", "Descarte"],
-  ["outro", "Outro destino"],
-];
+const ROTULOS_DESTINO = {
+  estoque: "Retornar ao estoque",
+  cliente: "Retornar ao cliente",
+  reembolso: "Reembolso",
+  reparo: "Enviar para reparo",
+  descarte: "Descarte",
+  outro: "Outro destino",
+};
 
 const CORES_STATUS = {
   solicitada: "bg-blue-50 text-blue-700 ring-blue-200",
@@ -63,6 +64,7 @@ const CORES_STATUS = {
   aguardando_recebimento: "bg-cyan-50 text-cyan-700 ring-cyan-200",
   aguardando_triagem: "bg-violet-50 text-violet-700 ring-violet-200",
   em_triagem: "bg-violet-50 text-violet-700 ring-violet-200",
+  aguardando_definicao_assurant: "bg-red-50 text-red-700 ring-red-200",
   bloqueado_aguardando_cliente: "bg-red-50 text-red-700 ring-red-200",
   aguardando_rma_aut: "bg-orange-50 text-orange-700 ring-orange-200",
   aguardando_ri: "bg-amber-50 text-amber-700 ring-amber-200",
@@ -198,7 +200,7 @@ function RecebimentoForm({ devolucao, userId, onConcluida }) {
   );
 }
 
-function TriagemForm({ devolucao, userId, onConcluida }) {
+function TriagemForm({ devolucao, triagem, carregandoTriagem, userId, onConcluida }) {
   const [form, setForm] = useState({
     apresentouDefeito: "",
     statusReclamacao: "",
@@ -207,6 +209,9 @@ function TriagemForm({ devolucao, userId, onConcluida }) {
   });
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
+  const funcionalConcluida = Boolean(triagem?.data_funcional);
+  const cosmeticaConcluida = Boolean(triagem?.data_cosmetico)
+    || triagem?.status_atual === "Triagem de devolução concluída";
 
   async function salvar(evento) {
     evento.preventDefault();
@@ -236,11 +241,41 @@ function TriagemForm({ devolucao, userId, onConcluida }) {
     <CaixaAcao titulo="Ação Furbtech: nova triagem do aparelho" detalhe={`Use o voucher ${devolucao.voucher_dev || "DEV"} em todas as etapas da triagem.`}>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white px-4 py-3 ring-1 ring-purple-200">
         <div><p className="text-[10px] font-black uppercase text-purple-500">Voucher da devolução</p><p className="font-mono text-lg font-black text-purple-800">{devolucao.voucher_dev}</p></div>
-        <Link to="/triagens/funcional" className="flex items-center gap-2 rounded-xl bg-purple-100 px-4 py-2.5 text-xs font-bold text-purple-700 hover:bg-purple-200">
-          <Wrench className="h-4 w-4" /> Abrir Triagem Funcional
-        </Link>
+        {!carregandoTriagem && !funcionalConcluida && <Link to="/triagens/funcional" className="flex items-center gap-2 rounded-xl bg-purple-100 px-4 py-2.5 text-xs font-bold text-purple-700 hover:bg-purple-200"><Wrench className="h-4 w-4" /> Abrir Triagem Funcional</Link>}
+        {!carregandoTriagem && funcionalConcluida && !cosmeticaConcluida && <Link to="/triagens/cosmetica" className="flex items-center gap-2 rounded-xl bg-purple-100 px-4 py-2.5 text-xs font-bold text-purple-700 hover:bg-purple-200"><FlaskConical className="h-4 w-4" /> Abrir Triagem Cosmética</Link>}
       </div>
-      <form onSubmit={salvar} className="space-y-3">
+
+      {carregandoTriagem && <div className="flex items-center gap-2 rounded-xl bg-white px-4 py-3 text-xs font-bold text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Carregando resultados das triagens...</div>}
+
+      {!carregandoTriagem && funcionalConcluida && (
+        <div className="mb-3 rounded-xl bg-white p-3 ring-1 ring-purple-200">
+          <p className="mb-2 text-xs font-black uppercase text-purple-700">Resultado da Triagem Funcional</p>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <Campo rotulo="Resultado" valor={triagem.resultado_triagem_funcional} />
+            <Campo rotulo="Bateria" valor={triagem.status_bateria} />
+            <Campo rotulo="Percentual" valor={triagem.bateria_percentual != null ? `${triagem.bateria_percentual}%` : "—"} />
+            <Campo rotulo="Defeitos" valor={triagem.defeitos_adicionais} />
+          </div>
+        </div>
+      )}
+
+      {!carregandoTriagem && cosmeticaConcluida && (
+        <div className="mb-3 rounded-xl bg-white p-3 ring-1 ring-purple-200">
+          <p className="mb-2 text-xs font-black uppercase text-purple-700">Resultado da Triagem Cosmética</p>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+            <Campo rotulo="Grade" valor={triagem.grade_cosmetica || triagem.grade} />
+            <Campo rotulo="Tela" valor={triagem.tela} />
+            <Campo rotulo="Laterais" valor={triagem.laterais} />
+            <Campo rotulo="Traseira" valor={triagem.traseira} />
+            <Campo rotulo="Concluída em" valor={formatarData(triagem.data_cosmetico)} />
+          </div>
+        </div>
+      )}
+
+      {!carregandoTriagem && !funcionalConcluida && <Aviso tipo="sucesso">Primeiro conclua a Triagem Funcional com o voucher DEV.</Aviso>}
+      {!carregandoTriagem && funcionalConcluida && !cosmeticaConcluida && <Aviso tipo="sucesso">Funcional concluída. Agora conclua a Triagem Cosmética.</Aviso>}
+
+      {!carregandoTriagem && cosmeticaConcluida && <form onSubmit={salvar} className="space-y-3">
         <div className="grid gap-3 md:grid-cols-2">
           <div>
             <label className={labelCls}>Apresentou o defeito reclamado? *</label>
@@ -262,7 +297,7 @@ function TriagemForm({ devolucao, userId, onConcluida }) {
           {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <FlaskConical className="h-4 w-4" />}
           {salvando ? "Salvando..." : "Concluir análise da devolução"}
         </button>
-      </form>
+      </form>}
     </CaixaAcao>
   );
 }
@@ -303,7 +338,7 @@ function RmaAutForm({ devolucao, userId, onConcluida }) {
 }
 
 function FinalizacaoForm({ devolucao, userId, onConcluida }) {
-  const [form, setForm] = useState({ dataFinalizacao: agoraLocal(), destinoFinal: "estoque", comentarios: "" });
+  const [form, setForm] = useState({ dataFinalizacao: agoraLocal(), comentarios: "" });
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
 
@@ -315,7 +350,6 @@ function FinalizacaoForm({ devolucao, userId, onConcluida }) {
       const resultado = await finalizarDevolucaoFurbtech({
         devolucaoId: devolucao.id,
         dataFinalizacao: form.dataFinalizacao,
-        destinoFinal: form.destinoFinal,
         comentarios: form.comentarios,
         usuarioId: userId,
       });
@@ -335,10 +369,10 @@ function FinalizacaoForm({ devolucao, userId, onConcluida }) {
       <form onSubmit={salvar} className="space-y-3">
         <div className="grid gap-3 md:grid-cols-2">
           <div><label className={labelCls}>Data de finalização *</label><input type="datetime-local" value={form.dataFinalizacao} onChange={e => setForm(v => ({ ...v, dataFinalizacao: e.target.value }))} className={inputCls} /></div>
-          <div><label className={labelCls}>Destino final *</label><select value={form.destinoFinal} onChange={e => setForm(v => ({ ...v, destinoFinal: e.target.value }))} className={inputCls}>{DESTINOS_FINAIS.map(([valor, rotulo]) => <option key={valor} value={valor}>{rotulo}</option>)}</select></div>
+          <div><label className={labelCls}>Destino definido pela Assurant</label><div className={`${inputCls} bg-slate-100 font-bold`}>{ROTULOS_DESTINO[devolucao.destino_final] || devolucao.destino_final || "—"}</div></div>
           <div className="md:col-span-2"><label className={labelCls}>Comentários Furbtech</label><textarea value={form.comentarios} onChange={e => setForm(v => ({ ...v, comentarios: e.target.value }))} className={`${inputCls} min-h-20 resize-y`} placeholder="Observações da finalização" /></div>
         </div>
-        {form.destinoFinal === "estoque" && <div className="rounded-xl bg-purple-100 px-3 py-2 text-xs font-bold text-purple-700">O voucher {devolucao.voucher_dev} será enviado para Armazenagem WMS e, depois, Entrada no Oracle.</div>}
+        {devolucao.destino_final === "estoque" && <div className="rounded-xl bg-purple-100 px-3 py-2 text-xs font-bold text-purple-700">O voucher {devolucao.voucher_dev} será enviado para Armazenagem WMS e, depois, Entrada no Oracle.</div>}
         {erro && <Aviso>{erro}</Aviso>}
         <button type="submit" disabled={salvando} className="flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
           {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileCheck2 className="h-4 w-4" />}
@@ -424,6 +458,7 @@ function Historico({ devolucaoId }) {
 }
 
 function OrientacaoFluxo({ devolucao }) {
+  if (devolucao.status === "aguardando_definicao_assurant") return <CaixaAcao titulo="Aguardando definição Assurant" detalhe="O IMEI bipado na Triagem Funcional é diferente do IMEI da solicitação." cor="red"><p className="text-xs font-semibold">O processo está travado. A Furbtech não deve continuar até a Assurant autorizar o IMEI ou decidir pela devolução ao cliente.</p></CaixaAcao>;
   if (devolucao.status === "aguardando_ri") return <CaixaAcao titulo="Aguardando Assurant" detalhe={`A Assurant precisa informar a RI. ${devolucao.tipo_rma_aut || "RMA/AUT"}: ${devolucao.numero_rma_aut || "—"}`} cor="orange"><p className="text-xs font-semibold">Nenhuma ação Furbtech é necessária neste momento.</p></CaixaAcao>;
   if (devolucao.status === "aguardando_armazenagem") return <CaixaAcao titulo="Encaminhar para Armazenagem WMS" detalhe={`Bipe o voucher ${devolucao.voucher_dev} na tela de Armazenagem.`}><Link to="/triagens/armazenagem" className="inline-flex items-center gap-2 rounded-xl bg-[#7F2D92] px-4 py-2.5 text-xs font-bold text-white"><Warehouse className="h-4 w-4" /> Abrir Armazenagem</Link></CaixaAcao>;
   if (devolucao.status === "aguardando_oracle") return <CaixaAcao titulo="Aguardando Entrada no Oracle" detalhe="A armazenagem física já foi concluída."><p className="text-xs font-semibold">O processo será finalizado automaticamente quando o produto ficar disponível.</p></CaixaAcao>;
@@ -434,6 +469,19 @@ function OrientacaoFluxo({ devolucao }) {
 function CardDevolucao({ devolucao, userId, onAtualizar }) {
   const [detalhes, setDetalhes] = useState(false);
   const [mensagem, setMensagem] = useState("");
+  const [triagem, setTriagem] = useState(null);
+  const [carregandoTriagem, setCarregandoTriagem] = useState(Boolean(devolucao.voucher_dev));
+
+  useEffect(() => {
+    let ativo = true;
+    if (!devolucao.voucher_dev) return setCarregandoTriagem(false);
+    setCarregandoTriagem(true);
+    buscarTriagemDevolucao(devolucao.id)
+      .then(data => { if (ativo) setTriagem(data); })
+      .catch(() => { if (ativo) setTriagem(null); })
+      .finally(() => { if (ativo) setCarregandoTriagem(false); });
+    return () => { ativo = false; };
+  }, [devolucao.id, devolucao.voucher_dev, devolucao.status]);
 
   function concluida(texto) {
     setMensagem(texto);
@@ -464,7 +512,7 @@ function CardDevolucao({ devolucao, userId, onAtualizar }) {
 
       {mensagem && <div className="mt-3"><Aviso tipo="sucesso">{mensagem}</Aviso></div>}
       {podeReceber && <RecebimentoForm devolucao={devolucao} userId={userId} onConcluida={concluida} />}
-      {podeTriar && <TriagemForm devolucao={devolucao} userId={userId} onConcluida={concluida} />}
+      {podeTriar && <TriagemForm devolucao={devolucao} triagem={triagem} carregandoTriagem={carregandoTriagem} userId={userId} onConcluida={concluida} />}
       {devolucao.status === "aguardando_rma_aut" && <RmaAutForm devolucao={devolucao} userId={userId} onConcluida={concluida} />}
       {devolucao.status === "aguardando_finalizacao" && <FinalizacaoForm devolucao={devolucao} userId={userId} onConcluida={concluida} />}
       <OrientacaoFluxo devolucao={devolucao} />
