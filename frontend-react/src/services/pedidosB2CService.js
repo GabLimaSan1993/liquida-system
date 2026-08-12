@@ -306,7 +306,8 @@ export async function listarEmAnaliseComOpcao() {
 
   // Índice do estoque sugerível por SKU (só o que o FIFO ofereceria).
   const temLocal = (t) => !!(t.local && String(t.local).trim());
-  const wh2ok = (loc) => loc == null || String(loc).trim() === "" || String(loc).trim().toUpperCase().startsWith("WH2");
+  const wh2ok = (loc) =>
+  String(loc || "").trim().toUpperCase().startsWith("WH2");
   const porSku = new Map();
   for (const t of porImei.values()) {
     const st = subinv.get(t.imei);
@@ -471,44 +472,40 @@ export async function buscarSugestaoFifo(skuProduto, gradePedido) {
   const subinvMap = {};
   (subinv || []).forEach(s => { subinvMap[s.imei] = s; });
 
-  // Distância de grade em relação ao pedido:
-  //   0  = grade exata (prioridade máxima)
-  //   >0 = grade superior (quanto menor, mais próxima da vendida — menos "desperdício")
-  const ordemPedido = gradeOrdem(gradeAlvo);
+  // O FIFO só sugere aparelhos que estejam fisicamente no WH2,
+// possuam endereço físico e DATA_SUBINV.
+const temLocal = (item) =>
+  !!(item.local && String(item.local).trim());
 
-  // O FIFO só SUGERE aparelhos que estão fisicamente no armazém (WH2): precisam ter
-  //   (1) local preenchido — a garantia do Gaia de que o aparelho está no armazém, e
-  //   (2) data_subinv — a âncora de antiguidade para o FIFO.
-  // Sem local OU sem subinv, o aparelho é pulado (o pedido segue com o próximo elegível).
-  // (Os pulados não somem do controle — aparecem na aba Comparativo Aging à parte.)
-  // (3) armazém do Oracle (local_subinv) sendo WH2 — "WH2 B2C" ou "WH2 CENTER CELL".
-  // É o que impede sugerir peça que está em CENTER CELL / ALPHA / YUSEN (fora do WH2).
-  // Atenção: "CENTER CELL" e "WH2 CENTER CELL" são armazéns diferentes — teste por PREFIXO.
-  // local_subinv NULO é aceito de propósito: enquanto a base não for reimportada com a
-  // coluna LOCAL, todo o estoque está sem armazém e o FIFO travaria. Como o importador
-  // recusa planilha sem LOCAL, nulo só existe em dados anteriores à virada.
-  const temLocal = (item) => !!(item.local && String(item.local).trim());
-  const ehWH2 = (loc) => String(loc || "").trim().toUpperCase().startsWith("WH2");
-  const armazemOk = (loc) => loc == null || String(loc).trim() === "" || ehWH2(loc);
-  const ordenados = imeisValidos
-    .map(item => ({
-      ...item,
-      data_subinv:     subinvMap[item.imei]?.data_subinv || null,
-      local_subinv:    subinvMap[item.imei]?.local_subinv || null,
-      distancia_grade: ordemPedido - gradeOrdem(item.grade),
-    }))
-    .filter(item => item.data_subinv && temLocal(item) && armazemOk(item.local_subinv))
-    .sort((a, b) => {
-      // Outlet mistura grades de propósito (Bom pra cima), então não prioriza grade:
-      // é FIFO puro entre os elegíveis. Nos demais casos, grade mais próxima primeiro.
-      if (!ehOutlet && a.distancia_grade !== b.distancia_grade) {
-        return a.distancia_grade - b.distancia_grade;
-      }
-      // FIFO: subinventário mais antigo primeiro (todos têm subinv aqui)
-      return new Date(a.data_subinv) - new Date(b.data_subinv);
-    });
+const ehWH2 = (localSubinv) =>
+  String(localSubinv || "")
+    .trim()
+    .toUpperCase()
+    .startsWith("WH2");
 
-  return ordenados;
+const ordenados = imeisValidos
+  .map(item => ({
+    ...item,
+    data_subinv: subinvMap[item.imei]?.data_subinv || null,
+    local_subinv: subinvMap[item.imei]?.local_subinv || null,
+  }))
+  .filter(item =>
+    item.data_subinv &&
+    temLocal(item) &&
+    ehWH2(item.local_subinv)
+  )
+  .sort((a, b) => {
+    // FIFO puro: DATA_SUBINV mais antiga primeiro.
+    const porData =
+      new Date(a.data_subinv) - new Date(b.data_subinv);
+
+    if (porData !== 0) return porData;
+
+    // IMEI é somente o desempate quando as datas forem iguais.
+    return String(a.imei).localeCompare(String(b.imei));
+  });
+
+return ordenados;
 }
 
 // Aplica a MESMA regra de elegibilidade do FIFO (grade + bateria) a um item de estoque,
@@ -625,8 +622,8 @@ export async function buscarComparativoAging() {
     // Selecionado = o que o FIFO sugeriria: mais antigo COM subinv E com local (armazém/Gaia)
     // (local_subinv nulo é aceito enquanto a base não tem a coluna LOCAL — mesma regra do FIFO)
     const temLocalCmp = (c) => !!(c.local && String(c.local).trim());
-    const armazemOkCmp = (loc) => loc == null || String(loc).trim() === "" ||
-      String(loc).trim().toUpperCase().startsWith("WH2");
+    const armazemOkCmp = (loc) =>
+  String(loc || "").trim().toUpperCase().startsWith("WH2");
     const comSubinv = candidatos
       .map(c => ({ ...c, data_subinv: subinvMap[c.imei] || null, local_subinv: localSubinvMap[c.imei] || null }))
       .filter(c => c.data_subinv && temLocalCmp(c) && armazemOkCmp(c.local_subinv))
