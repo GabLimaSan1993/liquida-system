@@ -635,12 +635,7 @@ export function gerarEtiquetaArmazenagem({
   );
 
 
-  doc.rect(
-    71,
-    7,
-    17,
-    17
-  );
+
 
 
   escreverTexto(
