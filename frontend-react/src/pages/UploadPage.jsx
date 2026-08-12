@@ -17,6 +17,7 @@ import {
 import { importarPedidoB2B } from "../services/b2bService.js";
 import { importarNFs }        from "../services/b2bNfService.js";
 import { uploadAnymarketZip } from "../services/anymarketService.js";
+import { alocarPedidosAutomaticamente } from "../services/alocacaoAutomaticaService.js";
 import { importarSubinv }     from "../services/subinvService.js";
 import { previewRelatorioAP, uploadRelatorioAP } from "../services/entradaOracleService.js";
 import { previewTradein, uploadTradein } from "../services/tradeinService.js";
@@ -735,14 +736,57 @@ export default function UploadPage() {
         }
       );
 
-      updateHistoryCard("AnyMarket", { name: anyFile.name, status: "Concluído", rows: result.total.toLocaleString("pt-BR"), progress: 100 });
+      setStatus("AnyMarket importado. Executando alocação automática por FIFO...");
+      updateHistoryCard("AnyMarket", {
+        name: anyFile.name,
+        status: "Alocando IMEIs por FIFO...",
+        rows: result.total.toLocaleString("pt-BR"),
+        progress: 80,
+      });
+      setProgress(80);
+
+      const automatico = await alocarPedidosAutomaticamente({
+        idsAnymarket: result.idsAnymarket,
+        userId: user.id,
+        horaCorte: anyHoraCorte,
+        onProgress: ({ atual, total, pedido }) => {
+          const parte = total ? atual / total : 1;
+          const pct = Math.min(98, 80 + Math.round(parte * 18));
+          setProgress(pct);
+          updateHistoryCard("AnyMarket", {
+            name: anyFile.name,
+            status: `Alocando pedido ${atual} de ${total}`,
+            rows: result.total.toLocaleString("pt-BR"),
+            progress: pct,
+          });
+          setStatus(`FIFO automático: pedido ${pedido} · ${atual} de ${total}...`);
+        },
+      });
+
+      updateHistoryCard("AnyMarket", {
+        name: anyFile.name,
+        status: automatico.falhas > 0 ? "Concluído com pendências" : "Concluído",
+        rows: result.total.toLocaleString("pt-BR"),
+        progress: 100,
+      });
       setProgress(100);
       setAnyPreview({
         mensagem:   `✓ ${result.total.toLocaleString("pt-BR")} linhas importadas`,
         inseridos:  result.inseridos,
         atualizados: result.atualizados,
+        elegiveis: automatico.total,
+        alocados: automatico.alocados,
+        semProduto: automatico.semProduto,
+        falhas: automatico.falhas,
+        gruposCriados: automatico.gruposCriados,
+        grupos: automatico.grupos,
+        pendencias: automatico.pendencias,
       });
-      setStatus(`AnyMarket importado! ${result.inseridos} pedidos B2C novos · ${result.atualizados} atualizados.`);
+      setStatus(
+        `Processo concluído! ${automatico.alocados} IMEIs alocados · ` +
+        `${automatico.gruposCriados} listas criadas · ` +
+        `${automatico.semProduto + automatico.falhas} pendências.`
+      );
       setAnyHoraCorte("");
       setAnyFile(null);
     } catch (error) {
@@ -1077,6 +1121,41 @@ export default function UploadPage() {
                 <div className="text-sm font-bold text-emerald-700">{anyPreview.mensagem}</div>
                 <p>Pedidos B2C novos: <span className="font-bold text-emerald-700">{anyPreview.inseridos?.toLocaleString("pt-BR")}</span></p>
                 <p>Pedidos atualizados: <span className="font-bold text-blue-700">{anyPreview.atualizados?.toLocaleString("pt-BR")}</span></p>
+                <div className="mt-3 border-t border-slate-100 pt-3">
+                  <p className="font-bold text-[#6B1F87]">Alocação automática</p>
+                  <p>Pedidos dentro do corte: <span className="font-bold">{anyPreview.elegiveis?.toLocaleString("pt-BR")}</span></p>
+                  <p>IMEIs alocados: <span className="font-bold text-emerald-700">{anyPreview.alocados?.toLocaleString("pt-BR")}</span></p>
+                  <p>Listas criadas: <span className="font-bold text-blue-700">{anyPreview.gruposCriados?.toLocaleString("pt-BR")}</span></p>
+                  <p>Sem opção no FIFO: <span className="font-bold text-amber-600">{anyPreview.semProduto?.toLocaleString("pt-BR")}</span></p>
+                  {anyPreview.falhas > 0 && (
+                    <p>Falhas técnicas: <span className="font-bold text-red-600">{anyPreview.falhas.toLocaleString("pt-BR")}</span></p>
+                  )}
+                </div>
+
+                {anyPreview.grupos?.length > 0 && (
+                  <div className="mt-3 rounded-xl bg-blue-50 p-3 ring-1 ring-blue-100">
+                    <p className="font-bold text-blue-800 mb-1">Listas liberadas para separação</p>
+                    {anyPreview.grupos.map(grupo => (
+                      <p key={grupo.id}>
+                        Lista #{grupo.numero} · {grupo.marketplace} · {grupo.total} aparelho{grupo.total !== 1 ? "s" : ""}
+                      </p>
+                    ))}
+                  </div>
+                )}
+
+                {anyPreview.pendencias?.length > 0 && (
+                  <div className="mt-3 rounded-xl bg-amber-50 p-3 ring-1 ring-amber-100">
+                    <p className="font-bold text-amber-800 mb-1">Pendências enviadas para tratamento</p>
+                    {anyPreview.pendencias.slice(0, 10).map((item, indice) => (
+                      <p key={`${item.pedido}-${indice}`}>
+                        Pedido {item.pedido} · {item.sku || "SKU não informado"} · {item.motivo}
+                      </p>
+                    ))}
+                    {anyPreview.pendencias.length > 10 && (
+                      <p className="font-bold mt-1">+ {anyPreview.pendencias.length - 10} pendências</p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
