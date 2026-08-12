@@ -49,28 +49,48 @@ function jsonSeguro(valor) {
 }
 
 
-function normalizarTriagem(triagem, laudo = null) {
+/*
+ * Organiza os dados do produto.
+ *
+ * Primeiro tenta utilizar as informações da triagem.
+ * Se elas estiverem vazias, busca no catálogo pelo SKU.
+ *
+ * Isso corrige os vouchers antigos, que guardavam
+ * tudo dentro do campo modelo.
+ */
+function normalizarTriagem(
+  triagem,
+  laudo = null,
+  catalogo = null
+) {
   const respostas =
-    jsonSeguro(triagem?.respostas_funcional);
+    jsonSeguro(
+      triagem?.respostas_funcional
+    );
 
   return {
     ...triagem,
 
     produto: {
       marca:
-        respostas?.produto?.marca || null,
+        respostas?.produto?.marca ||
+        catalogo?.marca ||
+        null,
 
       modelo:
         respostas?.produto?.modelo ||
+        catalogo?.modelo ||
         triagem?.modelo ||
         null,
 
       armazenamento:
         respostas?.produto?.armazenamento ||
+        catalogo?.capacidade ||
         null,
 
       cor:
         respostas?.produto?.cor ||
+        catalogo?.cor ||
         null,
     },
 
@@ -85,6 +105,10 @@ function normalizarTriagem(triagem, laudo = null) {
 }
 
 
+/*
+ * Lista os produtos que estão aguardando
+ * a etapa de armazenagem.
+ */
 export async function listarAguardandoArmazenagem() {
   const { data, error } = await supabase
 
@@ -134,6 +158,10 @@ export async function listarAguardandoArmazenagem() {
 }
 
 
+/*
+ * Busca todas as informações do produto
+ * que será armazenado.
+ */
 export async function buscarDetalhesArmazenagem(
   voucher
 ) {
@@ -143,40 +171,42 @@ export async function buscarDetalhesArmazenagem(
       .toUpperCase();
 
 
-  const { data: triagem, error } =
-    await supabase
+  const {
+    data: triagem,
+    error,
+  } = await supabase
 
-      .from("assurant_triagem")
+    .from("assurant_triagem")
 
-      .select(`
-        id,
-        voucher,
-        imei,
-        sku,
-        modelo,
-        status_atual,
-        local,
-        grade,
-        grade_cosmetica,
-        tela,
-        laterais,
-        traseira,
-        status_bateria,
-        bateria_percentual,
-        resultado_triagem_funcional,
-        defeitos_adicionais,
-        respostas_funcional,
-        data_funcional,
-        data_laudo,
-        data_cosmetico
-      `)
+    .select(`
+      id,
+      voucher,
+      imei,
+      sku,
+      modelo,
+      status_atual,
+      local,
+      grade,
+      grade_cosmetica,
+      tela,
+      laterais,
+      traseira,
+      status_bateria,
+      bateria_percentual,
+      resultado_triagem_funcional,
+      defeitos_adicionais,
+      respostas_funcional,
+      data_funcional,
+      data_laudo,
+      data_cosmetico
+    `)
 
-      .eq(
-        "voucher",
-        codigo
-      )
+    .eq(
+      "voucher",
+      codigo
+    )
 
-      .maybeSingle();
+    .maybeSingle();
 
 
   if (error) {
@@ -191,11 +221,79 @@ export async function buscarDetalhesArmazenagem(
   }
 
 
+  /*
+   * Busca marca, modelo, capacidade e cor
+   * no catálogo utilizando o SKU.
+   */
+  let catalogo = null;
+
+
+  if (triagem.sku) {
+    const {
+      data: produtoCatalogo,
+      error: erroCatalogo,
+    } = await supabase
+
+      .from("produtos_catalogo")
+
+      .select(`
+        tipo,
+        marca,
+        modelo,
+        capacidade,
+        cor,
+        sku_als,
+        sku_oracle
+      `)
+
+      .eq(
+        "sku_als",
+        String(triagem.sku)
+          .trim()
+          .toUpperCase()
+      )
+
+      .eq(
+        "ativo",
+        true
+      )
+
+      .order(
+        "pendente",
+        {
+          ascending: true,
+        }
+      )
+
+      .limit(1)
+
+      .maybeSingle();
+
+
+    if (erroCatalogo) {
+      throw new Error(
+        erroCatalogo.message
+      );
+    }
+
+
+    catalogo =
+      produtoCatalogo || null;
+  }
+
+
+  /*
+   * Busca o laudo quando o produto
+   * tiver passado por essa etapa.
+   */
   let laudo = null;
 
 
   if (triagem.data_laudo) {
-    const { data } = await supabase
+    const {
+      data: dadosLaudo,
+      error: erroLaudo,
+    } = await supabase
 
       .from("triagem_laudos")
 
@@ -225,17 +323,30 @@ export async function buscarDetalhesArmazenagem(
       .maybeSingle();
 
 
-    laudo = data || null;
+    if (erroLaudo) {
+      throw new Error(
+        erroLaudo.message
+      );
+    }
+
+
+    laudo =
+      dadosLaudo || null;
   }
 
 
   return normalizarTriagem(
     triagem,
-    laudo
+    laudo,
+    catalogo
   );
 }
 
 
+/*
+ * Solicita ao banco a reserva automática
+ * do melhor endereço disponível.
+ */
 export async function reservarEndereco(
   voucher,
   userId
@@ -246,19 +357,21 @@ export async function reservarEndereco(
     );
 
 
-  const { data, error } =
-    await supabase.rpc(
-      "wms_reservar_endereco",
-      {
-        p_voucher:
-          String(voucher || "")
-            .trim()
-            .toUpperCase(),
+  const {
+    data,
+    error,
+  } = await supabase.rpc(
+    "wms_reservar_endereco",
+    {
+      p_voucher:
+        String(voucher || "")
+          .trim()
+          .toUpperCase(),
 
-        p_usuario:
-          userId,
-      }
-    );
+      p_usuario:
+        userId,
+    }
+  );
 
 
   if (error) {
@@ -281,29 +394,35 @@ export async function reservarEndereco(
 }
 
 
+/*
+ * Registra as validações físicas:
+ * rua, bloco, andar, coluna e linha.
+ */
 export async function registrarBipagem(
   reservaId,
   etapa,
   codigo,
   userId
 ) {
-  const { data, error } =
-    await supabase.rpc(
-      "wms_registrar_bipagem",
-      {
-        p_reserva:
-          reservaId,
+  const {
+    data,
+    error,
+  } = await supabase.rpc(
+    "wms_registrar_bipagem",
+    {
+      p_reserva:
+        reservaId,
 
-        p_etapa:
-          etapa,
+      p_etapa:
+        etapa,
 
-        p_codigo:
-          codigo,
+      p_codigo:
+        codigo,
 
-        p_usuario:
-          userId,
-      }
-    );
+      p_usuario:
+        userId,
+    }
+  );
 
 
   if (error) {
@@ -319,21 +438,27 @@ export async function registrarBipagem(
 }
 
 
+/*
+ * Cancela uma reserva e libera
+ * novamente o endereço.
+ */
 export async function cancelarReserva(
   reservaId,
   userId
 ) {
-  const { data, error } =
-    await supabase.rpc(
-      "wms_cancelar_reserva",
-      {
-        p_reserva:
-          reservaId,
+  const {
+    data,
+    error,
+  } = await supabase.rpc(
+    "wms_cancelar_reserva",
+    {
+      p_reserva:
+        reservaId,
 
-        p_usuario:
-          userId,
-      }
-    );
+      p_usuario:
+        userId,
+    }
+  );
 
 
   if (error) {
@@ -349,6 +474,9 @@ export async function cancelarReserva(
 }
 
 
+/*
+ * Formata o endereço para exibição na tela.
+ */
 export function enderecoExibicao(
   endereco
 ) {
@@ -386,6 +514,10 @@ export function enderecoExibicao(
 }
 
 
+/*
+ * Gera uma imagem do código de barras
+ * para inserir dentro do PDF.
+ */
 function barcodePng(codigo) {
   const canvas =
     document.createElement("canvas");
@@ -412,6 +544,10 @@ function barcodePng(codigo) {
 }
 
 
+/*
+ * Função auxiliar para escrever
+ * textos dentro do PDF.
+ */
 function escreverTexto(
   doc,
   valor,
@@ -439,6 +575,10 @@ function escreverTexto(
 }
 
 
+/*
+ * Gera a etiqueta no tamanho
+ * 105 mm de largura por 50 mm de altura.
+ */
 export function gerarEtiquetaArmazenagem({
   detalhes,
   endereco,
@@ -475,10 +615,11 @@ export function gerarEtiquetaArmazenagem({
 
 
   /*
-   * Contorno da etiqueta.
+   * Contorno externo da etiqueta.
    */
   doc.setDrawColor(0);
   doc.setLineWidth(0.25);
+
 
   doc.rect(
     1.5,
@@ -489,7 +630,8 @@ export function gerarEtiquetaArmazenagem({
 
 
   /*
-   * Linha que separa os dados do endereço.
+   * Linha que separa os dados
+   * do produto e o endereço.
    */
   doc.line(
     68,
@@ -534,6 +676,10 @@ export function gerarEtiquetaArmazenagem({
   }
 
 
+  /*
+   * Nome do produto utilizando
+   * marca e modelo separados.
+   */
   const nomeProduto =
     [
       produto.marca,
@@ -557,6 +703,9 @@ export function gerarEtiquetaArmazenagem({
   );
 
 
+  /*
+   * Capacidade e cor.
+   */
   escreverTexto(
     doc,
     [
@@ -564,7 +713,7 @@ export function gerarEtiquetaArmazenagem({
       produto.cor,
     ]
       .filter(Boolean)
-      .join(" ") || "—",
+      .join(" · ") || "—",
     4,
     25,
     6.5
@@ -572,7 +721,7 @@ export function gerarEtiquetaArmazenagem({
 
 
   /*
-   * O SKU aparece apenas como texto.
+   * SKU somente como texto.
    * Não possui código de barras.
    */
   escreverTexto(
@@ -623,7 +772,10 @@ export function gerarEtiquetaArmazenagem({
 
 
   /*
-   * Quadrado para colar a bolinha do grade.
+   * Área reservada para colar a bolinha do grade.
+   *
+   * Não existe contorno ao redor dessa área,
+   * conforme solicitado.
    */
   escreverTexto(
     doc,
@@ -635,9 +787,10 @@ export function gerarEtiquetaArmazenagem({
   );
 
 
-
-
-
+  /*
+   * Classificação física escrita
+   * abaixo da área da bolinha.
+   */
   escreverTexto(
     doc,
     gradeFisica,
@@ -707,9 +860,10 @@ export function gerarEtiquetaArmazenagem({
 
 
   /*
-   * Apartamento destacado.
+   * Apartamento destacado em preto.
    */
   doc.setFillColor(0);
+
 
   doc.rect(
     70.5,
@@ -745,6 +899,9 @@ export function gerarEtiquetaArmazenagem({
 }
 
 
+/*
+ * Baixa o PDF no computador.
+ */
 export function baixarEtiquetaArmazenagem(
   dados
 ) {
