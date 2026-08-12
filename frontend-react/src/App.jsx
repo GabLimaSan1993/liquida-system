@@ -43,6 +43,7 @@ import TriagemFuncionalPage from "./pages/TriagemFuncionalPage.jsx";
 import LaudoPage from "./pages/LaudoPage.jsx";
 import TriagemCosmeticaPage from "./pages/TriagemCosmeticaPage.jsx";
 import ArmazenagemPage from "./pages/ArmazenagemPage.jsx";
+import EstoqueWmsPage from "./pages/EstoqueWmsPage.jsx";
 
 function ProtectedRoute({ tela, children }) {
   const { user, loading, hasAccess } = useAuth();
@@ -148,6 +149,9 @@ export default function App() {
         <Route path="/triagens/cosmetica" element={<ProtectedRoute tela="/triagens/cosmetica"><TriagemCosmeticaPage /></ProtectedRoute>} />
         <Route path="/triagens/armazenagem" element={<ProtectedRoute tela="/triagens/armazenagem"><ArmazenagemPage /></ProtectedRoute>} />
         <Route path="/triagens/entrada-oracle" element={<ProtectedRoute tela="/triagens/entrada-oracle"><EntradaOraclePage /></ProtectedRoute>} />
+
+        {/* Gestão de Estoque WMS */}
+        <Route path="/wms/estoque" element={<ProtectedRoute tela="/wms/estoque"><EstoqueWmsPage /></ProtectedRoute>} />
 
         {/* Inventário Cíclico */}
         <Route path="/inventario" element={<ProtectedRoute tela="/inventario"><InventarioPage /></ProtectedRoute>} />

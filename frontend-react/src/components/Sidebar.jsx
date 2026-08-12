@@ -169,11 +169,9 @@ function MenuAssurant({ onClose, telas }) {
   tem("/triagens/entrada-oracle") ||
   tem("/triagens/funcional") ||
   tem("/triagens/laudo") ||
-  tem("/triagens/cosmetica") ||
-  tem("/triagens/armazenagem") ||
-  tem("/wms/estoque")
+  tem("/triagens/cosmetica")
 ) && (
-          <SubGroup icon={FlaskConical} label="Triagens" paths={["/triagens", "/wms"]}>
+          <SubGroup icon={FlaskConical} label="Triagens" paths={["/triagens"]}>
             {tem("/triagens/funcional") && (
               <NavItem to="/triagens/funcional" icon={Wrench} label="Triagem Funcional" indent onClick={onClose} />
             )}
@@ -190,24 +188,6 @@ function MenuAssurant({ onClose, telas }) {
   />
 )}
 
-{tem("/triagens/armazenagem") && (
-  <NavItem
-    to="/triagens/armazenagem"
-    icon={Package}
-    label="Armazenagem"
-    indent
-    onClick={onClose}
-  />
-)}
-{tem("/wms/estoque") && (
-  <NavItem
-    to="/wms/estoque"
-    icon={Package}
-    label="Consulta Estoque WMS"
-    indent
-    onClick={onClose}
-  />
-)}
             {tem("/triagens/entrada-oracle") && (
               <NavItem to="/triagens/entrada-oracle" icon={ClipboardList} label="Entrada no Oracle" indent onClick={onClose} />
             )}
@@ -251,9 +231,17 @@ function MenuAssurant({ onClose, telas }) {
         {tem("/indicadores") && (
           <NavItem to="/indicadores" icon={BarChart3} label="Indicadores" onClick={onClose} />
         )}
-        {tem("/inventario") && (
-          <SubGroup icon={ClipboardCheck} label="Gestão de Estoque" paths={["/inventario"]}>
-            <NavItem to="/inventario"           icon={ClipboardCheck}  label="Inventário Cíclico" indent onClick={onClose} />
+        {(tem("/triagens/armazenagem") || tem("/wms/estoque") || tem("/inventario")) && (
+          <SubGroup icon={ClipboardCheck} label="Gestão de Estoque" paths={["/triagens/armazenagem", "/wms", "/inventario"]}>
+            {tem("/triagens/armazenagem") && (
+              <NavItem to="/triagens/armazenagem" icon={Package} label="Armazenagem" indent onClick={onClose} />
+            )}
+            {tem("/wms/estoque") && (
+              <NavItem to="/wms/estoque" icon={Package} label="Consulta Estoque WMS" indent onClick={onClose} />
+            )}
+            {tem("/inventario") && (
+              <NavItem to="/inventario" icon={ClipboardCheck} label="Inventário Cíclico" indent onClick={onClose} />
+            )}
           </SubGroup>
         )}
         {tem("/trocas-b2c/gestao") && (
@@ -344,12 +332,10 @@ function SidebarContent({ profile, onClose, handleLogout }) {
                 <NavItem to="/recebimento"        icon={Truck}           label="Recebimento YBV"    indent onClick={onClose} />
                 <NavItem to="/recebimento/gestao" icon={ClipboardList}   label="Gestão Recebimento" indent onClick={onClose} />
               </SubGroup>
-              <SubGroup icon={FlaskConical} label="Triagens" paths={["/triagens", "/wms"]}>
+              <SubGroup icon={FlaskConical} label="Triagens" paths={["/triagens"]}>
                 <NavItem to="/triagens/funcional"      icon={Wrench}        label="Triagem Funcional" indent onClick={onClose} />
                 <NavItem to="/triagens/laudo"          icon={FileText}      label="Laudo"             indent onClick={onClose} />
                 <NavItem to="/triagens/cosmetica"      icon={Sparkles}      label="Triagem Cosmética" indent onClick={onClose} />
-                <NavItem to="/triagens/armazenagem" icon={Package} label="Armazenagem" indent onClick={onClose} />
-                <NavItem to="/wms/estoque" icon={Package} label="Consulta Estoque WMS" indent onClick={onClose} />
                 <NavItem to="/triagens/entrada-oracle" icon={ClipboardList} label="Entrada no Oracle" indent onClick={onClose} />
               </SubGroup>
               <SubGroup icon={Box} label="B2B" paths={["/b2b"]}>
@@ -368,8 +354,10 @@ function SidebarContent({ profile, onClose, handleLogout }) {
               <SubGroup icon={BarChart3} label="Indicadores" paths={["/indicadores"]}>
                 <NavItem to="/indicadores"        icon={BarChart3}       label="Painel de Indicadores" indent onClick={onClose} />
               </SubGroup>
-              <SubGroup icon={ClipboardCheck} label="Gestão de Estoque" paths={["/inventario"]}>
-                <NavItem to="/inventario"         icon={ClipboardCheck}  label="Inventário Cíclico" indent onClick={onClose} />
+              <SubGroup icon={ClipboardCheck} label="Gestão de Estoque" paths={["/triagens/armazenagem", "/wms", "/inventario"]}>
+                <NavItem to="/triagens/armazenagem" icon={Package}        label="Armazenagem"         indent onClick={onClose} />
+                <NavItem to="/wms/estoque"           icon={Package}        label="Consulta Estoque WMS" indent onClick={onClose} />
+                <NavItem to="/inventario"             icon={ClipboardCheck} label="Inventário Cíclico" indent onClick={onClose} />
               </SubGroup>
               <SubGroup icon={RefreshCw} label="Trocas" paths={["/trocas-b2c"]}>
                 <NavItem to="/trocas-b2c/nova"    icon={PlusCircle}      label="Trocas — Assurant" indent onClick={onClose} />
