@@ -8,19 +8,51 @@ import {
 const TAMANHO_LISTA = 20;
 const BLOCO_IDS = 200;
 
+function pagamentoParaDataLocal(valor) {
+  const texto = String(valor || "").trim();
+  const match = texto.match(
+    /^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/
+  );
+
+  if (!match) return null;
+
+  const data = new Date(
+    Number(match[3]),
+    Number(match[2]) - 1,
+    Number(match[1]),
+    Number(match[4] || 0),
+    Number(match[5] || 0),
+    Number(match[6] || 0)
+  );
+
+  return Number.isNaN(data.getTime()) ? null : data;
+}
+
 function dentroDaHoraCorte(dataPagamento, horaCorte) {
   if (!horaCorte) return true;
   if (!dataPagamento) return false;
 
-  const horario = String(dataPagamento).match(/(\d{2}):(\d{2})(?::\d{2})?$/);
-  if (!horario) return false;
+  const pagamento = pagamentoParaDataLocal(dataPagamento);
+  if (!pagamento) return false;
 
   const [horaLimite, minutoLimite] = horaCorte.split(":").map(Number);
-  const hora = Number(horario[1]);
-  const minuto = Number(horario[2]);
+  if (!Number.isFinite(horaLimite) || !Number.isFinite(minutoLimite)) return false;
 
-  return hora < horaLimite ||
-    (hora === horaLimite && minuto <= minutoLimite);
+  const hoje = new Date();
+  const corte = new Date(
+    hoje.getFullYear(),
+    hoje.getMonth(),
+    hoje.getDate(),
+    horaLimite,
+    minutoLimite,
+    59,
+    999
+  );
+
+  // Com corte às 08:00 de hoje, todo pagamento de ontem é elegível.
+  // Antes, o sistema comparava somente 21:35 > 08:00 e descartava
+  // incorretamente os pedidos da noite anterior.
+  return pagamento.getTime() <= corte.getTime();
 }
 
 function pagamentoParaOrdenacao(valor) {
