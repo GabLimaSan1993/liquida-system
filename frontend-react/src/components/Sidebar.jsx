@@ -219,13 +219,16 @@ function MenuAssurant({ onClose, telas }) {
         {tem("/indicadores") && (
           <NavItem to="/indicadores" icon={BarChart3} label="Indicadores" onClick={onClose} />
         )}
-        {(tem("/triagens/armazenagem") || tem("/wms/estoque") || tem("/inventario")) && (
+        {(tem("/triagens/armazenagem") || tem("/wms/estoque") || tem("/wms/carga-inicial") || tem("/inventario")) && (
           <SubGroup icon={Warehouse} label="Gestão de Estoque" paths={["/triagens/armazenagem", "/wms", "/inventario"]}>
             {tem("/triagens/armazenagem") && (
               <NavItem to="/triagens/armazenagem" icon={Package} label="Armazenagem" indent onClick={onClose} />
             )}
             {tem("/wms/estoque") && (
               <NavItem to="/wms/estoque" icon={Warehouse} label="Consulta do Estoque" indent onClick={onClose} />
+            )}
+            {tem("/wms/carga-inicial") && (
+              <NavItem to="/wms/carga-inicial" icon={ScanLine} label="Carga Inicial" indent onClick={onClose} />
             )}
             {tem("/inventario") && (
               <NavItem to="/inventario" icon={ClipboardCheck} label="Inventário Cíclico" indent onClick={onClose} />
@@ -353,6 +356,7 @@ function SidebarContent({ profile, onClose, handleLogout }) {
               <SubGroup icon={Warehouse} label="Gestão de Estoque" paths={["/triagens/armazenagem", "/wms", "/inventario"]}>
                 <NavItem to="/triagens/armazenagem" icon={Package}        label="Armazenagem"         indent onClick={onClose} />
                 <NavItem to="/wms/estoque"           icon={Warehouse}      label="Consulta do Estoque" indent onClick={onClose} />
+                <NavItem to="/wms/carga-inicial"     icon={ScanLine}       label="Carga Inicial"       indent onClick={onClose} />
                 <NavItem to="/inventario"             icon={ClipboardCheck} label="Inventário Cíclico" indent onClick={onClose} />
               </SubGroup>
               <SubGroup icon={RefreshCw} label="Trocas e Devoluções" paths={["/trocas-devolucoes"]}>

@@ -44,6 +44,7 @@ import LaudoPage from "./pages/LaudoPage.jsx";
 import TriagemCosmeticaPage from "./pages/TriagemCosmeticaPage.jsx";
 import ArmazenagemPage from "./pages/ArmazenagemPage.jsx";
 import EstoqueWmsPage from "./pages/EstoqueWmsPage.jsx";
+import CargaInicialEstoquePage from "./pages/CargaInicialEstoquePage.jsx";
 import PortalTrocasDevolucoesAssurantPage from "./pages/PortalTrocasDevolucoesAssurantPage.jsx";
 import PortalTrocasDevolucoesFurbtechPage from "./pages/PortalTrocasDevolucoesFurbtechPage.jsx";
 import GestaoTrocasDevolucoesPage from "./pages/GestaoTrocasDevolucoesPage.jsx";
@@ -181,6 +182,7 @@ export default function App() {
 
         {/* WMS */}
         <Route path="/wms/estoque" element={<ProtectedRoute tela="/wms/estoque"><EstoqueWmsPage /></ProtectedRoute>} />
+        <Route path="/wms/carga-inicial" element={<ProtectedRoute tela="/wms/carga-inicial"><CargaInicialEstoquePage /></ProtectedRoute>} />
 
         {/* Inventário Cíclico */}
         <Route path="/inventario" element={<ProtectedRoute tela="/inventario"><InventarioPage /></ProtectedRoute>} />
