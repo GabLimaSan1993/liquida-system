@@ -2,6 +2,15 @@ import * as XLSX from "xlsx";
 import JSZip from "jszip";
 import { supabase } from "../lib/supabase";
 
+function statusEhCancelado(valor) {
+  return String(valor || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase()
+    .includes("cancel");
+}
+
 const COLUMN_MAP = {
   "ID ANYMARKET":                          "id_anymarket",
   "TIPO DOCUMENTO":                        "tipo_documento",
@@ -193,7 +202,7 @@ async function sincronizarPedidosB2C(rows, horaCorte, userId) {
     const bloco = idsTodos.slice(i, i + BLOCO_IDS);
     const { data, error } = await supabase
       .from("pedidos_b2c")
-      .select("id, id_anymarket, sku_marketplace, item_seq, status, status_anymarket, codigo_de_rastreio")
+      .select("id, id_anymarket, sku_marketplace, item_seq, status, status_anymarket, codigo_de_rastreio, numero_nf, chave_nf")
       .in("id_anymarket", bloco);
     if (error) {
       throw new Error(
@@ -254,14 +263,29 @@ async function sincronizarPedidosB2C(rows, horaCorte, userId) {
       // (minutos de tela travada). Numa hora típica, só um punhado muda de status.
       const mudouStatus   = (item.status ?? null) !== (existente.status_anymarket ?? null);
       const mudouRastreio = (item.codigo_de_rastreio ?? null) !== (existente.codigo_de_rastreio ?? null);
-      if (mudouStatus || mudouRastreio) {
-        paraAtualizar.push({
+      const canceladoAntesDoXml =
+        statusEhCancelado(item.status) &&
+        !existente.numero_nf &&
+        !existente.chave_nf &&
+        existente.status !== "cancelado";
+
+      if (mudouStatus || mudouRastreio || canceladoAntesDoXml) {
+        const atualizacao = {
           id:                 existente.id,
           status_anymarket:   item.status,
           codigo_de_rastreio: item.codigo_de_rastreio,
           data_entrega:       item.data_entrega,
           atualizado_em:      new Date().toISOString(),
-        });
+        };
+
+        // O pedido é encerrado, a reserva compartilhada é liberada pelo gatilho
+        // do WMS e o produto volta para "Aguardando alocação".
+        if (canceladoAntesDoXml) {
+          atualizacao.status = "cancelado";
+          atualizacao.grupo_id = null;
+        }
+
+        paraAtualizar.push(atualizacao);
       } else {
         inalterados++;
       }

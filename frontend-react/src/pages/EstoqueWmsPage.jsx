@@ -514,6 +514,12 @@ export default function EstoqueWmsPage() {
                   <CampoDetalhe rotulo="Grade venda" valor={selecionado.grade_venda} />
                 </div>
                 <CampoDetalhe rotulo="Status do produto" valor={selecionado.status_produto} />
+                {selecionado.reserva_referencia && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <CampoDetalhe rotulo="Canal da alocação" valor={selecionado.reserva_canal} />
+                    <CampoDetalhe rotulo="Pedido" valor={selecionado.reserva_referencia} mono />
+                  </div>
+                )}
                 <CampoDetalhe rotulo="Aging Oracle" valor={fmtAgingProduto(selecionado.aging_dias)} />
                 <CampoDetalhe rotulo="Armazenado em" valor={fmtData(selecionado.armazenado_em)} />
                 {selecionado.status_endereco === "reservado" && (
@@ -606,7 +612,6 @@ export default function EstoqueWmsPage() {
         <div className="mt-4 flex items-center justify-between gap-3">
           <p className="text-xs font-semibold text-slate-500">
             {fmtNumero(resultado.total)} resultado{Number(resultado.total) !== 1 ? "s" : ""}
-            {Number(resultado.total) > 100 ? " · exibindo os 100 primeiros" : ""}
           </p>
         </div>
 

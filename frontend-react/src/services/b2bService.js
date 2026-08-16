@@ -18,6 +18,24 @@ function limparImei(v) {
   return String(v ?? "").trim();
 }
 
+// O novo WMS e a unica fonte operacional de endereco. Gaia continua apenas
+// como historico/diagnostico e nunca completa um endereco ausente no WMS.
+async function localizarImeisWms(imeis) {
+  const unicos = [...new Set((imeis || []).map(limparImei).filter(Boolean))];
+  if (!unicos.length) return new Map();
+
+  const mapa = new Map();
+  const BLOCO = 500;
+  for (let i = 0; i < unicos.length; i += BLOCO) {
+    const { data, error } = await supabase.rpc("wms_localizar_saida", {
+      p_imeis: unicos.slice(i, i + BLOCO),
+    });
+    if (error) throw new Error(`Falha ao consultar o novo WMS: ${error.message}`);
+    (data || []).forEach(item => mapa.set(limparImei(item.imei), item));
+  }
+  return mapa;
+}
+
 async function resolverCliente(ganhador) {
   if (!ganhador) return "Cliente não identificado";
   const termo = ganhador.substring(0, 30).trim();
@@ -83,24 +101,11 @@ export async function importarPedidoB2B(file, userId, extras = {}) {
           .map(r => limparImei(r["IMEI"] || r["NUM_IMEI"]))
           .filter(i => i.length > 5);
 
-        const { data: triagem } = await supabase
-          .from("assurant_triagem")
-          .select("imei, local, voucher, criado_em")
-          .in("imei", imeisLista)
-          .order("criado_em", { ascending: false });
-
-        // Mapas robustos: para cada IMEI, o registro MAIS RECENTE que tenha voucher / local.
-        // Como vem ordenado por criado_em desc, o primeiro não-nulo já é o mais recente.
-        const localMap = {}, voucherMap = {};
-        (triagem || []).forEach(t => {
-          const key = limparImei(t.imei);
-          if (!key) return;
-          if (t.voucher && !voucherMap[key]) voucherMap[key] = t.voucher;
-          if (t.local   && !localMap[key])   localMap[key]   = t.local;
-        });
+        const wmsMap = await localizarImeisWms(imeisLista);
 
         const itens = rows.map((r, rowIdx) => {
           const imei = limparImei(r["IMEI"] || r["NUM_IMEI"]);
+          const wms = wmsMap.get(imei) || null;
           let valor = null;
           if (valorIdx >= 0) {
             const rawVal = allRows[rowIdx + 2]?.[valorIdx];
@@ -112,16 +117,17 @@ export async function importarPedidoB2B(file, userId, extras = {}) {
           }
           return {
             pedido_id: pedido.id, imei,
-            voucher:       voucherMap[imei] || null,
+            voucher:       wms?.voucher || null,
             modelo:        r["MODELO"]  || r["CNN"]  || null,
             grade:         r["GRADE"]   || null,
             grade2:        r["GRADE2"]  || null,
             desc_item:     r["DESC_ITEM"] || null,
             cod_item:      r["COD_ITEM"]  || null,
-            // Prioriza o endereço da triagem (RUA/BL/AD...); só cai na planilha se a triagem não tiver.
-            local_estoque: localMap[imei] || r["LOCAL"] || null,
-            aging:         r["AGING"] ? parseInt(r["AGING"]) : null,
-            valor, status: "pendente",
+            local_estoque: wms?.disponivel ? wms.local : null,
+            aging:         wms?.aging_dias ?? null,
+            valor,
+            // Fora do WMS ou já comprometido com outro pedido: análise direta.
+            status:        wms?.disponivel ? "pendente" : "em_analise",
           };
         }).filter(i => i.imei && i.imei.length > 5);
 
@@ -149,13 +155,21 @@ export async function listarPedidosB2B() {
 export async function listarItens(pedidoId) {
   const { data, error } = await supabase.from("b2b_itens").select("*").eq("pedido_id", pedidoId).order("local_estoque", { ascending: true });
   if (error) throw new Error(error.message);
-  return data || [];
+  const itens = data || [];
+  const wmsMap = await localizarImeisWms(itens.map(i => i.imei));
+  return itens.map(item => {
+    const wms = wmsMap.get(limparImei(item.imei));
+    return {
+      ...item,
+      local_estoque: wms?.local || null,
+      posicao_wms_encontrada: Boolean(wms),
+      aging: wms?.aging_dias ?? null,
+    };
+  });
 }
 
 export async function listarItensComStatusGaia(pedidoId) {
-  const { data: itens, error } = await supabase
-    .from("b2b_itens").select("*").eq("pedido_id", pedidoId).order("local_estoque", { ascending: true });
-  if (error) throw new Error(error.message);
+  const itens = await listarItens(pedidoId);
   if (!itens?.length) return [];
 
   const imeis = itens.map(i => i.imei).filter(Boolean);
@@ -219,14 +233,26 @@ export async function marcarEmAnalise(itemId, userId) {
   if (error) throw new Error(error.message);
 }
 
-export async function marcarLocalizado(itemId, novaLocalizacao, userId) {
+export async function marcarLocalizado(itemId, _novaLocalizacao, userId) {
+  const { data: itemAtual, error: errItem } = await supabase
+    .from("b2b_itens")
+    .select("imei")
+    .eq("id", itemId)
+    .single();
+  if (errItem || !itemAtual?.imei) throw new Error("Item B2B não encontrado.");
+
+  const wms = (await localizarImeisWms([itemAtual.imei])).get(limparImei(itemAtual.imei));
+  if (!wms?.local) {
+    throw new Error("IMEI não possui posição confirmada no novo WMS.");
+  }
+
   const { error } = await supabase.from("b2b_itens")
     .update({
       status:             "bipado",
-      local_estoque:      novaLocalizacao,
+      local_estoque:      wms.local,
       localizado_em:      new Date().toISOString(),
       localizado_por:     userId,
-      localizado_local:   novaLocalizacao,
+      localizado_local:   wms.local,
       nao_localizado_em:  null,
       nao_localizado_por: null,
     })
@@ -260,14 +286,26 @@ export async function marcarNaoFaturar(itemId, motivo, observacao, userId) {
   }
 }
 
-export async function reverterNaoLocalizado(itemId, novoLocal) {
+export async function reverterNaoLocalizado(itemId) {
+  const { data: itemAtual, error: errItem } = await supabase
+    .from("b2b_itens")
+    .select("imei")
+    .eq("id", itemId)
+    .single();
+  if (errItem || !itemAtual?.imei) throw new Error("Item B2B não encontrado.");
+
+  const wms = (await localizarImeisWms([itemAtual.imei])).get(limparImei(itemAtual.imei));
+  if (!wms?.local) {
+    throw new Error("IMEI não possui posição confirmada no novo WMS.");
+  }
+
   const { error } = await supabase.from("b2b_itens")
     .update({
       status:               "pendente",
-      local_estoque:        novoLocal,
+      local_estoque:        wms.local,
       nao_localizado_em:    null,
       nao_localizado_por:   null,
-      nao_localizado_local: novoLocal,
+      nao_localizado_local: wms.local,
     })
     .eq("id", itemId);
   if (error) throw new Error(error.message);
@@ -611,7 +649,7 @@ export async function registrarNFErro(pedidoId, numeroNf, qtdItens, motivo, user
 // ══════════════════════════════════════════════════════════
 // REMOVER NF COM ERRO
 // ══════════════════════════════════════════════════════════
-export async function removerNFErro(pedidoId, numeroNf, userId) {
+export async function removerNFErro(pedidoId, numeroNf) {
   const nf = String(numeroNf || "").trim();
   if (!nf) return { ok: false, erro: "NF inválida." };
 

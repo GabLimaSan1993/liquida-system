@@ -53,6 +53,26 @@ function gradeAceita(gradeDisponivel, gradePedido) {
   return gradeOrdem(gradeDisponivel) <= gradeOrdem(gradePedido);
 }
 
+// O novo WMS é a única fonte física de localização. A função retorna também
+// voucher, SKU, grade e DATA_SUBINV congelados na posição armazenada.
+async function localizarImeisWms(imeis) {
+  const unicos = [...new Set(
+    (imeis || []).map(i => String(i || "").trim()).filter(Boolean),
+  )];
+  if (!unicos.length) return new Map();
+
+  const mapa = new Map();
+  const BLOCO = 500;
+  for (let i = 0; i < unicos.length; i += BLOCO) {
+    const { data, error } = await supabase.rpc("wms_localizar_saida", {
+      p_imeis: unicos.slice(i, i + BLOCO),
+    });
+    if (error) throw new Error(`Falha ao consultar o novo WMS: ${error.message}`);
+    (data || []).forEach(item => mapa.set(String(item.imei).trim(), item));
+  }
+  return mapa;
+}
+
 export function extrairGrade(tituloProduto) {
   if (!tituloProduto) return null;
   const partes = tituloProduto.split(" - ");
@@ -199,36 +219,16 @@ export async function listarPedidosGrupo(grupoId) {
 
   const pedidos = data || [];
 
-  // Enriquece com local e voucher do estoque (para o picking saber onde buscar a peça).
-  // Busca ao vivo na triagem pelo imei_alocado — reflete a localização atual da peça.
+  // Enriquece ao vivo pela posição física do novo WMS. Não há fallback para Gaia.
   const imeis = pedidos.map(p => p.imei_alocado).filter(Boolean);
   if (imeis.length) {
-    const { data: estoque } = await supabase
-      .from("assurant_triagem")
-      .select("imei, local, voucher, criado_em")
-      .in("imei", imeis);
-
-    // Um IMEI pode ter várias passagens (ex.: venda + devolução DEV...). Fica a passagem
-    // MAIS RECENTE que tenha local preenchido; se nenhuma tiver, a mais recente de todas.
-    // (Sem isso, o mapa ficava com uma linha qualquer — às vezes a antiga sem local.)
-    const mapa = {};
-    (estoque || []).forEach(e => {
-      const atual = mapa[e.imei];
-      if (!atual) { mapa[e.imei] = e; return; }
-      const eTemLocal     = !!(e.local && String(e.local).trim());
-      const atualTemLocal = !!(atual.local && String(atual.local).trim());
-      // Prefere quem tem local; entre os dois, o mais recente
-      if (eTemLocal !== atualTemLocal) {
-        if (eTemLocal) mapa[e.imei] = e;
-      } else if (new Date(e.criado_em) > new Date(atual.criado_em)) {
-        mapa[e.imei] = e;
-      }
-    });
+    const mapa = await localizarImeisWms(imeis);
 
     pedidos.forEach(p => {
-      const e = mapa[p.imei_alocado];
-      p.local_estoque   = e?.local   || null;
+      const e = mapa.get(String(p.imei_alocado).trim());
+      p.local_estoque   = e?.local || null;
       p.voucher_estoque = e?.voucher || null;
+      p.posicao_wms_encontrada = !!e;
     });
   }
 
@@ -253,106 +253,32 @@ export async function listarPedidosEmAnalise() {
 export async function listarEmAnaliseComOpcao() {
   const pedidos = await listarPedidosEmAnalise();
   if (!pedidos.length) return [];
+  const locais = await localizarImeisWms(
+    pedidos.map(p => p.imei_alocado).filter(Boolean),
+  );
+  const cache = new Map();
+  const resposta = [];
 
-  // OTIMIZAÇÃO: em vez de varrer TODO o estoque alocável, busca só os SKUs que os
-  // pedidos em análise precisam. São poucos SKUs distintos, então a consulta fica leve.
-  const skuBasePorPedido = new Map();
-  const skusAlvo = new Set();
   for (const p of pedidos) {
-    const skuRaw = p.sku_definido || p.sku_produto || "";
-    const skuBase = await traduzirSku(String(skuRaw).replace(/-CC\d+$/i, "").trim());
-    skuBasePorPedido.set(p.id, skuBase);
-    if (skuBase) skusAlvo.add(skuBase);
-  }
-  if (!skusAlvo.size) return pedidos.map(p => ({ ...p, temOpcaoFifo: false }));
+    const sku = p.sku_definido || p.sku_produto || "";
+    const grade = p.grade_definida || p.grade_produto;
+    const chave = `${sku}|||${grade || ""}`;
+    if (!cache.has(chave)) {
+      cache.set(chave, await buscarSugestaoFifo(sku, grade));
+    }
 
-  // Busca só o estoque alocável DESSES SKUs (não o estoque inteiro).
-  const { data: triagem } = await supabase
-    .from("assurant_triagem")
-    .select("imei, sku, grade, local, status_atual, status_bateria, criado_em")
-    .in("status_atual", STATUS_ALOCAVEIS)
-    .in("sku", [...skusAlvo])
-    .limit(5000);
-
-  const porImei = new Map();
-  for (const t of (triagem || [])) {
-    const a = porImei.get(t.imei);
-    if (!a || new Date(t.criado_em) > new Date(a.criado_em)) porImei.set(t.imei, t);
-  }
-
-  // Subinv só dos IMEIs desses SKUs.
-  const imeis = [...porImei.keys()];
-  const subinv = new Map();
-  for (let i = 0; i < imeis.length; i += 1000) {
-    const { data } = await supabase
-      .from("estoque_subinv").select("imei, data_subinv, local_subinv")
-      .in("imei", imeis.slice(i, i + 1000));
-    (data || []).forEach(s => subinv.set(s.imei, s));
-  }
-
-  // TRAVA DE DONO: mesma regra do FIFO. Sem isso o selo conta como candidato peça que já
-  // está amarrada a outro pedido — inclusive a própria peça do pedido em análise, que
-  // continua "Reservado para pedido B2C". Era o que fazia o selo prometer opção que o
-  // modal (que chama o FIFO de verdade) depois não encontrava.
-  const emUso = new Set();
-  for (let i = 0; i < imeis.length; i += 200) {
-    const { data: donos } = await supabase
-      .from("pedidos_b2c")
-      .select("imei_alocado")
-      .in("status", ["alocado", "em_picking", "embalado", "faturado", "em_analise", "aguardando_definicao_produto"])
-      .in("imei_alocado", imeis.slice(i, i + 200));
-    (donos || []).forEach(d => { if (d.imei_alocado) emUso.add(String(d.imei_alocado).trim()); });
-  }
-
-  // Índice do estoque sugerível por SKU (só o que o FIFO ofereceria).
-  const temLocal = (t) => !!(t.local && String(t.local).trim());
-  const wh2ok = (loc) =>
-  String(loc || "").trim().toUpperCase().startsWith("WH2");
-  const porSku = new Map();
-  for (const t of porImei.values()) {
-    const st = subinv.get(t.imei);
-    if (!st?.data_subinv || !temLocal(t) || !wh2ok(st.local_subinv)) continue;
-    if (emUso.has(String(t.imei).trim())) continue;
-    if (!porSku.has(t.sku)) porSku.set(t.sku, []);
-    porSku.get(t.sku).push(t);
-  }
-
-  // Enriquece com local e voucher da triagem (pelo imei_alocado), pra mostrar no card de
-  // análise ONDE o operador deveria ter achado a peça. Mesma regra do picking: prefere a
-  // passagem mais recente COM local preenchido; entre iguais, a mais nova.
-  const imeisAnalise = pedidos.map(p => p.imei_alocado).filter(Boolean);
-  const locVouch = new Map();
-  for (let i = 0; i < imeisAnalise.length; i += 200) {
-    const { data: est } = await supabase
-      .from("assurant_triagem")
-      .select("imei, local, voucher, criado_em")
-      .in("imei", imeisAnalise.slice(i, i + 200));
-    (est || []).forEach(e => {
-      const atual = locVouch.get(e.imei);
-      if (!atual) { locVouch.set(e.imei, e); return; }
-      const eTemLocal = !!(e.local && String(e.local).trim());
-      const aTemLocal = !!(atual.local && String(atual.local).trim());
-      if (eTemLocal !== aTemLocal) { if (eTemLocal) locVouch.set(e.imei, e); }
-      else if (new Date(e.criado_em) > new Date(atual.criado_em)) locVouch.set(e.imei, e);
+    const candidatos = cache.get(chave) || [];
+    const atual = locais.get(String(p.imei_alocado || "").trim());
+    resposta.push({
+      ...p,
+      temOpcaoFifo: candidatos.some(c => String(c.imei) !== String(p.imei_alocado)),
+      local_estoque: atual?.local || null,
+      voucher_estoque: atual?.voucher || null,
+      posicao_wms_encontrada: !!atual,
     });
   }
 
-  return pedidos.map(p => {
-    const skuBase = skuBasePorPedido.get(p.id);
-    const gradeAlvo = p.grade_definida || p.grade_produto;
-    const candidatos = porSku.get(skuBase) || [];
-    // itemElegivel aplica grade E bateria — gradeAceita sozinho deixava passar peça
-    // Outlet (bateria 70–79%) para pedido que não é Outlet.
-    const gradeAlvoNorm = String(gradeAlvo || "").trim();
-    const ehOutlet = /outlet/i.test(gradeAlvoNorm);
-    const temOpcaoFifo = candidatos.some(c => itemElegivel(c, ehOutlet, gradeAlvoNorm));
-    const est = locVouch.get(p.imei_alocado);
-    return {
-      ...p, temOpcaoFifo,
-      local_estoque: est?.local || null,
-      voucher_estoque: est?.voucher || null,
-    };
-  });
+  return resposta;
 }
 
 export async function listarPedidosFaturamento() {
@@ -408,104 +334,20 @@ export async function buscarSugestaoFifo(skuProduto, gradePedido) {
 
   // Traduz o SKU da Assurant para o SKU ALS, quando for o caso.
   const skuBase = await traduzirSku(skuSemCC);
-
-  const { data: encontrados, error } = await supabase
-    .from("assurant_triagem")
-    .select("imei, sku, grade, local, voucher, status_atual, status_bateria, criado_em")
-    .eq("sku", skuBase)
-    .in("status_atual", STATUS_ALOCAVEIS);
-
-  if (error) throw new Error(error.message);
-  if (!encontrados?.length) return [];
-
-  // Um IMEI pode ter mais de uma passagem pela triagem (ex.: venda + devolução).
-  // Fica a linha mais recente, que é o registro atual da peça — evita sugerir a mesma duas vezes.
-  const porImei = new Map();
-  for (const item of encontrados) {
-    const atual = porImei.get(item.imei);
-    if (!atual || new Date(item.criado_em) > new Date(atual.criado_em)) {
-      porImei.set(item.imei, item);
-    }
-  }
-  const disponiveis = Array.from(porImei.values());
-
-  // Filtro de elegibilidade:
-  // - Outlet (CC4): grade Bom ou superior E bateria entre 70 e 79%.
-  //   "Bom" tem ordem 4; "Bom ou superior" = ordem <= 4. Regular e Quebrado ficam de fora.
-  // - Não-Outlet: grade igual ou superior à vendida E bateria que NÃO seja Outlet nem pior
-  //   (exclui 70–79%, abaixo 70% e abaixo de 80%). Aceita 80%+, 80–85%, 85%+ e sem info (null).
-  //   Isso impede que um aparelho Outlet (70–79%) seja sugerido para um pedido que não é Outlet.
-  const imeisElegiveis = disponiveis.filter(item => itemElegivel(item, ehOutlet, gradeAlvo));
-
-  if (!imeisElegiveis.length) return [];
-
-  // TRAVA DE DONO: nunca sugerir aparelho que já está amarrado a um pedido ativo.
-  // O status_atual da triagem sozinho não basta — reimportação da planilha, resolução de
-  // análise e carimbo manual já devolveram para "Produto disponível" peças que tinham dono,
-  // e o FIFO ofereceu de novo (o mesmo IMEI apareceu em dois pedidos embalados). Aqui a
-  // fonte da verdade é a própria pedidos_b2c: existindo pedido ativo apontando para o
-  // IMEI, ele sai da lista, não importa o que a triagem diga.
-  const imeisEmUso = new Set();
-  const candidatosImei = imeisElegiveis.map(i => i.imei);
-  const BLOCO_DONO = 200;
-  for (let i = 0; i < candidatosImei.length; i += BLOCO_DONO) {
-    const { data: donos, error: errDonos } = await supabase
-      .from("pedidos_b2c")
-      .select("imei_alocado")
-      .in("status", ["alocado", "em_picking", "embalado", "faturado", "em_analise", "aguardando_definicao_produto"])
-      .in("imei_alocado", candidatosImei.slice(i, i + BLOCO_DONO));
-    if (errDonos) throw new Error(`Falha ao verificar IMEIs em uso: ${errDonos.message}`);
-    (donos || []).forEach(d => {
-      if (d.imei_alocado) imeisEmUso.add(String(d.imei_alocado).trim());
-    });
-  }
-
-  const imeisValidos = imeisElegiveis.filter(i => !imeisEmUso.has(String(i.imei).trim()));
-  if (!imeisValidos.length) return [];
-
-  const imeisList = imeisValidos.map(i => i.imei);
-  const { data: subinv } = await supabase
-    .from("estoque_subinv")
-    .select("imei, data_subinv, local_subinv")
-    .in("imei", imeisList);
-
-  const subinvMap = {};
-  (subinv || []).forEach(s => { subinvMap[s.imei] = s; });
-
-  // O FIFO só sugere aparelhos que estejam fisicamente no WH2,
-// possuam endereço físico e DATA_SUBINV.
-const temLocal = (item) =>
-  !!(item.local && String(item.local).trim());
-
-const ehWH2 = (localSubinv) =>
-  String(localSubinv || "")
-    .trim()
-    .toUpperCase()
-    .startsWith("WH2");
-
-const ordenados = imeisValidos
-  .map(item => ({
-    ...item,
-    data_subinv: subinvMap[item.imei]?.data_subinv || null,
-    local_subinv: subinvMap[item.imei]?.local_subinv || null,
-  }))
-  .filter(item =>
-    item.data_subinv &&
-    temLocal(item) &&
-    ehWH2(item.local_subinv)
-  )
-  .sort((a, b) => {
-    // FIFO puro: DATA_SUBINV mais antiga primeiro.
-    const porData =
-      new Date(a.data_subinv) - new Date(b.data_subinv);
-
-    if (porData !== 0) return porData;
-
-    // IMEI é somente o desempate quando as datas forem iguais.
-    return String(a.imei).localeCompare(String(b.imei));
+  const { data, error } = await supabase.rpc("wms_buscar_candidatos_saida", {
+    p_sku: skuBase,
   });
+  if (error) throw new Error(`Falha no FIFO do novo WMS: ${error.message}`);
 
-return ordenados;
+  // O banco já garante: posição confirmada, não reservada e DATA_SUBINV presente.
+  // O frontend mantém somente as regras comerciais de grade e bateria.
+  return (data || [])
+    .filter(item => itemElegivel(item, ehOutlet, gradeAlvo))
+    .sort((a, b) => {
+      const porData = new Date(a.data_subinv) - new Date(b.data_subinv);
+      if (porData !== 0) return porData;
+      return String(a.imei).localeCompare(String(b.imei));
+    });
 }
 
 // Aplica a MESMA regra de elegibilidade do FIFO (grade + bateria) a um item de estoque,
@@ -1098,16 +940,6 @@ export async function marcarNaoLocalizado(pedidoId, motivo, userId, destino = "e
     .eq("id", pedidoId);
   if (errItem) throw new Error(errItem.message);
 
-  // Tira a peça de circulação: se o separador foi na rua e não achou, o endereço
-  // está errado ou ela sumiu. Deixá-la "Produto disponível" faz o FIFO oferecer de
-  // novo amanhã e o próximo separador perder a mesma viagem.
-  if (imeiSolto) {
-    await supabase
-      .from("assurant_triagem")
-      .update({ status_atual: "Em análise de estoque", atualizado_em: agora })
-      .eq("imei", imeiSolto);
-  }
-
   // 2. Puxa os IRMÃOS que já avançaram de volta para "alocado" sem grupo. Mantém o IMEI
   //    reservado (imei_alocado, sku_alocado, grade_alocada intactos). Limpa só bipagem/
   //    embalagem, porque eles recuam de etapa. Não toca em item já faturado/concluído.
@@ -1225,6 +1057,17 @@ export async function prepararResolucaoAnalise(pedido) {
       .order("criado_em", { ascending: false })
       .limit(1);
     peca = data?.[0] || null;
+    if (peca) {
+      const wms = (await localizarImeisWms([pedido.imei_alocado])).get(
+        String(pedido.imei_alocado).trim(),
+      );
+      peca = {
+        ...peca,
+        local: wms?.local || null,
+        aging_dias: wms?.aging_dias ?? null,
+        posicao_wms_encontrada: Boolean(wms),
+      };
+    }
   }
 
   // Cores que já apareceram nesse modelo. Provisório: quando existir a lista oficial
@@ -1483,7 +1326,7 @@ export async function voltarParaAlocacao(pedidoId) {
 }
 
 // Cancela um pedido a partir da tela de definição. Definitivo. Se o pedido tinha
-// aparelho reservado, o aparelho volta ao estoque ("Produto disponível"). O pedido
+// aparelho reservado, o aparelho volta para "Aguardando alocação". O pedido
 // sai do fluxo (status = cancelado) e passa a viver na aba Cancelados.
 export async function cancelarPedidoDefinicao(pedidoId, userId) {
   const { data: pedido } = await supabase
@@ -1492,13 +1335,25 @@ export async function cancelarPedidoDefinicao(pedidoId, userId) {
     .eq("id", pedidoId)
     .single();
 
-  // Solta o aparelho reservado, se houver, de volta ao estoque.
+  // Mantém a regra também durante a publicação anterior à ativação do gatilho WMS.
   if (pedido?.imei_alocado) {
-    await supabase
+    const { data: triagemAtual } = await supabase
       .from("assurant_triagem")
-      .update({ status_atual: "Produto disponível" })
+      .select("unique_key")
       .eq("imei", pedido.imei_alocado)
-      .eq("status_atual", "Reservado para pedido B2C");
+      .order("criado_em", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (triagemAtual?.unique_key) {
+      await supabase
+        .from("assurant_triagem")
+        .update({
+          status_atual: "Aguardando alocação",
+          atualizado_em: new Date().toISOString(),
+        })
+        .eq("unique_key", triagemAtual.unique_key);
+    }
   }
 
   const agora = new Date().toISOString();

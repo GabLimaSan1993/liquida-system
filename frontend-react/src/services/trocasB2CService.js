@@ -1,6 +1,24 @@
 import { supabase } from "../lib/supabase";
 import { buscarSugestaoFifo } from "./pedidosB2CService.js";
 
+async function localizarImeisWms(imeis) {
+  const unicos = [...new Set(
+    (imeis || []).map(i => String(i || "").trim()).filter(Boolean),
+  )];
+  if (!unicos.length) return new Map();
+
+  const mapa = new Map();
+  const BLOCO = 500;
+  for (let i = 0; i < unicos.length; i += BLOCO) {
+    const { data, error } = await supabase.rpc("wms_localizar_saida", {
+      p_imeis: unicos.slice(i, i + BLOCO),
+    });
+    if (error) throw new Error(`Falha ao consultar o novo WMS: ${error.message}`);
+    (data || []).forEach(item => mapa.set(String(item.imei).trim(), item));
+  }
+  return mapa;
+}
+
 // ════════════════════════════════════════════════════════
 // Parsing do SKU AnyMarket: extrai SKU limpo + grade-alvo do sufixo -ccN
 //   sem sufixo  -> grade EXCELENTE/LIKE NEW
@@ -232,6 +250,15 @@ export async function buscarSugestoesPorSku(skus) {
 export async function validarImeiTroca(imei, skusAceitos) {
   const imeiTrim = String(imei).trim();
 
+  const wms = (await localizarImeisWms([imeiTrim])).get(imeiTrim);
+  if (!wms) {
+    return { ok: false, erro: "IMEI não possui posição confirmada no novo WMS." };
+  }
+  if (!wms.disponivel) {
+    const origem = wms.reserva_canal ? ` (${wms.reserva_canal})` : "";
+    return { ok: false, erro: `IMEI já está reservado em outra saída${origem}.` };
+  }
+
   const { data: triagem } = await supabase
     .from("assurant_triagem")
     .select("imei, sku, modelo, local, grade, status_atual, status_bateria, criado_em")
@@ -240,26 +267,32 @@ export async function validarImeiTroca(imei, skusAceitos) {
     .limit(1)
     .single();
 
-  if (!triagem) return { ok: false, erro: "IMEI não encontrado na base Assurant." };
+  const item = {
+    ...(triagem || {}),
+    imei: wms.imei,
+    sku: wms.sku || triagem?.sku || null,
+    modelo: wms.modelo || triagem?.modelo || null,
+    grade: wms.grade || triagem?.grade || null,
+    local: wms.local,
+    voucher: wms.voucher || null,
+  };
+
+  if (!item.sku) return { ok: false, erro: "IMEI sem SKU cadastrado no novo WMS." };
 
   // Compara contra os SKUs aceitos já limpos
   const skusAceitosLimpos = skusAceitos
     .map(s => parseSkuGrade(s.sku?.trim() || "").sku)
     .filter(Boolean);
-  if (!skusAceitosLimpos.includes(triagem.sku)) {
+  if (!skusAceitosLimpos.includes(item.sku)) {
     return {
       ok: false,
-      erro: `SKU do aparelho (${triagem.sku}) não está na lista de SKUs aceitos para esta troca.`,
+      erro: `SKU do aparelho (${item.sku}) não está na lista de SKUs aceitos para esta troca.`,
     };
   }
 
-  const { data: subinv } = await supabase
-    .from("estoque_subinv")
-    .select("imei, data_subinv")
-    .eq("imei", imeiTrim)
-    .single();
-
-  if (!subinv) return { ok: false, erro: "IMEI não está no estoque Oracle (subinventory) — indisponível." };
+  if (!wms.data_subinv) {
+    return { ok: false, erro: "IMEI sem DATA_SUBINV — indisponível para FIFO B2C." };
+  }
 
   const { data: b2bItem } = await supabase
     .from("b2b_itens")
@@ -279,11 +312,15 @@ export async function validarImeiTroca(imei, skusAceitos) {
 
   if (trocaAtiva) return { ok: false, erro: "IMEI já está sendo usado em outra troca B2C." };
 
-  const agingOracle = Math.floor(
-    (new Date() - new Date(subinv.data_subinv)) / (1000 * 60 * 60 * 24)
-  );
-
-  return { ok: true, item: { ...triagem, data_subinv: subinv.data_subinv, aging_oracle: agingOracle } };
+  return {
+    ok: true,
+    item: {
+      ...item,
+      data_subinv: wms.data_subinv,
+      aging_oracle: wms.aging_dias,
+      posicao_wms_encontrada: true,
+    },
+  };
 }
 
 // ════════════════════════════════════════════════════════
@@ -343,11 +380,6 @@ export async function alocarTroca(trocaId, imei, skuEscolhido, userId) {
     if (error) throw new Error(error.message);
   }
 
-  await supabase
-    .from("assurant_triagem")
-    .update({ status_atual: "Reservado para pedido B2C", atualizado_em: agora })
-    .eq("imei", imeiTrim);
-
   return { ok: true, imei: imeiTrim };
 }
 
@@ -360,21 +392,17 @@ export async function listarParaSeparacao() {
     .not("imei", "is", null);
   if (!ops?.length) return {};
 
-  const imeis = ops.map(o => o.imei);
-  const locais = {};
-  const BLOCO = 200;
-  for (let i = 0; i < imeis.length; i += BLOCO) {
-    const { data: tri } = await supabase
-      .from("assurant_triagem")
-      .select("imei, local, modelo, grade, voucher, criado_em")
-      .in("imei", imeis.slice(i, i + BLOCO))
-      .order("criado_em", { ascending: false });
-    (tri || []).forEach(t => { if (!locais[t.imei]) locais[t.imei] = t; });
-  }
+  const locais = await localizarImeisWms(ops.map(o => o.imei));
 
   const mapa = {};
   ops.forEach(o => {
-    mapa[o.troca_id] = { ...o, ...(locais[o.imei] || {}) };
+    const wms = locais.get(String(o.imei).trim());
+    mapa[o.troca_id] = {
+      ...o,
+      ...(wms || {}),
+      local: wms?.local || null,
+      posicao_wms_encontrada: Boolean(wms),
+    };
   });
   return mapa;
 }
@@ -417,11 +445,6 @@ export async function naoLocalizadoSeparacao(trocaId, userId, observacao) {
 
   const agora = new Date().toISOString();
   const imeiSumido = String(op.imei).trim();
-
-  await supabase
-    .from("assurant_triagem")
-    .update({ status_atual: "Em análise de estoque", atualizado_em: agora })
-    .eq("imei", imeiSumido);
 
   const tentativas = [
     ...(Array.isArray(op.tentativas) ? op.tentativas : []),

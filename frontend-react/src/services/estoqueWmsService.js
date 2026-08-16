@@ -60,7 +60,7 @@ export async function buscarResumoEstoqueWms() {
 }
 
 export async function buscarMapaAndarWms(rua, bloco, andar) {
-  const { data, error } = await supabase.rpc("wms_mapa_andar_aging", {
+  const { data, error } = await supabase.rpc("wms_mapa_andar_expedicao", {
     p_rua: Number(rua),
     p_bloco: Number(bloco),
     p_andar: Number(andar),
@@ -74,14 +74,14 @@ export async function pesquisarEstoqueWms({
   grade = "",
   status = "ocupado",
   rua = "",
-  limite = 100,
+  limite = null,
 } = {}) {
-  const { data, error } = await supabase.rpc("wms_buscar_estoque", {
+  const { data, error } = await supabase.rpc("wms_buscar_estoque_expedicao", {
     p_busca: busca.trim() || null,
     p_grade: grade || null,
     p_status: status || null,
     p_rua: rua ? Number(rua) : null,
-    p_limite: limite,
+    p_limite: limite || null,
   });
   if (error) throw new Error(error.message);
 
