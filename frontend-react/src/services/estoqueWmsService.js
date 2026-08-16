@@ -60,7 +60,7 @@ export async function buscarResumoEstoqueWms() {
 }
 
 export async function buscarMapaAndarWms(rua, bloco, andar) {
-  const { data, error } = await supabase.rpc("wms_mapa_andar", {
+  const { data, error } = await supabase.rpc("wms_mapa_andar_aging", {
     p_rua: Number(rua),
     p_bloco: Number(bloco),
     p_andar: Number(andar),

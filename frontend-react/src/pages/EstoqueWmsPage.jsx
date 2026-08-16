@@ -108,6 +108,13 @@ function fmtAging(valor) {
   return `${dias.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}d méd.`;
 }
 
+function fmtAgingProduto(valor) {
+  if (valor === null || valor === undefined || valor === "") return "Sem aging";
+  const dias = Number(valor);
+  if (!Number.isFinite(dias)) return "Sem aging";
+  return `${dias.toLocaleString("pt-BR")} ${dias === 1 ? "dia" : "dias"}`;
+}
+
 function tituloCoberturaAging(item) {
   if (!item) return "Nenhum produto com aging neste grupo";
   const comAging = Number(item.produtos_com_aging || 0);
@@ -457,13 +464,14 @@ export default function EstoqueWmsPage() {
                     const item = mapaPorPosicao.get(`${coluna}-${linha}`);
                     const status = item?.status_endereco || "livre";
                     const config = STATUS_CONFIG[status] || STATUS_CONFIG.livre;
+                    const corAging = faixaAging(item?.aging_dias);
                     const ativo = selecionado?.endereco_id === item?.endereco_id;
                     return (
                       <button
                         key={`${coluna}-${linha}`}
                         disabled={!item || loadingMapa}
                         onClick={() => setSelecionado(item)}
-                        className={`min-h-[66px] rounded-xl p-2 text-left ring-1 transition ${config.celula} ${
+                        className={`min-h-[66px] rounded-xl p-2 text-left ring-1 transition ${corAging.classe} ${
                           ativo ? "outline outline-3 outline-offset-2 outline-[#7F2D92]" : ""
                         } disabled:opacity-40`}
                       >
@@ -506,6 +514,7 @@ export default function EstoqueWmsPage() {
                   <CampoDetalhe rotulo="Grade venda" valor={selecionado.grade_venda} />
                 </div>
                 <CampoDetalhe rotulo="Status do produto" valor={selecionado.status_produto} />
+                <CampoDetalhe rotulo="Aging Oracle" valor={fmtAgingProduto(selecionado.aging_dias)} />
                 <CampoDetalhe rotulo="Armazenado em" valor={fmtData(selecionado.armazenado_em)} />
                 {selecionado.status_endereco === "reservado" && (
                   <CampoDetalhe rotulo="Reserva válida até" valor={fmtData(selecionado.reservado_ate)} />
