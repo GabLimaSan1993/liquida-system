@@ -74,14 +74,18 @@ export async function pesquisarEstoqueWms({
   grade = "",
   status = "ocupado",
   rua = "",
-  limite = null,
+  pagina = 1,
+  tamanhoPagina = 250,
 } = {}) {
-  const { data, error } = await supabase.rpc("wms_buscar_estoque_expedicao", {
+  const paginaSegura = Math.max(1, Number(pagina) || 1);
+  const tamanhoSeguro = Math.min(500, Math.max(1, Number(tamanhoPagina) || 250));
+  const { data, error } = await supabase.rpc("wms_buscar_estoque_expedicao_pagina", {
     p_busca: busca.trim() || null,
     p_grade: grade || null,
     p_status: status || null,
     p_rua: rua ? Number(rua) : null,
-    p_limite: limite || null,
+    p_offset: (paginaSegura - 1) * tamanhoSeguro,
+    p_tamanho: tamanhoSeguro,
   });
   if (error) throw new Error(error.message);
 

@@ -22,6 +22,7 @@ const COLUNAS_VISUAIS = ["F", "E", "D", "C", "B", "A"];
 const LINHAS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 const BLOCOS = [1, 2, 3, 4, 5];
 const ANDARES = [5, 4, 3, 2, 1];
+const ITENS_POR_PAGINA = 250;
 
 const FAIXAS_AGING = [
   {
@@ -178,6 +179,7 @@ export default function EstoqueWmsPage() {
   });
   const [resultado, setResultado] = useState({ total: 0, linhas: [] });
   const [pesquisando, setPesquisando] = useState(false);
+  const [pagina, setPagina] = useState(1);
 
   async function carregarResumo() {
     setLoadingResumo(true);
@@ -214,11 +216,21 @@ export default function EstoqueWmsPage() {
     }
   }
 
+  async function executarPesquisa(paginaAlvo = 1) {
+    const dados = await pesquisarEstoqueWms({
+      ...filtros,
+      pagina: paginaAlvo,
+      tamanhoPagina: ITENS_POR_PAGINA,
+    });
+    setResultado(dados);
+    setPagina(paginaAlvo);
+  }
+
   async function pesquisar(evento) {
     evento?.preventDefault();
     setPesquisando(true);
     try {
-      setResultado(await pesquisarEstoqueWms(filtros));
+      await executarPesquisa(1);
       setErro("");
     } catch (e) {
       setErro(`Não foi possível pesquisar o estoque: ${e.message}`);
@@ -228,7 +240,7 @@ export default function EstoqueWmsPage() {
   }
 
   async function atualizarTudo() {
-    await Promise.all([carregarResumo(), carregarMapa(), pesquisar()]);
+    await Promise.all([carregarResumo(), carregarMapa(), executarPesquisa(pagina)]);
   }
 
   useEffect(() => {
@@ -236,7 +248,11 @@ export default function EstoqueWmsPage() {
 
     Promise.all([
       buscarResumoEstoqueWms(),
-      pesquisarEstoqueWms({ status: "ocupado" }),
+      pesquisarEstoqueWms({
+        status: "ocupado",
+        pagina: 1,
+        tamanhoPagina: ITENS_POR_PAGINA,
+      }),
     ])
       .then(([dadosResumo, dadosPesquisa]) => {
         if (cancelado) return;
@@ -255,6 +271,24 @@ export default function EstoqueWmsPage() {
 
     return () => { cancelado = true; };
   }, []);
+
+  const totalPaginas = Math.max(
+    1,
+    Math.ceil(Number(resultado.total || 0) / ITENS_POR_PAGINA),
+  );
+
+  async function mudarPagina(novaPagina) {
+    if (novaPagina < 1 || novaPagina > totalPaginas || pesquisando) return;
+    setPesquisando(true);
+    try {
+      await executarPesquisa(novaPagina);
+      setErro("");
+    } catch (e) {
+      setErro(`Não foi possível pesquisar o estoque: ${e.message}`);
+    } finally {
+      setPesquisando(false);
+    }
+  }
 
   useEffect(() => {
     let cancelado = false;
@@ -609,10 +643,31 @@ export default function EstoqueWmsPage() {
           </button>
         </form>
 
-        <div className="mt-4 flex items-center justify-between gap-3">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs font-semibold text-slate-500">
             {fmtNumero(resultado.total)} resultado{Number(resultado.total) !== 1 ? "s" : ""}
           </p>
+          <div className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+            <button
+              type="button"
+              onClick={() => mudarPagina(pagina - 1)}
+              disabled={pagina <= 1 || pesquisando}
+              className="rounded-lg border border-slate-200 px-3 py-1.5 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Anterior
+            </button>
+            <span>
+              Página {fmtNumero(pagina)} de {fmtNumero(totalPaginas)}
+            </span>
+            <button
+              type="button"
+              onClick={() => mudarPagina(pagina + 1)}
+              disabled={pagina >= totalPaginas || pesquisando}
+              className="rounded-lg border border-slate-200 px-3 py-1.5 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Próxima
+            </button>
+          </div>
         </div>
 
         <div className="mt-3 overflow-x-auto rounded-xl ring-1 ring-slate-200">
