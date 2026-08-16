@@ -22,7 +22,7 @@ const COLUNAS_VISUAIS = ["F", "E", "D", "C", "B", "A"];
 const LINHAS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 const BLOCOS = [1, 2, 3, 4, 5];
 const ANDARES = [5, 4, 3, 2, 1];
-const ITENS_POR_PAGINA = 250;
+const ITENS_POR_PAGINA = 50;
 
 const FAIXAS_AGING = [
   {
