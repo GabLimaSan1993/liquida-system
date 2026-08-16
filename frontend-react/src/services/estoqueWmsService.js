@@ -49,8 +49,13 @@ export async function buscarResumoEstoqueWms() {
     ocupados: 0,
     bloqueados: 0,
     ocupacao_percentual: 0,
+    aging_medio_dias: null,
+    produtos_com_aging: 0,
+    produtos_sem_aging: 0,
     por_grade: [],
     por_rua: [],
+    por_bloco: [],
+    por_andar: [],
   };
 }
 
