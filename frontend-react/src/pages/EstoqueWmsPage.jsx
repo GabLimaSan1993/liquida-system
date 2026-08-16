@@ -23,6 +23,45 @@ const LINHAS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 const BLOCOS = [1, 2, 3, 4, 5];
 const ANDARES = [5, 4, 3, 2, 1];
 
+const FAIXAS_AGING = [
+  {
+    ate: 30,
+    rotulo: "Até 30 dias",
+    classe: "bg-emerald-100 text-emerald-900 ring-emerald-300 hover:bg-emerald-200",
+    ponto: "bg-emerald-500",
+  },
+  {
+    ate: 60,
+    rotulo: "31 a 60 dias",
+    classe: "bg-lime-100 text-lime-900 ring-lime-300 hover:bg-lime-200",
+    ponto: "bg-lime-500",
+  },
+  {
+    ate: 90,
+    rotulo: "61 a 90 dias",
+    classe: "bg-amber-100 text-amber-950 ring-amber-300 hover:bg-amber-200",
+    ponto: "bg-amber-500",
+  },
+  {
+    ate: 120,
+    rotulo: "91 a 120 dias",
+    classe: "bg-orange-200 text-orange-950 ring-orange-400 hover:bg-orange-300",
+    ponto: "bg-orange-500",
+  },
+  {
+    ate: Infinity,
+    rotulo: "Acima de 120 dias",
+    classe: "bg-red-600 text-white ring-red-700 hover:bg-red-700",
+    ponto: "bg-red-600",
+  },
+];
+
+const AGING_SEM_DADOS = {
+  rotulo: "Sem aging",
+  classe: "bg-slate-50 text-slate-700 ring-slate-200 hover:bg-slate-100",
+  ponto: "bg-slate-300",
+};
+
 const STATUS_CONFIG = {
   livre: {
     label: "Livre",
@@ -53,6 +92,27 @@ function fmtNumero(valor) {
 function fmtData(valor) {
   if (!valor) return "—";
   return new Date(valor).toLocaleString("pt-BR");
+}
+
+function faixaAging(valor) {
+  if (valor === null || valor === undefined || valor === "") return AGING_SEM_DADOS;
+  const dias = Number(valor);
+  if (!Number.isFinite(dias)) return AGING_SEM_DADOS;
+  return FAIXAS_AGING.find(faixa => dias <= faixa.ate) || AGING_SEM_DADOS;
+}
+
+function fmtAging(valor) {
+  if (valor === null || valor === undefined || valor === "") return "Sem aging";
+  const dias = Number(valor);
+  if (!Number.isFinite(dias)) return "Sem aging";
+  return `${dias.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}d méd.`;
+}
+
+function tituloCoberturaAging(item) {
+  if (!item) return "Nenhum produto com aging neste grupo";
+  const comAging = Number(item.produtos_com_aging || 0);
+  const semAging = Number(item.produtos_sem_aging || 0);
+  return `${fmtAging(item.aging_medio_dias)} · ${fmtNumero(comAging)} com aging · ${fmtNumero(semAging)} sem aging`;
 }
 
 function Card({ children, className = "" }) {
@@ -226,6 +286,12 @@ export default function EstoqueWmsPage() {
   }, [mapa]);
 
   const ruaResumo = (resumo?.por_rua || []).find(item => Number(item.rua) === rua);
+  const blocoResumo = (resumo?.por_bloco || []).find(
+    item => Number(item.rua) === rua && Number(item.bloco) === bloco,
+  );
+  const andarResumo = (resumo?.por_andar || []).find(
+    item => Number(item.rua) === rua && Number(item.bloco) === bloco && Number(item.andar) === andar,
+  );
 
   function abrirResultado(item) {
     setLoadingMapa(true);
@@ -265,7 +331,7 @@ export default function EstoqueWmsPage() {
               <MapPin className="h-5 w-5" /> Mapa físico do estoque
             </h2>
             <p className="mt-1 text-xs text-slate-500">
-              Selecione rua, bloco e andar. Coluna A fica à direita; linhas seguem de cima para baixo.
+              Rua, bloco e andar usam a média do aging Oracle. Coluna A fica à direita; linhas seguem de cima para baixo.
             </p>
           </div>
           <button
@@ -282,22 +348,25 @@ export default function EstoqueWmsPage() {
           {RUAS_WMS.map(item => {
             const ocupacao = (resumo?.por_rua || []).find(r => Number(r.rua) === item.rua);
             const ativo = rua === item.rua;
+            const corAging = faixaAging(ocupacao?.aging_medio_dias);
             return (
               <button
                 key={item.rua}
                 onClick={() => selecionarRua(item.rua)}
-                className={`rounded-xl px-2 py-2.5 text-left ring-1 transition ${
-                  ativo
-                    ? "bg-[#7F2D92] text-white ring-[#7F2D92] shadow"
-                    : "bg-slate-50 text-slate-700 ring-slate-200 hover:bg-purple-50"
+                title={tituloCoberturaAging(ocupacao)}
+                className={`rounded-xl px-2 py-2.5 text-left ring-1 transition ${corAging.classe} ${
+                  ativo ? "outline outline-2 outline-offset-2 outline-[#7F2D92] shadow-md" : ""
                 }`}
               >
                 <p className="text-sm font-black">RUA {String(item.rua).padStart(2, "0")}</p>
-                <p className={`truncate text-[9px] font-bold ${ativo ? "text-white/75" : "text-slate-400"}`}>
+                <p className="truncate text-[9px] font-bold opacity-70">
                   {item.grade}
                 </p>
-                <p className={`mt-1 text-[10px] ${ativo ? "text-white/90" : "text-slate-500"}`}>
-                  {ocupacao?.ocupacao_percentual || 0}%
+                <p className="mt-1 text-[10px] font-black">
+                  {fmtAging(ocupacao?.aging_medio_dias)}
+                </p>
+                <p className="text-[9px] opacity-70">
+                  {ocupacao?.ocupacao_percentual || 0}% ocup.
                 </p>
               </button>
             );
@@ -306,35 +375,64 @@ export default function EstoqueWmsPage() {
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <span className="mr-1 text-xs font-bold text-slate-500">Bloco:</span>
-          {BLOCOS.map(numero => (
-            <button
-              key={numero}
-              disabled={rua === 15 && numero !== 1}
-              onClick={() => { setLoadingMapa(true); setBloco(numero); }}
-              className={`rounded-lg px-3 py-1.5 text-xs font-bold ring-1 ${
-                bloco === numero
-                  ? "bg-purple-100 text-purple-800 ring-purple-300"
-                  : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50"
-              } disabled:cursor-not-allowed disabled:opacity-25`}
-            >
-              BL {String(numero).padStart(2, "0")}
-            </button>
-          ))}
+          {BLOCOS.map(numero => {
+            const dadosBloco = (resumo?.por_bloco || []).find(
+              item => Number(item.rua) === rua && Number(item.bloco) === numero,
+            );
+            const corAging = faixaAging(dadosBloco?.aging_medio_dias);
+            return (
+              <button
+                key={numero}
+                disabled={rua === 15 && numero !== 1}
+                onClick={() => { setLoadingMapa(true); setBloco(numero); }}
+                title={tituloCoberturaAging(dadosBloco)}
+                className={`rounded-lg px-3 py-1.5 text-left text-xs font-bold ring-1 ${corAging.classe} ${
+                  bloco === numero ? "outline outline-2 outline-offset-1 outline-[#7F2D92]" : ""
+                } disabled:cursor-not-allowed disabled:opacity-25`}
+              >
+                <span className="block">BL {String(numero).padStart(2, "0")}</span>
+                <span className="block text-[9px] font-black opacity-75">{fmtAging(dadosBloco?.aging_medio_dias)}</span>
+              </button>
+            );
+          })}
 
           <span className="ml-3 mr-1 text-xs font-bold text-slate-500">Andar:</span>
-          {ANDARES.map(numero => (
-            <button
-              key={numero}
-              onClick={() => { setLoadingMapa(true); setAndar(numero); }}
-              className={`rounded-lg px-3 py-1.5 text-xs font-bold ring-1 ${
-                andar === numero
-                  ? "bg-purple-100 text-purple-800 ring-purple-300"
-                  : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50"
-              }`}
-            >
-              AD {String(numero).padStart(2, "0")}
-            </button>
+          {ANDARES.map(numero => {
+            const dadosAndar = (resumo?.por_andar || []).find(
+              item => Number(item.rua) === rua && Number(item.bloco) === bloco && Number(item.andar) === numero,
+            );
+            const corAging = faixaAging(dadosAndar?.aging_medio_dias);
+            return (
+              <button
+                key={numero}
+                onClick={() => { setLoadingMapa(true); setAndar(numero); }}
+                title={tituloCoberturaAging(dadosAndar)}
+                className={`rounded-lg px-3 py-1.5 text-left text-xs font-bold ring-1 ${corAging.classe} ${
+                  andar === numero ? "outline outline-2 outline-offset-1 outline-[#7F2D92]" : ""
+                }`}
+              >
+                <span className="block">AD {String(numero).padStart(2, "0")}</span>
+                <span className="block text-[9px] font-black opacity-75">{fmtAging(dadosAndar?.aging_medio_dias)}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl bg-slate-50 px-3 py-2.5 ring-1 ring-slate-200">
+          <span className="text-[10px] font-black uppercase tracking-wide text-slate-500">Mapa de calor · aging médio</span>
+          {FAIXAS_AGING.map(faixa => (
+            <span key={faixa.rotulo} className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-600">
+              <span className={`h-2.5 w-2.5 rounded-full ${faixa.ponto}`} />
+              {faixa.rotulo}
+            </span>
           ))}
+          <span className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-600">
+            <span className={`h-2.5 w-2.5 rounded-full ${AGING_SEM_DADOS.ponto}`} />
+            Sem aging
+          </span>
+          <span className="ml-auto text-[10px] font-bold text-slate-600">
+            Rua {fmtAging(ruaResumo?.aging_medio_dias)} · Bloco {fmtAging(blocoResumo?.aging_medio_dias)} · Andar {fmtAging(andarResumo?.aging_medio_dias)}
+          </span>
         </div>
 
         <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -572,3 +670,4 @@ export default function EstoqueWmsPage() {
     </div>
   );
 }
+
