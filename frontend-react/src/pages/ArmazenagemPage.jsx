@@ -21,8 +21,10 @@ import { useAuth } from "../AuthContext.jsx";
 
 import {
   ETAPAS_BIPAGEM,
+  MODO_SEM_BIPAGEM_LOCALIZACAO,
   baixarEtiquetaArmazenagem,
   cancelarReserva,
+  confirmarArmazenagemSemBipagem,
   enderecoExibicao,
   listarAguardandoArmazenagem,
   registrarBipagem,
@@ -854,6 +856,82 @@ export default function ArmazenagemPage() {
   }
 
 
+  async function confirmarSemBipagem() {
+    if (
+      !dados?.reserva?.id ||
+      !dados?.endereco ||
+      carregando
+    ) {
+      return;
+    }
+
+
+    const confirmou =
+      window.confirm(
+        "Confirma que o produto foi colocado fisicamente em " +
+        `${enderecoExibicao(dados.endereco)}?`
+      );
+
+
+    if (!confirmou) {
+      return;
+    }
+
+
+    setCarregando(true);
+    setFeedback(null);
+
+
+    try {
+      const resultado =
+        await confirmarArmazenagemSemBipagem(
+          dados.reserva.id,
+          dados.endereco,
+          user.id,
+          etapaAtual
+        );
+
+
+      setEtapaAtual(5);
+
+      setConcluido(
+        resultado
+      );
+
+      setFeedback({
+        tipo: "ok",
+
+        msg:
+          "Armazenagem confirmada sem bipagem das etiquetas de localização. " +
+          `Produto enviado para ${resultado.status}.`,
+      });
+
+      carregarFila();
+
+    } catch (erro) {
+      if (
+        Number.isInteger(
+          erro.etapaAtual
+        )
+      ) {
+        setEtapaAtual(
+          erro.etapaAtual
+        );
+      }
+
+      setFeedback({
+        tipo: "erro",
+        msg:
+          erro.message +
+          " Você pode tentar confirmar novamente.",
+      });
+
+    } finally {
+      setCarregando(false);
+    }
+  }
+
+
   async function cancelar() {
     if (
       !dados?.reserva?.id ||
@@ -984,7 +1062,9 @@ export default function ArmazenagemPage() {
             "
           >
             Voucher → endereço automático →
-            validação física → Oracle
+            {MODO_SEM_BIPAGEM_LOCALIZACAO
+              ? " confirmação provisória → Oracle"
+              : " validação física → Oracle"}
           </p>
         </div>
 
@@ -1466,9 +1546,9 @@ export default function ArmazenagemPage() {
                     text-slate-500
                   "
                 >
-                  Siga este endereço e
-                  valide cada identificação
-                  física na sequência.
+                  {MODO_SEM_BIPAGEM_LOCALIZACAO
+                    ? "Coloque o produto nesta posição e confirme a armazenagem pelo botão abaixo."
+                    : "Siga este endereço e valide cada identificação física na sequência."}
                 </p>
               </div>
 
@@ -1568,133 +1648,97 @@ export default function ArmazenagemPage() {
                   max-w-3xl
                 "
               >
-                <Progresso
-                  atual={etapaAtual}
-                />
-
-
-                <div
-                  className="
-                    mt-6
-                    text-center
-                  "
-                >
-                  <p
-                    className="
-                      text-sm
-                      text-slate-500
-                    "
-                  >
-                    Agora bipe
-                  </p>
-
-                  <h3
-                    className="
-                      mt-1
-                      text-2xl
-                      font-black
-                      text-[#6B1F87]
-                    "
-                  >
-                    {etapa?.rotulo}
-                  </h3>
-
-                  <p
-                    className="
-                      mt-1
-                      text-xs
-                      text-slate-400
-                    "
-                  >
-                    Formato da identificação
-                    física: {etapa?.exemplo}
-                  </p>
-
-
+                {MODO_SEM_BIPAGEM_LOCALIZACAO ? (
                   <div
                     className="
-                      mx-auto
-                      mt-4
-                      flex
-                      max-w-xl
-                      gap-2
+                      py-3
+                      text-center
                     "
                   >
-                    <input
-                      ref={scanRef}
-
-                      value={codigo}
-
-                      disabled={
-                        carregando
-                      }
-
-                      onChange={
-                        (evento) =>
-                          setCodigo(
-                            evento
-                              .target
-                              .value
-                              .toUpperCase()
-                          )
-                      }
-
-                      onKeyDown={
-                        (evento) => {
-                          if (
-                            evento.key
-                            === "Enter"
-                          ) {
-                            bipar();
-                          }
-                        }
-                      }
-
-                      placeholder={
-                        `Bipe ${
-                          etapa?.rotulo
-                            .toLowerCase()
-                        }...`
-                      }
-
+                    <div
                       className="
-                        min-w-0
-                        flex-1
+                        mx-auto
+                        flex
+                        h-12
+                        w-12
+                        items-center
+                        justify-center
                         rounded-2xl
-                        border-2
-                        border-purple-200
-                        px-5
-                        py-4
-                        text-center
-                        font-mono
-                        text-xl
+                        bg-amber-50
+                        text-amber-600
+                        ring-1
+                        ring-amber-200
+                      "
+                    >
+                      <AlertTriangle
+                        className="h-6 w-6"
+                      />
+                    </div>
+
+                    <p
+                      className="
+                        mt-4
+                        text-xs
                         font-black
                         uppercase
-                        outline-none
-                        focus:border-[#7F2D92]
-                        disabled:opacity-50
+                        tracking-wider
+                        text-amber-600
                       "
-                    />
+                    >
+                      Modo provisório sem bipagem
+                    </p>
 
+                    <h3
+                      className="
+                        mt-2
+                        text-2xl
+                        font-black
+                        text-slate-800
+                      "
+                    >
+                      Confirme a colocação física
+                    </h3>
+
+                    <p
+                      className="
+                        mx-auto
+                        mt-2
+                        max-w-xl
+                        text-sm
+                        text-slate-500
+                      "
+                    >
+                      Coloque o produto em
+                      <strong className="text-[#6B1F87]">
+                        {` ${enderecoExibicao(endereco)} `}
+                      </strong>
+                      e confirme somente depois que ele estiver
+                      fisicamente nessa posição.
+                    </p>
 
                     <button
                       onClick={
-                        bipar
+                        confirmarSemBipagem
                       }
 
                       disabled={
-                        !codigo.trim() ||
                         carregando
                       }
 
                       className="
+                        mt-6
+                        inline-flex
+                        items-center
+                        justify-center
+                        gap-2
                         rounded-2xl
-                        bg-[#7F2D92]
-                        px-6
-                        py-3
-                        font-bold
+                        bg-emerald-600
+                        px-7
+                        py-4
+                        text-sm
+                        font-black
                         text-white
-                        hover:bg-[#6B1F87]
+                        hover:bg-emerald-700
                         disabled:opacity-40
                       "
                     >
@@ -1707,11 +1751,175 @@ export default function ArmazenagemPage() {
                           "
                         />
                       ) : (
-                        "Validar"
+                        <CheckCircle
+                          className="h-5 w-5"
+                        />
                       )}
+
+                      {carregando
+                        ? "Confirmando..."
+                        : "Confirmar armazenagem sem bipagem"}
                     </button>
+
+                    <p
+                      className="
+                        mt-3
+                        text-xs
+                        font-semibold
+                        text-red-500
+                      "
+                    >
+                      Não confirme antes de colocar o produto na posição indicada.
+                    </p>
                   </div>
-                </div>
+                ) : (
+                  <>
+                    <Progresso
+                      atual={etapaAtual}
+                    />
+
+
+                    <div
+                      className="
+                        mt-6
+                        text-center
+                      "
+                    >
+                      <p
+                        className="
+                          text-sm
+                          text-slate-500
+                        "
+                      >
+                        Agora bipe
+                      </p>
+
+                      <h3
+                        className="
+                          mt-1
+                          text-2xl
+                          font-black
+                          text-[#6B1F87]
+                        "
+                      >
+                        {etapa?.rotulo}
+                      </h3>
+
+                      <p
+                        className="
+                          mt-1
+                          text-xs
+                          text-slate-400
+                        "
+                      >
+                        Formato da identificação
+                        física: {etapa?.exemplo}
+                      </p>
+
+
+                      <div
+                        className="
+                          mx-auto
+                          mt-4
+                          flex
+                          max-w-xl
+                          gap-2
+                        "
+                      >
+                        <input
+                          ref={scanRef}
+
+                          value={codigo}
+
+                          disabled={
+                            carregando
+                          }
+
+                          onChange={
+                            (evento) =>
+                              setCodigo(
+                                evento
+                                  .target
+                                  .value
+                                  .toUpperCase()
+                              )
+                          }
+
+                          onKeyDown={
+                            (evento) => {
+                              if (
+                                evento.key
+                                === "Enter"
+                              ) {
+                                bipar();
+                              }
+                            }
+                          }
+
+                          placeholder={
+                            `Bipe ${
+                              etapa?.rotulo
+                                .toLowerCase()
+                            }...`
+                          }
+
+                          className="
+                            min-w-0
+                            flex-1
+                            rounded-2xl
+                            border-2
+                            border-purple-200
+                            px-5
+                            py-4
+                            text-center
+                            font-mono
+                            text-xl
+                            font-black
+                            uppercase
+                            outline-none
+                            focus:border-[#7F2D92]
+                            disabled:opacity-50
+                          "
+                        />
+
+
+                        <button
+                          onClick={
+                            bipar
+                          }
+
+                          disabled={
+                            !codigo.trim() ||
+                            carregando
+                          }
+
+                          className="
+                            rounded-2xl
+                            bg-[#7F2D92]
+                            px-6
+                            py-3
+                            font-bold
+                            text-white
+                            hover:bg-[#6B1F87]
+                            disabled:opacity-40
+                          "
+                        >
+                          {carregando ? (
+                            <Loader
+                              className="
+                                h-5
+                                w-5
+                                animate-spin
+                              "
+                            />
+                          ) : (
+                            "Validar"
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             </Card>
           ) : (

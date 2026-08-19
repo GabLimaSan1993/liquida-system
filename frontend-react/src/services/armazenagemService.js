@@ -32,6 +32,20 @@ export const ETAPAS_BIPAGEM = [
 ];
 
 
+/*
+ * MODO PROVISÓRIO
+ *
+ * true  = o operador confirma a armazenagem sem bipar
+ *         Rua, Bloco, Andar, Coluna e Linha.
+ *
+ * false = o fluxo normal de cinco bipagens volta a aparecer.
+ *
+ * Quando as etiquetas físicas forem instaladas, altere somente
+ * esta constante para false e publique novamente o frontend.
+ */
+export const MODO_SEM_BIPAGEM_LOCALIZACAO = true;
+
+
 function jsonSeguro(valor) {
   if (!valor) {
     return {};
@@ -435,6 +449,145 @@ export async function registrarBipagem(
     erro:
       "A bipagem não retornou resultado.",
   };
+}
+
+
+/*
+ * Monta exatamente os mesmos códigos que seriam lidos
+ * nas etiquetas físicas da posição reservada.
+ */
+function codigoLocalizacaoPorEtapa(
+  etapa,
+  endereco
+) {
+  const rua =
+    String(endereco?.rua ?? "")
+      .padStart(2, "0");
+
+  const bloco =
+    String(endereco?.bloco ?? "")
+      .padStart(2, "0");
+
+  const andar =
+    String(endereco?.andar ?? "")
+      .padStart(2, "0");
+
+  const coluna =
+    String(endereco?.coluna ?? "")
+      .trim()
+      .toUpperCase();
+
+  const linha =
+    String(endereco?.linha ?? "")
+      .padStart(2, "0");
+
+  const codigos = {
+    rua: `RUA${rua}`,
+    bloco: `BL${bloco}`,
+    andar: `AD${andar}`,
+    coluna: `COL${coluna}`,
+    linha: `LIN${linha}`,
+  };
+
+  return codigos[etapa] || null;
+}
+
+
+/*
+ * Confirma a armazenagem sem exigir as etiquetas físicas.
+ *
+ * A função reaproveita a validação já existente no banco e envia,
+ * em sequência, os códigos da própria posição que foi reservada.
+ * Dessa forma, as regras de conclusão, ocupação do endereço e
+ * atualização do produto continuam sendo executadas pelo Supabase.
+ */
+export async function confirmarArmazenagemSemBipagem(
+  reservaId,
+  endereco,
+  userId,
+  etapaInicial = 0
+) {
+  if (!reservaId) {
+    throw new Error(
+      "Reserva não informada para confirmar a armazenagem."
+    );
+  }
+
+  if (!endereco) {
+    throw new Error(
+      "Endereço reservado não encontrado."
+    );
+  }
+
+  const inicio = Math.min(
+    Math.max(
+      Number(etapaInicial) || 0,
+      0
+    ),
+    ETAPAS_BIPAGEM.length
+  );
+
+  let ultimoResultado = null;
+
+  for (
+    let indice = inicio;
+    indice < ETAPAS_BIPAGEM.length;
+    indice += 1
+  ) {
+    const etapa =
+      ETAPAS_BIPAGEM[indice];
+
+    const codigo =
+      codigoLocalizacaoPorEtapa(
+        etapa.id,
+        endereco
+      );
+
+    if (!codigo) {
+      throw new Error(
+        `Não foi possível montar o código da etapa ${etapa.rotulo}.`
+      );
+    }
+
+    let resultado;
+
+    try {
+      resultado =
+        await registrarBipagem(
+          reservaId,
+          etapa.id,
+          codigo,
+          userId
+        );
+    } catch (erro) {
+      erro.etapaAtual = indice;
+      throw erro;
+    }
+
+    if (!resultado?.ok) {
+      const erro = new Error(
+        resultado?.erro ||
+        `Não foi possível confirmar a etapa ${etapa.rotulo}.`
+      );
+
+      erro.etapaAtual = indice;
+      throw erro;
+    }
+
+    ultimoResultado = resultado;
+
+    if (resultado.concluido) {
+      return resultado;
+    }
+  }
+
+  if (!ultimoResultado?.concluido) {
+    throw new Error(
+      "As etapas foram validadas, mas o banco não confirmou a conclusão da armazenagem."
+    );
+  }
+
+  return ultimoResultado;
 }
 
 
