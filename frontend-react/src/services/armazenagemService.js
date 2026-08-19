@@ -139,14 +139,22 @@ export async function listarAguardandoArmazenagem() {
       data_cosmetico
     `)
 
-    .eq(
-      "status_atual",
-      "Aguardando armazenagem"
+    .or(
+      [
+        "status_atual.ilike.Aguardando armazenagem",
+        "status_atual.ilike.Aguardando alocação",
+        "status_atual.ilike.Aguardando alocacao",
+        "status_atual.ilike.Aguardando locação",
+        "status_atual.ilike.Aguardando locacao",
+      ].join(",")
     )
 
-    .eq(
-      "origem_triagem",
-      "liquida"
+    .or(
+      [
+        "origem_triagem.ilike.liquida",
+        "origem_triagem.ilike.gaia",
+        "origem_triagem.is.null",
+      ].join(",")
     )
 
     .order(
@@ -365,9 +373,48 @@ export async function reservarEndereco(
   voucher,
   userId
 ) {
+  const voucherNormalizado =
+    String(voucher || "")
+      .trim()
+      .toUpperCase();
+
+
+  /*
+   * Produtos vindos do Gaia podem chegar como
+   * "Aguardando alocação" ou "Aguardando locação".
+   * Antes da reserva, converte somente o voucher selecionado
+   * para o status oficial utilizado pelo WMS.
+   */
+  const {
+    data: preparacao,
+    error: erroPreparacao,
+  } = await supabase.rpc(
+    "wms_preparar_status_armazenagem",
+    {
+      p_voucher:
+        voucherNormalizado,
+    }
+  );
+
+
+  if (erroPreparacao) {
+    throw new Error(
+      erroPreparacao.message
+    );
+  }
+
+
+  if (!preparacao?.ok) {
+    throw new Error(
+      preparacao?.erro ||
+      "Não foi possível preparar o produto para armazenagem."
+    );
+  }
+
+
   const detalhes =
     await buscarDetalhesArmazenagem(
-      voucher
+      voucherNormalizado
     );
 
 
@@ -378,9 +425,7 @@ export async function reservarEndereco(
     "wms_reservar_endereco",
     {
       p_voucher:
-        String(voucher || "")
-          .trim()
-          .toUpperCase(),
+        voucherNormalizado,
 
       p_usuario:
         userId,
