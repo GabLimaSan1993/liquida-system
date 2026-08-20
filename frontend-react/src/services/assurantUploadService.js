@@ -1,11 +1,15 @@
 import Papa from "papaparse";
 import { supabase } from "../lib/supabase";
 
-
-const TAMANHO_LOTE_INICIAL = 100;
-const MAX_TENTATIVAS = 3;
-const PAUSA_ENTRE_LOTES_MS = 50;
-
+/*
+ * 500 registros reduzem uma carga de 160 mil linhas
+ * de aproximadamente 1.600 chamadas para cerca de 320.
+ * Se o banco não suportar um lote desse tamanho, a rotina
+ * divide automaticamente o lote até ele ser processado.
+ */
+const TAMANHO_LOTE_INICIAL = 500;
+const MAX_TENTATIVAS_REDE = 3;
+const PAUSA_ENTRE_LOTES_MS = 10;
 
 function aguardar(tempoMs) {
   return new Promise((resolve) => {
@@ -13,17 +17,14 @@ function aguardar(tempoMs) {
   });
 }
 
-
 function textoOuNull(valor) {
   if (valor === null || valor === undefined) {
     return null;
   }
 
   const texto = String(valor).trim();
-
   return texto || null;
 }
-
 
 function identificadorOuNull(valor) {
   const texto = textoOuNull(valor);
@@ -33,7 +34,6 @@ function identificadorOuNull(valor) {
     : null;
 }
 
-
 function textoComparacao(valor) {
   return String(valor || "")
     .trim()
@@ -41,7 +41,6 @@ function textoComparacao(valor) {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
 }
-
 
 /*
  * Enquanto as triagens continuam sendo realizadas no Gaia,
@@ -64,7 +63,6 @@ function statusGaiaParaLiquida(valor) {
 
   return statusOriginal;
 }
-
 
 function parseDate(valor) {
   if (
@@ -96,7 +94,6 @@ function parseDate(valor) {
 
   return data.toISOString();
 }
-
 
 function parseRow(
   row,
@@ -266,7 +263,6 @@ function parseRow(
   };
 }
 
-
 function erroPodeRepetir(erro) {
   const mensagem = String(
     erro?.message ||
@@ -297,6 +293,18 @@ function erroPodeRepetir(erro) {
   );
 }
 
+function erroDeTimeoutBanco(erro) {
+  const mensagem = String(
+    erro?.message ||
+    erro ||
+    ""
+  ).toLowerCase();
+
+  return (
+    mensagem.includes("statement timeout") ||
+    mensagem.includes("canceling statement")
+  );
+}
 
 async function executarUpsertComRepeticao(
   rows
@@ -305,7 +313,7 @@ async function executarUpsertComRepeticao(
 
   for (
     let tentativa = 1;
-    tentativa <= MAX_TENTATIVAS;
+    tentativa <= MAX_TENTATIVAS_REDE;
     tentativa += 1
   ) {
     const { error } = await supabase.rpc(
@@ -321,9 +329,18 @@ async function executarUpsertComRepeticao(
 
     ultimoErro = error;
 
+    /*
+     * Repetir o mesmo lote que excedeu o tempo do banco
+     * apenas atrasaria a carga. Devolve imediatamente o erro
+     * para que enviarLoteAdaptativo divida o lote ao meio.
+     */
+    if (erroDeTimeoutBanco(error)) {
+      throw error;
+    }
+
     if (
       !erroPodeRepetir(error) ||
-      tentativa === MAX_TENTATIVAS
+      tentativa === MAX_TENTATIVAS_REDE
     ) {
       break;
     }
@@ -337,7 +354,6 @@ async function executarUpsertComRepeticao(
     "O banco não retornou o resultado do lote."
   );
 }
-
 
 /*
  * Se um lote continuar excedendo o tempo máximo do banco,
@@ -359,7 +375,7 @@ async function enviarLoteAdaptativo({
     aoConcluir(rows.length);
   } catch (erro) {
     if (
-      erroPodeRepetir(erro) &&
+      erroDeTimeoutBanco(erro) &&
       rows.length > 1
     ) {
       const metade = Math.ceil(
@@ -391,8 +407,8 @@ async function enviarLoteAdaptativo({
   }
 }
 
-
 // ── Preview ───────────────────────────────────────────────
+
 export async function previewTriagemAssurant(
   file
 ) {
@@ -495,8 +511,8 @@ export async function previewTriagemAssurant(
   );
 }
 
-
 // ── Upload com repetição e divisão adaptativa dos lotes ──
+
 export async function uploadTriagemAssurant(
   file,
   userId,
