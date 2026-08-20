@@ -124,6 +124,15 @@ function normalizarTriagem(
  * a etapa de armazenagem.
  */
 export async function listarAguardandoArmazenagem() {
+  const STATUS_FILA = [
+    "Aguardando armazenagem",
+    "Aguardando alocação",
+    "Aguardando alocacao",
+    "Aguardando locação",
+    "Aguardando locacao",
+  ];
+
+
   const { data, error } = await supabase
 
     .from("assurant_triagem")
@@ -139,22 +148,9 @@ export async function listarAguardandoArmazenagem() {
       data_cosmetico
     `)
 
-    .or(
-      [
-        "status_atual.ilike.Aguardando armazenagem",
-        "status_atual.ilike.Aguardando alocação",
-        "status_atual.ilike.Aguardando alocacao",
-        "status_atual.ilike.Aguardando locação",
-        "status_atual.ilike.Aguardando locacao",
-      ].join(",")
-    )
-
-    .or(
-      [
-        "origem_triagem.ilike.liquida",
-        "origem_triagem.ilike.gaia",
-        "origem_triagem.is.null",
-      ].join(",")
+    .in(
+      "status_atual",
+      STATUS_FILA
     )
 
     .order(
