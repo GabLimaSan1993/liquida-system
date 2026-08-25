@@ -116,37 +116,80 @@ export async function listarGruposPicking() {
     .in("status", ["aberto", "em_picking"])
     .eq("oculto_picking", false)
     .order("criado_em", { ascending: true });
+
   if (error) throw new Error(error.message);
 
   const grupos = data || [];
   if (!grupos.length) return [];
 
-  // Descobre o marketplace de cada grupo pelos pedidos (todos do mesmo marketplace agora)
-  const ids = grupos.map(g => g.id);
-  const { data: pedidos } = await supabase
-    .from("pedidos_b2c")
-    .select("grupo_id, marketplace")
-    .in("grupo_id", ids);
+  // Busca em blocos para evitar URLs grandes no PostgREST.
+  const ids = grupos.map((g) => g.id);
+  const pedidos = [];
+  const BLOCO_IDS = 200;
+
+  for (let i = 0; i < ids.length; i += BLOCO_IDS) {
+    const { data: bloco, error: erroBloco } = await supabase
+      .from("pedidos_b2c")
+      .select("grupo_id, marketplace, status")
+      .in("grupo_id", ids.slice(i, i + BLOCO_IDS));
+
+    if (erroBloco) throw new Error(erroBloco.message);
+
+    pedidos.push(...(bloco || []));
+  }
 
   const mpPorGrupo = {};
-  (pedidos || []).forEach(p => {
-    if (!mpPorGrupo[p.grupo_id]) mpPorGrupo[p.grupo_id] = new Set();
-    mpPorGrupo[p.grupo_id].add(p.marketplace || "—");
+  const qtdAtivaPorGrupo = {};
+
+  pedidos.forEach((pedido) => {
+    // A aba Picking só possui trabalho quando existe item em_picking.
+    if (pedido.status !== "em_picking") return;
+
+    if (!mpPorGrupo[pedido.grupo_id]) {
+      mpPorGrupo[pedido.grupo_id] = new Set();
+    }
+
+    mpPorGrupo[pedido.grupo_id].add(
+      pedido.marketplace || "—"
+    );
+
+    qtdAtivaPorGrupo[pedido.grupo_id] =
+      (qtdAtivaPorGrupo[pedido.grupo_id] || 0) + 1;
   });
 
-  // Conta quantos pedidos cada grupo realmente tem (para esconder grupos-casca vazios).
-  const qtdPorGrupo = {};
-  (pedidos || []).forEach(p => { qtdPorGrupo[p.grupo_id] = (qtdPorGrupo[p.grupo_id] || 0) + 1; });
-
   return grupos
-    // Grupo sem nenhum pedido não deve aparecer no picking. Isso acontece quando todos
-    // os itens de um grupo vão para análise (a regra tira o item do grupo, e a casca fica
-    // vazia). Some da tela sem precisar apagar o registro do grupo.
-    .filter(g => (qtdPorGrupo[g.id] || 0) > 0)
-    .map(g => {
-      const mps = mpPorGrupo[g.id] ? Array.from(mpPorGrupo[g.id]) : [];
-      const marketplace = mps.length === 1 ? mps[0] : (mps.length > 1 ? "Vários" : null);
-      return { ...g, marketplace };
+    // Esconde grupos-casca mesmo que o cabeçalho esteja inconsistente.
+    .filter(
+      (grupo) =>
+        (qtdAtivaPorGrupo[grupo.id] || 0) > 0
+    )
+    .map((grupo) => {
+      const marketplaces = mpPorGrupo[grupo.id]
+        ? Array.from(mpPorGrupo[grupo.id])
+        : [];
+
+      const marketplace =
+        marketplaces.length === 1
+          ? marketplaces[0]
+          : marketplaces.length > 1
+            ? "Vários"
+            : null;
+
+      const totalAtual =
+        qtdAtivaPorGrupo[grupo.id] || 0;
+
+      return {
+        ...grupo,
+
+        // Preserva o total histórico sem mostrá-lo como pendência.
+        total_pedidos_original: grupo.total_pedidos,
+
+        // O cartão passa a mostrar somente o que ainda falta separar.
+        total_pedidos: totalAtual,
+        total_picking_atual: totalAtual,
+
+        marketplace,
+      };
     });
 }
 
@@ -855,32 +898,70 @@ export async function registrarBipagem(pedidoId, imeiDigitado, userId) {
 }
 
 async function verificarConclusaoGrupo(grupoId) {
-  const { data: pedidos } = await supabase
+  const { data: pedidos, error } = await supabase
     .from("pedidos_b2c")
     .select("status")
     .eq("grupo_id", grupoId);
 
+  if (error) {
+    throw new Error(error.message);
+  }
+
   const todos = pedidos || [];
-  // "em_analise" saiu daqui: agora o item em análise deixa o grupo (grupo_id = null),
-  // então não precisa mais ser contado como concluído para o grupo poder fechar.
-  const concluidos = todos.filter(p =>
-    ["embalado", "faturado", "concluido"].includes(p.status)
+
+  const ativos = todos.filter(
+    (pedido) => pedido.status === "em_picking"
   ).length;
 
-  // Grupo que ficou sem nenhum pedido (todos saíram para análise) não deve reabrir.
-  if (todos.length > 0 && concluidos >= todos.length) {
-    // Grupo concluído: fecha e libera a trava de picking automaticamente.
-    await supabase
+  /*
+   * Sem item em_picking, inclusive quando todos saíram
+   * do grupo para análise, o picking foi concluído.
+   */
+  if (ativos === 0) {
+    const { error: erroConclusao } = await supabase
       .from("pedidos_b2c_grupos")
-      .update({ status: "concluido", picking_por: null, picking_por_nome: null, picking_em: null })
+      .update({
+        status: "concluido",
+        picking_por: null,
+        picking_por_nome: null,
+        picking_em: null,
+      })
       .eq("id", grupoId);
-  } else {
-    // Reabriu no picking: limpa a trava de faturamento (fica livre de novo quando voltar).
-    await supabase
-      .from("pedidos_b2c_grupos")
-      .update({ status: "em_picking", baixado_por: null, baixado_por_nome: null, baixado_em: null })
-      .eq("id", grupoId);
+
+    if (erroConclusao) {
+      throw new Error(erroConclusao.message);
+    }
+
+    return {
+      concluido: true,
+      totalVinculado: todos.length,
+      ativos: 0,
+    };
   }
+
+  /*
+   * Ainda há trabalho real no grupo.
+   * Mantém o picking aberto.
+   */
+  const { error: erroReabertura } = await supabase
+    .from("pedidos_b2c_grupos")
+    .update({
+      status: "em_picking",
+      baixado_por: null,
+      baixado_por_nome: null,
+      baixado_em: null,
+    })
+    .eq("id", grupoId);
+
+  if (erroReabertura) {
+    throw new Error(erroReabertura.message);
+  }
+
+  return {
+    concluido: false,
+    totalVinculado: todos.length,
+    ativos,
+  };
 }
 
 // ══════════════════════════════════════════════════════════
@@ -890,87 +971,164 @@ async function verificarConclusaoGrupo(grupoId) {
 // destino: "em_analise" (padrão) ou "aguardando_definicao_produto". O picking usa o
 // segundo quando o FIFO não tem substituto: não é caso de investigar estoque, é falta de
 // produto — quem decide o que fazer é a definição de produto, não a análise.
-export async function marcarNaoLocalizado(pedidoId, motivo, userId, destino = "em_analise") {
-  // REGRA: pedido multi-item anda SEMPRE junto. Se um item cai em análise, os irmãos que
-  // já avançaram (alocado em grupo, em picking, embalado) RECUAM para "alocado" sem grupo
-  // e esperam a resolução — mantendo o IMEI reservado (não perdem a peça já achada).
-  // Só voltam a andar quando TODOS os itens do pedido estiverem prontos de novo.
-  const { data: alvo } = await supabase
+export async function marcarNaoLocalizado(
+  pedidoId,
+  motivo,
+  userId,
+  destino = "em_analise"
+) {
+  /*
+   * Pedido multi-item anda junto. Quando um item entra
+   * em análise, os irmãos ativos saem do grupo antigo.
+   */
+  const { data: alvo, error: erroAlvo } = await supabase
     .from("pedidos_b2c")
-    .select("id, id_anymarket, grupo_id")
+    .select(
+      "id, id_anymarket, grupo_id, imei_alocado"
+    )
     .eq("id", pedidoId)
     .single();
-  if (!alvo) throw new Error("Pedido não encontrado.");
+
+  if (erroAlvo || !alvo) {
+    throw new Error(
+      erroAlvo?.message || "Pedido não encontrado."
+    );
+  }
 
   const agora = new Date().toISOString();
   const gruposAfetados = new Set();
-  if (alvo.grupo_id) gruposAfetados.add(alvo.grupo_id);
 
-  // 1. O item sai do grupo e vai para o destino pedido (análise ou definição de produto).
+  if (alvo.grupo_id) {
+    gruposAfetados.add(alvo.grupo_id);
+  }
+
+  /*
+   * O item principal sai do grupo e vai para análise
+   * ou aguardando definição.
+   */
   const campos = {
-    status:         destino,
-    grupo_id:       null,
-    motivo_analise: motivo || "Não localizado",
-    atualizado_em:  agora,
+    status: destino,
+    grupo_id: null,
+    motivo_analise:
+      motivo || "Não localizado no picking",
+    atualizado_em: agora,
   };
+
   if (destino === "aguardando_definicao_produto") {
-    campos.definicao_solicitada_em  = agora;
+    campos.definicao_solicitada_em = agora;
     campos.definicao_solicitada_por = userId;
-    // O pedido volta para a fila de definição, então a definição anterior precisa ser
-    // reaberta: a aba só lista definicao_status nulo ou pendente, e um "concluido"
-    // remanescente deixaria o pedido invisível em todas as telas.
-    campos.definicao_status         = "pendente";
-    campos.definicao_resolvido_em   = null;
-    campos.definicao_resolvido_por  = null;
-    campos.definicao_resumo         = null;
-    // Solta o aparelho que ninguém achou — segurá-lo bloqueia o FIFO para os outros.
-    campos.imei_alocado             = null;
-    campos.sku_alocado              = null;
-    campos.grade_alocada            = null;
-    campos.alocado_em               = null;
-    campos.alocado_por              = null;
+    campos.definicao_status = "pendente";
+    campos.definicao_resolvido_em = null;
+    campos.definicao_resolvido_por = null;
+    campos.definicao_resumo = null;
+
+    campos.imei_alocado = null;
+    campos.sku_alocado = null;
+    campos.grade_alocada = null;
+    campos.alocado_em = null;
+    campos.alocado_por = null;
   } else {
-    campos.analise_em  = agora;
+    campos.analise_em = agora;
     campos.analise_por = userId;
   }
 
-  const { error: errItem } = await supabase
+  const { error: erroItem } = await supabase
     .from("pedidos_b2c")
     .update(campos)
     .eq("id", pedidoId);
-  if (errItem) throw new Error(errItem.message);
 
-  // 2. Puxa os IRMÃOS que já avançaram de volta para "alocado" sem grupo. Mantém o IMEI
-  //    reservado (imei_alocado, sku_alocado, grade_alocada intactos). Limpa só bipagem/
-  //    embalagem, porque eles recuam de etapa. Não toca em item já faturado/concluído.
-  const { data: irmaos } = await supabase
-    .from("pedidos_b2c")
-    .select("id, grupo_id, status")
-    .eq("id_anymarket", alvo.id_anymarket)
-    .neq("id", pedidoId)
-    .in("status", ["alocado", "em_picking", "embalado", "em_analise", "aguardando_definicao_produto"]);
+  if (erroItem) {
+    throw new Error(erroItem.message);
+  }
 
-  for (const irmao of (irmaos || [])) {
-    if (irmao.grupo_id) gruposAfetados.add(irmao.grupo_id);
+  /*
+   * O aparelho não localizado deixa de ser elegível
+   * para novas alocações no FIFO.
+   *
+   * O gatilho de pedidos_b2c converte a reserva WMS
+   * para análise e bloqueia o endereço.
+   */
+  if (alvo.imei_alocado) {
+    const { error: erroTriagem } = await supabase
+      .from("assurant_triagem")
+      .update({
+        status_atual: "Em análise de estoque",
+        atualizado_em: agora,
+      })
+      .eq("imei", alvo.imei_alocado);
+
+    if (erroTriagem) {
+      throw new Error(erroTriagem.message);
+    }
+  }
+
+  /*
+   * Recolhe os irmãos ativos do mesmo pedido.
+   * Mantém os IMEIs já reservados, mas limpa bipagem
+   * e embalagem porque eles retornarão em uma nova leva.
+   */
+  const { data: irmaos, error: erroIrmaos } =
     await supabase
       .from("pedidos_b2c")
+      .select("id, grupo_id, status")
+      .eq("id_anymarket", alvo.id_anymarket)
+      .neq("id", pedidoId)
+      .in("status", [
+        "alocado",
+        "em_picking",
+        "embalado",
+        "em_analise",
+        "aguardando_definicao_produto",
+      ]);
+
+  if (erroIrmaos) {
+    throw new Error(erroIrmaos.message);
+  }
+
+  for (const irmao of irmaos || []) {
+    if (irmao.grupo_id) {
+      gruposAfetados.add(irmao.grupo_id);
+    }
+
+    const { error: erroIrmao } = await supabase
+      .from("pedidos_b2c")
       .update({
-        status:        "alocado",
-        grupo_id:      null,
-        imei_bipado:   null,
-        bipado_em:     null,
-        bipado_por:    null,
-        embalado_em:   null,
-        embalado_por:  null,
+        status: "alocado",
+        grupo_id: null,
+
+        imei_bipado: null,
+        bipado_em: null,
+        bipado_por: null,
+
+        embalado_em: null,
+        embalado_por: null,
+
         atualizado_em: agora,
       })
       .eq("id", irmao.id);
+
+    if (erroIrmao) {
+      throw new Error(erroIrmao.message);
+    }
   }
 
-  // 3. Recalcula todo grupo tocado: sem os itens que saíram, os que sobraram podem fechar.
-  for (const gid of gruposAfetados) {
-    await verificarConclusaoGrupo(gid);
+  /*
+   * Recalcula os grupos antigos.
+   *
+   * Se não restar item em_picking, conclui.
+   * Se ainda houver outros itens, libera a trava para
+   * que o grupo possa ser aberto novamente.
+   */
+  for (const grupoId of gruposAfetados) {
+    await verificarConclusaoGrupo(grupoId);
+    await liberarTravaPicking(grupoId);
   }
+
+  return {
+    ok: true,
+    destino,
+    gruposAfetados: Array.from(gruposAfetados),
+  };
 }
 
 // Picking — "Não localizado" com busca automática de segunda opção.
@@ -979,66 +1137,38 @@ export async function marcarNaoLocalizado(pedidoId, motivo, userId, destino = "e
 // 3. Se achar: reserva o novo e o pedido segue no grupo apontando para ele.
 //    Se não achar: manda o pedido para análise (fluxo atual).
 // Retorna { trocado: true, novoImei, local } | { trocado: false } (foi para análise).
-export async function naoLocalizadoBuscarProximo(pedido, userId, motivo) {
-  const imeiAntigo = pedido.imei_alocado;
-  // Motivo padrão é o "não localizado" do picking. A conferência de cor/modelo/SKU passa
-  // o motivo da divergência e reaproveita este mesmo fluxo: a peça problemática sai do
-  // estoque sugerível e o pedido ganha a próxima opção do FIFO sem cair em análise.
-  const motivoFinal = motivo || "Não localizado";
-
-  // 1. IMEI antigo vai para análise de estoque (não some, mas sai do FIFO até verificação)
-  if (imeiAntigo) {
-    await supabase
-      .from("assurant_triagem")
-      .update({ status_atual: "Em análise de estoque" })
-      .eq("imei", imeiAntigo);
+export async function naoLocalizadoBuscarProximo(
+  pedido,
+  userId,
+  motivo
+) {
+  if (!pedido?.id) {
+    throw new Error("Pedido não encontrado.");
   }
 
-  // 2. Busca a próxima sugestão FIFO. Usa SKU/grade DEFINIDOS quando existirem (pedido que
-  //    passou por definição de produto), senão os originais — mesma regra do FIFO.
-  const skuBusca   = pedido.sku_definido   || pedido.sku_produto;
-  const gradeBusca = pedido.grade_definida || pedido.grade_produto;
-  const sugestoes = await buscarSugestaoFifo(skuBusca, gradeBusca);
-  // Exclui por segurança o próprio antigo (caso ainda apareça) e qualquer já reservado
-  const proximo = (sugestoes || []).find(s => s.imei !== imeiAntigo);
+  const motivoFinal =
+    motivo || "Não localizado no picking";
 
-  if (proximo) {
-    // 3a. Reserva o novo IMEI e aponta o pedido para ele — segue no mesmo grupo
-    await supabase
-      .from("assurant_triagem")
-      .update({ status_atual: "Reservado para pedido B2C" })
-      .eq("imei", proximo.imei);
-
-    const { error: errTroca } = await supabase
-      .from("pedidos_b2c")
-      .update({
-        imei_alocado:  proximo.imei,
-        sku_alocado:   proximo.sku,
-        grade_alocada: proximo.grade,
-        atualizado_em: new Date().toISOString(),
-      })
-      .eq("id", pedido.id);
-    if (errTroca) throw traduzErroAlocacao(errTroca, proximo.imei);
-
-    // Troca no picking também é decisão do FIFO — registra com a origem certa.
-    await registrarAuditoriaFifo(pedido.id, {
-      sugestao: proximo, candidatos: sugestoes,
-      origem: motivo ? "divergencia_conferencia" : "nao_localizado",
-      pedido, userId,
-    });
-
-    return { trocado: true, novoImei: proximo.imei, local: proximo.local, grade: proximo.grade };
-  }
-
-  // 3b. Sem segunda opção: não é caso de análise de estoque — é falta de produto.
-  // Vai para "Aguardando definição" para alguém decidir o substituto.
+  /*
+   * Não procura nem coloca outro aparelho dentro do
+   * grupo que já estava em separação.
+   *
+   * O item vai para Em Análise e o grupo antigo é
+   * recalculado. A substituição será feita na resolução
+   * da análise e entrará em uma nova leva.
+   */
   await marcarNaoLocalizado(
     pedido.id,
-    `${motivoFinal} (sem segunda opção no FIFO)`,
+    motivoFinal,
     userId,
-    "aguardando_definicao_produto",
+    "em_analise"
   );
-  return { trocado: false };
+
+  return {
+    trocado: false,
+    emAnalise: true,
+    grupoAnteriorEncerrado: true,
+  };
 }
 
 // Monta os dados do modal de resolução de análise:
@@ -1198,87 +1328,183 @@ export async function resolverAnaliseParaEmbalagem(pedidoId, { tipo, valorReal, 
 // O aparelho antigo (não localizado) vai para "Em análise de estoque". O novo é
 // reservado e o pedido volta ao picking (sem grupo), para alguém buscar e bipar.
 // Usa o SKU/grade definidos quando existirem (senão os originais), igual o FIFO.
-export async function seguirComOpcaoFifo(pedido, userId) {
+export async function seguirComOpcaoFifo(
+  pedido,
+  userId
+) {
   const imeiAntigo = pedido.imei_alocado;
 
-  const sku   = pedido.sku_definido   || pedido.sku_produto;
-  const grade = pedido.grade_definida || pedido.grade_produto;
-  const sugestoes = await buscarSugestaoFifo(sku, grade);
-  const proximo = (sugestoes || []).find(s => s.imei !== imeiAntigo);
+  const sku =
+    pedido.sku_definido || pedido.sku_produto;
+
+  const grade =
+    pedido.grade_definida || pedido.grade_produto;
+
+  const sugestoes = await buscarSugestaoFifo(
+    sku,
+    grade
+  );
+
+  const proximo = (sugestoes || []).find(
+    (sugestao) =>
+      sugestao.imei !== imeiAntigo
+  );
 
   if (!proximo) {
-    return { ok: false, erro: "Nenhuma opção disponível no FIFO agora." };
+    return {
+      ok: false,
+      erro: "Nenhuma opção disponível no FIFO agora.",
+    };
   }
 
   if (imeiAntigo) {
-    await supabase
+    const { error: erroAntigo } = await supabase
       .from("assurant_triagem")
-      .update({ status_atual: "Em análise de estoque" })
+      .update({
+        status_atual: "Em análise de estoque",
+      })
       .eq("imei", imeiAntigo);
+
+    if (erroAntigo) {
+      throw new Error(erroAntigo.message);
+    }
   }
 
-  await supabase
+  const { error: erroReserva } = await supabase
     .from("assurant_triagem")
-    .update({ status_atual: "Reservado para pedido B2C" })
+    .update({
+      status_atual: "Reservado para pedido B2C",
+    })
     .eq("imei", proximo.imei);
 
+  if (erroReserva) {
+    throw new Error(erroReserva.message);
+  }
+
   const agora = new Date().toISOString();
+
   const { error } = await supabase
     .from("pedidos_b2c")
     .update({
-      status:        "em_picking",
-      grupo_id:      null,
-      imei_alocado:  proximo.imei,
-      sku_alocado:   proximo.sku,
+      /*
+       * Ainda está sem grupo. Precisa voltar como
+       * alocado para a formação automática recolher
+       * o pedido em uma nova leva.
+       */
+      status: "alocado",
+      grupo_id: null,
+
+      imei_alocado: proximo.imei,
+      sku_alocado: proximo.sku,
       grade_alocada: proximo.grade,
-      resolvido_em:  agora,
+
+      alocado_em: agora,
+      alocado_por: userId,
+
+      resolvido_em: agora,
       resolvido_por: userId,
       atualizado_em: agora,
     })
     .eq("id", pedido.id);
-  if (error) throw traduzErroAlocacao(error, proximo.imei);
 
-  const grupoFormado = await verificarECriarGrupo(userId);
-  return { ok: true, novoImei: proximo.imei, local: proximo.local, grade: proximo.grade, grupoFormado };
+  if (error) {
+    throw traduzErroAlocacao(
+      error,
+      proximo.imei
+    );
+  }
+
+  const grupoFormado =
+    await verificarECriarGrupo(userId);
+
+  return {
+    ok: true,
+    novoImei: proximo.imei,
+    local: proximo.local,
+    grade: proximo.grade,
+    grupoFormado,
+  };
 }
 
-export async function resolverAnalise(pedidoId, novoImei, userId) {
-  const { data: pedido } = await supabase
-    .from("pedidos_b2c")
-    .select("imei_alocado, grupo_id")
-    .eq("id", pedidoId)
-    .single();
-
-  if (pedido?.imei_alocado) {
+export async function resolverAnalise(
+  pedidoId,
+  novoImei,
+  userId
+) {
+  const { data: pedido, error: erroPedido } =
     await supabase
+      .from("pedidos_b2c")
+      .select("imei_alocado, grupo_id")
+      .eq("id", pedidoId)
+      .single();
+
+  if (erroPedido || !pedido) {
+    throw new Error(
+      erroPedido?.message || "Pedido não encontrado."
+    );
+  }
+
+  if (pedido.imei_alocado) {
+    const { error: erroLiberacao } = await supabase
       .from("assurant_triagem")
-      .update({ status_atual: "Produto disponível" })
+      .update({
+        status_atual: "Produto disponível",
+      })
       .eq("imei", pedido.imei_alocado);
+
+    if (erroLiberacao) {
+      throw new Error(erroLiberacao.message);
+    }
   }
 
   if (novoImei) {
-    await supabase
+    const { error: erroReserva } = await supabase
       .from("assurant_triagem")
-      .update({ status_atual: "Reservado para pedido B2C" })
+      .update({
+        status_atual: "Reservado para pedido B2C",
+      })
       .eq("imei", novoImei);
+
+    if (erroReserva) {
+      throw new Error(erroReserva.message);
+    }
   }
+
+  const agora = new Date().toISOString();
 
   const { error } = await supabase
     .from("pedidos_b2c")
     .update({
-      status:        "em_picking",
-      grupo_id:      null,
-      imei_alocado:  novoImei || pedido?.imei_alocado,
-      resolvido_em:  new Date().toISOString(),
+      /*
+       * A formação de grupos procura status alocado
+       * com grupo_id nulo.
+       */
+      status: "alocado",
+      grupo_id: null,
+
+      imei_alocado:
+        novoImei || pedido.imei_alocado,
+
+      alocado_em: agora,
+      alocado_por: userId,
+
+      resolvido_em: agora,
       resolvido_por: userId,
-      atualizado_em: new Date().toISOString(),
+      atualizado_em: agora,
     })
     .eq("id", pedidoId);
-  if (error) throw new Error(error.message);
 
-  // O item resolvido volta ao picking SEM grupo: vira um alocado avulso que a formação
-  // de grupo recolhe numa leva nova — grupo diferente do original, como a operação pede.
-  // (O grupo antigo já foi recalculado quando o item saiu, em marcarNaoLocalizado.)
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const grupoFormado =
+    await verificarECriarGrupo(userId);
+
+  return {
+    ok: true,
+    grupoFormado,
+  };
 }
 
 // ══════════════════════════════════════════════════════════
