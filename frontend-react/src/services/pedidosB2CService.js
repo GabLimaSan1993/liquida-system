@@ -1698,92 +1698,219 @@ export async function listarGruposFaturamento() {
 export async function listarGruposFaturados() {
   const { data: pedidos, error } = await supabase
     .from("pedidos_b2c")
-    .select("grupo_id, id_anymarket, marketplace, total_do_pedido, numero_nf, data_de_pagamento, faturado_em, faturado_por")
+    .select(`
+      grupo_id,
+      id_anymarket,
+      marketplace,
+      total_do_pedido,
+      numero_nf,
+      data_de_pagamento,
+      faturado_em,
+      faturado_por
+    `)
     .in("status", ["faturado", "concluido"])
     .not("grupo_id", "is", null);
-  if (error) throw new Error(error.message);
+
+  if (error) {
+    throw new Error(error.message);
+  }
 
   const lista = pedidos || [];
-  if (!lista.length) return [];
 
-  // Um pedido pode ter mais de uma linha (multi-item). O valor do pedido é o mesmo
-  // em todas elas, então somar linha a linha inflaria o total: agrupa por id_anymarket
-  // e soma uma vez por pedido, contando as linhas separadamente como unidades.
+  if (!lista.length) {
+    return [];
+  }
+
   const cont = {};
-  lista.forEach(p => {
-    const c = (cont[p.grupo_id] ||= { porPedido: {}, mp: {}, nfs: [], ultimo: null, porId: null, unidades: 0 });
-    c.unidades++;
-    const nome = p.marketplace || "—";
-    c.mp[nome] = (c.mp[nome] || 0) + 1;
-    if (p.numero_nf) c.nfs.push(String(p.numero_nf));
-    if (p.faturado_em && (!c.ultimo || p.faturado_em > c.ultimo)) {
-      c.ultimo = p.faturado_em;
-      c.porId  = p.faturado_por || null;
+
+  lista.forEach((pedido) => {
+    const grupo = (
+      cont[pedido.grupo_id] ||= {
+        porPedido: {},
+        mp: {},
+        nfs: [],
+        ultimo: null,
+        porId: null,
+        unidades: 0,
+      }
+    );
+
+    grupo.unidades++;
+
+    const marketplace = pedido.marketplace || "—";
+
+    grupo.mp[marketplace] =
+      (grupo.mp[marketplace] || 0) + 1;
+
+    if (pedido.numero_nf) {
+      grupo.nfs.push(String(pedido.numero_nf));
     }
-    const chave = String(p.id_anymarket);
-    const ped = (c.porPedido[chave] ||= {
-      id_anymarket: p.id_anymarket,
-      valor: 0,
-      unidades: 0,
-      faturadoEm: null,
-      pagamento: p.data_de_pagamento || null,
-      nfs: [],
-    });
-    ped.unidades++;
-    if (!ped.valor) ped.valor = p.total_do_pedido || 0;
-    if (p.numero_nf) ped.nfs.push(String(p.numero_nf));
-    if (p.faturado_em && (!ped.faturadoEm || p.faturado_em > ped.faturadoEm)) ped.faturadoEm = p.faturado_em;
+
+    if (
+      pedido.faturado_em &&
+      (!grupo.ultimo || pedido.faturado_em > grupo.ultimo)
+    ) {
+      grupo.ultimo = pedido.faturado_em;
+      grupo.porId = pedido.faturado_por || null;
+    }
+
+    const chavePedido = String(pedido.id_anymarket);
+
+    const pedidoAgrupado = (
+      grupo.porPedido[chavePedido] ||= {
+        id_anymarket: pedido.id_anymarket,
+        valor: 0,
+        unidades: 0,
+        faturadoEm: null,
+        pagamento: pedido.data_de_pagamento || null,
+        nfs: [],
+      }
+    );
+
+    pedidoAgrupado.unidades++;
+
+    if (!pedidoAgrupado.valor) {
+      pedidoAgrupado.valor =
+        pedido.total_do_pedido || 0;
+    }
+
+    if (pedido.numero_nf) {
+      pedidoAgrupado.nfs.push(
+        String(pedido.numero_nf)
+      );
+    }
+
+    if (
+      pedido.faturado_em &&
+      (
+        !pedidoAgrupado.faturadoEm ||
+        pedido.faturado_em >
+          pedidoAgrupado.faturadoEm
+      )
+    ) {
+      pedidoAgrupado.faturadoEm =
+        pedido.faturado_em;
+    }
   });
 
-  // Busca os grupos em blocos: lista grande de ids estoura a URL do PostgREST silenciosamente.
   const ids = Object.keys(cont);
   const BLOCO_IDS = 200;
   const grupos = [];
-  for (let i = 0; i < ids.length; i += BLOCO_IDS) {
-    const { data, error: e2 } = await supabase
-      .from("pedidos_b2c_grupos")
-      .select("*")
-      .in("id", ids.slice(i, i + BLOCO_IDS));
-    if (e2) throw new Error(e2.message);
+
+  for (
+    let i = 0;
+    i < ids.length;
+    i += BLOCO_IDS
+  ) {
+    const { data, error: erroGrupos } =
+      await supabase
+        .from("pedidos_b2c_grupos")
+        .select("*")
+        .in(
+          "id",
+          ids.slice(i, i + BLOCO_IDS)
+        )
+        .eq(
+          "status_faturamento",
+          "concluido"
+        );
+
+    if (erroGrupos) {
+      throw new Error(erroGrupos.message);
+    }
+
     grupos.push(...(data || []));
   }
 
-  const userIds = [...new Set(Object.values(cont).map(c => c.porId).filter(Boolean))];
+  const userIds = [
+    ...new Set(
+      Object.values(cont)
+        .map((grupo) => grupo.porId)
+        .filter(Boolean)
+    ),
+  ];
+
   const nomes = {};
-  for (let i = 0; i < userIds.length; i += BLOCO_IDS) {
-    const { data: perfis } = await supabase
-      .from("user_profiles")
-      .select("id, nome")
-      .in("id", userIds.slice(i, i + BLOCO_IDS));
-    (perfis || []).forEach(u => { nomes[u.id] = u.nome; });
+
+  for (
+    let i = 0;
+    i < userIds.length;
+    i += BLOCO_IDS
+  ) {
+    const { data: perfis, error: erroPerfis } =
+      await supabase
+        .from("user_profiles")
+        .select("id, nome")
+        .in(
+          "id",
+          userIds.slice(i, i + BLOCO_IDS)
+        );
+
+    if (erroPerfis) {
+      throw new Error(erroPerfis.message);
+    }
+
+    (perfis || []).forEach((usuario) => {
+      nomes[usuario.id] = usuario.nome;
+    });
   }
 
   return grupos
-    .map(g => {
-      const c = cont[g.id];
-      const nfs = [...new Set(c.nfs)].sort((a, b) => Number(a) - Number(b));
-      const pedidosFat = Object.values(c.porPedido).map(p => ({
-        ...p,
-        // Dias do pagamento até o faturamento. data_de_pagamento é texto DD/MM/AAAA.
-        dias: diasEntrePagamentoEFaturamento(p.pagamento, p.faturadoEm),
+    .map((grupo) => {
+      const contagem = cont[grupo.id];
+
+      const nfs = [
+        ...new Set(contagem.nfs),
+      ].sort(
+        (a, b) => Number(a) - Number(b)
+      );
+
+      const pedidosFaturados = Object.values(
+        contagem.porPedido
+      ).map((pedido) => ({
+        ...pedido,
+        dias: diasEntrePagamentoEFaturamento(
+          pedido.pagamento,
+          pedido.faturadoEm
+        ),
       }));
+
       return {
-        ...g,
-        faturados: pedidosFat.length,
-        unidades: c.unidades,
-        valorFaturado: pedidosFat.reduce((acc, p) => acc + (p.valor || 0), 0),
-        marketplaces: Object.entries(c.mp)
-          .map(([nome, qtd]) => ({ nome, qtd }))
+        ...grupo,
+        faturados: pedidosFaturados.length,
+        unidades: contagem.unidades,
+
+        valorFaturado:
+          pedidosFaturados.reduce(
+            (total, pedido) =>
+              total + (pedido.valor || 0),
+            0
+          ),
+
+        marketplaces: Object.entries(
+          contagem.mp
+        )
+          .map(([nome, quantidade]) => ({
+            nome,
+            qtd: quantidade,
+          }))
           .sort((a, b) => b.qtd - a.qtd),
+
         totalNfs: nfs.length,
         nfDe: nfs[0] || null,
         nfAte: nfs[nfs.length - 1] || null,
-        faturadoEm: c.ultimo,
-        faturadoPorNome: nomes[c.porId] || null,
-        pedidosFat,
+        faturadoEm: contagem.ultimo,
+
+        faturadoPorNome:
+          nomes[contagem.porId] || null,
+
+        pedidosFat: pedidosFaturados,
       };
     })
-    .sort((a, b) => (b.numero || 0) - (a.numero || 0));
+    .sort(
+      (a, b) =>
+        (b.numero || 0) - (a.numero || 0)
+    );
 }
 
 // data_de_pagamento vem como texto "DD/MM/AAAA HH:MM:SS" do AnyMarket. Monta a data
@@ -2056,17 +2183,42 @@ export async function importarNFsXmlGrupo(file, grupoId, userId) {
 
 // Marca o faturamento do grupo como concluído quando não resta nada pendente
 // (nada embalado aguardando NF, nem em picking, nem em análise).
-async function verificarConclusaoFaturamentoGrupo(grupoId) {
-  const { data: pedidos } = await supabase
-    .from("pedidos_b2c").select("status").eq("grupo_id", grupoId);
-  const todos = pedidos || [];
-  const pendente = todos.some(p => ["embalado", "em_picking", "em_analise"].includes(p.status));
-  const concluido = todos.length > 0 && !pendente;
+async function verificarConclusaoFaturamentoGrupo(
+  grupoId
+) {
+  const { data: pedidos, error } =
+    await supabase
+      .from("pedidos_b2c")
+      .select("status")
+      .eq("grupo_id", grupoId);
 
-  await supabase
-    .from("pedidos_b2c_grupos")
-    .update({ status_faturamento: concluido ? "concluido" : "pendente" })
-    .eq("id", grupoId);
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const todos = pedidos || [];
+
+  const concluido =
+    todos.length > 0 &&
+    todos.every((pedido) =>
+      ["faturado", "concluido"].includes(
+        pedido.status
+      )
+    );
+
+  const { error: erroGrupo } =
+    await supabase
+      .from("pedidos_b2c_grupos")
+      .update({
+        status_faturamento: concluido
+          ? "concluido"
+          : "pendente",
+      })
+      .eq("id", grupoId);
+
+  if (erroGrupo) {
+    throw new Error(erroGrupo.message);
+  }
 
   return concluido;
 }
