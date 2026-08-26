@@ -46,7 +46,7 @@ function StatusBadge({ chave, label }) {
     picking: "bg-purple-50 text-purple-700 ring-purple-200",
     faturamento: "bg-amber-50 text-amber-700 ring-amber-200",
     validacao: "bg-orange-50 text-orange-700 ring-orange-200",
-    teams: "bg-blue-50 text-blue-700 ring-blue-200",
+    definicao: "bg-blue-50 text-blue-700 ring-blue-200",
     aguardando_alocacao: "bg-slate-50 text-slate-600 ring-slate-200",
     concluido: "bg-emerald-50 text-emerald-700 ring-emerald-200",
     cancelado: "bg-red-50 text-red-700 ring-red-200",
@@ -91,7 +91,7 @@ function DefinicaoResumo({ corte }) {
   return (
     <div>
       <h4 className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">
-        Aguardando definição
+        Definição de produto
       </h4>
       <div className="space-y-1.5">
         <div className="flex items-center justify-between gap-4 text-xs">
@@ -99,8 +99,8 @@ function DefinicaoResumo({ corte }) {
           <strong className="text-slate-800">{corte.definicao?.emValidacao || 0}</strong>
         </div>
         <div className="flex items-center justify-between gap-4 text-xs">
-          <span className="text-slate-600">Já enviados ao Teams</span>
-          <strong className="text-slate-800">{corte.definicao?.noTeams || 0}</strong>
+          <span className="text-slate-600">Aguardando definição</span>
+          <strong className="text-slate-800">{corte.definicao?.aguardando || 0}</strong>
         </div>
       </div>
     </div>
@@ -189,8 +189,8 @@ export default function B2CPainelGestorPage() {
 
       setDados(resposta);
       setCorteAberto((atual) => {
-        if (atual && resposta.cortes.some((corte) => corte.hora === atual)) return atual;
-        return resposta.resumo.ultimoCorte;
+        if (atual && resposta.cortes.some((corte) => corte.chave === atual)) return atual;
+        return resposta.cortes.at(-1)?.chave || null;
       });
     } catch (error) {
       console.error(error);
@@ -225,6 +225,7 @@ export default function B2CPainelGestorPage() {
 
   const resumo = dados?.resumo || {};
   const cortes = dados?.cortes || [];
+  const ultimoCorte = cortes.at(-1) || null;
 
   return (
     <div className="space-y-5">
@@ -233,7 +234,7 @@ export default function B2CPainelGestorPage() {
         <div className="min-w-0 flex-1">
           <h2 className="text-lg font-black text-slate-800">Painel Gestor · B2C</h2>
           <p className="text-xs text-slate-500">
-            Entrada e andamento dos pedidos por corte do AnyMarket
+            Entrada e andamento dos pedidos por janela operacional do AnyMarket
           </p>
         </div>
       </div>
@@ -244,13 +245,13 @@ export default function B2CPainelGestorPage() {
           className="inline-flex items-center gap-2 border-b-2 border-[#7F2D92] px-3 py-2 text-sm font-bold text-[#7F2D92]"
         >
           <Clock3 className="h-4 w-4" />
-          Cortes do dia
+          Cortes da janela operacional
         </button>
       </div>
 
       <div className="flex flex-wrap items-end gap-3">
         <label className="block">
-          <span className="mb-1 block text-xs font-semibold text-slate-600">Data</span>
+          <span className="mb-1 block text-xs font-semibold text-slate-600">Data operacional</span>
           <div className="relative">
             <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
@@ -277,6 +278,10 @@ export default function B2CPainelGestorPage() {
         </span>
       </div>
 
+      <p className="text-xs text-slate-500">
+        A data selecionada considera os cortes do dia anterior após 13:00 até 13:00 do dia escolhido.
+      </p>
+
       {loading ? (
         <div className="flex h-48 items-center justify-center">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-purple-200 border-t-[#7F2D92]" />
@@ -292,7 +297,7 @@ export default function B2CPainelGestorPage() {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <KpiCard
               icon={Users}
-              label="Entraram na esteira hoje"
+              label="Entraram na janela"
               value={resumo.pedidosNoDia || 0}
               sub="pedidos AnyMarket distintos"
             />
@@ -300,11 +305,15 @@ export default function B2CPainelGestorPage() {
               icon={Clock3}
               label="Cortes realizados"
               value={resumo.cortesRealizados || 0}
-              sub="horários encontrados no dia"
+              sub="entre as duas viradas de 13h"
             />
             <KpiCard
               icon={PackageCheck}
-              label={resumo.ultimoCorte ? `Último corte · ${resumo.ultimoCorte}` : "Último corte"}
+              label={
+                ultimoCorte
+                  ? `Último corte · ${ultimoCorte.dataLabel} · ${ultimoCorte.hora}`
+                  : "Último corte"
+              }
               value={resumo.pedidosUltimoCorte || 0}
               sub="pedidos que entraram no corte"
             />
@@ -313,9 +322,9 @@ export default function B2CPainelGestorPage() {
           <Card>
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <div>
-                <h3 className="text-sm font-black text-slate-800">Cortes do dia</h3>
+                <h3 className="text-sm font-black text-slate-800">Cortes da janela operacional</h3>
                 <p className="text-xs text-slate-500">
-                  Clique no horário para abrir todos os pedidos que entraram naquele corte.
+                  Clique na data e no horário para abrir todos os pedidos que entraram naquele corte.
                 </p>
               </div>
               {dados?.atualizadoEm && (
@@ -338,7 +347,7 @@ export default function B2CPainelGestorPage() {
                     <tr>
                       <th className="whitespace-nowrap px-3 py-3 font-bold">Corte</th>
                       <th className="whitespace-nowrap px-3 py-3 text-right font-bold">Entraram na esteira</th>
-                      <th className="whitespace-nowrap px-3 py-3 text-right font-bold">Acumulado do dia</th>
+                      <th className="whitespace-nowrap px-3 py-3 text-right font-bold">Acumulado da janela</th>
                       <th className="whitespace-nowrap px-3 py-3 text-right font-bold">Em picking</th>
                       <th className="whitespace-nowrap px-3 py-3 text-right font-bold">Em faturamento</th>
                       <th className="whitespace-nowrap px-3 py-3 text-right font-bold">Aguard. definição</th>
@@ -346,13 +355,13 @@ export default function B2CPainelGestorPage() {
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {cortes.map((corte) => {
-                      const aberto = corteAberto === corte.hora;
+                      const aberto = corteAberto === corte.chave;
                       return (
                         <FragmentoCorte
-                          key={corte.hora}
+                          key={corte.chave}
                           corte={corte}
                           aberto={aberto}
-                          onToggle={() => setCorteAberto(aberto ? null : corte.hora)}
+                          onToggle={() => setCorteAberto(aberto ? null : corte.chave)}
                         />
                       );
                     })}
@@ -381,7 +390,7 @@ function FragmentoCorte({ corte, aberto, onToggle }) {
                 : "bg-white text-[#7F2D92] ring-1 ring-purple-200 hover:bg-purple-50"
             }`}
           >
-            {corte.hora}
+            {corte.dataLabel} · {corte.hora}
             {aberto ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
           </button>
         </td>
