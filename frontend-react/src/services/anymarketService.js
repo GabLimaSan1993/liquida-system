@@ -151,7 +151,37 @@ function mapRow(rawHeaders, values, userId) {
   });
   return row;
 }
+async function registrarCorteB2C(
+  horaCorte,
+  arquivo,
+  totalLinhas
+) {
+  const { error } = await supabase.rpc(
+    "registrar_corte_b2c",
+    {
+      p_hora_corte: horaCorte,
+      p_arquivo: arquivo || null,
+      p_linhas: totalLinhas || 0,
+    }
+  );
 
+  if (error) {
+    console.error(
+      "Erro ao registrar o corte B2C:",
+      error
+    );
+
+    return {
+      ok: false,
+      erro: error.message,
+    };
+  }
+
+  return {
+    ok: true,
+    erro: null,
+  };
+}
 async function sincronizarPedidosB2C(rows, horaCorte, userId) {
   // Cada linha do export é UM item do pedido, e cada item vira UMA linha em
   // pedidos_b2c (1 linha = 1 IMEI). Um pedido com 10 produtos tem 10 linhas.
@@ -369,6 +399,12 @@ export async function uploadAnymarketZip(file, userId, horaCorte, onProgress) {
 
   const { inseridos, atualizados, ignorados, inalterados } = await sincronizarPedidosB2C(rows, horaCorte, userId);
 
+  const registroCorte = await registrarCorteB2C(
+    horaCorte,
+    xlsxEntry.name,
+    rows.length
+  );
+
   if (onProgress) onProgress({ inserted: 1, total: 1, fase: "b2c" });
 
   // A tela usa esta lista para alocar automaticamente somente os pedidos
@@ -385,6 +421,8 @@ export async function uploadAnymarketZip(file, userId, horaCorte, onProgress) {
     ignorados,
     inalterados,
     idsAnymarket,
+    corteRegistrado: registroCorte.ok,
+    avisoCorte: registroCorte.erro,
   };
 }
 
