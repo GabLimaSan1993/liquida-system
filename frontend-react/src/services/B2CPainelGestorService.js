@@ -1,7 +1,6 @@
 import { supabase } from "../lib/supabase";
 
-// Janela de operaÃ§Ã£o em SÃ£o Paulo (UTC-3):
-// segunda a sexta, 08:00â€“17:48; sÃ¡bado, 07:00â€“16:00; domingo fechado.
+// Compatibilidade com o Painel Gestor B2B
 const SP_OFFSET_MIN = -180;
 
 const EXPEDIENTE = {
@@ -32,6 +31,7 @@ export function minutosUteis(inicioISO, fimISO) {
 
     const local = new Date(cursor + SP_OFFSET_MIN * 60000);
     const janela = EXPEDIENTE[local.getUTCDay()];
+
     const meiaNoiteLocal =
       Date.UTC(
         local.getUTCFullYear(),
@@ -40,7 +40,8 @@ export function minutosUteis(inicioISO, fimISO) {
         0,
         0,
         0
-      ) - SP_OFFSET_MIN * 60000;
+      ) -
+      SP_OFFSET_MIN * 60000;
 
     if (janela) {
       const abertura = meiaNoiteLocal + janela[0] * 60000;
@@ -58,7 +59,7 @@ export function minutosUteis(inicioISO, fimISO) {
 }
 
 export function fmtDuracao(minutos) {
-  if (minutos == null) return "â€”";
+  if (minutos == null) return "—";
   if (minutos < 1) return "0m";
 
   const dias = Math.floor(minutos / (60 * 24));
@@ -68,6 +69,7 @@ export function fmtDuracao(minutos) {
 
   if (dias) partes.push(`${dias}d`);
   if (horas) partes.push(`${horas}h`);
+
   if (minutosRestantes || (!dias && !horas)) {
     partes.push(`${minutosRestantes}m`);
   }
@@ -125,7 +127,10 @@ function normalizarHora(valor) {
     return null;
   }
 
-  return `${String(hora).padStart(2, "0")}:${String(minuto).padStart(2, "0")}`;
+  return `${String(hora).padStart(2, "0")}:${String(minuto).padStart(
+    2,
+    "0"
+  )}`;
 }
 
 function deslocarData(dataISO, dias) {
@@ -156,26 +161,38 @@ function dataSP(dataISO) {
   if (!dataISO) return null;
 
   const data = new Date(dataISO);
-  if (Number.isNaN(data.getTime())) return null;
 
-  const partes = new Intl.DateTimeFormat("pt-BR", {
-    timeZone: "America/Sao_Paulo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(data);
+  if (Number.isNaN(data.getTime())) {
+    return null;
+  }
+
+  const partes = new Intl.DateTimeFormat(
+    "pt-BR",
+    {
+      timeZone: "America/Sao_Paulo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }
+  ).formatToParts(data);
 
   const valor = (tipo) =>
-    partes.find((parte) => parte.type === tipo)?.value;
+    partes.find(
+      (parte) => parte.type === tipo
+    )?.value;
 
   return `${valor("year")}-${valor("month")}-${valor("day")}`;
 }
 
 function horaEmMinutos(hora) {
   const normalizada = normalizarHora(hora);
+
   if (!normalizada) return null;
 
-  const [horas, minutos] = normalizada.split(":").map(Number);
+  const [horas, minutos] = normalizada
+    .split(":")
+    .map(Number);
+
   return horas * 60 + minutos;
 }
 
@@ -185,16 +202,17 @@ function chaveDoCorte(dataOperacao, hora) {
 
 function dataCurta(dataISO) {
   const [ano, mes, dia] = dataISO.split("-");
+
   return `${dia}/${mes}/${ano}`;
 }
 
 function horarioSP(dataISO) {
-  if (!dataISO) return "â€”";
+  if (!dataISO) return "—";
 
   const data = new Date(dataISO);
 
   if (Number.isNaN(data.getTime())) {
-    return "â€”";
+    return "—";
   }
 
   return new Intl.DateTimeFormat(
@@ -232,7 +250,7 @@ function marketplaceResumido(valor) {
     return "Via Varejo";
   }
 
-  return valor?.trim() || "NÃ£o informado";
+  return valor?.trim() || "Não informado";
 }
 
 function primeiroPreenchido(itens, campo) {
@@ -245,10 +263,35 @@ function primeiroPreenchido(itens, campo) {
   );
 }
 
+function numeroSeguro(valor) {
+  if (valor == null || valor === "") return null;
+
+  const numero = Number(valor);
+
+  return Number.isFinite(numero)
+    ? numero
+    : null;
+}
+
 function statusDoPedido(itens) {
   const status = itens.map((item) =>
     normalizarTexto(item.status)
   );
+
+  const cancelado = itens.some(
+    (item) =>
+      normalizarTexto(item.status) === "cancelado" ||
+      normalizarTexto(
+        item.status_anymarket
+      ).includes("cancel")
+  );
+
+  if (cancelado) {
+    return {
+      chave: "cancelado",
+      label: "Cancelado",
+    };
+  }
 
   if (
     status.some((valor) =>
@@ -257,7 +300,7 @@ function statusDoPedido(itens) {
   ) {
     return {
       chave: "definicao",
-      label: "Aguardando definiÃ§Ã£o",
+      label: "Aguardando definição",
     };
   }
 
@@ -268,7 +311,7 @@ function statusDoPedido(itens) {
   ) {
     return {
       chave: "validacao",
-      label: "Em processo de validaÃ§Ã£o",
+      label: "Em processo de validação",
     };
   }
 
@@ -309,11 +352,12 @@ function statusDoPedido(itens) {
   ) {
     return {
       chave: "aguardando_alocacao",
-      label: "Aguardando alocaÃ§Ã£o",
+      label: "Aguardando alocação",
     };
   }
 
   if (
+    status.length > 0 &&
     status.every(
       (valor) =>
         valor === "concluido" ||
@@ -322,18 +366,7 @@ function statusDoPedido(itens) {
   ) {
     return {
       chave: "concluido",
-      label: "ConcluÃ­do",
-    };
-  }
-
-  if (
-    status.some(
-      (valor) => valor === "cancelado"
-    )
-  ) {
-    return {
-      chave: "cancelado",
-      label: "Cancelado",
+      label: "Concluído",
     };
   }
 
@@ -384,8 +417,30 @@ function resumirPedido(
     ),
   ];
 
+  const totalDoPedido = numeroSeguro(
+    primeiroPreenchido(
+      ordenados,
+      "total_do_pedido"
+    )
+  );
+
+  const valorDosItens = ordenados.reduce(
+    (total, item) =>
+      total +
+      (numeroSeguro(
+        item.valor_unitario
+      ) || 0),
+    0
+  );
+
+  const valorPedido =
+    totalDoPedido != null
+      ? totalDoPedido
+      : valorDosItens;
+
   return {
     idAnymarket,
+
     entradaEm:
       ordenados[0]?.criado_em || null,
 
@@ -404,13 +459,13 @@ function resumirPedido(
       primeiroPreenchido(
         ordenados,
         "cliente"
-      ) || "NÃ£o informado",
+      ) || "Não informado",
 
     quantidadeItens: ordenados.length,
 
     titulo:
       titulos[0] ||
-      "Produto nÃ£o informado",
+      "Produto não informado",
 
     outrosTitulos: Math.max(
       0,
@@ -429,7 +484,13 @@ function resumirPedido(
       "numero_nf"
     ),
 
+    valorPedido,
+
+    cancelado:
+      status.chave === "cancelado",
+
     statusChave: status.chave,
+
     statusLabel: status.label,
   };
 }
@@ -463,6 +524,9 @@ async function buscarLinhasDaJanela(
           sku_alocado,
           imei_alocado,
           status,
+          status_anymarket,
+          valor_unitario,
+          total_do_pedido,
           faturado_em,
           numero_nf,
           grupo_id
@@ -541,16 +605,28 @@ async function buscarCortesRegistrados(
     throw new Error(error.message);
   }
 
-  return (data || []).filter((corte) => {
-    const minutos = horaEmMinutos(corte.hora_corte);
-    if (minutos == null) return false;
+  return (data || []).filter(
+    (corte) => {
+      const minutos = horaEmMinutos(
+        corte.hora_corte
+      );
 
-    if (corte.data_operacao === dataAnterior) {
-      return minutos > 13 * 60;
+      if (minutos == null) return false;
+
+      if (
+        corte.data_operacao ===
+        dataAnterior
+      ) {
+        return minutos > 13 * 60;
+      }
+
+      return (
+        corte.data_operacao ===
+          dataISO &&
+        minutos <= 13 * 60
+      );
     }
-
-    return corte.data_operacao === dataISO && minutos <= 13 * 60;
-  });
+  );
 }
 
 export function hojeEmSaoPaulo() {
@@ -578,12 +654,12 @@ export function hojeEmSaoPaulo() {
 export function formatarDataHoraSP(
   dataISO
 ) {
-  if (!dataISO) return "â€”";
+  if (!dataISO) return "—";
 
   const data = new Date(dataISO);
 
   if (Number.isNaN(data.getTime())) {
-    return "â€”";
+    return "—";
   }
 
   return new Intl.DateTimeFormat(
@@ -609,6 +685,7 @@ export async function buscarCortesPainelGestorB2C(
       cortesRegistrados,
     ] = await Promise.all([
       buscarLinhasDaJanela(dataISO),
+
       buscarCortesRegistrados(
         dataISO
       ),
@@ -632,10 +709,11 @@ export async function buscarCortesPainelGestorB2C(
 
         if (!hora) return;
 
-        const chave = chaveDoCorte(
-          corte.data_operacao,
-          hora
-        );
+        const chave =
+          chaveDoCorte(
+            corte.data_operacao,
+            hora
+          );
 
         metadadosPorCorte.set(
           chave,
@@ -644,16 +722,13 @@ export async function buscarCortesPainelGestorB2C(
               corte.data_operacao,
 
             arquivo:
-              corte.arquivo ||
-              null,
+              corte.arquivo || null,
 
             linhasArquivo:
-              corte.linhas_arquivo ||
-              0,
+              corte.linhas_arquivo || 0,
 
             importadoEm:
-              corte.importado_em ||
-              null,
+              corte.importado_em || null,
           }
         );
       }
@@ -688,10 +763,9 @@ export async function buscarCortesPainelGestorB2C(
     });
 
     /*
-     * Um pedido com vÃ¡rios itens
-     * aparece somente uma vez,
-     * no primeiro corte em que
-     * entrou naquele dia.
+     * Cada pedido aparece apenas no
+     * primeiro corte em que entrou
+     * na janela operacional.
      */
     linhasPorPedido.forEach(
       (itens) => {
@@ -715,16 +789,19 @@ export async function buscarCortesPainelGestorB2C(
 
         if (!hora) return;
 
-        const dataOperacao = dataSP(
-          ordenados[0]?.criado_em
-        );
+        const dataOperacao =
+          dataSP(
+            ordenados[0]
+              ?.criado_em
+          );
 
         if (!dataOperacao) return;
 
-        const chaveCorte = chaveDoCorte(
-          dataOperacao,
-          hora
-        );
+        const chaveCorte =
+          chaveDoCorte(
+            dataOperacao,
+            hora
+          );
 
         if (
           !linhasPorCorte.has(
@@ -748,194 +825,380 @@ export async function buscarCortesPainelGestorB2C(
         ...metadadosPorCorte.keys(),
         ...linhasPorCorte.keys(),
       ]),
-    ].sort((a, b) => a.localeCompare(b));
+    ].sort(
+      (a, b) =>
+        a.localeCompare(b)
+    );
 
     const pedidosAcumulados =
       new Set();
 
-    const cortes = chavesCorte.map(
-      (chaveCorte) => {
-        const [dataDaChave, hora] =
-          chaveCorte.split("|");
+    const cortes =
+      chavesCorte.map(
+        (chaveCorte) => {
+          const [
+            dataDaChave,
+            hora,
+          ] = chaveCorte.split("|");
 
-        const linhasDoCorte =
-          linhasPorCorte.get(
-            chaveCorte
-          ) || [];
+          const linhasDoCorte =
+            linhasPorCorte.get(
+              chaveCorte
+            ) || [];
 
-        const itensPorPedido =
-          new Map();
+          const itensPorPedido =
+            new Map();
 
-        const metadados =
-          metadadosPorCorte.get(
-            chaveCorte
-          ) || {};
+          const metadados =
+            metadadosPorCorte.get(
+              chaveCorte
+            ) || {};
 
-        const dataOperacao =
-          metadados.dataOperacao ||
-          dataDaChave;
+          const dataOperacao =
+            metadados.dataOperacao ||
+            dataDaChave;
 
-        linhasDoCorte.forEach(
-          (linha) => {
-            const chave = String(
-              linha.id_anymarket
+          linhasDoCorte.forEach(
+            (linha) => {
+              const chave = String(
+                linha.id_anymarket
+              );
+
+              if (
+                !itensPorPedido.has(
+                  chave
+                )
+              ) {
+                itensPorPedido.set(
+                  chave,
+                  []
+                );
+              }
+
+              itensPorPedido
+                .get(chave)
+                .push(linha);
+            }
+          );
+
+          const pedidos = [
+            ...itensPorPedido.entries(),
+          ]
+            .map(
+              ([
+                idAnymarket,
+                itens,
+              ]) =>
+                resumirPedido(
+                  idAnymarket,
+                  itens
+                )
+            )
+            .sort(
+              (a, b) =>
+                new Date(
+                  a.entradaEm || 0
+                ) -
+                new Date(
+                  b.entradaEm || 0
+                )
             );
 
-            if (
-              !itensPorPedido.has(
-                chave
-              )
-            ) {
-              itensPorPedido.set(
-                chave,
-                []
-              );
-            }
-
-            itensPorPedido
-              .get(chave)
-              .push(linha);
-          }
-        );
-
-        const pedidos = [
-          ...itensPorPedido.entries(),
-        ]
-          .map(
-            ([
-              idAnymarket,
-              itens,
-            ]) =>
-              resumirPedido(
-                idAnymarket,
-                itens
-              )
-          )
-          .sort(
-            (a, b) =>
-              new Date(
-                a.entradaEm || 0
-              ) -
-              new Date(
-                b.entradaEm || 0
+          pedidos.forEach(
+            (pedido) =>
+              pedidosAcumulados.add(
+                pedido.idAnymarket
               )
           );
 
-        pedidos.forEach(
-          (pedido) =>
-            pedidosAcumulados.add(
-              pedido.idAnymarket
+          const faturamentoPorMarketplace =
+            {
+              Magalu: 0,
+              "Mercado Livre": 0,
+              "Via Varejo": 0,
+              Outros: 0,
+            };
+
+          pedidos
+            .filter(
+              (pedido) =>
+                pedido.statusChave ===
+                "faturamento"
             )
-        );
+            .forEach(
+              (pedido) => {
+                const chave =
+                  Object.prototype
+                    .hasOwnProperty.call(
+                      faturamentoPorMarketplace,
+                      pedido.marketplace
+                    )
+                    ? pedido.marketplace
+                    : "Outros";
 
-        const faturamentoPorMarketplace =
-          {
-            Magalu: 0,
-            "Mercado Livre": 0,
-            "Via Varejo": 0,
-            Outros: 0,
+                faturamentoPorMarketplace[
+                  chave
+                ] += 1;
+              }
+            );
+
+          const emPicking =
+            pedidos.filter(
+              (pedido) =>
+                pedido.statusChave ===
+                "picking"
+            ).length;
+
+          const emFaturamento =
+            pedidos.filter(
+              (pedido) =>
+                pedido.statusChave ===
+                "faturamento"
+            ).length;
+
+          const emValidacao =
+            pedidos.filter(
+              (pedido) =>
+                pedido.statusChave ===
+                "validacao"
+            ).length;
+
+          const emDefinicao =
+            pedidos.filter(
+              (pedido) =>
+                pedido.statusChave ===
+                "definicao"
+            ).length;
+
+          return {
+            chave: chaveCorte,
+
+            dataOperacao,
+
+            dataLabel:
+              dataCurta(
+                dataOperacao
+              ),
+
+            hora,
+
+            arquivo:
+              metadados.arquivo ||
+              null,
+
+            linhasArquivo:
+              metadados.linhasArquivo ||
+              0,
+
+            importadoEm:
+              metadados.importadoEm ||
+              null,
+
+            pedidosEntraram:
+              pedidos.length,
+
+            acumuladoDia:
+              pedidosAcumulados.size,
+
+            emPicking,
+
+            emFaturamento,
+
+            aguardandoDefinicao:
+              emValidacao +
+              emDefinicao,
+
+            definicao: {
+              emValidacao,
+              aguardando:
+                emDefinicao,
+            },
+
+            faturamentoPorMarketplace,
+
+            pedidos,
           };
-
-        pedidos
-          .filter(
-            (pedido) =>
-              pedido.statusChave ===
-              "faturamento"
-          )
-          .forEach(
-            (pedido) => {
-              const chave =
-                Object.prototype.hasOwnProperty.call(
-                  faturamentoPorMarketplace,
-                  pedido.marketplace
-                )
-                  ? pedido.marketplace
-                  : "Outros";
-
-              faturamentoPorMarketplace[
-                chave
-              ]++;
-            }
-          );
-
-        const emPicking =
-          pedidos.filter(
-            (pedido) =>
-              pedido.statusChave ===
-              "picking"
-          ).length;
-
-        const emFaturamento =
-          pedidos.filter(
-            (pedido) =>
-              pedido.statusChave ===
-              "faturamento"
-          ).length;
-
-        const emValidacao =
-          pedidos.filter(
-            (pedido) =>
-              pedido.statusChave ===
-              "validacao"
-          ).length;
-
-        const emDefinicao =
-          pedidos.filter(
-            (pedido) =>
-              pedido.statusChave ===
-              "definicao"
-          ).length;
-
-        return {
-          chave: chaveCorte,
-
-          dataOperacao,
-
-          dataLabel:
-            dataCurta(dataOperacao),
-
-          hora,
-
-          arquivo:
-            metadados.arquivo ||
-            null,
-
-          linhasArquivo:
-            metadados.linhasArquivo ||
-            0,
-
-          importadoEm:
-            metadados.importadoEm ||
-            null,
-
-          pedidosEntraram:
-            pedidos.length,
-
-          acumuladoDia:
-            pedidosAcumulados.size,
-
-          emPicking,
-
-          emFaturamento,
-
-          aguardandoDefinicao:
-            emValidacao +
-            emDefinicao,
-
-          definicao: {
-            emValidacao,
-            aguardando: emDefinicao,
-          },
-
-          faturamentoPorMarketplace,
-
-          pedidos,
-        };
-      }
-    );
+        }
+      );
 
     const ultimoCorte =
       cortes.at(-1) || null;
+
+    /*
+     * Consolidação da janela.
+     * Cada pedido já está resumido uma vez
+     * pelo id_anymarket, evitando multiplicar
+     * total_do_pedido pelos itens.
+     */
+    const pedidosDaJanela =
+      cortes.flatMap(
+        (corte) =>
+          corte.pedidos
+      );
+
+    const marketplaceMap =
+      new Map();
+
+    const statusMap =
+      new Map();
+
+    let totalItens = 0;
+    let valorTotal = 0;
+    let pedidosCancelados = 0;
+    let itensCancelados = 0;
+    let valorCancelado = 0;
+
+    pedidosDaJanela.forEach(
+      (pedido) => {
+        const valor =
+          numeroSeguro(
+            pedido.valorPedido
+          ) || 0;
+
+        const itens =
+          Number(
+            pedido.quantidadeItens
+          ) || 0;
+
+        totalItens += itens;
+        valorTotal += valor;
+
+        if (pedido.cancelado) {
+          pedidosCancelados += 1;
+          itensCancelados += itens;
+          valorCancelado += valor;
+        }
+
+        if (
+          !marketplaceMap.has(
+            pedido.marketplace
+          )
+        ) {
+          marketplaceMap.set(
+            pedido.marketplace,
+            {
+              marketplace:
+                pedido.marketplace,
+
+              pedidos: 0,
+
+              itens: 0,
+
+              valorTotal: 0,
+
+              pedidosCancelados: 0,
+
+              itensCancelados: 0,
+
+              valorCancelado: 0,
+            }
+          );
+        }
+
+        const marketplace =
+          marketplaceMap.get(
+            pedido.marketplace
+          );
+
+        marketplace.pedidos += 1;
+        marketplace.itens += itens;
+        marketplace.valorTotal += valor;
+
+        if (pedido.cancelado) {
+          marketplace.pedidosCancelados += 1;
+          marketplace.itensCancelados += itens;
+          marketplace.valorCancelado += valor;
+        }
+
+        if (
+          !statusMap.has(
+            pedido.statusChave
+          )
+        ) {
+          statusMap.set(
+            pedido.statusChave,
+            {
+              chave:
+                pedido.statusChave,
+
+              label:
+                pedido.statusLabel,
+
+              pedidos: 0,
+
+              itens: 0,
+
+              valor: 0,
+            }
+          );
+        }
+
+        const statusAtual =
+          statusMap.get(
+            pedido.statusChave
+          );
+
+        statusAtual.pedidos += 1;
+        statusAtual.itens += itens;
+        statusAtual.valor += valor;
+      }
+    );
+
+    const porMarketplace = [
+      ...marketplaceMap.values(),
+    ]
+      .map((item) => ({
+        ...item,
+
+        pedidosAtivos:
+          item.pedidos -
+          item.pedidosCancelados,
+
+        valorAtivo:
+          item.valorTotal -
+          item.valorCancelado,
+      }))
+      .sort(
+        (a, b) =>
+          b.valorTotal -
+          a.valorTotal
+      );
+
+    const porStatus = [
+      ...statusMap.values(),
+    ].sort(
+      (a, b) =>
+        b.pedidos -
+        a.pedidos
+    );
+
+    const consolidado = {
+      pedidos:
+        pedidosDaJanela.length,
+
+      itens:
+        totalItens,
+
+      valorTotal,
+
+      pedidosCancelados,
+
+      itensCancelados,
+
+      valorCancelado,
+
+      pedidosAtivos:
+        pedidosDaJanela.length -
+        pedidosCancelados,
+
+      valorAtivo:
+        valorTotal -
+        valorCancelado,
+
+      porMarketplace,
+
+      porStatus,
+    };
 
     return {
       ok: true,
@@ -944,10 +1207,19 @@ export async function buscarCortesPainelGestorB2C(
 
       janela: {
         inicioData:
-          deslocarData(dataISO, -1),
-        inicioHora: "13:00",
-        fimData: dataISO,
-        fimHora: "13:00",
+          deslocarData(
+            dataISO,
+            -1
+          ),
+
+        inicioHora:
+          "13:00",
+
+        fimData:
+          dataISO,
+
+        fimHora:
+          "13:00",
       },
 
       atualizadoEm:
@@ -965,7 +1237,8 @@ export async function buscarCortesPainelGestorB2C(
           null,
 
         dataUltimoCorte:
-          ultimoCorte?.dataOperacao ||
+          ultimoCorte
+            ?.dataOperacao ||
           null,
 
         pedidosUltimoCorte:
@@ -973,6 +1246,8 @@ export async function buscarCortesPainelGestorB2C(
             ?.pedidosEntraram ||
           0,
       },
+
+      consolidado,
 
       cortes,
     };
@@ -987,7 +1262,7 @@ export async function buscarCortesPainelGestorB2C(
 
       erro:
         error?.message ||
-        "NÃ£o foi possÃ­vel carregar os cortes do B2C.",
+        "Não foi possível carregar os cortes do B2C.",
     };
   }
 }
