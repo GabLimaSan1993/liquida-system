@@ -1,5 +1,78 @@
 import { supabase } from "../lib/supabase";
+const SP_OFFSET_MIN = -180;
 
+const EXPEDIENTE = {
+  0: null,
+  1: [8 * 60, 17 * 60 + 48],
+  2: [8 * 60, 17 * 60 + 48],
+  3: [8 * 60, 17 * 60 + 48],
+  4: [8 * 60, 17 * 60 + 48],
+  5: [8 * 60, 17 * 60 + 48],
+  6: [7 * 60, 16 * 60],
+};
+
+export function minutosUteis(inicioISO, fimISO) {
+  if (!inicioISO || !fimISO) return null;
+
+  const inicio = new Date(inicioISO).getTime();
+  const fim = new Date(fimISO).getTime();
+
+  if (Number.isNaN(inicio) || Number.isNaN(fim)) return null;
+  if (fim <= inicio) return 0;
+
+  let total = 0;
+  let cursor = inicio;
+  let guard = 0;
+
+  while (cursor < fim && guard < 400) {
+    guard += 1;
+
+    const local = new Date(cursor + SP_OFFSET_MIN * 60000);
+    const janela = EXPEDIENTE[local.getUTCDay()];
+
+    const meiaNoiteLocal =
+      Date.UTC(
+        local.getUTCFullYear(),
+        local.getUTCMonth(),
+        local.getUTCDate(),
+        0,
+        0,
+        0
+      ) - SP_OFFSET_MIN * 60000;
+
+    if (janela) {
+      const abertura = meiaNoiteLocal + janela[0] * 60000;
+      const fechamento = meiaNoiteLocal + janela[1] * 60000;
+      const de = Math.max(inicio, abertura);
+      const ate = Math.min(fim, fechamento);
+
+      if (ate > de) total += ate - de;
+    }
+
+    cursor = meiaNoiteLocal + 24 * 60 * 60000;
+  }
+
+  return Math.round(total / 60000);
+}
+
+export function fmtDuracao(minutos) {
+  if (minutos == null) return "—";
+  if (minutos < 1) return "0m";
+
+  const dias = Math.floor(minutos / (60 * 24));
+  const horas = Math.floor((minutos % (60 * 24)) / 60);
+  const minutosRestantes = minutos % 60;
+  const partes = [];
+
+  if (dias) partes.push(`${dias}d`);
+  if (horas) partes.push(`${horas}h`);
+
+  if (minutosRestantes || (!dias && !horas)) {
+    partes.push(`${minutosRestantes}m`);
+  }
+
+  return partes.join(" ");
+}
 const TAMANHO_PAGINA = 1000;
 
 const STATUS_PICKING = new Set([
