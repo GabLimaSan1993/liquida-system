@@ -416,47 +416,255 @@ async function verificarConclusaoPicking(pedidoId) {
 // CONCLUSÃO DE FATURAMENTO — depende de NF
 // ══════════════════════════════════════════════════════════
 async function verificarConclusaoFaturamento(pedidoId) {
-  const { data: itens } = await supabase
-    .from("b2b_itens").select("status, nf")
+  const {
+    data: itens,
+    error: erroItens,
+  } = await supabase
+    .from("b2b_itens")
+    .select("status, nf")
     .eq("pedido_id", pedidoId);
 
-  const { data: todasNFs } = await supabase
-    .from("b2b_nfs").select("numero_nf, total_itens, status")
-    .eq("pedido_id", pedidoId);
-
-  const todos        = itens || [];
-  const nfs          = todasNFs || [];
-  const totalBipados = todos.filter(i => i.status === "bipado").length;
-
-  const nfsErro     = nfs.filter(n => n.status === "erro");
-  const numerosErro = new Set(nfsErro.map(n => String(n.numero_nf)));
-
-  const bipadosComNFok = todos.filter(i => i.status === "bipado" && i.nf && !numerosErro.has(String(i.nf))).length;
-  const totalItensNFok = nfs.filter(n => n.status !== "erro").reduce((s, n) => s + (n.total_itens || 0), 0);
-  const cobertura      = Math.max(bipadosComNFok, totalItensNFok);
-
-  let statusFaturamento;
-  if (totalBipados === 0) {
-    statusFaturamento = "concluido";
-  } else if (nfsErro.length > 0) {
-    statusFaturamento = "erro_nf";
-  } else if (cobertura === 0) {
-    statusFaturamento = "pendente";
-  } else if (cobertura >= totalBipados) {
-    statusFaturamento = "concluido";
-  } else {
-    statusFaturamento = "parcial";
+  if (erroItens) {
+    throw new Error(erroItens.message);
   }
 
-  await supabase
+  const {
+    data: todasNFs,
+    error: erroNFs,
+  } = await supabase
+    .from("b2b_nfs")
+    .select(
+      "numero_nf, total_itens, status"
+    )
+    .eq("pedido_id", pedidoId);
+
+  if (erroNFs) {
+    throw new Error(erroNFs.message);
+  }
+
+  const todos =
+    itens || [];
+
+  const nfs =
+    todasNFs || [];
+
+  const totalBipados =
+    todos.filter(
+      (item) =>
+        item.status === "bipado"
+    ).length;
+
+  const totalNaoFaturar =
+    todos.filter(
+      (item) =>
+        item.status ===
+        "nao_faturar"
+    ).length;
+
+  const nfsErro =
+    nfs.filter(
+      (nf) =>
+        nf.status === "erro"
+    );
+
+  const nfsOk =
+    nfs.filter(
+      (nf) =>
+        nf.status !== "erro"
+    );
+
+  const numerosErro =
+    new Set(
+      nfsErro.map(
+        (nf) =>
+          String(nf.numero_nf)
+      )
+    );
+
+  const numerosOk =
+    new Set(
+      nfsOk.map(
+        (nf) =>
+          String(nf.numero_nf)
+      )
+    );
+
+  /*
+   * A NF pode estar vinculada diretamente
+   * aos itens ou registrada somente com
+   * a quantidade de aparelhos.
+   *
+   * Utilizamos a maior evidência disponível
+   * sem somar as duas e duplicar o volume.
+   */
+  const bipadosComNFok =
+    todos.filter(
+      (item) =>
+        item.status ===
+          "bipado" &&
+        item.nf &&
+        numerosOk.has(
+          String(item.nf)
+        )
+    ).length;
+
+  const bipadosComNFErro =
+    todos.filter(
+      (item) =>
+        item.status ===
+          "bipado" &&
+        item.nf &&
+        numerosErro.has(
+          String(item.nf)
+        )
+    ).length;
+
+  const totalItensNFok =
+    nfsOk.reduce(
+      (total, nf) =>
+        total +
+        Number(
+          nf.total_itens || 0
+        ),
+      0
+    );
+
+  const totalItensNFErro =
+    nfsErro.reduce(
+      (total, nf) =>
+        total +
+        Number(
+          nf.total_itens || 0
+        ),
+      0
+    );
+
+  const coberturaNFok =
+    Math.max(
+      bipadosComNFok,
+      totalItensNFok
+    );
+
+  const coberturaNFErro =
+    Math.max(
+      bipadosComNFErro,
+      totalItensNFErro
+    );
+
+  const coberturaFaturamento =
+    coberturaNFok +
+    coberturaNFErro;
+
+  /*
+   * Regra operacional:
+   *
+   * Faturados
+   * + Não faturar
+   * + Erro de NF
+   * >= Total do pedido
+   */
+  const totalCoberto =
+    Math.min(
+      todos.length,
+
+      totalNaoFaturar +
+        coberturaFaturamento
+    );
+
+  const faturamentoCoberto =
+    todos.length > 0 &&
+    totalCoberto >=
+      todos.length;
+
+  let statusFaturamento;
+
+  if (totalBipados === 0) {
+    statusFaturamento =
+      "concluido";
+  } else if (
+    faturamentoCoberto &&
+    nfsErro.length > 0
+  ) {
+    /*
+     * Mantém o alerta de erro,
+     * mas não bloqueia a conclusão.
+     */
+    statusFaturamento =
+      "erro_nf";
+  } else if (
+    faturamentoCoberto
+  ) {
+    statusFaturamento =
+      "concluido";
+  } else if (
+    nfsErro.length > 0
+  ) {
+    statusFaturamento =
+      "erro_nf";
+  } else if (
+    coberturaFaturamento > 0
+  ) {
+    statusFaturamento =
+      "parcial";
+  } else {
+    statusFaturamento =
+      "pendente";
+  }
+
+  const {
+    error: erroAtualizacao,
+  } = await supabase
     .from("b2b_pedidos")
-    .update({ status_faturamento: statusFaturamento })
+    .update({
+      status_faturamento:
+        statusFaturamento,
+    })
     .eq("id", pedidoId);
 
-  const { data: pedido } = await supabase
-    .from("b2b_pedidos").select("status_picking").eq("id", pedidoId).single();
-  if (pedido?.status_picking === "concluido" && statusFaturamento === "concluido") {
-    await supabase.from("b2b_pedidos").update({ status: "concluido" }).eq("id", pedidoId);
+  if (erroAtualizacao) {
+    throw new Error(
+      erroAtualizacao.message
+    );
+  }
+
+  const {
+    data: pedido,
+    error: erroPedido,
+  } = await supabase
+    .from("b2b_pedidos")
+    .select("status_picking")
+    .eq("id", pedidoId)
+    .single();
+
+  if (erroPedido) {
+    throw new Error(
+      erroPedido.message
+    );
+  }
+
+  /*
+   * A presença de erro de NF não impede
+   * mais a conclusão e o disparo do e-mail.
+   */
+  if (
+    pedido?.status_picking ===
+      "concluido" &&
+    faturamentoCoberto
+  ) {
+    const {
+      error: erroConclusao,
+    } = await supabase
+      .from("b2b_pedidos")
+      .update({
+        status: "concluido",
+      })
+      .eq("id", pedidoId);
+
+    if (erroConclusao) {
+      throw new Error(
+        erroConclusao.message
+      );
+    }
   }
 
   return statusFaturamento;
