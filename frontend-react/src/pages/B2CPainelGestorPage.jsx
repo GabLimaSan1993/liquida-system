@@ -1,28 +1,41 @@
-import { useCallback, useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
+
 import {
   AlertTriangle,
+  Ban,
   BarChart3,
   CalendarDays,
   ChevronDown,
   ChevronUp,
   Clock3,
   DollarSign,
-  Ban,
   PackageCheck,
   RefreshCw,
   Store,
   Users,
 } from "lucide-react";
+
 import {
   buscarCortesPainelGestorB2C,
   formatarDataHoraSP,
   hojeEmSaoPaulo,
 } from "../services/B2CPainelGestorService.js";
 
-function Card({ children, className = "" }) {
+function Card({
+  children,
+  className = "",
+}) {
   return (
     <div
-      className={`rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200 ${className}`}
+      className={`
+        rounded-2xl bg-white p-5
+        shadow-sm ring-1 ring-slate-200
+        ${className}
+      `}
     >
       {children}
     </div>
@@ -30,14 +43,21 @@ function Card({ children, className = "" }) {
 }
 
 function fmtMoeda(valor) {
-  return Number(valor || 0).toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  });
+  return Number(
+    valor || 0
+  ).toLocaleString(
+    "pt-BR",
+    {
+      style: "currency",
+      currency: "BRL",
+    }
+  );
 }
 
 function fmtNumero(valor) {
-  return Number(valor || 0).toLocaleString("pt-BR");
+  return Number(
+    valor || 0
+  ).toLocaleString("pt-BR");
 }
 
 function KpiCard({
@@ -103,9 +123,11 @@ function StatusBadge({
 
   return (
     <span
-      className={`inline-flex rounded-lg px-2 py-1 text-[11px] font-semibold ring-1 ${
-        cores[chave] || cores.outro
-      }`}
+      className={`
+        inline-flex rounded-lg px-2 py-1
+        text-[11px] font-semibold ring-1
+        ${cores[chave] || cores.outro}
+      `}
     >
       {label}
     </span>
@@ -116,7 +138,8 @@ function MarketplaceResumo({
   corte,
 }) {
   const valores =
-    corte.faturamentoPorMarketplace || {};
+    corte.faturamentoPorMarketplace ||
+    {};
 
   const linhas = [
     [
@@ -187,8 +210,10 @@ function DefinicaoResumo({
           </span>
 
           <strong className="text-slate-800">
-            {corte.definicao
-              ?.emValidacao || 0}
+            {
+              corte.definicao
+                ?.emValidacao || 0
+            }
           </strong>
         </div>
 
@@ -198,8 +223,10 @@ function DefinicaoResumo({
           </span>
 
           <strong className="text-slate-800">
-            {corte.definicao
-              ?.aguardando || 0}
+            {
+              corte.definicao
+                ?.aguardando || 0
+            }
           </strong>
         </div>
       </div>
@@ -257,87 +284,92 @@ function DetalhesDoCorte({
           </thead>
 
           <tbody className="divide-y divide-slate-100">
-            {corte.pedidos.length ===
-            0 ? (
-              <tr>
-                <td
-                  colSpan={7}
-                  className="px-3 py-8 text-center text-sm text-slate-400"
-                >
-                  Este corte foi
-                  realizado, mas nenhum
-                  pedido novo entrou na
-                  esteira.
-                </td>
-              </tr>
-            ) : (
-              corte.pedidos.map(
-                (pedido) => (
-                  <tr
-                    key={
-                      pedido.idAnymarket
-                    }
-                    className="align-top hover:bg-slate-50"
-                  >
-                    <td className="whitespace-nowrap px-3 py-3 font-semibold text-slate-700">
-                      {
-                        pedido.entradaHora
-                      }
-                    </td>
-
-                    <td className="whitespace-nowrap px-3 py-3 font-bold text-slate-800">
-                      {
-                        pedido.idAnymarket
-                      }
-                    </td>
-
-                    <td className="whitespace-nowrap px-3 py-3 text-slate-600">
-                      {
-                        pedido.marketplace
-                      }
-                    </td>
-
-                    <td className="min-w-[160px] px-3 py-3 text-slate-600">
-                      {pedido.cliente}
-                    </td>
-
-                    <td className="min-w-[240px] px-3 py-3 text-slate-600">
-                      <span>
-                        {pedido.titulo}
-                      </span>
-
-                      {pedido.outrosTitulos >
-                        0 && (
-                        <span className="ml-1 text-[11px] text-slate-400">
-                          +
-                          {
-                            pedido.outrosTitulos
-                          }{" "}
-                          produto(s)
-                        </span>
-                      )}
-                    </td>
-
-                    <td className="px-3 py-3 text-center font-bold text-slate-700">
-                      {
-                        pedido.quantidadeItens
-                      }
-                    </td>
-
-                    <td className="whitespace-nowrap px-3 py-3">
-                      <StatusBadge
-                        chave={
-                          pedido.statusChave
-                        }
-                        label={
-                          pedido.statusLabel
-                        }
-                      />
+            {
+              corte.pedidos.length === 0
+                ? (
+                  <tr>
+                    <td
+                      colSpan={7}
+                      className="px-3 py-8 text-center text-sm text-slate-400"
+                    >
+                      Este corte foi realizado, mas nenhum pedido novo entrou na esteira.
                     </td>
                   </tr>
                 )
-              )
-            )}
+                : corte.pedidos.map(
+                  (pedido) => (
+                    <tr
+                      key={
+                        pedido.idAnymarket
+                      }
+                      className="align-top hover:bg-slate-50"
+                    >
+                      <td className="whitespace-nowrap px-3 py-3 font-semibold text-slate-700">
+                        {
+                          pedido.entradaHora
+                        }
+                      </td>
+
+                      <td className="whitespace-nowrap px-3 py-3 font-bold text-slate-800">
+                        {
+                          pedido.idAnymarket
+                        }
+                      </td>
+
+                      <td className="whitespace-nowrap px-3 py-3 text-slate-600">
+                        {
+                          pedido.marketplace
+                        }
+                      </td>
+
+                      <td className="min-w-[160px] px-3 py-3 text-slate-600">
+                        {
+                          pedido.cliente
+                        }
+                      </td>
+
+                      <td className="min-w-[240px] px-3 py-3 text-slate-600">
+                        <span>
+                          {
+                            pedido.titulo
+                          }
+                        </span>
+
+                        {
+                          pedido.outrosTitulos >
+                            0 && (
+                            <span className="ml-1 text-[11px] text-slate-400">
+                              +
+                              {
+                                pedido.outrosTitulos
+                              }
+                              {" "}
+                              produto(s)
+                            </span>
+                          )
+                        }
+                      </td>
+
+                      <td className="px-3 py-3 text-center font-bold text-slate-700">
+                        {
+                          pedido.quantidadeItens
+                        }
+                      </td>
+
+                      <td className="whitespace-nowrap px-3 py-3">
+                        <StatusBadge
+                          chave={
+                            pedido.statusChave
+                          }
+                          label={
+                            pedido.statusLabel
+                          }
+                        />
+                      </td>
+                    </tr>
+                  )
+                )
+            }
           </tbody>
         </table>
       </div>
@@ -347,6 +379,7 @@ function DetalhesDoCorte({
 
 function ConsolidadoDaJanela({
   consolidado,
+  periodo = false,
 }) {
   const dados =
     consolidado || {};
@@ -361,14 +394,19 @@ function ConsolidadoDaJanela({
     <div className="space-y-4">
       <div>
         <h3 className="text-sm font-black text-slate-800">
-          Consolidado da janela
-          operacional
+          {
+            periodo
+              ? "Consolidado do período operacional"
+              : "Consolidado da janela operacional"
+          }
         </h3>
 
         <p className="text-xs text-slate-500">
-          Pedidos distintos, valores e
-          cancelamentos entre as duas
-          viradas de 13h.
+          {
+            periodo
+              ? "Pedidos distintos, valores e cancelamentos em todas as janelas selecionadas."
+              : "Pedidos distintos, valores e cancelamentos entre as duas viradas de 13h."
+          }
         </p>
       </div>
 
@@ -376,44 +414,59 @@ function ConsolidadoDaJanela({
         <KpiCard
           icon={DollarSign}
           label="Valor total"
-          value={fmtMoeda(
-            dados.valorTotal
-          )}
-          sub={`${fmtNumero(
-            dados.pedidos
-          )} pedidos · ${fmtNumero(
-            dados.itens
-          )} itens`}
+          value={
+            fmtMoeda(
+              dados.valorTotal
+            )
+          }
+          sub={`
+            ${fmtNumero(dados.pedidos)}
+            pedidos ·
+            ${fmtNumero(dados.itens)}
+            itens
+          `}
         />
 
         <KpiCard
           icon={PackageCheck}
           label="Valor ativo"
-          value={fmtMoeda(
-            dados.valorAtivo
-          )}
-          sub={`${fmtNumero(
-            dados.pedidosAtivos
-          )} pedidos não cancelados`}
+          value={
+            fmtMoeda(
+              dados.valorAtivo
+            )
+          }
+          sub={`
+            ${fmtNumero(
+              dados.pedidosAtivos
+            )}
+            pedidos não cancelados
+          `}
         />
 
         <KpiCard
           icon={Ban}
           label="Cancelamentos"
-          value={fmtNumero(
-            dados.pedidosCancelados
-          )}
-          sub={`${fmtNumero(
-            dados.itensCancelados
-          )} itens cancelados`}
+          value={
+            fmtNumero(
+              dados.pedidosCancelados
+            )
+          }
+          sub={`
+            ${fmtNumero(
+              dados.itensCancelados
+            )}
+            itens cancelados
+          `}
         />
 
         <KpiCard
           icon={Ban}
           label="Valor cancelado"
-          value={fmtMoeda(
-            dados.valorCancelado
-          )}
+          value={
+            fmtMoeda(
+              dados.valorCancelado
+            )
+          }
           sub="retirado do valor ativo"
         />
       </div>
@@ -425,14 +478,11 @@ function ConsolidadoDaJanela({
 
             <div>
               <h4 className="text-sm font-black text-slate-800">
-                Consolidado por
-                marketplace
+                Consolidado por marketplace
               </h4>
 
               <p className="text-xs text-slate-500">
-                Quantidades e valores
-                sem duplicar pedidos com
-                vários produtos.
+                Quantidades e valores sem duplicar pedidos com vários produtos.
               </p>
             </div>
           </div>
@@ -472,120 +522,152 @@ function ConsolidadoDaJanela({
               </thead>
 
               <tbody className="divide-y divide-slate-100">
-                {marketplaces.length ===
-                0 ? (
-                  <tr>
-                    <td
-                      colSpan={7}
-                      className="px-3 py-8 text-center text-slate-400"
-                    >
-                      Nenhum pedido
-                      encontrado na
-                      janela.
-                    </td>
-                  </tr>
-                ) : (
-                  marketplaces.map(
-                    (item) => (
-                      <tr
-                        key={
-                          item.marketplace
-                        }
-                        className="hover:bg-slate-50"
-                      >
-                        <td className="px-3 py-3 text-left font-bold text-slate-700">
+                {
+                  marketplaces.length === 0
+                    ? (
+                      <tr>
+                        <td
+                          colSpan={7}
+                          className="px-3 py-8 text-center text-slate-400"
+                        >
+                          Nenhum pedido encontrado
+                          {" "}
                           {
-                            item.marketplace
+                            periodo
+                              ? "no período"
+                              : "na janela"
                           }
-                        </td>
-
-                        <td className="px-3 py-3 text-right font-semibold text-slate-700">
-                          {fmtNumero(
-                            item.pedidos
-                          )}
-                        </td>
-
-                        <td className="px-3 py-3 text-right text-slate-600">
-                          {fmtNumero(
-                            item.itens
-                          )}
-                        </td>
-
-                        <td className="px-3 py-3 text-right font-semibold text-slate-700">
-                          {fmtMoeda(
-                            item.valorTotal
-                          )}
-                        </td>
-
-                        <td className="px-3 py-3 text-right font-semibold text-red-600">
-                          {fmtNumero(
-                            item.pedidosCancelados
-                          )}
-                        </td>
-
-                        <td className="px-3 py-3 text-right font-semibold text-red-600">
-                          {fmtMoeda(
-                            item.valorCancelado
-                          )}
-                        </td>
-
-                        <td className="px-3 py-3 text-right font-black text-emerald-700">
-                          {fmtMoeda(
-                            item.valorAtivo
-                          )}
+                          .
                         </td>
                       </tr>
                     )
-                  )
-                )}
+                    : marketplaces.map(
+                      (item) => (
+                        <tr
+                          key={
+                            item.marketplace
+                          }
+                          className="hover:bg-slate-50"
+                        >
+                          <td className="px-3 py-3 text-left font-bold text-slate-700">
+                            {
+                              item.marketplace
+                            }
+                          </td>
+
+                          <td className="px-3 py-3 text-right font-semibold text-slate-700">
+                            {
+                              fmtNumero(
+                                item.pedidos
+                              )
+                            }
+                          </td>
+
+                          <td className="px-3 py-3 text-right text-slate-600">
+                            {
+                              fmtNumero(
+                                item.itens
+                              )
+                            }
+                          </td>
+
+                          <td className="px-3 py-3 text-right font-semibold text-slate-700">
+                            {
+                              fmtMoeda(
+                                item.valorTotal
+                              )
+                            }
+                          </td>
+
+                          <td className="px-3 py-3 text-right font-semibold text-red-600">
+                            {
+                              fmtNumero(
+                                item.pedidosCancelados
+                              )
+                            }
+                          </td>
+
+                          <td className="px-3 py-3 text-right font-semibold text-red-600">
+                            {
+                              fmtMoeda(
+                                item.valorCancelado
+                              )
+                            }
+                          </td>
+
+                          <td className="px-3 py-3 text-right font-black text-emerald-700">
+                            {
+                              fmtMoeda(
+                                item.valorAtivo
+                              )
+                            }
+                          </td>
+                        </tr>
+                      )
+                    )
+                }
               </tbody>
 
-              {marketplaces.length >
-                0 && (
-                <tfoot className="bg-purple-50 text-slate-800">
-                  <tr>
-                    <td className="px-3 py-3 font-black">
-                      Total
-                    </td>
+              {
+                marketplaces.length >
+                  0 && (
+                  <tfoot className="bg-purple-50 text-slate-800">
+                    <tr>
+                      <td className="px-3 py-3 font-black">
+                        Total
+                      </td>
 
-                    <td className="px-3 py-3 text-right font-black">
-                      {fmtNumero(
-                        dados.pedidos
-                      )}
-                    </td>
+                      <td className="px-3 py-3 text-right font-black">
+                        {
+                          fmtNumero(
+                            dados.pedidos
+                          )
+                        }
+                      </td>
 
-                    <td className="px-3 py-3 text-right font-black">
-                      {fmtNumero(
-                        dados.itens
-                      )}
-                    </td>
+                      <td className="px-3 py-3 text-right font-black">
+                        {
+                          fmtNumero(
+                            dados.itens
+                          )
+                        }
+                      </td>
 
-                    <td className="px-3 py-3 text-right font-black">
-                      {fmtMoeda(
-                        dados.valorTotal
-                      )}
-                    </td>
+                      <td className="px-3 py-3 text-right font-black">
+                        {
+                          fmtMoeda(
+                            dados.valorTotal
+                          )
+                        }
+                      </td>
 
-                    <td className="px-3 py-3 text-right font-black text-red-600">
-                      {fmtNumero(
-                        dados.pedidosCancelados
-                      )}
-                    </td>
+                      <td className="px-3 py-3 text-right font-black text-red-600">
+                        {
+                          fmtNumero(
+                            dados.pedidosCancelados
+                          )
+                        }
+                      </td>
 
-                    <td className="px-3 py-3 text-right font-black text-red-600">
-                      {fmtMoeda(
-                        dados.valorCancelado
-                      )}
-                    </td>
+                      <td className="px-3 py-3 text-right font-black text-red-600">
+                        {
+                          fmtMoeda(
+                            dados.valorCancelado
+                          )
+                        }
+                      </td>
 
-                    <td className="px-3 py-3 text-right font-black text-emerald-700">
-                      {fmtMoeda(
-                        dados.valorAtivo
-                      )}
-                    </td>
-                  </tr>
-                </tfoot>
-              )}
+                      <td className="px-3 py-3 text-right font-black text-emerald-700">
+                        {
+                          fmtMoeda(
+                            dados.valorAtivo
+                          )
+                        }
+                      </td>
+                    </tr>
+                  </tfoot>
+                )
+              }
             </table>
           </div>
         </Card>
@@ -600,8 +682,7 @@ function ConsolidadoDaJanela({
               </h4>
 
               <p className="text-xs text-slate-500">
-                Situação operacional
-                atual dos pedidos.
+                Situação operacional atual dos pedidos.
               </p>
             </div>
           </div>
@@ -625,49 +706,56 @@ function ConsolidadoDaJanela({
               </thead>
 
               <tbody className="divide-y divide-slate-100">
-                {status.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={3}
-                      className="px-3 py-8 text-center text-slate-400"
-                    >
-                      Nenhum status
-                      encontrado.
-                    </td>
-                  </tr>
-                ) : (
-                  status.map(
-                    (item) => (
-                      <tr
-                        key={item.chave}
-                        className="hover:bg-slate-50"
-                      >
-                        <td className="px-3 py-3 text-left">
-                          <StatusBadge
-                            chave={
-                              item.chave
-                            }
-                            label={
-                              item.label
-                            }
-                          />
-                        </td>
-
-                        <td className="px-3 py-3 text-right font-black text-slate-700">
-                          {fmtNumero(
-                            item.pedidos
-                          )}
-                        </td>
-
-                        <td className="px-3 py-3 text-right font-semibold text-slate-700">
-                          {fmtMoeda(
-                            item.valor
-                          )}
+                {
+                  status.length === 0
+                    ? (
+                      <tr>
+                        <td
+                          colSpan={3}
+                          className="px-3 py-8 text-center text-slate-400"
+                        >
+                          Nenhum status encontrado.
                         </td>
                       </tr>
                     )
-                  )
-                )}
+                    : status.map(
+                      (item) => (
+                        <tr
+                          key={
+                            item.chave
+                          }
+                          className="hover:bg-slate-50"
+                        >
+                          <td className="px-3 py-3 text-left">
+                            <StatusBadge
+                              chave={
+                                item.chave
+                              }
+                              label={
+                                item.label
+                              }
+                            />
+                          </td>
+
+                          <td className="px-3 py-3 text-right font-black text-slate-700">
+                            {
+                              fmtNumero(
+                                item.pedidos
+                              )
+                            }
+                          </td>
+
+                          <td className="px-3 py-3 text-right font-semibold text-slate-700">
+                            {
+                              fmtMoeda(
+                                item.valor
+                              )
+                            }
+                          </td>
+                        </tr>
+                      )
+                    )
+                }
               </tbody>
             </table>
           </div>
@@ -678,12 +766,28 @@ function ConsolidadoDaJanela({
 }
 
 export default function B2CPainelGestorPage() {
+  const hoje =
+    hojeEmSaoPaulo();
+
+  const [
+    modoConsulta,
+    setModoConsulta,
+  ] = useState("data");
+
   const [
     dataSelecionada,
     setDataSelecionada,
-  ] = useState(
-    hojeEmSaoPaulo()
-  );
+  ] = useState(hoje);
+
+  const [
+    dataInicial,
+    setDataInicial,
+  ] = useState(hoje);
+
+  const [
+    dataFinal,
+    setDataFinal,
+  ] = useState(hoje);
 
   const [
     dados,
@@ -705,6 +809,25 @@ export default function B2CPainelGestorPage() {
     setCorteAberto,
   ] = useState(null);
 
+  const consultaPorPeriodo =
+    modoConsulta === "periodo";
+
+  const dataInicialConsulta =
+    consultaPorPeriodo
+      ? dataInicial
+      : dataSelecionada;
+
+  const dataFinalConsulta =
+    consultaPorPeriodo
+      ? dataFinal
+      : dataSelecionada;
+
+  const periodoInvalido =
+    !dataInicialConsulta ||
+    !dataFinalConsulta ||
+    dataInicialConsulta >
+      dataFinalConsulta;
+
   const carregar = useCallback(
     async (
       silencioso = false
@@ -718,7 +841,8 @@ export default function B2CPainelGestorPage() {
       try {
         const resposta =
           await buscarCortesPainelGestorB2C(
-            dataSelecionada
+            dataInicialConsulta,
+            dataFinalConsulta
           );
 
         if (!resposta.ok) {
@@ -743,8 +867,10 @@ export default function B2CPainelGestorPage() {
             }
 
             return (
-              resposta.cortes.at(-1)
-                ?.chave || null
+              resposta.cortes
+                .at(-1)
+                ?.chave ||
+              null
             );
           }
         );
@@ -755,7 +881,7 @@ export default function B2CPainelGestorPage() {
 
         setErro(
           error?.message ||
-            "Não foi possível carregar o painel."
+          "Não foi possível carregar o painel."
         );
       } finally {
         if (!silencioso) {
@@ -763,57 +889,71 @@ export default function B2CPainelGestorPage() {
         }
       }
     },
-    [dataSelecionada]
+    [
+      dataInicialConsulta,
+      dataFinalConsulta,
+    ]
   );
 
-  useEffect(() => {
-    carregar();
-  }, [carregar]);
+  useEffect(
+    () => {
+      carregar();
+    },
+    [carregar]
+  );
 
-  useEffect(() => {
-    let intervaloId;
+  useEffect(
+    () => {
+      let intervaloId;
 
-    const agora =
-      new Date();
+      const agora =
+        new Date();
 
-    const proximaHora =
-      new Date(agora);
+      const proximaHora =
+        new Date(agora);
 
-    proximaHora.setMinutes(
-      60,
-      5,
-      0
-    );
-
-    const espera = Math.max(
-      1000,
-      proximaHora.getTime() -
-        agora.getTime()
-    );
-
-    const timeoutId =
-      window.setTimeout(() => {
-        carregar(true);
-
-        intervaloId =
-          window.setInterval(
-            () => carregar(true),
-            60 * 60 * 1000
-          );
-      }, espera);
-
-    return () => {
-      window.clearTimeout(
-        timeoutId
+      proximaHora.setMinutes(
+        60,
+        5,
+        0
       );
 
-      if (intervaloId) {
-        window.clearInterval(
-          intervaloId
+      const espera =
+        Math.max(
+          1000,
+          proximaHora.getTime() -
+          agora.getTime()
         );
-      }
-    };
-  }, [carregar]);
+
+      const timeoutId =
+        window.setTimeout(
+          () => {
+            carregar(true);
+
+            intervaloId =
+              window.setInterval(
+                () =>
+                  carregar(true),
+                60 * 60 * 1000
+              );
+          },
+          espera
+        );
+
+      return () => {
+        window.clearTimeout(
+          timeoutId
+        );
+
+        if (intervaloId) {
+          window.clearInterval(
+            intervaloId
+          );
+        }
+      };
+    },
+    [carregar]
+  );
 
   const resumo =
     dados?.resumo || {};
@@ -835,9 +975,7 @@ export default function B2CPainelGestorPage() {
           </h2>
 
           <p className="text-xs text-slate-500">
-            Entrada e andamento dos
-            pedidos por janela
-            operacional do AnyMarket
+            Entrada e andamento dos pedidos por janela operacional do AnyMarket
           </p>
         </div>
       </div>
@@ -848,244 +986,424 @@ export default function B2CPainelGestorPage() {
           className="inline-flex items-center gap-2 border-b-2 border-[#7F2D92] px-3 py-2 text-sm font-bold text-[#7F2D92]"
         >
           <Clock3 className="h-4 w-4" />
+
           Cortes da janela operacional
         </button>
       </div>
 
       <div className="flex flex-wrap items-end gap-3">
-        <label className="block">
-          <span className="mb-1 block text-xs font-semibold text-slate-600">
-            Data operacional
+        <div className="w-full">
+          <span className="mb-1.5 block text-xs font-semibold text-slate-600">
+            Tipo de consulta
           </span>
 
-          <div className="relative">
-            <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-
-            <input
-              type="date"
-              value={
-                dataSelecionada
-              }
-              onChange={(
-                event
-              ) =>
+          <div className="inline-flex rounded-xl bg-white p-1 ring-1 ring-slate-200">
+            <button
+              type="button"
+              onClick={() => {
                 setDataSelecionada(
-                  event.target
-                    .value
-                )
-              }
-              className="rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
-            />
+                  dataFinal ||
+                  hoje
+                );
+
+                setModoConsulta(
+                  "data"
+                );
+              }}
+              className={`
+                rounded-lg px-3 py-1.5
+                text-xs font-bold transition
+                ${
+                  !consultaPorPeriodo
+                    ? "bg-[#7F2D92] text-white"
+                    : "text-slate-500 hover:bg-slate-50"
+                }
+              `}
+            >
+              Data operacional
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setDataInicial(
+                  dataSelecionada ||
+                  hoje
+                );
+
+                setDataFinal(
+                  dataSelecionada ||
+                  hoje
+                );
+
+                setModoConsulta(
+                  "periodo"
+                );
+              }}
+              className={`
+                rounded-lg px-3 py-1.5
+                text-xs font-bold transition
+                ${
+                  consultaPorPeriodo
+                    ? "bg-[#7F2D92] text-white"
+                    : "text-slate-500 hover:bg-slate-50"
+                }
+              `}
+            >
+              Período
+            </button>
           </div>
-        </label>
+        </div>
+
+        {
+          !consultaPorPeriodo
+            ? (
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold text-slate-600">
+                  Data operacional
+                </span>
+
+                <div className="relative">
+                  <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+
+                  <input
+                    type="date"
+                    value={
+                      dataSelecionada
+                    }
+                    onChange={
+                      (event) =>
+                        setDataSelecionada(
+                          event.target
+                            .value
+                        )
+                    }
+                    className="rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+                  />
+                </div>
+              </label>
+            )
+            : (
+              <>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-semibold text-slate-600">
+                    Data inicial
+                  </span>
+
+                  <div className="relative">
+                    <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+
+                    <input
+                      type="date"
+                      value={
+                        dataInicial
+                      }
+                      max={
+                        dataFinal ||
+                        undefined
+                      }
+                      onChange={
+                        (event) =>
+                          setDataInicial(
+                            event.target
+                              .value
+                          )
+                      }
+                      className="rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+                    />
+                  </div>
+                </label>
+
+                <label className="block">
+                  <span className="mb-1 block text-xs font-semibold text-slate-600">
+                    Data final
+                  </span>
+
+                  <div className="relative">
+                    <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+
+                    <input
+                      type="date"
+                      value={
+                        dataFinal
+                      }
+                      min={
+                        dataInicial ||
+                        undefined
+                      }
+                      onChange={
+                        (event) =>
+                          setDataFinal(
+                            event.target
+                              .value
+                          )
+                      }
+                      className="rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+                    />
+                  </div>
+                </label>
+              </>
+            )
+        }
 
         <button
           type="button"
           onClick={() =>
             carregar()
           }
-          disabled={loading}
+          disabled={
+            loading ||
+            periodoInvalido
+          }
           className="inline-flex items-center gap-2 rounded-xl bg-[#7F2D92] px-4 py-2 text-sm font-bold text-white transition hover:bg-purple-800 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <RefreshCw
-            className={`h-4 w-4 ${
-              loading
-                ? "animate-spin"
-                : ""
-            }`}
+            className={`
+              h-4 w-4
+              ${
+                loading
+                  ? "animate-spin"
+                  : ""
+              }
+            `}
           />
 
           Atualizar
         </button>
 
         <span className="rounded-xl bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 ring-1 ring-blue-200">
-          Atualização automática a cada
-          hora
+          Atualização automática a cada hora
         </span>
       </div>
 
       <p className="text-xs text-slate-500">
-        A data selecionada considera os
-        cortes do dia anterior após
-        13:00 até 13:00 do dia
-        escolhido.
+        {
+          consultaPorPeriodo
+            ? "O período considera os cortes após 13:00 do dia anterior à data inicial até 13:00 da data final."
+            : "A data selecionada considera os cortes do dia anterior após 13:00 até 13:00 do dia escolhido."
+        }
       </p>
 
-      {loading ? (
-        <div className="flex h-48 items-center justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-purple-200 border-t-[#7F2D92]" />
-        </div>
-      ) : erro ? (
-        <Card className="py-10 text-center">
-          <AlertTriangle className="mx-auto mb-2 h-8 w-8 text-amber-500" />
-
-          <p className="text-sm font-semibold text-slate-700">
-            Não foi possível carregar o
-            painel.
+      {
+        consultaPorPeriodo &&
+        periodoInvalido && (
+          <p className="text-xs font-semibold text-red-600">
+            A data final deve ser igual ou posterior à data inicial.
           </p>
+        )
+      }
 
-          <p className="mt-1 text-xs text-slate-500">
-            {erro}
-          </p>
-        </Card>
-      ) : (
-        <>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <KpiCard
-              icon={Users}
-              label="Entraram na janela"
-              value={
-                resumo.pedidosNoDia ||
-                0
-              }
-              sub="pedidos AnyMarket distintos"
-            />
-
-            <KpiCard
-              icon={Clock3}
-              label="Cortes realizados"
-              value={
-                resumo.cortesRealizados ||
-                0
-              }
-              sub="entre as duas viradas de 13h"
-            />
-
-            <KpiCard
-              icon={PackageCheck}
-              label={
-                ultimoCorte
-                  ? `Último corte · ${ultimoCorte.dataLabel} · ${ultimoCorte.hora}`
-                  : "Último corte"
-              }
-              value={
-                resumo.pedidosUltimoCorte ||
-                0
-              }
-              sub="pedidos que entraram no corte"
-            />
-          </div>
-
-          <Card>
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <h3 className="text-sm font-black text-slate-800">
-                  Cortes da janela
-                  operacional
-                </h3>
-
-                <p className="text-xs text-slate-500">
-                  Clique na data e no
-                  horário para abrir
-                  todos os pedidos que
-                  entraram naquele
-                  corte.
-                </p>
-              </div>
-
-              {dados?.atualizadoEm && (
-                <span className="text-[11px] text-slate-400">
-                  Atualizado em{" "}
-                  {formatarDataHoraSP(
-                    dados.atualizadoEm
-                  )}
-                </span>
-              )}
+      {
+        loading
+          ? (
+            <div className="flex h-48 items-center justify-center">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-purple-200 border-t-[#7F2D92]" />
             </div>
+          )
+          : erro
+            ? (
+              <Card className="py-10 text-center">
+                <AlertTriangle className="mx-auto mb-2 h-8 w-8 text-amber-500" />
 
-            {cortes.length ===
-            0 ? (
-              <div className="py-10 text-center text-slate-400">
-                <Clock3 className="mx-auto mb-2 h-8 w-8 opacity-40" />
-
-                <p className="text-sm font-semibold">
-                  Nenhum corte
-                  encontrado nesta
-                  data.
+                <p className="text-sm font-semibold text-slate-700">
+                  Não foi possível carregar o painel.
                 </p>
 
-                <p className="mt-1 text-xs">
-                  Os cortes aparecem
-                  após a entrada dos
-                  pedidos pelo upload
-                  do AnyMarket.
+                <p className="mt-1 text-xs text-slate-500">
+                  {erro}
                 </p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-slate-200 text-left text-xs">
-                  <thead className="bg-slate-50 text-slate-500">
-                    <tr>
-                      <th className="whitespace-nowrap px-3 py-3 font-bold">
-                        Corte
-                      </th>
+              </Card>
+            )
+            : (
+              <>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <KpiCard
+                    icon={Users}
+                    label={
+                      consultaPorPeriodo
+                        ? "Entraram no período"
+                        : "Entraram na janela"
+                    }
+                    value={
+                      resumo
+                        .pedidosNoPeriodo ??
+                      resumo
+                        .pedidosNoDia ??
+                      0
+                    }
+                    sub="pedidos AnyMarket distintos"
+                  />
 
-                      <th className="whitespace-nowrap px-3 py-3 text-right font-bold">
-                        Entraram na
-                        esteira
-                      </th>
+                  <KpiCard
+                    icon={Clock3}
+                    label="Cortes realizados"
+                    value={
+                      resumo
+                        .cortesRealizados ||
+                      0
+                    }
+                    sub={
+                      consultaPorPeriodo
+                        ? "nas janelas selecionadas"
+                        : "entre as duas viradas de 13h"
+                    }
+                  />
 
-                      <th className="whitespace-nowrap px-3 py-3 text-right font-bold">
-                        Acumulado da
-                        janela
-                      </th>
+                  <KpiCard
+                    icon={PackageCheck}
+                    label={
+                      ultimoCorte
+                        ? `Último corte · ${ultimoCorte.dataLabel} · ${ultimoCorte.hora}`
+                        : "Último corte"
+                    }
+                    value={
+                      resumo
+                        .pedidosUltimoCorte ||
+                      0
+                    }
+                    sub="pedidos que entraram no corte"
+                  />
+                </div>
 
-                      <th className="whitespace-nowrap px-3 py-3 text-right font-bold">
-                        Em picking
-                      </th>
+                <Card>
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <h3 className="text-sm font-black text-slate-800">
+                        {
+                          consultaPorPeriodo
+                            ? "Cortes do período operacional"
+                            : "Cortes da janela operacional"
+                        }
+                      </h3>
 
-                      <th className="whitespace-nowrap px-3 py-3 text-right font-bold">
-                        Em faturamento
-                      </th>
+                      <p className="text-xs text-slate-500">
+                        Clique na data e no horário para abrir todos os pedidos que entraram naquele corte.
+                      </p>
+                    </div>
 
-                      <th className="whitespace-nowrap px-3 py-3 text-right font-bold">
-                        Aguard. definição
-                      </th>
-                    </tr>
-                  </thead>
+                    {
+                      dados
+                        ?.atualizadoEm && (
+                        <span className="text-[11px] text-slate-400">
+                          Atualizado em
+                          {" "}
+                          {
+                            formatarDataHoraSP(
+                              dados.atualizadoEm
+                            )
+                          }
+                        </span>
+                      )
+                    }
+                  </div>
 
-                  <tbody className="divide-y divide-slate-100">
-                    {cortes.map(
-                      (corte) => {
-                        const aberto =
-                          corteAberto ===
-                          corte.chave;
+                  {
+                    cortes.length === 0
+                      ? (
+                        <div className="py-10 text-center text-slate-400">
+                          <Clock3 className="mx-auto mb-2 h-8 w-8 opacity-40" />
 
-                        return (
-                          <FragmentoCorte
-                            key={
-                              corte.chave
+                          <p className="text-sm font-semibold">
+                            Nenhum corte encontrado
+                            {" "}
+                            {
+                              consultaPorPeriodo
+                                ? "neste período"
+                                : "nesta data"
                             }
-                            corte={
-                              corte
-                            }
-                            aberto={
-                              aberto
-                            }
-                            onToggle={() =>
-                              setCorteAberto(
-                                aberto
-                                  ? null
-                                  : corte.chave
-                              )
-                            }
-                          />
-                        );
-                      }
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </Card>
+                            .
+                          </p>
 
-          <ConsolidadoDaJanela
-            consolidado={
-              dados?.consolidado
-            }
-          />
-        </>
-      )}
+                          <p className="mt-1 text-xs">
+                            Os cortes aparecem após a entrada dos pedidos pelo upload do AnyMarket.
+                          </p>
+                        </div>
+                      )
+                      : (
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full divide-y divide-slate-200 text-left text-xs">
+                            <thead className="bg-slate-50 text-slate-500">
+                              <tr>
+                                <th className="whitespace-nowrap px-3 py-3 font-bold">
+                                  Corte
+                                </th>
+
+                                <th className="whitespace-nowrap px-3 py-3 text-right font-bold">
+                                  Entraram na esteira
+                                </th>
+
+                                <th className="whitespace-nowrap px-3 py-3 text-right font-bold">
+                                  {
+                                    consultaPorPeriodo
+                                      ? "Acumulado do período"
+                                      : "Acumulado da janela"
+                                  }
+                                </th>
+
+                                <th className="whitespace-nowrap px-3 py-3 text-right font-bold">
+                                  Em picking
+                                </th>
+
+                                <th className="whitespace-nowrap px-3 py-3 text-right font-bold">
+                                  Em faturamento
+                                </th>
+
+                                <th className="whitespace-nowrap px-3 py-3 text-right font-bold">
+                                  Aguard. definição
+                                </th>
+                              </tr>
+                            </thead>
+
+                            <tbody className="divide-y divide-slate-100">
+                              {
+                                cortes.map(
+                                  (corte) => {
+                                    const aberto =
+                                      corteAberto ===
+                                      corte.chave;
+
+                                    return (
+                                      <FragmentoCorte
+                                        key={
+                                          corte.chave
+                                        }
+                                        corte={
+                                          corte
+                                        }
+                                        aberto={
+                                          aberto
+                                        }
+                                        onToggle={
+                                          () =>
+                                            setCorteAberto(
+                                              aberto
+                                                ? null
+                                                : corte.chave
+                                            )
+                                        }
+                                      />
+                                    );
+                                  }
+                                )
+                              }
+                            </tbody>
+                          </table>
+                        </div>
+                      )
+                  }
+                </Card>
+
+                <ConsolidadoDaJanela
+                  consolidado={
+                    dados?.consolidado
+                  }
+                  periodo={
+                    consultaPorPeriodo
+                  }
+                />
+              </>
+            )
+      }
     </div>
   );
 }
@@ -1108,56 +1426,78 @@ function FragmentoCorte({
           <button
             type="button"
             onClick={onToggle}
-            className={`inline-flex items-center gap-2 rounded-lg px-2.5 py-1.5 font-black transition ${
-              aberto
-                ? "bg-[#7F2D92] text-white"
-                : "bg-white text-[#7F2D92] ring-1 ring-purple-200 hover:bg-purple-50"
-            }`}
+            className={`
+              inline-flex items-center gap-2
+              rounded-lg px-2.5 py-1.5
+              font-black transition
+              ${
+                aberto
+                  ? "bg-[#7F2D92] text-white"
+                  : "bg-white text-[#7F2D92] ring-1 ring-purple-200 hover:bg-purple-50"
+              }
+            `}
           >
-            {corte.dataLabel} ·{" "}
+            {corte.dataLabel}
+            {" · "}
             {corte.hora}
 
-            {aberto ? (
-              <ChevronUp className="h-3.5 w-3.5" />
-            ) : (
-              <ChevronDown className="h-3.5 w-3.5" />
-            )}
+            {
+              aberto
+                ? (
+                  <ChevronUp className="h-3.5 w-3.5" />
+                )
+                : (
+                  <ChevronDown className="h-3.5 w-3.5" />
+                )
+            }
           </button>
         </td>
 
         <td className="px-3 py-2.5 text-right font-black text-slate-800">
-          {corte.pedidosEntraram}
+          {
+            corte.pedidosEntraram
+          }
         </td>
 
         <td className="px-3 py-2.5 text-right font-semibold text-slate-700">
-          {corte.acumuladoDia}
+          {
+            corte.acumuladoDia
+          }
         </td>
 
         <td className="px-3 py-2.5 text-right font-semibold text-slate-700">
-          {corte.emPicking}
+          {
+            corte.emPicking
+          }
         </td>
 
         <td className="px-3 py-2.5 text-right font-semibold text-slate-700">
-          {corte.emFaturamento}
+          {
+            corte.emFaturamento
+          }
         </td>
 
         <td className="px-3 py-2.5 text-right font-semibold text-slate-700">
-          {corte.aguardandoDefinicao}
+          {
+            corte.aguardandoDefinicao
+          }
         </td>
       </tr>
 
-      {aberto && (
-        <tr>
-          <td
-            colSpan={6}
-            className="px-3 py-4"
-          >
-            <DetalhesDoCorte
-              corte={corte}
-            />
-          </td>
-        </tr>
-      )}
+      {
+        aberto && (
+          <tr>
+            <td
+              colSpan={6}
+              className="px-3 py-4"
+            >
+              <DetalhesDoCorte
+                corte={corte}
+              />
+            </td>
+          </tr>
+        )
+      }
     </>
   );
 }
