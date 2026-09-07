@@ -268,13 +268,15 @@ export default function App() {
     <CargaInicialV2Page />
   }
 />
-      </Route>
+
 <Route
   path="b2b"
   element={
     <B2BV2Page />
   }
 />
+
+</Route>
 
 
       {/* =====================================================
