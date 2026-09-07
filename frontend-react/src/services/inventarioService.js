@@ -2,7 +2,20 @@ import { supabase } from "../lib/supabase";
 
 // Peças que não estão fisicamente no armazém não entram na contagem.
 const STATUS_FORA_DO_ESTOQUE = ["Finalizado"];
+function enderecoEhWms(local) {
+  if (!local) {
+    return false;
+  }
 
+  const endereco =
+    String(local)
+      .trim()
+      .toUpperCase();
+
+  return /^RUA\s*\d{1,2}\/BL\d{2}\/AD\d{2}\/AP\s+[A-F](0[1-9]|10)$/.test(
+    endereco
+  );
+}
 // ══════════════════════════════════════════════════════════
 // NORMALIZAÇÃO DE ENDEREÇO
 // A base tem "RA 12/BL01/AD01/A", "R12/BL4/AD1/A" e "RUA 12/BL02/AD05/A".
@@ -108,8 +121,17 @@ export async function sortearDia(cicloId, quantidade = 131) {
     .not("status_atual", "in", `(${STATUS_FORA_DO_ESTOQUE.map(s => `"${s}"`).join(",")})`);
   if (error) throw new Error(error.message);
 
-  const enderecos = new Set();
-  (pecas || []).forEach(p => enderecos.add(p.local_normalizado));
+  const enderecos =
+  new Set(
+    (pecas || [])
+      .map(
+        (p) =>
+          p.local_normalizado
+      )
+      .filter(
+        enderecoEhWms
+      )
+  );
 
   // Os que já foram contados neste ciclo.
   // O erro é verificado de propósito: se esta consulta falhar sem ninguém olhar,
@@ -158,7 +180,20 @@ export async function listarContagensPendentes(cicloId) {
   // A ordenação é feita aqui, e não no banco: o .order() do Postgres é alfabético e
   // colocaria "RUA 10" antes de "RUA 2". Com a contagem presa nas ruas 1 e 2 isso
   // nunca apareceu; com o sorteio espalhando pelo armazém, apareceria todo dia.
-  return (data || []).sort((a, b) => ordemEndereco(a.endereco, b.endereco));
+  return (data || [])
+  .filter(
+    (contagem) =>
+      enderecoEhWms(
+        contagem.endereco
+      )
+  )
+  .sort(
+    (a, b) =>
+      ordemEndereco(
+        a.endereco,
+        b.endereco
+      )
+  );
 }
 
 // ══════════════════════════════════════════════════════════
@@ -170,6 +205,13 @@ export async function abrirContagem(contagemId, userId, userNome) {
   const { data: cont } = await supabase
     .from("inventario_contagens").select("*").eq("id", contagemId).single();
   if (!cont) return { ok: false, erro: "Contagem não encontrada." };
+  if (!enderecoEhWms(cont.endereco)) {
+  return {
+    ok: false,
+    erro:
+      "Este endereço não pertence ao layout atual do WMS.",
+  };
+}
   if (cont.status === "concluida") return { ok: false, erro: "Contagem já concluída." };
 
   // Já congelada? Devolve o que está lá.
@@ -521,18 +563,18 @@ export async function mapaInventarioCiclo(cicloId) {
 
 
   const enderecos =
-    [
-      ...new Set(
-        (pecas || [])
-          .map(
-            (peca) =>
-              peca.local_normalizado
-          )
-          .filter(
-            Boolean
-          )
-      ),
-    ];
+  [
+    ...new Set(
+      (pecas || [])
+        .map(
+          (peca) =>
+            peca.local_normalizado
+        )
+        .filter(
+          enderecoEhWms
+        )
+    ),
+  ];
 
 
   const contagemPorEndereco =
