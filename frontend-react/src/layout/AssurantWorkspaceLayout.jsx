@@ -95,7 +95,37 @@ const MENU_GROUPS = [
       {
         label: "Triagens",
         icon: FlaskConical,
-        enabled: false,
+        enabled: true,
+
+        children: [
+          {
+            label: "Triagem Funcional",
+            icon: FlaskConical,
+            to: "/v2/assurant/triagens/funcional",
+            exact: true,
+          },
+
+          {
+            label: "Laudo",
+            icon: FileText,
+            to: "/v2/assurant/triagens/laudo",
+            exact: true,
+          },
+
+          {
+            label: "Triagem Cosmética",
+            icon: ClipboardCheck,
+            to: "/v2/assurant/triagens/cosmetica",
+            exact: true,
+          },
+
+          {
+            label: "Entrada Oracle",
+            icon: Activity,
+            to: "/v2/assurant/triagens/oracle",
+            exact: true,
+          },
+        ],
       },
 
       {
