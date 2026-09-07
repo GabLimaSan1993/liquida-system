@@ -55,6 +55,7 @@ import RecebimentoV2Page from "./pages/assurant-v2/RecebimentoV2Page.jsx";
 import GestaoRecebimentoV2Page from "./pages/assurant-v2/GestaoRecebimentoV2Page.jsx";
 import TriagensV2Page from "./pages/assurant-v2/TriagensV2Page.jsx";
 import ArmazenagemV2Page from "./pages/assurant-v2/ArmazenagemV2Page.jsx";
+import ConsultaEstoqueV2Page from "./pages/assurant-v2/ConsultaEstoqueV2Page.jsx";
 
 function ProtectedRoute({ tela, children }) {
   const { user, loading, hasAccess } = useAuth();
@@ -246,7 +247,12 @@ export default function App() {
     <ArmazenagemV2Page />
   }
 />
-
+<Route
+  path="estoque/consulta"
+  element={
+    <ConsultaEstoqueV2Page />
+  }
+/>
       </Route>
 
       {/* =====================================================
