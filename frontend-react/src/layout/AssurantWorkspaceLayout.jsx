@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+
 import {
   Activity,
   AlertTriangle,
   BarChart3,
   Boxes,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ClipboardCheck,
@@ -27,6 +29,7 @@ import {
   Warehouse,
   X,
 } from "lucide-react";
+
 import {
   NavLink,
   Outlet,
@@ -70,18 +73,37 @@ const MENU_GROUPS = [
       {
         label: "Recebimento",
         icon: Truck,
-        enabled: false,
+        enabled: true,
+
+        children: [
+          {
+            label: "Recebimento Lojas",
+            icon: Truck,
+            to: "/v2/assurant/recebimento",
+            exact: true,
+          },
+
+          {
+            label: "Gestão de Recebimento",
+            icon: BarChart3,
+            to: "/v2/assurant/recebimento/gestao",
+            exact: true,
+          },
+        ],
       },
+
       {
         label: "Triagens",
         icon: FlaskConical,
         enabled: false,
       },
+
       {
         label: "B2B",
         icon: Boxes,
         enabled: false,
       },
+
       {
         label: "B2C",
         icon: ShoppingCart,
@@ -98,16 +120,19 @@ const MENU_GROUPS = [
         icon: Package,
         enabled: false,
       },
+
       {
         label: "Consulta do Estoque",
         icon: Warehouse,
         enabled: false,
       },
+
       {
         label: "Inventário",
         icon: ClipboardCheck,
         enabled: false,
       },
+
       {
         label: "Carga Inicial",
         icon: Activity,
@@ -135,11 +160,13 @@ const MENU_GROUPS = [
         icon: BarChart3,
         enabled: false,
       },
+
       {
         label: "SLA & Rastreabilidade",
         icon: ShieldCheck,
         enabled: false,
       },
+
       {
         label: "Documentação",
         icon: FileText,
@@ -150,8 +177,12 @@ const MENU_GROUPS = [
 ];
 
 const STATUS_LABELS = {
-  aguardando_alocacao: "Aguardando alocação",
-  aguardando_definicao_produto: "Aguardando definição",
+  aguardando_alocacao:
+    "Aguardando alocação",
+
+  aguardando_definicao_produto:
+    "Aguardando definição",
+
   alocado: "Alocado",
   em_picking: "Picking",
   em_analise: "Em análise",
@@ -162,14 +193,18 @@ const STATUS_LABELS = {
 };
 
 function fmtNumber(value) {
-  return Number(value || 0).toLocaleString("pt-BR");
+  return Number(
+    value || 0
+  ).toLocaleString("pt-BR");
 }
 
 function fmtDateTime(value) {
   if (!value) return "—";
 
   try {
-    return new Date(value).toLocaleString("pt-BR", {
+    return new Date(
+      value
+    ).toLocaleString("pt-BR", {
       day: "2-digit",
       month: "2-digit",
       hour: "2-digit",
@@ -181,13 +216,19 @@ function fmtDateTime(value) {
 }
 
 function getStatusLabel(status) {
-  if (!status) return "Não informado";
+  if (!status) {
+    return "Não informado";
+  }
 
   return (
     STATUS_LABELS[status] ||
     status
       .replaceAll("_", " ")
-      .replace(/\b\w/g, (letter) => letter.toUpperCase())
+      .replace(
+        /\b\w/g,
+        (letter) =>
+          letter.toUpperCase()
+      )
   );
 }
 
@@ -218,11 +259,15 @@ function getStatusClasses(status) {
   }
 }
 
-function Logo({ collapsed = false }) {
+function Logo({
+  collapsed = false,
+}) {
   return (
     <div
       className={`flex items-center ${
-        collapsed ? "justify-center" : "gap-3"
+        collapsed
+          ? "justify-center"
+          : "gap-3"
       }`}
     >
       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/15">
@@ -249,73 +294,85 @@ function Logo({ collapsed = false }) {
   );
 }
 
-function SidebarNavItem({
+function DisabledSidebarItem({
+  item,
+  collapsed,
+}) {
+  const Icon = item.icon;
+
+  return (
+    <div
+      title={
+        collapsed
+          ? `${item.label} — Em migração`
+          : undefined
+      }
+      className={`
+        group relative flex h-11 cursor-default items-center rounded-xl
+        text-white/35 transition
+        ${
+          collapsed
+            ? "justify-center px-2"
+            : "gap-3 px-3"
+        }
+      `}
+    >
+      <Icon className="h-[18px] w-[18px] shrink-0" />
+
+      {!collapsed && (
+        <>
+          <span className="min-w-0 flex-1 truncate text-sm font-medium">
+            {item.label}
+          </span>
+
+          <span className="rounded-md bg-white/5 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white/30">
+            Em migração
+          </span>
+        </>
+      )}
+
+      {collapsed && (
+        <div className="pointer-events-none absolute left-[66px] z-[100] hidden whitespace-nowrap rounded-lg bg-slate-950 px-3 py-2 text-xs font-semibold text-white shadow-xl group-hover:block">
+          {item.label}
+
+          <div className="mt-0.5 text-[10px] font-medium text-white/45">
+            Em migração
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SimpleSidebarItem({
   item,
   collapsed,
   closeMobile,
 }) {
   const Icon = item.icon;
 
-  if (!item.enabled) {
-    return (
-      <div
-        title={
-          collapsed
-            ? `${item.label} — Em migração`
-            : undefined
-        }
-        className={`
-          group relative flex h-11 cursor-default items-center rounded-xl
-          text-white/35 transition
-          ${
-            collapsed
-              ? "justify-center px-2"
-              : "gap-3 px-3"
-          }
-        `}
-      >
-        <Icon className="h-[18px] w-[18px] shrink-0" />
-
-        {!collapsed && (
-          <>
-            <span className="min-w-0 flex-1 truncate text-sm font-medium">
-              {item.label}
-            </span>
-
-            <span className="rounded-md bg-white/5 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white/30">
-              Em migração
-            </span>
-          </>
-        )}
-
-        {collapsed && (
-          <div className="pointer-events-none absolute left-[66px] z-[100] hidden whitespace-nowrap rounded-lg bg-slate-950 px-3 py-2 text-xs font-semibold text-white shadow-xl group-hover:block">
-            {item.label}
-
-            <div className="mt-0.5 text-[10px] font-medium text-white/45">
-              Em migração
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
   return (
     <NavLink
       to={item.to}
       end={item.exact}
-      onClick={closeMobile}
-      title={
-        collapsed ? item.label : undefined
+      onClick={
+        closeMobile
       }
-      className={({ isActive }) => `
+      title={
+        collapsed
+          ? item.label
+          : undefined
+      }
+      className={({
+        isActive,
+      }) => `
         group relative flex h-11 items-center rounded-xl transition-all
         ${
           collapsed
             ? "justify-center px-2"
             : "gap-3 px-3"
         }
+
         ${
           isActive
             ? "bg-white text-[#4C1D95] shadow-sm"
@@ -340,6 +397,204 @@ function SidebarNavItem({
   );
 }
 
+function ExpandableSidebarItem({
+  item,
+  collapsed,
+  closeMobile,
+  pathname,
+}) {
+  const Icon = item.icon;
+
+  const hasActiveChild =
+    item.children.some(
+      (child) =>
+        pathname === child.to
+    );
+
+  const [open, setOpen] =
+    useState(
+      hasActiveChild
+    );
+
+  useEffect(() => {
+    if (hasActiveChild) {
+      setOpen(true);
+    }
+  }, [hasActiveChild]);
+
+  if (collapsed) {
+    const firstChild =
+      item.children[0];
+
+    return (
+      <NavLink
+        to={firstChild.to}
+        title={item.label}
+        onClick={
+          closeMobile
+        }
+        className={`
+          group relative flex h-11 items-center justify-center rounded-xl px-2 transition-all
+          ${
+            hasActiveChild
+              ? "bg-white text-[#4C1D95] shadow-sm"
+              : "text-white/70 hover:bg-white/10 hover:text-white"
+          }
+        `}
+      >
+        <Icon className="h-[18px] w-[18px]" />
+
+        <div className="pointer-events-none absolute left-[66px] z-[100] hidden whitespace-nowrap rounded-lg bg-slate-950 px-3 py-2 text-xs font-semibold text-white shadow-xl group-hover:block">
+          {item.label}
+
+          <div className="mt-1 text-[10px] font-medium text-white/45">
+            Clique para abrir
+          </div>
+        </div>
+      </NavLink>
+    );
+  }
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() =>
+          setOpen(
+            (current) =>
+              !current
+          )
+        }
+        className={`
+          flex h-11 w-full items-center gap-3 rounded-xl px-3 text-left transition-all
+          ${
+            hasActiveChild
+              ? "bg-white/10 text-white"
+              : "text-white/70 hover:bg-white/10 hover:text-white"
+          }
+        `}
+      >
+        <Icon className="h-[18px] w-[18px] shrink-0" />
+
+        <span className="min-w-0 flex-1 truncate text-sm font-semibold">
+          {item.label}
+        </span>
+
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 transition-transform duration-200 ${
+            open
+              ? "rotate-180"
+              : ""
+          }`}
+        />
+      </button>
+
+      <div
+        className={`overflow-hidden transition-all duration-200 ${
+          open
+            ? "mt-1 max-h-40 opacity-100"
+            : "max-h-0 opacity-0"
+        }`}
+      >
+        <div className="ml-[21px] border-l border-white/10 pl-3">
+          <div className="space-y-1 py-1">
+            {item.children.map(
+              (child) => {
+                const ChildIcon =
+                  child.icon;
+
+                return (
+                  <NavLink
+                    key={
+                      child.to
+                    }
+                    to={
+                      child.to
+                    }
+                    end={
+                      child.exact
+                    }
+                    onClick={
+                      closeMobile
+                    }
+                    className={({
+                      isActive,
+                    }) => `
+                      flex min-h-10 items-center gap-2.5 rounded-xl px-3 py-2 text-xs transition
+                      ${
+                        isActive
+                          ? "bg-white text-[#4C1D95] shadow-sm font-bold"
+                          : "text-white/55 hover:bg-white/8 hover:text-white"
+                      }
+                    `}
+                  >
+                    <ChildIcon className="h-4 w-4 shrink-0" />
+
+                    <span className="min-w-0 truncate">
+                      {
+                        child.label
+                      }
+                    </span>
+                  </NavLink>
+                );
+              }
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SidebarMenuItem({
+  item,
+  collapsed,
+  closeMobile,
+  pathname,
+}) {
+  if (!item.enabled) {
+    return (
+      <DisabledSidebarItem
+        item={item}
+        collapsed={
+          collapsed
+        }
+      />
+    );
+  }
+
+  if (
+    item.children?.length
+  ) {
+    return (
+      <ExpandableSidebarItem
+        item={item}
+        collapsed={
+          collapsed
+        }
+        closeMobile={
+          closeMobile
+        }
+        pathname={
+          pathname
+        }
+      />
+    );
+  }
+
+  return (
+    <SimpleSidebarItem
+      item={item}
+      collapsed={
+        collapsed
+      }
+      closeMobile={
+        closeMobile
+      }
+    />
+  );
+}
+
 function SidebarContent({
   collapsed,
   onToggleCollapsed,
@@ -347,6 +602,7 @@ function SidebarContent({
   onBack,
   profile,
   onLogout,
+  pathname,
   mobile = false,
 }) {
   return (
@@ -354,6 +610,7 @@ function SidebarContent({
       <div
         className={`
           flex h-[72px] shrink-0 items-center border-b border-white/10
+
           ${
             collapsed
               ? "justify-center px-3"
@@ -361,18 +618,25 @@ function SidebarContent({
           }
         `}
       >
-        <Logo collapsed={collapsed} />
+        <Logo
+          collapsed={
+            collapsed
+          }
+        />
 
-        {!collapsed && mobile && (
-          <button
-            type="button"
-            onClick={onCloseMobile}
-            className="rounded-lg p-2 text-white/60 transition hover:bg-white/10 hover:text-white"
-            aria-label="Fechar menu"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        )}
+        {!collapsed &&
+          mobile && (
+            <button
+              type="button"
+              onClick={
+                onCloseMobile
+              }
+              className="rounded-lg p-2 text-white/60 transition hover:bg-white/10 hover:text-white"
+              aria-label="Fechar menu"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          )}
       </div>
 
       {!collapsed && (
@@ -434,6 +698,7 @@ function SidebarContent({
       <nav
         className={`
           assurant-sidebar-scroll mt-4 flex-1 overflow-y-auto overflow-x-hidden pb-4
+
           ${
             collapsed
               ? "px-3"
@@ -443,12 +708,21 @@ function SidebarContent({
       >
         <div className="space-y-5">
           {MENU_GROUPS.map(
-            (group, groupIndex) => (
-              <div key={groupIndex}>
+            (
+              group,
+              groupIndex
+            ) => (
+              <div
+                key={
+                  groupIndex
+                }
+              >
                 {group.label &&
                   !collapsed && (
                     <div className="mb-1.5 px-3 text-[10px] font-black tracking-[0.16em] text-white/30">
-                      {group.label}
+                      {
+                        group.label
+                      }
                     </div>
                   )}
 
@@ -460,16 +734,21 @@ function SidebarContent({
                 <div className="space-y-1">
                   {group.items.map(
                     (item) => (
-                      <SidebarNavItem
+                      <SidebarMenuItem
                         key={
                           item.label
                         }
-                        item={item}
+                        item={
+                          item
+                        }
                         collapsed={
                           collapsed
                         }
                         closeMobile={
                           onCloseMobile
+                        }
+                        pathname={
+                          pathname
                         }
                       />
                     )
@@ -484,6 +763,7 @@ function SidebarContent({
       <div
         className={`
           shrink-0 border-t border-white/10 py-3
+
           ${
             collapsed
               ? "px-3"
@@ -515,6 +795,7 @@ function SidebarContent({
           className={`
             flex h-10 w-full items-center rounded-xl text-white/50 transition
             hover:bg-white/10 hover:text-white
+
             ${
               collapsed
                 ? "justify-center"
@@ -535,7 +816,9 @@ function SidebarContent({
       {!mobile && (
         <button
           type="button"
-          onClick={onToggleCollapsed}
+          onClick={
+            onToggleCollapsed
+          }
           className="
             absolute -right-3 top-[92px] z-50 flex h-7 w-7
             items-center justify-center rounded-full border border-violet-200
@@ -572,7 +855,9 @@ function Topbar({
       <div className="flex h-full items-center gap-4 px-4 lg:px-6">
         <button
           type="button"
-          onClick={onOpenMobileMenu}
+          onClick={
+            onOpenMobileMenu
+          }
           className="rounded-xl border border-slate-200 p-2.5 text-slate-600 transition hover:bg-slate-50 lg:hidden"
           aria-label="Abrir menu"
         >
@@ -603,10 +888,16 @@ function Topbar({
 
           <input
             type="text"
-            value={searchValue}
-            onChange={(event) =>
+            value={
+              searchValue
+            }
+            onChange={(
+              event
+            ) =>
               onSearchValueChange(
-                event.target.value
+                event
+                  .target
+                  .value
               )
             }
             placeholder="Buscar pedido, IMEI, voucher, SKU..."
@@ -675,24 +966,31 @@ function KpiCard({
     violet: {
       icon:
         "bg-violet-50 text-violet-700 ring-violet-100",
+
       line:
         "from-violet-500 to-fuchsia-400",
     },
+
     emerald: {
       icon:
         "bg-emerald-50 text-emerald-700 ring-emerald-100",
+
       line:
         "from-emerald-500 to-teal-400",
     },
+
     amber: {
       icon:
         "bg-amber-50 text-amber-700 ring-amber-100",
+
       line:
         "from-amber-500 to-orange-400",
     },
+
     rose: {
       icon:
         "bg-rose-50 text-rose-700 ring-rose-100",
+
       line:
         "from-rose-500 to-pink-400",
     },
@@ -787,7 +1085,9 @@ function PipelineStage({
         </div>
 
         <div className="mt-0.5 text-xl font-black text-slate-900">
-          {fmtNumber(value)}
+          {fmtNumber(
+            value
+          )}
         </div>
 
         <div className="mt-1 text-[10px] text-slate-400">
@@ -813,18 +1113,23 @@ function AlertRow({
     amber: {
       icon:
         "bg-amber-50 text-amber-600",
+
       badge:
         "bg-amber-50 text-amber-700",
     },
+
     rose: {
       icon:
         "bg-rose-50 text-rose-600",
+
       badge:
         "bg-rose-50 text-rose-700",
     },
+
     violet: {
       icon:
         "bg-violet-50 text-violet-600",
+
       badge:
         "bg-violet-50 text-violet-700",
     },
@@ -848,27 +1153,35 @@ function AlertRow({
         </div>
 
         <div className="mt-0.5 truncate text-[10px] text-slate-400">
-          {description}
+          {
+            description
+          }
         </div>
       </div>
 
       <div
         className={`rounded-lg px-2 py-1 text-xs font-black ${cfg.badge}`}
       >
-        {fmtNumber(value)}
+        {fmtNumber(
+          value
+        )}
       </div>
     </div>
   );
 }
 
-function StatusBadge({ status }) {
+function StatusBadge({
+  status,
+}) {
   return (
     <span
       className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold ring-1 ${getStatusClasses(
         status
       )}`}
     >
-      {getStatusLabel(status)}
+      {getStatusLabel(
+        status
+      )}
     </span>
   );
 }
@@ -882,7 +1195,9 @@ function WmsOccupancy({
     total > 0
       ? Math.min(
           100,
-          (occupied / total) * 100
+          (occupied /
+            total) *
+            100
         )
       : 0;
 
@@ -890,54 +1205,70 @@ function WmsOccupancy({
     total > 0
       ? Math.min(
           100,
-          (blocked / total) * 100
+          (blocked /
+            total) *
+            100
         )
       : 0;
 
   const cells = 36;
-  const occupiedCells = Math.round(
-    (occupiedPercent / 100) *
-      cells
-  );
 
-  const blockedCells = Math.min(
-    cells - occupiedCells,
+  const occupiedCells =
     Math.round(
-      (blockedPercent / 100) *
+      (occupiedPercent /
+        100) *
         cells
-    )
-  );
+    );
+
+  const blockedCells =
+    Math.min(
+      cells -
+        occupiedCells,
+
+      Math.round(
+        (blockedPercent /
+          100) *
+          cells
+      )
+    );
 
   return (
     <div className="p-5">
       <div className="grid grid-cols-9 gap-1.5">
         {Array.from({
           length: cells,
-        }).map((_, index) => {
-          const occupiedCell =
-            index <
-            occupiedCells;
+        }).map(
+          (
+            _,
+            index
+          ) => {
+            const occupiedCell =
+              index <
+              occupiedCells;
 
-          const blockedCell =
-            index >=
-              occupiedCells &&
-            index <
-              occupiedCells +
-                blockedCells;
+            const blockedCell =
+              index >=
+                occupiedCells &&
+              index <
+                occupiedCells +
+                  blockedCells;
 
-          return (
-            <div
-              key={index}
-              className={`h-8 rounded-md border ${
-                blockedCell
-                  ? "border-rose-200 bg-rose-100"
-                  : occupiedCell
-                  ? "border-emerald-200 bg-emerald-100"
-                  : "border-slate-200 bg-slate-50"
-              }`}
-            />
-          );
-        })}
+            return (
+              <div
+                key={
+                  index
+                }
+                className={`h-8 rounded-md border ${
+                  blockedCell
+                    ? "border-rose-200 bg-rose-100"
+                    : occupiedCell
+                    ? "border-emerald-200 bg-emerald-100"
+                    : "border-slate-200 bg-slate-50"
+                }`}
+              />
+            );
+          }
+        )}
       </div>
 
       <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2">
@@ -1001,22 +1332,30 @@ function WmsOccupancy({
 
 function DashboardSkeleton() {
   return (
-    <div className="space-y-5 animate-pulse">
+    <div className="animate-pulse space-y-5">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {Array.from({
           length: 4,
-        }).map((_, index) => (
-          <div
-            key={index}
-            className="h-32 rounded-2xl bg-slate-200/60"
-          />
-        ))}
+        }).map(
+          (
+            _,
+            index
+          ) => (
+            <div
+              key={
+                index
+              }
+              className="h-32 rounded-2xl bg-slate-200/60"
+            />
+          )
+        )}
       </div>
 
       <div className="h-48 rounded-2xl bg-slate-200/60" />
 
       <div className="grid gap-5 xl:grid-cols-3">
         <div className="h-80 rounded-2xl bg-slate-200/60 xl:col-span-2" />
+
         <div className="h-80 rounded-2xl bg-slate-200/60" />
       </div>
     </div>
@@ -1026,199 +1365,277 @@ function DashboardSkeleton() {
 function AssurantDashboard({
   searchValue,
 }) {
-  const [loading, setLoading] =
-    useState(true);
+  const [
+    loading,
+    setLoading,
+  ] = useState(true);
 
-  const [warning, setWarning] =
-    useState("");
+  const [
+    warning,
+    setWarning,
+  ] = useState("");
 
-  const [updatedAt, setUpdatedAt] =
-    useState(null);
+  const [
+    updatedAt,
+    setUpdatedAt,
+  ] = useState(null);
 
-  const [metrics, setMetrics] =
-    useState({
-      b2cActive: 0,
-      b2cAnalysis: 0,
-      b2cDefinition: 0,
-      b2cBilled: 0,
-      triageTotal: 0,
-      awaitingStorage: 0,
-      wmsConfirmed: 0,
-      addressTotal: 0,
-      addressOccupied: 0,
-      addressBlocked: 0,
-      activeReservations: 0,
-      analysisReservations: 0,
-    });
+  const [
+    metrics,
+    setMetrics,
+  ] = useState({
+    b2cActive: 0,
+    b2cAnalysis: 0,
+    b2cDefinition: 0,
+    b2cBilled: 0,
 
-  const [recentOrders, setRecentOrders] =
-    useState([]);
+    triageTotal: 0,
+    awaitingStorage: 0,
+
+    wmsConfirmed: 0,
+
+    addressTotal: 0,
+    addressOccupied: 0,
+    addressBlocked: 0,
+
+    activeReservations: 0,
+    analysisReservations: 0,
+  });
+
+  const [
+    recentOrders,
+    setRecentOrders,
+  ] = useState([]);
 
   const loadDashboard =
-    useCallback(async () => {
-      setLoading(true);
-      setWarning("");
+    useCallback(
+      async () => {
+        setLoading(true);
+        setWarning("");
 
-      const results =
-        await Promise.all([
-          supabase
-            .from("pedidos_b2c")
-            .select("id", {
-              count: "exact",
-              head: true,
-            })
-            .in(
-              "status",
-              ACTIVE_B2C_STATUSES
-            ),
+        const results =
+          await Promise.all([
+            supabase
+              .from(
+                "pedidos_b2c"
+              )
+              .select(
+                "id",
+                {
+                  count:
+                    "exact",
+                  head: true,
+                }
+              )
+              .in(
+                "status",
+                ACTIVE_B2C_STATUSES
+              ),
 
-          supabase
-            .from("pedidos_b2c")
-            .select("id", {
-              count: "exact",
-              head: true,
-            })
-            .eq(
-              "status",
-              "em_analise"
-            ),
+            supabase
+              .from(
+                "pedidos_b2c"
+              )
+              .select(
+                "id",
+                {
+                  count:
+                    "exact",
+                  head: true,
+                }
+              )
+              .eq(
+                "status",
+                "em_analise"
+              ),
 
-          supabase
-            .from("pedidos_b2c")
-            .select("id", {
-              count: "exact",
-              head: true,
-            })
-            .eq(
-              "status",
-              "aguardando_definicao_produto"
-            ),
+            supabase
+              .from(
+                "pedidos_b2c"
+              )
+              .select(
+                "id",
+                {
+                  count:
+                    "exact",
+                  head: true,
+                }
+              )
+              .eq(
+                "status",
+                "aguardando_definicao_produto"
+              ),
 
-          supabase
-            .from("pedidos_b2c")
-            .select("id", {
-              count: "exact",
-              head: true,
-            })
-            .not(
-              "faturado_em",
-              "is",
-              null
-            ),
+            supabase
+              .from(
+                "pedidos_b2c"
+              )
+              .select(
+                "id",
+                {
+                  count:
+                    "exact",
+                  head: true,
+                }
+              )
+              .not(
+                "faturado_em",
+                "is",
+                null
+              ),
 
-          supabase
-            .from(
-              "assurant_triagem"
-            )
-            .select("id", {
-              count: "exact",
-              head: true,
-            }),
+            supabase
+              .from(
+                "assurant_triagem"
+              )
+              .select(
+                "id",
+                {
+                  count:
+                    "exact",
+                  head: true,
+                }
+              ),
 
-          supabase
-            .from(
-              "assurant_triagem"
-            )
-            .select("id", {
-              count: "exact",
-              head: true,
-            })
-            .eq(
-              "status_atual",
-              "Aguardando armazenagem"
-            ),
+            supabase
+              .from(
+                "assurant_triagem"
+              )
+              .select(
+                "id",
+                {
+                  count:
+                    "exact",
+                  head: true,
+                }
+              )
+              .eq(
+                "status_atual",
+                "Aguardando armazenagem"
+              ),
 
-          supabase
-            .from(
-              "wms_alocacoes"
-            )
-            .select("id", {
-              count: "exact",
-              head: true,
-            })
-            .eq(
-              "status",
-              "confirmado"
-            ),
+            supabase
+              .from(
+                "wms_alocacoes"
+              )
+              .select(
+                "id",
+                {
+                  count:
+                    "exact",
+                  head: true,
+                }
+              )
+              .eq(
+                "status",
+                "confirmado"
+              ),
 
-          supabase
-            .from(
-              "wms_enderecos"
-            )
-            .select("id", {
-              count: "exact",
-              head: true,
-            })
-            .eq(
-              "ativo",
-              true
-            ),
+            supabase
+              .from(
+                "wms_enderecos"
+              )
+              .select(
+                "id",
+                {
+                  count:
+                    "exact",
+                  head: true,
+                }
+              )
+              .eq(
+                "ativo",
+                true
+              ),
 
-          supabase
-            .from(
-              "wms_enderecos"
-            )
-            .select("id", {
-              count: "exact",
-              head: true,
-            })
-            .eq(
-              "ativo",
-              true
-            )
-            .eq(
-              "status",
-              "ocupado"
-            ),
+            supabase
+              .from(
+                "wms_enderecos"
+              )
+              .select(
+                "id",
+                {
+                  count:
+                    "exact",
+                  head: true,
+                }
+              )
+              .eq(
+                "ativo",
+                true
+              )
+              .eq(
+                "status",
+                "ocupado"
+              ),
 
-          supabase
-            .from(
-              "wms_enderecos"
-            )
-            .select("id", {
-              count: "exact",
-              head: true,
-            })
-            .eq(
-              "ativo",
-              true
-            )
-            .eq(
-              "status",
-              "bloqueado"
-            ),
+            supabase
+              .from(
+                "wms_enderecos"
+              )
+              .select(
+                "id",
+                {
+                  count:
+                    "exact",
+                  head: true,
+                }
+              )
+              .eq(
+                "ativo",
+                true
+              )
+              .eq(
+                "status",
+                "bloqueado"
+              ),
 
-          supabase
-            .from(
-              "wms_reservas_saida"
-            )
-            .select("id", {
-              count: "exact",
-              head: true,
-            })
-            .in("status", [
-              "reservado",
-              "analise",
-              "reconciliar",
-            ]),
+            supabase
+              .from(
+                "wms_reservas_saida"
+              )
+              .select(
+                "id",
+                {
+                  count:
+                    "exact",
+                  head: true,
+                }
+              )
+              .in(
+                "status",
+                [
+                  "reservado",
+                  "analise",
+                  "reconciliar",
+                ]
+              ),
 
-          supabase
-            .from(
-              "wms_reservas_saida"
-            )
-            .select("id", {
-              count: "exact",
-              head: true,
-            })
-            .in("status", [
-              "analise",
-              "reconciliar",
-            ]),
+            supabase
+              .from(
+                "wms_reservas_saida"
+              )
+              .select(
+                "id",
+                {
+                  count:
+                    "exact",
+                  head: true,
+                }
+              )
+              .in(
+                "status",
+                [
+                  "analise",
+                  "reconciliar",
+                ]
+              ),
 
-          supabase
-            .from("pedidos_b2c")
-            .select(
-              `
+            supabase
+              .from(
+                "pedidos_b2c"
+              )
+              .select(`
                 id,
                 id_anymarket,
                 marketplace,
@@ -1228,115 +1645,121 @@ function AssurantDashboard({
                 sku_produto,
                 imei_alocado,
                 atualizado_em
-              `
+              `)
+              .order(
+                "atualizado_em",
+                {
+                  ascending:
+                    false,
+                }
+              )
+              .limit(8),
+          ]);
+
+        const [
+          b2cActive,
+          b2cAnalysis,
+          b2cDefinition,
+          b2cBilled,
+          triageTotal,
+          awaitingStorage,
+          wmsConfirmed,
+          addressTotal,
+          addressOccupied,
+          addressBlocked,
+          activeReservations,
+          analysisReservations,
+          recent,
+        ] = results;
+
+        const queryErrors =
+          results
+            .map(
+              (
+                result
+              ) =>
+                result?.error
             )
-            .order(
-              "atualizado_em",
-              {
-                ascending: false,
-              }
-            )
-            .limit(8),
-        ]);
+            .filter(
+              Boolean
+            );
 
-      const [
-        b2cActive,
-        b2cAnalysis,
-        b2cDefinition,
-        b2cBilled,
-        triageTotal,
-        awaitingStorage,
-        wmsConfirmed,
-        addressTotal,
-        addressOccupied,
-        addressBlocked,
-        activeReservations,
-        analysisReservations,
-        recent,
-      ] = results;
+        if (
+          queryErrors.length >
+          0
+        ) {
+          console.warn(
+            "Dashboard Assurant V2 - consultas com erro:",
+            queryErrors
+          );
 
-      const queryErrors =
-        results
-          .map(
-            (result) =>
-              result?.error
-          )
-          .filter(Boolean);
+          setWarning(
+            "Alguns indicadores não puderam ser carregados. Os demais dados continuam disponíveis."
+          );
+        }
 
-      if (
-        queryErrors.length >
-        0
-      ) {
-        console.warn(
-          "Dashboard Assurant V2 - consultas com erro:",
-          queryErrors
+        setMetrics({
+          b2cActive:
+            b2cActive.count ||
+            0,
+
+          b2cAnalysis:
+            b2cAnalysis.count ||
+            0,
+
+          b2cDefinition:
+            b2cDefinition.count ||
+            0,
+
+          b2cBilled:
+            b2cBilled.count ||
+            0,
+
+          triageTotal:
+            triageTotal.count ||
+            0,
+
+          awaitingStorage:
+            awaitingStorage.count ||
+            0,
+
+          wmsConfirmed:
+            wmsConfirmed.count ||
+            0,
+
+          addressTotal:
+            addressTotal.count ||
+            0,
+
+          addressOccupied:
+            addressOccupied.count ||
+            0,
+
+          addressBlocked:
+            addressBlocked.count ||
+            0,
+
+          activeReservations:
+            activeReservations.count ||
+            0,
+
+          analysisReservations:
+            analysisReservations.count ||
+            0,
+        });
+
+        setRecentOrders(
+          recent.data || []
         );
 
-        setWarning(
-          "Alguns indicadores não puderam ser carregados. Os demais dados continuam disponíveis."
+        setUpdatedAt(
+          new Date()
         );
-      }
 
-      setMetrics({
-        b2cActive:
-          b2cActive.count ||
-          0,
-
-        b2cAnalysis:
-          b2cAnalysis.count ||
-          0,
-
-        b2cDefinition:
-          b2cDefinition.count ||
-          0,
-
-        b2cBilled:
-          b2cBilled.count ||
-          0,
-
-        triageTotal:
-          triageTotal.count ||
-          0,
-
-        awaitingStorage:
-          awaitingStorage.count ||
-          0,
-
-        wmsConfirmed:
-          wmsConfirmed.count ||
-          0,
-
-        addressTotal:
-          addressTotal.count ||
-          0,
-
-        addressOccupied:
-          addressOccupied.count ||
-          0,
-
-        addressBlocked:
-          addressBlocked.count ||
-          0,
-
-        activeReservations:
-          activeReservations.count ||
-          0,
-
-        analysisReservations:
-          analysisReservations.count ||
-          0,
-      });
-
-      setRecentOrders(
-        recent.data || []
-      );
-
-      setUpdatedAt(
-        new Date()
-      );
-
-      setLoading(false);
-    }, []);
+        setLoading(false);
+      },
+      []
+    );
 
   useEffect(() => {
     loadDashboard();
@@ -1354,7 +1777,9 @@ function AssurantDashboard({
       }
 
       return recentOrders.filter(
-        (order) => {
+        (
+          order
+        ) => {
           const values = [
             order.id_anymarket,
             order.marketplace,
@@ -1366,12 +1791,16 @@ function AssurantDashboard({
           ];
 
           return values.some(
-            (value) =>
+            (
+              value
+            ) =>
               String(
                 value || ""
               )
                 .toLowerCase()
-                .includes(term)
+                .includes(
+                  term
+                )
           );
         }
       );
@@ -1448,6 +1877,7 @@ function AssurantDashboard({
             className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 shadow-sm transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700"
           >
             <RefreshCw className="h-4 w-4" />
+
             Atualizar
           </button>
         </div>
@@ -1456,6 +1886,7 @@ function AssurantDashboard({
       {warning && (
         <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+
           {warning}
         </div>
       )}
@@ -1604,7 +2035,10 @@ function AssurantDashboard({
           className="xl:col-span-2"
           action={
             <span className="text-[10px] font-semibold text-slate-400">
-              {filteredOrders.length} registros
+              {
+                filteredOrders.length
+              }{" "}
+              registros
             </span>
           }
         >
@@ -1642,7 +2076,9 @@ function AssurantDashboard({
                 {filteredOrders.length >
                 0 ? (
                   filteredOrders.map(
-                    (order) => (
+                    (
+                      order
+                    ) => (
                       <tr
                         key={
                           order.id
@@ -1704,7 +2140,9 @@ function AssurantDashboard({
                 ) : (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={
+                        6
+                      }
                       className="px-5 py-10 text-center text-xs text-slate-400"
                     >
                       Nenhum pedido encontrado para a busca atual.
@@ -1779,6 +2217,7 @@ function AssurantDashboard({
           action={
             <div className="flex items-center gap-1.5 text-[10px] font-semibold text-emerald-600">
               <span className="h-2 w-2 rounded-full bg-emerald-500" />
+
               Tempo real
             </div>
           }
@@ -1887,6 +2326,7 @@ function AssurantDashboard({
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-emerald-100 bg-emerald-50/60 px-4 py-3">
         <div className="flex items-center gap-2 text-[10px] font-semibold text-emerald-700">
           <CheckCircle2 className="h-3.5 w-3.5" />
+
           Somente leitura
         </div>
 
@@ -1899,8 +2339,9 @@ function AssurantDashboard({
 }
 
 export default function AssurantWorkspaceLayout() {
-  const { profile } =
-    useAuth();
+  const {
+    profile,
+  } = useAuth();
 
   const location =
     useLocation();
@@ -1947,8 +2388,12 @@ export default function AssurantWorkspaceLayout() {
   }, [collapsed]);
 
   useEffect(() => {
-    setMobileOpen(false);
-  }, [location.pathname]);
+    setMobileOpen(
+      false
+    );
+  }, [
+    location.pathname,
+  ]);
 
   const sidebarWidth =
     collapsed
@@ -1960,12 +2405,17 @@ export default function AssurantWorkspaceLayout() {
       () =>
         location.pathname !==
         "/v2/assurant",
-      [location.pathname]
+
+      [
+        location.pathname,
+      ]
     );
 
   function toggleCollapsed() {
     setCollapsed(
-      (current) =>
+      (
+        current
+      ) =>
         !current
     );
   }
@@ -1976,7 +2426,10 @@ export default function AssurantWorkspaceLayout() {
 
   async function handleLogout() {
     await signOut();
-    navigate("/login");
+
+    navigate(
+      "/login"
+    );
   }
 
   return (
@@ -2026,12 +2479,17 @@ export default function AssurantWorkspaceLayout() {
             onToggleCollapsed={
               toggleCollapsed
             }
-            profile={profile}
+            profile={
+              profile
+            }
             onBack={
               backToLiquida
             }
             onLogout={
               handleLogout
+            }
+            pathname={
+              location.pathname
             }
           />
         </div>
@@ -2068,6 +2526,9 @@ export default function AssurantWorkspaceLayout() {
               onLogout={
                 handleLogout
               }
+              pathname={
+                location.pathname
+              }
             />
           </aside>
         </>
@@ -2081,7 +2542,9 @@ export default function AssurantWorkspaceLayout() {
       >
         <Topbar
           onOpenMobileMenu={() =>
-            setMobileOpen(true)
+            setMobileOpen(
+              true
+            )
           }
           collapsed={
             collapsed
@@ -2089,7 +2552,9 @@ export default function AssurantWorkspaceLayout() {
           onToggleCollapsed={
             toggleCollapsed
           }
-          profile={profile}
+          profile={
+            profile
+          }
           searchValue={
             searchValue
           }
