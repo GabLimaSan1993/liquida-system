@@ -2469,7 +2469,7 @@ export default function AssurantWorkspaceLayout() {
         className="
           fixed inset-y-0 left-0 z-40 hidden border-r border-violet-950/30
           bg-[linear-gradient(180deg,#2A1747_0%,#211136_52%,#190D2A_100%)]
-          transition-[width] duration-300 ease-out lg:block
+          lg:block
         "
         style={{
           width: `${sidebarWidth}px`,
@@ -2539,7 +2539,7 @@ export default function AssurantWorkspaceLayout() {
       )}
 
       <div
-        className="min-h-screen transition-[margin] duration-300 ease-out lg:ml-[var(--sidebar-width)]"
+        className="min-h-screen lg:ml-[var(--sidebar-width)]"
         style={{
           "--sidebar-width": `${sidebarWidth}px`,
         }}
