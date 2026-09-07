@@ -162,10 +162,12 @@ const MENU_GROUPS = [
 },
 
       {
-        label: "Inventário",
-        icon: ClipboardCheck,
-        enabled: false,
-      },
+  label: "Inventário",
+  icon: ClipboardCheck,
+  to: "/v2/assurant/estoque/inventario",
+  exact: true,
+  enabled: true,
+},
 
       {
         label: "Carga Inicial",
