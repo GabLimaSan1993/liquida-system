@@ -137,10 +137,12 @@ const MENU_GROUPS = [
 },
 
       {
-        label: "B2C",
-        icon: ShoppingCart,
-        enabled: false,
-      },
+  label: "B2C",
+  icon: ShoppingCart,
+  to: "/v2/assurant/b2c",
+  exact: true,
+  enabled: true,
+},
     ],
   },
 
