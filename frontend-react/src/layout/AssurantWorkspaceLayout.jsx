@@ -129,10 +129,12 @@ const MENU_GROUPS = [
       },
 
       {
-        label: "B2B",
-        icon: Boxes,
-        enabled: false,
-      },
+  label: "B2B",
+  icon: Boxes,
+  to: "/v2/assurant/b2b",
+  exact: true,
+  enabled: true,
+},
 
       {
         label: "B2C",

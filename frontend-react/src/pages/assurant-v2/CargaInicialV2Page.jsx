@@ -66,8 +66,8 @@ export default function CargaInicialV2Page() {
 
         /* Roxo legado principal -> violeta oficial V2 */
         .carga-inicial-v2 [class*="bg-[#7F2D92]"] {
-          background-color: var(--v2-violet) !important;
-        }
+  background-color: #211136 !important;
+}
 
         .carga-inicial-v2 [class*="text-[#7F2D92]"] {
           color: var(--v2-violet) !important;
@@ -118,8 +118,8 @@ export default function CargaInicialV2Page() {
 
         /* Botões principais */
         .carga-inicial-v2 [class*="bg-[#7F2D92]"]:hover {
-          background-color: var(--v2-violet-hover) !important;
-        }
+  background-color: #190D2A !important;
+}
       `}</style>
 
       <CargaInicialEstoquePage />

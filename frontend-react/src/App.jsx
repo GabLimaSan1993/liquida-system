@@ -58,6 +58,7 @@ import ArmazenagemV2Page from "./pages/assurant-v2/ArmazenagemV2Page.jsx";
 import ConsultaEstoqueV2Page from "./pages/assurant-v2/ConsultaEstoqueV2Page.jsx";
 import InventarioV2Page from "./pages/assurant-v2/InventarioV2Page.jsx";
 import CargaInicialV2Page from "./pages/assurant-v2/CargaInicialV2Page.jsx";
+import B2BV2Page from "./pages/assurant-v2/B2BV2Page.jsx";
 
 function ProtectedRoute({ tela, children }) {
   const { user, loading, hasAccess } = useAuth();
@@ -268,6 +269,13 @@ export default function App() {
   }
 />
       </Route>
+<Route
+  path="b2b"
+  element={
+    <B2BV2Page />
+  }
+/>
+
 
       {/* =====================================================
           LIQUIDA SYSTEM ATUAL
