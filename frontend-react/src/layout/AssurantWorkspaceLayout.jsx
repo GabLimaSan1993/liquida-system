@@ -884,55 +884,30 @@ function SidebarContent({
       >
         <div className="space-y-5">
           {MENU_GROUPS.map(
-            (
-              group,
-              groupIndex
-            ) => (
-              <div
-                key={
-                  groupIndex
-                }
-              >
-                {group.label &&
-                  !collapsed && (
-                    <div className="mb-1.5 px-3 text-[10px] font-black tracking-[0.16em] text-white/30">
-                      {
-                        group.label
-                      }
-                    </div>
-                  )}
-
-                {group.label &&
-                  collapsed && (
-                    <div className="mx-auto mb-2 h-px w-7 bg-white/10" />
-                  )}
-
-                <div className="space-y-1">
-                  {group.items.map(
-                    (item) => (
-                      <SidebarMenuItem
-                        key={
-                          item.label
-                        }
-                        item={
-                          item
-                        }
-                        collapsed={
-                          collapsed
-                        }
-                        closeMobile={
-                          onCloseMobile
-                        }
-                        pathname={
-                          pathname
-                        }
-                      />
-                    )
-                  )}
-                </div>
-              </div>
-            )
-          )}
+  (
+    group,
+    groupIndex
+  ) => (
+    <SidebarGroup
+      key={
+        group.label ||
+        groupIndex
+      }
+      group={
+        group
+      }
+      collapsed={
+        collapsed
+      }
+      closeMobile={
+        onCloseMobile
+      }
+      pathname={
+        pathname
+      }
+    />
+  )
+)}
         </div>
       </nav>
 
