@@ -435,6 +435,11 @@ function TabEntrada() {
   ] = useState([]);
 
   const [
+  concluidosCarregados,
+  setConcluidosCarregados,
+] = useState(false);
+
+  const [
     loading,
     setLoading,
   ] = useState(true);
@@ -473,46 +478,83 @@ function TabEntrada() {
     setFeedback,
   ] = useState(null);
 
-  useEffect(() => {
-    carregar();
-  }, []);
+ useEffect(() => {
+  carregarPendentes();
+}, []);
 
-  async function carregar() {
-    setLoading(true);
+async function carregarPendentes() {
+  setLoading(true);
 
-    try {
-      const [
-        pendentes,
-        concluidos,
-      ] =
-        await Promise.all([
-          listarAguardandoOracle(),
+  try {
+    const pendentes =
+      await listarAguardandoOracle();
 
-          listarConfirmadosOracle(),
-        ]);
+    setPendentesLista(
+      pendentes
+    );
 
-      setPendentesLista(
-        pendentes
-      );
+    setSelecao(
+      new Set()
+    );
+  } catch (error) {
+    setFeedback({
+      tipo: "erro",
+      msg:
+        error.message,
+    });
+  } finally {
+    setLoading(false);
+  }
+}
 
-      setConcluidosLista(
-        concluidos
-      );
-
-      setSelecao(
-        new Set()
-      );
-    } catch (error) {
-      setFeedback({
-        tipo: "erro",
-        msg:
-          error.message,
-      });
-    } finally {
-      setLoading(false);
-    }
+async function carregarConcluidos({
+  forcar = false,
+} = {}) {
+  if (
+    concluidosCarregados &&
+    !forcar
+  ) {
+    return;
   }
 
+  setLoading(true);
+
+  try {
+    const concluidos =
+      await listarConfirmadosOracle();
+
+    setConcluidosLista(
+      concluidos
+    );
+
+    setConcluidosCarregados(
+      true
+    );
+  } catch (error) {
+    setFeedback({
+      tipo: "erro",
+      msg:
+        error.message,
+    });
+  } finally {
+    setLoading(false);
+  }
+}
+
+async function carregarAtual() {
+  if (
+    visao ===
+    "concluido"
+  ) {
+    await carregarConcluidos({
+      forcar: true,
+    });
+
+    return;
+  }
+
+  await carregarPendentes();
+}
   const base =
     visao ===
     "pendente"
@@ -766,25 +808,33 @@ function TabEntrada() {
     );
   }
 
-  function trocarVisao(
+  async function trocarVisao(
+  nova
+) {
+  setVisao(
     nova
+  );
+
+  setSelecao(
+    new Set()
+  );
+
+  setFiltroRi(
+    null
+  );
+
+  setGradesSel(
+    new Set()
+  );
+
+  if (
+    nova ===
+      "concluido" &&
+    !concluidosCarregados
   ) {
-    setVisao(
-      nova
-    );
-
-    setSelecao(
-      new Set()
-    );
-
-    setFiltroRi(
-      null
-    );
-
-    setGradesSel(
-      new Set()
-    );
+    await carregarConcluidos();
   }
+}
 
   function alternarFiltro(
     valor
@@ -859,7 +909,15 @@ function TabEntrada() {
         new Set()
       );
 
-      await carregar();
+      setConcluidosLista(
+  []
+);
+
+setConcluidosCarregados(
+  false
+);
+
+await carregarPendentes();
     } catch (error) {
       setFeedback({
         tipo: "erro",
@@ -1104,25 +1162,33 @@ function TabEntrada() {
         />
 
         <KpiCard
-          label="Confirmados"
-          value={fmtNumber(
-            concluidosLista.length
-          )}
-          helper="Histórico de entradas Oracle"
-          icon={
-            ShieldCheck
-          }
-          variant="emerald"
-          active={
-            visao ===
-            "concluido"
-          }
-          onClick={() =>
-            trocarVisao(
-              "concluido"
-            )
-          }
-        />
+  label="Confirmados"
+  value={
+    concluidosCarregados
+      ? fmtNumber(
+          concluidosLista.length
+        )
+      : "—"
+  }
+  helper={
+    concluidosCarregados
+      ? "Histórico de entradas Oracle"
+      : "Clique para carregar o histórico"
+  }
+  icon={
+    ShieldCheck
+  }
+  variant="emerald"
+  active={
+    visao ===
+    "concluido"
+  }
+  onClick={() =>
+    trocarVisao(
+      "concluido"
+    )
+  }
+/>
       </div>
 
       {feedback && (
@@ -1156,8 +1222,8 @@ function TabEntrada() {
             <button
               type="button"
               onClick={
-                carregar
-              }
+  carregarAtual
+}
               disabled={
                 loading
               }
@@ -1231,9 +1297,11 @@ function TabEntrada() {
               }`}
             >
               Concluídos ·{" "}
-              {
-                concluidosLista.length
-              }
+{
+  concluidosCarregados
+    ? concluidosLista.length
+    : "carregar"
+}
             </button>
           </div>
 
