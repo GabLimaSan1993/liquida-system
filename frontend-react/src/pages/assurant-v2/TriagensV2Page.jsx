@@ -1,43 +1,77 @@
 import {
+  lazy,
+  Suspense,
+} from "react";
+
+import {
   ClipboardCheck,
   FileText,
+  Loader2,
   ScanLine,
   ServerCog,
   ShieldCheck,
 } from "lucide-react";
 
-import TriagemFuncionalV2Page from "./TriagemFuncionalV2Page.jsx";
-import LaudoV2Page from "./LaudoV2Page.jsx";
-import TriagemCosmeticaV2Page from "./TriagemCosmeticaV2Page.jsx";
-import EntradaOracleV2Page from "./EntradaOracleV2Page.jsx";
+const TriagemFuncionalV2Page =
+  lazy(() =>
+    import(
+      "./TriagemFuncionalV2Page.jsx"
+    )
+  );
+
+const LaudoV2Page =
+  lazy(() =>
+    import(
+      "./LaudoV2Page.jsx"
+    )
+  );
+
+const TriagemCosmeticaV2Page =
+  lazy(() =>
+    import(
+      "./TriagemCosmeticaV2Page.jsx"
+    )
+  );
+
+const EntradaOracleV2Page =
+  lazy(() =>
+    import(
+      "./EntradaOracleV2Page.jsx"
+    )
+  );
 
 const CONFIG = {
   funcional: {
-    label: "Triagem Funcional",
+    label:
+      "Triagem Funcional",
 
     description:
       "Identificação do aparelho, conferência de IMEI, testes funcionais, bateria e diagnóstico.",
 
-    icon: ScanLine,
+    icon:
+      ScanLine,
 
     component:
       TriagemFuncionalV2Page,
   },
 
   laudo: {
-    label: "Laudo",
+    label:
+      "Laudo",
 
     description:
       "Registro fotográfico e formalização das evidências dos aparelhos com divergências ou defeitos.",
 
-    icon: FileText,
+    icon:
+      FileText,
 
     component:
       LaudoV2Page,
   },
 
   cosmetica: {
-    label: "Triagem Cosmética",
+    label:
+      "Triagem Cosmética",
 
     description:
       "Avaliação estética do aparelho, validação complementar e definição da classificação final.",
@@ -50,7 +84,8 @@ const CONFIG = {
   },
 
   oracle: {
-    label: "Entrada Oracle",
+    label:
+      "Entrada Oracle",
 
     description:
       "Conciliação com o relatório AP, controle de RI e confirmação da entrada no Oracle.",
@@ -62,6 +97,28 @@ const CONFIG = {
       EntradaOracleV2Page,
   },
 };
+
+function LoadingScreen({
+  label,
+}) {
+  return (
+    <div className="flex min-h-[320px] items-center justify-center rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="text-center">
+        <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-violet-50 text-violet-700">
+          <Loader2 className="h-5 w-5 animate-spin" />
+        </div>
+
+        <div className="mt-3 text-xs font-black text-slate-700">
+          Carregando {label}
+        </div>
+
+        <div className="mt-1 text-[10px] text-slate-400">
+          Preparando a bancada operacional...
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function TriagensV2Page({
   tipo = "funcional",
@@ -78,7 +135,6 @@ export default function TriagensV2Page({
 
   return (
     <div className="mx-auto max-w-[1680px] space-y-5">
-      {/* Cabeçalho do módulo */}
       <div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="rounded-lg bg-violet-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-violet-700">
@@ -113,8 +169,17 @@ export default function TriagensV2Page({
         </div>
       </div>
 
-      {/* Tela operacional V2 nativa */}
-      <Component />
+      <Suspense
+        fallback={
+          <LoadingScreen
+            label={
+              config.label
+            }
+          />
+        }
+      >
+        <Component />
+      </Suspense>
     </div>
   );
 }
