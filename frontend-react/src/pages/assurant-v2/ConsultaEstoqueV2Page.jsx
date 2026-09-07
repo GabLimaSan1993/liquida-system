@@ -1469,81 +1469,81 @@ const andarResumo =
             <div className="p-5">
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 xl:grid-cols-[repeat(15,minmax(0,1fr))]">
                 {RUAS_WMS.map(
-                  (item) => {
-                    const dadosRua =
-                      (
-                        resumo?.por_rua ||
-                        []
-                      ).find(
-                        (r) =>
-                          Number(
-                            r.rua
-                          ) ===
-                          item.rua
-                      );
+  (item) => {
+    const dadosRua =
+      (
+        resumo?.por_rua ||
+        []
+      ).find(
+        (r) =>
+          Number(
+            r.rua
+          ) ===
+          item.rua
+      );
 
-                    const aging =
-                      faixaAging(
-                        dadosRua?.aging_medio_dias
-                      );
+    const aging =
+      faixaAging(
+        dadosRua?.aging_medio_dias
+      );
 
-                    const ativa =
-                      rua ===
-                      item.rua;
+    const ativa =
+      rua ===
+      item.rua;
 
-                    return (
-                      <button
-                        type="button"
-                        key={
-                          item.rua
-                        }
-                        onClick={() => {
-                          setRua(
-                            item.rua
-                          );
+    return (
+      <button
+        type="button"
+        key={
+          item.rua
+        }
+        onClick={() => {
+          setRua(
+            item.rua
+          );
 
-                          if (
-                            item.rua ===
-                            15
-                          ) {
-                            setBloco(
-                              1
-                            );
-                          }
-                        }}
-                        className={`rounded-xl border p-2 text-left transition ${
-                          aging.fundo
-                        } ${
-                          ativa
-                            ? "border-violet-500 ring-2 ring-violet-100"
-                            : "border-slate-200 hover:border-violet-200"
-                        }`}
-                      >
-                        <div className="text-[10px] font-black text-slate-700">
-                          RUA{" "}
-                          {String(
-                            item.rua
-                          ).padStart(
-                            2,
-                            "0"
-                          )}
-                        </div>
+          if (
+            item.rua ===
+            15
+          ) {
+            setBloco(
+              1
+            );
+          }
+        }}
+        className={`min-h-[66px] rounded-xl px-3 py-3 text-left ring-1 transition ${
+          aging.classe
+        } ${
+          ativa
+            ? "outline outline-2 outline-offset-1 outline-violet-600"
+            : ""
+        }`}
+      >
+        <div className="text-[10px] font-black">
+          RUA{" "}
+          {String(
+            item.rua
+          ).padStart(
+            2,
+            "0"
+          )}
+        </div>
 
-                        <div className="mt-1 truncate text-[8px] font-bold text-slate-400">
-                          {
-                            item.grade
-                          }
-                        </div>
+        <div className="mt-1 text-[8px] font-black opacity-75">
+          {
+            item.grade
+          }
+        </div>
 
-                        <div className="mt-1 text-[9px] font-black text-slate-600">
-                          {fmtAging(
-                            dadosRua?.aging_medio_dias
-                          )}
-                        </div>
-                      </button>
-                    );
-                  }
-                )}
+        <div className="mt-2 text-[10px] font-black">
+          {fmtAging(
+            dadosRua?.aging_medio_dias
+          )}
+        </div>
+      </button>
+    );
+  }
+)}
               </div>
 
 
