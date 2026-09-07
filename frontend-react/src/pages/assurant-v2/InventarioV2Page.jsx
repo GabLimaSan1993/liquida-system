@@ -2964,6 +2964,95 @@ function resumoGrupoInventario(
   };
   
 }
+
+function corAcuracidadeInventario(
+  acuracidade
+) {
+  if (
+    acuracidade === null ||
+    acuracidade === undefined
+  ) {
+    return {
+      dot: "bg-slate-300",
+      cell:
+        "bg-slate-50 text-slate-500 ring-slate-200 hover:bg-slate-100",
+    };
+  }
+
+
+  if (
+    acuracidade >= 100
+  ) {
+    return {
+      dot: "bg-emerald-700",
+      cell:
+        "bg-emerald-200 text-emerald-950 ring-emerald-400 hover:bg-emerald-300",
+    };
+  }
+
+
+  if (
+    acuracidade >= 95
+  ) {
+    return {
+      dot: "bg-emerald-600",
+      cell:
+        "bg-emerald-100 text-emerald-950 ring-emerald-300 hover:bg-emerald-200",
+    };
+  }
+
+
+  if (
+    acuracidade >= 80
+  ) {
+    return {
+      dot: "bg-lime-600",
+      cell:
+        "bg-lime-100 text-lime-950 ring-lime-300 hover:bg-lime-200",
+    };
+  }
+
+
+  if (
+    acuracidade >= 60
+  ) {
+    return {
+      dot: "bg-amber-500",
+      cell:
+        "bg-amber-100 text-amber-950 ring-amber-300 hover:bg-amber-200",
+    };
+  }
+
+
+  if (
+    acuracidade >= 40
+  ) {
+    return {
+      dot: "bg-orange-500",
+      cell:
+        "bg-orange-100 text-orange-950 ring-orange-300 hover:bg-orange-200",
+    };
+  }
+
+
+  if (
+    acuracidade >= 20
+  ) {
+    return {
+      dot: "bg-rose-500",
+      cell:
+        "bg-rose-100 text-rose-950 ring-rose-300 hover:bg-rose-200",
+    };
+  }
+
+
+  return {
+    dot: "bg-red-700",
+    cell:
+      "bg-red-200 text-red-950 ring-red-400 hover:bg-red-300",
+  };
+}
+
   if (!ciclo) {
     return (
       <div className="space-y-4">
