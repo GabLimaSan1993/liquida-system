@@ -3023,4 +3023,4 @@ export default function TriagemFuncionalV2Page() {
       </div>
     </div>
   );
-}ALT-006A: cria Triagem Funcional nativa do Warehouse V2
+}
