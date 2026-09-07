@@ -1363,6 +1363,46 @@ export default function B2BV2Page() {
   .grid.grid-cols-1[class~="lg:grid-cols-4"].gap-3 {
   display: none !important;
 }
+
+/* =====================================================
+   FATURAMENTO — 2 PEDIDOS POR LINHA
+====================================================== */
+
+@media (min-width: 1180px) {
+
+  /* Grid dos pedidos do faturamento */
+  .b2b-v2
+    .space-y-3:has(
+      > .bg-white.rounded-2xl.p-5.ring-1.shadow-sm
+    ) {
+    display: grid !important;
+
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+
+    gap: 14px !important;
+  }
+
+
+  /* Remove espaçamento vertical herdado do space-y */
+  .b2b-v2
+    .space-y-3:has(
+      > .bg-white.rounded-2xl.p-5.ring-1.shadow-sm
+    )
+    > .bg-white.rounded-2xl.p-5.ring-1.shadow-sm {
+    margin-top: 0 !important;
+  }
+
+
+  /* Indicadores internos do pedido ficam 2 x 2 */
+  .b2b-v2
+    .space-y-3
+    > .bg-white.rounded-2xl.p-5.ring-1.shadow-sm
+    .grid.grid-cols-2[class~="lg:grid-cols-4"].gap-2.mb-4 {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr)) !important;
+  }
+}
       `}</style>
 
       <B2BPickingPage abaInicial="picking" />
