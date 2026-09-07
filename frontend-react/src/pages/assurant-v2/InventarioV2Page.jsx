@@ -2962,6 +2962,7 @@ function resumoGrupoInventario(
 
     acuracidade,
   };
+  
 }
   if (!ciclo) {
     return (
@@ -3158,26 +3159,50 @@ function resumoGrupoInventario(
       </div>
 
       <div className="flex flex-wrap items-center gap-3 text-[9px] font-bold">
-        <span className="flex items-center gap-1.5 text-emerald-700">
-          <span className="h-2.5 w-2.5 rounded-full bg-emerald-600" />
-          Validado ({fmtN(resumoMapa.validado)})
-        </span>
+  <span className="text-slate-400">
+    Acuracidade:
+  </span>
 
-        <span className="flex items-center gap-1.5 text-red-700">
-          <span className="h-2.5 w-2.5 rounded-full bg-red-600" />
-          Divergência ({fmtN(resumoMapa.divergencia)})
-        </span>
+  <span className="flex items-center gap-1.5 text-emerald-800">
+    <span className="h-2.5 w-2.5 rounded-full bg-emerald-700" />
+    100%
+  </span>
 
-        <span className="flex items-center gap-1.5 text-amber-700">
-          <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
-          Pendente ({fmtN(resumoMapa.pendente)})
-        </span>
+  <span className="flex items-center gap-1.5 text-emerald-700">
+    <span className="h-2.5 w-2.5 rounded-full bg-emerald-600" />
+    95–99,9%
+  </span>
 
-        <span className="flex items-center gap-1.5 text-slate-400">
-          <span className="h-2.5 w-2.5 rounded-full bg-slate-300" />
-          Sem estoque
-        </span>
-      </div>
+  <span className="flex items-center gap-1.5 text-lime-700">
+    <span className="h-2.5 w-2.5 rounded-full bg-lime-600" />
+    80–94,9%
+  </span>
+
+  <span className="flex items-center gap-1.5 text-amber-700">
+    <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
+    60–79,9%
+  </span>
+
+  <span className="flex items-center gap-1.5 text-orange-700">
+    <span className="h-2.5 w-2.5 rounded-full bg-orange-500" />
+    40–59,9%
+  </span>
+
+  <span className="flex items-center gap-1.5 text-rose-700">
+    <span className="h-2.5 w-2.5 rounded-full bg-rose-500" />
+    20–39,9%
+  </span>
+
+  <span className="flex items-center gap-1.5 text-red-800">
+    <span className="h-2.5 w-2.5 rounded-full bg-red-700" />
+    0–19,9%
+  </span>
+
+  <span className="flex items-center gap-1.5 text-slate-400">
+    <span className="h-2.5 w-2.5 rounded-full bg-slate-300" />
+    Sem contagem
+  </span>
+</div>
     </div>
   </div>
 
@@ -3198,15 +3223,10 @@ function resumoGrupoInventario(
     itensRua
   );
 
-const status =
-  statusGrupoInventario(
-    itensRua
-  );
-
 const config =
-  STATUS_MAPA_INVENTARIO[
-    status
-  ];
+  corAcuracidadeInventario(
+    resumoRua.acuracidade
+  );
 
           return (
             <button
@@ -3281,15 +3301,10 @@ const config =
     itensBloco
   );
 
-const status =
-  statusGrupoInventario(
-    itensBloco
-  );
-
 const config =
-  STATUS_MAPA_INVENTARIO[
-    status
-  ];
+  corAcuracidadeInventario(
+    resumoBloco.acuracidade
+  );
 
           return (
             <button
@@ -3366,15 +3381,10 @@ const config =
     itensAndar
   );
 
-const status =
-  statusGrupoInventario(
-    itensAndar
-  );
-
 const config =
-  STATUS_MAPA_INVENTARIO[
-    status
-  ];
+  corAcuracidadeInventario(
+    resumoAndar.acuracidade
+  );
 
           return (
             <button
