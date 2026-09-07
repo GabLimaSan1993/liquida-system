@@ -506,8 +506,8 @@ export async function mapaInventarioCiclo(cicloId) {
   } = await supabase
     .from("inventario_itens")
     .select(
-      "contagem_id, veredito"
-    )
+  "contagem_id, veredito, reconciliado_em"
+)
     .eq(
       "ciclo_id",
       cicloId
@@ -549,31 +549,88 @@ export async function mapaInventarioCiclo(cicloId) {
 
 
   const divergenciasPorContagem =
-    new Map();
+  new Map();
+
+const metricasPorContagem =
+  new Map();
 
 
-  (itens || []).forEach(
-    (item) => {
-      if (
-        [
-          "falta",
-          "sobra",
-          "conflito",
-        ].includes(
-          item.veredito
-        )
-      ) {
-        divergenciasPorContagem.set(
-          item.contagem_id,
-          (
-            divergenciasPorContagem.get(
-              item.contagem_id
-            ) || 0
-          ) + 1
-        );
-      }
+(itens || []).forEach(
+  (item) => {
+    const metricas =
+      metricasPorContagem.get(
+        item.contagem_id
+      ) || {
+        conferidos: 0,
+        sobras: 0,
+        conflitos: 0,
+        fantasmas: 0,
+      };
+
+
+    if (
+      item.veredito ===
+      "conferido"
+    ) {
+      metricas.conferidos +=
+        1;
     }
-  );
+
+
+    if (
+      item.veredito ===
+      "sobra"
+    ) {
+      metricas.sobras +=
+        1;
+    }
+
+
+    if (
+      item.veredito ===
+      "conflito"
+    ) {
+      metricas.conflitos +=
+        1;
+    }
+
+
+    if (
+      item.veredito ===
+        "falta" &&
+      !item.reconciliado_em
+    ) {
+      metricas.fantasmas +=
+        1;
+    }
+
+
+    metricasPorContagem.set(
+      item.contagem_id,
+      metricas
+    );
+
+
+    if (
+      [
+        "falta",
+        "sobra",
+        "conflito",
+      ].includes(
+        item.veredito
+      )
+    ) {
+      divergenciasPorContagem.set(
+        item.contagem_id,
+        (
+          divergenciasPorContagem.get(
+            item.contagem_id
+          ) || 0
+        ) + 1
+      );
+    }
+  }
+);
 
 
   return enderecos
@@ -637,6 +694,38 @@ export async function mapaInventarioCiclo(cicloId) {
                 contagem.id
               ) || 0
             : 0;
+            const metricas =
+  contagem
+    ? metricasPorContagem.get(
+        contagem.id
+      ) || {
+        conferidos: 0,
+        sobras: 0,
+        conflitos: 0,
+        fantasmas: 0,
+      }
+    : {
+        conferidos: 0,
+        sobras: 0,
+        conflitos: 0,
+        fantasmas: 0,
+      };
+
+
+const totalAvaliado =
+  metricas.conferidos +
+  metricas.sobras +
+  metricas.conflitos +
+  metricas.fantasmas;
+
+
+const acuraciaPeca =
+  contagem?.status ===
+  "concluida"
+    ? divergencias > 0
+      ? 0
+      : 100
+    : null;
 
 
         let statusMapa =

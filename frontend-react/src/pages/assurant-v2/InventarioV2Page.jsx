@@ -2895,7 +2895,74 @@ function statusGrupoInventario(
 
   return "validado";
 }
+function resumoGrupoInventario(
+  itensGrupo
+) {
+  const itens =
+    itensGrupo || [];
 
+
+  const concluidos =
+    itens.filter(
+      (item) =>
+        [
+          "validado",
+          "divergencia",
+        ].includes(
+          item.status_mapa
+        )
+    );
+
+
+  const validados =
+    concluidos.filter(
+      (item) =>
+        item.status_mapa ===
+        "validado"
+    ).length;
+
+
+  const divergentes =
+    concluidos.filter(
+      (item) =>
+        item.status_mapa ===
+        "divergencia"
+    ).length;
+
+
+  const pendentes =
+    itens.filter(
+      (item) =>
+        item.status_mapa ===
+        "pendente"
+    ).length;
+
+
+  const acuracidade =
+    concluidos.length > 0
+      ? (
+          validados /
+          concluidos.length
+        ) * 100
+      : null;
+
+
+  return {
+    total:
+      itens.length,
+
+    concluidos:
+      concluidos.length,
+
+    validados,
+
+    divergentes,
+
+    pendentes,
+
+    acuracidade,
+  };
+}
   if (!ciclo) {
     return (
       <div className="space-y-4">
@@ -3126,15 +3193,20 @@ function statusGrupoInventario(
                 numero
             );
 
-          const status =
-            statusGrupoInventario(
-              itensRua
-            );
+          const resumoRua =
+  resumoGrupoInventario(
+    itensRua
+  );
 
-          const config =
-            STATUS_MAPA_INVENTARIO[
-              status
-            ];
+const status =
+  statusGrupoInventario(
+    itensRua
+  );
+
+const config =
+  STATUS_MAPA_INVENTARIO[
+    status
+  ];
 
           return (
             <button
@@ -3169,9 +3241,18 @@ function statusGrupoInventario(
                 />
               </div>
 
-              <div className="mt-2 text-[8px] font-black uppercase opacity-75">
-                {config.label}
-              </div>
+              <div className="mt-2 text-[10px] font-black">
+  {resumoRua.acuracidade !== null
+    ? `${resumoRua.acuracidade
+        .toFixed(1)
+        .replace(".", ",")}%`
+    : "—"}
+</div>
+
+<div className="mt-0.5 text-[8px] font-bold opacity-75">
+  {resumoRua.concluidos} de{" "}
+  {resumoRua.total} APs
+</div>
             </button>
           );
         }
@@ -3195,15 +3276,20 @@ function statusGrupoInventario(
                   numero
             );
 
-          const status =
-            statusGrupoInventario(
-              itensBloco
-            );
+          const resumoBloco =
+  resumoGrupoInventario(
+    itensBloco
+  );
 
-          const config =
-            STATUS_MAPA_INVENTARIO[
-              status
-            ];
+const status =
+  statusGrupoInventario(
+    itensBloco
+  );
+
+const config =
+  STATUS_MAPA_INVENTARIO[
+    status
+  ];
 
           return (
             <button
@@ -3222,19 +3308,36 @@ function statusGrupoInventario(
                   : ""
               }`}
             >
-              <span className="flex items-center gap-2">
-                BL{" "}
-                {String(
-                  numero
-                ).padStart(
-                  2,
-                  "0"
-                )}
+              <div>
+  <div className="flex items-center gap-2">
+    <span>
+      BL{" "}
+      {String(
+        numero
+      ).padStart(
+        2,
+        "0"
+      )}
+    </span>
 
-                <span
-                  className={`h-2 w-2 rounded-full ${config.dot}`}
-                />
-              </span>
+    <span
+      className={`h-2 w-2 rounded-full ${config.dot}`}
+    />
+  </div>
+
+  <div className="mt-1 text-[10px] font-black">
+    {resumoBloco.acuracidade !== null
+      ? `${resumoBloco.acuracidade
+          .toFixed(1)
+          .replace(".", ",")}%`
+      : "—"}
+  </div>
+
+  <div className="mt-0.5 text-[8px] font-bold opacity-75">
+    {resumoBloco.concluidos} de{" "}
+    {resumoBloco.total} APs
+  </div>
+</div>
             </button>
           );
         }
@@ -3258,15 +3361,20 @@ function statusGrupoInventario(
                   numero
             );
 
-          const status =
-            statusGrupoInventario(
-              itensAndar
-            );
+          const resumoAndar =
+  resumoGrupoInventario(
+    itensAndar
+  );
 
-          const config =
-            STATUS_MAPA_INVENTARIO[
-              status
-            ];
+const status =
+  statusGrupoInventario(
+    itensAndar
+  );
+
+const config =
+  STATUS_MAPA_INVENTARIO[
+    status
+  ];
 
           return (
             <button
@@ -3285,19 +3393,36 @@ function statusGrupoInventario(
                   : ""
               }`}
             >
-              <span className="flex items-center gap-2">
-                AD{" "}
-                {String(
-                  numero
-                ).padStart(
-                  2,
-                  "0"
-                )}
+              <div>
+  <div className="flex items-center gap-2">
+    <span>
+      AD{" "}
+      {String(
+        numero
+      ).padStart(
+        2,
+        "0"
+      )}
+    </span>
 
-                <span
-                  className={`h-2 w-2 rounded-full ${config.dot}`}
-                />
-              </span>
+    <span
+      className={`h-2 w-2 rounded-full ${config.dot}`}
+    />
+  </div>
+
+  <div className="mt-1 text-[10px] font-black">
+    {resumoAndar.acuracidade !== null
+      ? `${resumoAndar.acuracidade
+          .toFixed(1)
+          .replace(".", ",")}%`
+      : "—"}
+  </div>
+
+  <div className="mt-0.5 text-[8px] font-bold opacity-75">
+    {resumoAndar.concluidos} de{" "}
+    {resumoAndar.total} APs
+  </div>
+</div>
             </button>
           );
         }
