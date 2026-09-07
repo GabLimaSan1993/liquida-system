@@ -429,6 +429,282 @@ export async function painelCiclo(cicloId) {
   };
 }
 
+// ══════════════════════════════════════════════════════════
+// MAPA DO INVENTÁRIO
+// Leitura consolidada por endereço físico do estoque.
+// Não grava nada no banco.
+//
+// Status visual:
+// - validado    = contagem concluída sem divergência
+// - divergencia = contagem concluída com falta/sobra/conflito
+// - pendente    = ainda não concluído no ciclo
+// ══════════════════════════════════════════════════════════
+export async function mapaInventarioCiclo(cicloId) {
+  if (!cicloId) {
+    return [];
+  }
+
+
+  // Todos os endereços que atualmente possuem estoque físico.
+  // É a mesma origem utilizada pelo sorteio do inventário.
+  const {
+    data: pecas,
+    error: erroPecas,
+  } = await supabase
+    .from("assurant_triagem")
+    .select("local_normalizado")
+    .not(
+      "local_normalizado",
+      "is",
+      null
+    )
+    .neq(
+      "local_normalizado",
+      "GENERICO"
+    )
+    .not(
+      "status_atual",
+      "in",
+      `(${STATUS_FORA_DO_ESTOQUE.map(
+        (status) =>
+          `"${status}"`
+      ).join(",")})`
+    );
+
+  if (erroPecas) {
+    throw new Error(
+      erroPecas.message
+    );
+  }
+
+
+  // Contagens já existentes neste ciclo.
+  const {
+    data: contagens,
+    error: erroContagens,
+  } = await supabase
+    .from("inventario_contagens")
+    .select(
+      "id, endereco, status, esperadas, encontradas, operador_nome, aberta_em, fechada_em"
+    )
+    .eq(
+      "ciclo_id",
+      cicloId
+    );
+
+  if (erroContagens) {
+    throw new Error(
+      erroContagens.message
+    );
+  }
+
+
+  // Divergências registradas no ciclo.
+  const {
+    data: itens,
+    error: erroItens,
+  } = await supabase
+    .from("inventario_itens")
+    .select(
+      "contagem_id, veredito"
+    )
+    .eq(
+      "ciclo_id",
+      cicloId
+    );
+
+  if (erroItens) {
+    throw new Error(
+      erroItens.message
+    );
+  }
+
+
+  const enderecos =
+    [
+      ...new Set(
+        (pecas || [])
+          .map(
+            (peca) =>
+              peca.local_normalizado
+          )
+          .filter(
+            Boolean
+          )
+      ),
+    ];
+
+
+  const contagemPorEndereco =
+    new Map(
+      (contagens || []).map(
+        (contagem) => [
+          normalizarEndereco(
+            contagem.endereco
+          ),
+          contagem,
+        ]
+      )
+    );
+
+
+  const divergenciasPorContagem =
+    new Map();
+
+
+  (itens || []).forEach(
+    (item) => {
+      if (
+        [
+          "falta",
+          "sobra",
+          "conflito",
+        ].includes(
+          item.veredito
+        )
+      ) {
+        divergenciasPorContagem.set(
+          item.contagem_id,
+          (
+            divergenciasPorContagem.get(
+              item.contagem_id
+            ) || 0
+          ) + 1
+        );
+      }
+    }
+  );
+
+
+  return enderecos
+    .map(
+      (enderecoBruto) => {
+        const endereco =
+          normalizarEndereco(
+            enderecoBruto
+          );
+
+        const contagem =
+          contagemPorEndereco.get(
+            endereco
+          );
+
+        const partes =
+          String(
+            endereco || ""
+          ).split("/");
+
+        const rua =
+          Number(
+            (
+              partes[0] ||
+              ""
+            ).match(
+              /\d+/
+            )?.[0]
+          ) || null;
+
+        const bloco =
+          Number(
+            (
+              partes[1] ||
+              ""
+            ).match(
+              /\d+/
+            )?.[0]
+          ) || null;
+
+        const andar =
+          Number(
+            (
+              partes[2] ||
+              ""
+            ).match(
+              /\d+/
+            )?.[0]
+          ) || null;
+
+        const apartamento =
+          partes
+            .slice(3)
+            .join("/") ||
+          null;
+
+
+        const divergencias =
+          contagem
+            ? divergenciasPorContagem.get(
+                contagem.id
+              ) || 0
+            : 0;
+
+
+        let statusMapa =
+          "pendente";
+
+
+        if (
+          contagem?.status ===
+          "concluida"
+        ) {
+          statusMapa =
+            divergencias > 0
+              ? "divergencia"
+              : "validado";
+        }
+
+
+        return {
+          endereco,
+          rua,
+          bloco,
+          andar,
+          apartamento,
+
+          status_mapa:
+            statusMapa,
+
+          contagem_id:
+            contagem?.id ||
+            null,
+
+          status_contagem:
+            contagem?.status ||
+            null,
+
+          esperadas:
+            contagem?.esperadas ||
+            0,
+
+          encontradas:
+            contagem?.encontradas ||
+            0,
+
+          divergencias,
+
+          operador:
+            contagem?.operador_nome ||
+            null,
+
+          aberta_em:
+            contagem?.aberta_em ||
+            null,
+
+          fechada_em:
+            contagem?.fechada_em ||
+            null,
+        };
+      }
+    )
+    .sort(
+      (a, b) =>
+        ordemEndereco(
+          a.endereco,
+          b.endereco
+        )
+    );
+}
+
 // Lista os conflitos do ciclo (mesmo IMEI em mais de um registro) para tratar com a Assurant.
 export async function listarConflitos(cicloId) {
   const { data, error } = await supabase

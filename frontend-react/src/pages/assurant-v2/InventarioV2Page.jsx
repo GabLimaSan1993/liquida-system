@@ -43,6 +43,7 @@ import {
   listarContagensPendentes,
   listarFechamentos,
   listarItens,
+  mapaInventarioCiclo,
   painelCiclo,
   resumoDoDia,
   sortearDia,
@@ -2258,6 +2259,26 @@ function TabGestao({
   ] = useState([]);
 
   const [
+  mapaInventario,
+  setMapaInventario,
+] = useState([]);
+
+const [
+  ruaMapa,
+  setRuaMapa,
+] = useState(null);
+
+const [
+  blocoMapa,
+  setBlocoMapa,
+] = useState(null);
+
+const [
+  andarMapa,
+  setAndarMapa,
+] = useState(null);
+
+  const [
     loading,
     setLoading,
   ] = useState(true);
@@ -2277,6 +2298,178 @@ function TabGestao({
     carregar();
   }, [ciclo]);
 
+  useEffect(() => {
+  if (
+    mapaInventario.length ===
+    0
+  ) {
+    setRuaMapa(
+      null
+    );
+
+    setBlocoMapa(
+      null
+    );
+
+    setAndarMapa(
+      null
+    );
+
+    return;
+  }
+
+
+  const ruas =
+    [
+      ...new Set(
+        mapaInventario
+          .map(
+            (item) =>
+              Number(
+                item.rua
+              )
+          )
+          .filter(
+            (numero) =>
+              Number.isFinite(
+                numero
+              ) &&
+              numero > 0
+          )
+      ),
+    ].sort(
+      (a, b) =>
+        a - b
+    );
+
+
+  const ruaAtual =
+    ruas.includes(
+      ruaMapa
+    )
+      ? ruaMapa
+      : ruas[0] ||
+        null;
+
+
+  if (
+    ruaAtual !==
+    ruaMapa
+  ) {
+    setRuaMapa(
+      ruaAtual
+    );
+  }
+
+
+  const blocos =
+    [
+      ...new Set(
+        mapaInventario
+          .filter(
+            (item) =>
+              Number(
+                item.rua
+              ) ===
+              ruaAtual
+          )
+          .map(
+            (item) =>
+              Number(
+                item.bloco
+              )
+          )
+          .filter(
+            (numero) =>
+              Number.isFinite(
+                numero
+              ) &&
+              numero > 0
+          )
+      ),
+    ].sort(
+      (a, b) =>
+        a - b
+    );
+
+
+  const blocoAtual =
+    blocos.includes(
+      blocoMapa
+    )
+      ? blocoMapa
+      : blocos[0] ||
+        null;
+
+
+  if (
+    blocoAtual !==
+    blocoMapa
+  ) {
+    setBlocoMapa(
+      blocoAtual
+    );
+  }
+
+
+  const andares =
+    [
+      ...new Set(
+        mapaInventario
+          .filter(
+            (item) =>
+              Number(
+                item.rua
+              ) ===
+                ruaAtual &&
+              Number(
+                item.bloco
+              ) ===
+                blocoAtual
+          )
+          .map(
+            (item) =>
+              Number(
+                item.andar
+              )
+          )
+          .filter(
+            (numero) =>
+              Number.isFinite(
+                numero
+              ) &&
+              numero > 0
+          )
+      ),
+    ].sort(
+      (a, b) =>
+        a - b
+    );
+
+
+  const andarAtual =
+    andares.includes(
+      andarMapa
+    )
+      ? andarMapa
+      : andares[0] ||
+        null;
+
+
+  if (
+    andarAtual !==
+    andarMapa
+  ) {
+    setAndarMapa(
+      andarAtual
+    );
+  }
+}, [
+  mapaInventario,
+  ruaMapa,
+  blocoMapa,
+  andarMapa,
+]);
 
   async function carregar() {
     if (!ciclo) {
@@ -2293,26 +2486,35 @@ function TabGestao({
 
     try {
       const [
-        dadosPainel,
-        dadosConflitos,
-      ] =
-        await Promise.all([
-          painelCiclo(
-            ciclo.id
-          ),
+  dadosPainel,
+  dadosConflitos,
+  dadosMapa,
+] =
+  await Promise.all([
+    painelCiclo(
+      ciclo.id
+    ),
 
-          listarConflitos(
-            ciclo.id
-          ),
-        ]);
+    listarConflitos(
+      ciclo.id
+    ),
 
-      setPainel(
-        dadosPainel
-      );
+    mapaInventarioCiclo(
+      ciclo.id
+    ),
+  ]);
 
-      setConflitos(
-        dadosConflitos
-      );
+setPainel(
+  dadosPainel
+);
+
+setConflitos(
+  dadosConflitos
+);
+
+setMapaInventario(
+  dadosMapa
+);
     } catch (e) {
       console.error(
         e
@@ -2413,7 +2615,151 @@ function TabGestao({
     }
   }
 
+const ruasMapa =
+  [
+    ...new Set(
+      mapaInventario
+        .map(
+          (item) =>
+            Number(
+              item.rua
+            )
+        )
+        .filter(
+          (numero) =>
+            Number.isFinite(
+              numero
+            ) &&
+            numero > 0
+        )
+    ),
+  ].sort(
+    (a, b) =>
+      a - b
+  );
 
+
+const blocosMapa =
+  [
+    ...new Set(
+      mapaInventario
+        .filter(
+          (item) =>
+            Number(
+              item.rua
+            ) ===
+            ruaMapa
+        )
+        .map(
+          (item) =>
+            Number(
+              item.bloco
+            )
+        )
+        .filter(
+          (numero) =>
+            Number.isFinite(
+              numero
+            ) &&
+            numero > 0
+        )
+    ),
+  ].sort(
+    (a, b) =>
+      a - b
+  );
+
+
+const andaresMapa =
+  [
+    ...new Set(
+      mapaInventario
+        .filter(
+          (item) =>
+            Number(
+              item.rua
+            ) ===
+              ruaMapa &&
+            Number(
+              item.bloco
+            ) ===
+              blocoMapa
+        )
+        .map(
+          (item) =>
+            Number(
+              item.andar
+            )
+        )
+        .filter(
+          (numero) =>
+            Number.isFinite(
+              numero
+            ) &&
+            numero > 0
+        )
+    ),
+  ].sort(
+    (a, b) =>
+      b - a
+  );
+
+
+const apartamentosMapa =
+  mapaInventario
+    .filter(
+      (item) =>
+        Number(
+          item.rua
+        ) ===
+          ruaMapa &&
+        Number(
+          item.bloco
+        ) ===
+          blocoMapa &&
+        Number(
+          item.andar
+        ) ===
+          andarMapa
+    )
+    .sort(
+      (a, b) =>
+        String(
+          a.apartamento || ""
+        ).localeCompare(
+          String(
+            b.apartamento || ""
+          ),
+          "pt-BR",
+          {
+            numeric: true,
+          }
+        )
+    );
+
+
+const resumoMapa = {
+  validado:
+    mapaInventario.filter(
+      (item) =>
+        item.status_mapa ===
+        "validado"
+    ).length,
+
+  divergencia:
+    mapaInventario.filter(
+      (item) =>
+        item.status_mapa ===
+        "divergencia"
+    ).length,
+
+  pendente:
+    mapaInventario.filter(
+      (item) =>
+        item.status_mapa ===
+        "pendente"
+    ).length,
+};
   if (!ciclo) {
     return (
       <div className="space-y-4">
