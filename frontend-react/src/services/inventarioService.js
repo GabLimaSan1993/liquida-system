@@ -1,7 +1,5 @@
 import { supabase } from "../lib/supabase";
 
-// Peças que não estão fisicamente no armazém não entram na contagem.
-const STATUS_FORA_DO_ESTOQUE = ["Finalizado"];
 function enderecoEhWms(local) {
   if (!local) {
     return false;
@@ -112,21 +110,27 @@ export async function abrirCiclo(nome, userId) {
 // e concluía, com razão, que o sistema estava travado.
 // ══════════════════════════════════════════════════════════
 export async function sortearDia(cicloId, quantidade = 131) {
-  // Endereços que existem no estoque (a coluna local_normalizado é mantida por trigger)
-  const { data: pecas, error } = await supabase
-    .from("assurant_triagem")
-    .select("local_normalizado")
-    .not("local_normalizado", "is", null)
-    .neq("local_normalizado", "GENERICO")
-    .not("status_atual", "in", `(${STATUS_FORA_DO_ESTOQUE.map(s => `"${s}"`).join(",")})`);
-  if (error) throw new Error(error.message);
+  // Fonte oficial do estoque físico:
+ // wms_enderecos + wms_alocacoes confirmadas.
+const {
+  data: posicoesWms,
+  error,
+} = await supabase.rpc(
+  "wms_inventario_posicoes"
+);
 
-  const enderecos =
+if (error) {
+  throw new Error(
+    error.message
+  );
+}
+
+const enderecos =
   new Set(
-    (pecas || [])
+    (posicoesWms || [])
       .map(
-        (p) =>
-          p.local_normalizado
+        (posicao) =>
+          posicao.endereco
       )
       .filter(
         enderecoEhWms
@@ -220,20 +224,33 @@ export async function abrirContagem(contagemId, userId, userNome) {
     return { ok: true, contagem: cont, itens, reaberta: true };
   }
 
-  // Peças que o sistema espera neste endereço — filtro direto no banco, via índice.
-  const { data: esperadas, error } = await supabase
-    .from("assurant_triagem")
-    .select("imei, voucher, local, sku, grade, status_atual")
-    .eq("local_normalizado", cont.endereco)
-    .not("status_atual", "in", `(${STATUS_FORA_DO_ESTOQUE.map(s => `"${s}"`).join(",")})`);
-  if (error) throw new Error(error.message);
+  /// Produto esperado no AP segundo a fonte física oficial do WMS.
+const {
+  data: posicoesWms,
+  error,
+} = await supabase.rpc(
+  "wms_inventario_posicao",
+  {
+    p_endereco:
+      cont.endereco,
+  }
+);
+
+if (error) {
+  throw new Error(
+    error.message
+  );
+}
+
+const esperadas =
+  posicoesWms || [];
 
   const linhas = (esperadas || []).map(p => ({
     contagem_id:       contagemId,
     ciclo_id:          cont.ciclo_id,
     imei:              p.imei,
     veredito:          "esperado",
-    endereco_anterior: p.local,
+    endereco_anterior: p.endereco,
   }));
 
   if (linhas.length) {
@@ -249,7 +266,7 @@ export async function abrirContagem(contagemId, userId, userNome) {
       operador_id:     userId,
       operador_nome:   userNome || "Operador",
       aberta_em:       new Date().toISOString(),
-      endereco_origem: esperadas?.[0]?.local || null,
+      endereco_origem: esperadas?.[0]?.endereco || null,
     })
     .eq("id", contagemId);
   if (errUpd) throw new Error(errUpd.message);
@@ -316,29 +333,40 @@ export async function biparItem(contagemId, imeiDigitado) {
     .maybeSingle();
   if (repetido) return { ok: false, erro: `${imei} já foi bipado nesta contagem.` };
 
-  // SOBRA: a peça está aqui, mas o sistema a esperava em outro lugar (ou lugar nenhum).
-  const { data: linhas } = await supabase
-    .from("assurant_triagem")
-    .select("id, imei, voucher, local, criado_em, atualizado_em")
-    .eq("imei", imei)
-    .not("status_atual", "in", `(${STATUS_FORA_DO_ESTOQUE.map(s => `"${s}"`).join(",")})`)
-    .order("atualizado_em", { ascending: false })
-    .order("criado_em", { ascending: false });
-
-  if (!linhas?.length) {
-    return { ok: false, erro: `${imei} não existe no estoque (ou já foi expedido).` };
+  // SOBRA: o aparelho foi encontrado fisicamente neste AP,
+// mas o WMS o espera em outro endereço.
+const {
+  data: posicoesWms,
+  error: erroBuscaWms,
+} = await supabase.rpc(
+  "wms_inventario_buscar_item",
+  {
+    p_imei: imei,
   }
+);
 
-  const conflito = linhas.length > 1;
-  const alvo = linhas[0];  // a mais recente
-  const anterior = alvo.local;
+if (erroBuscaWms) {
+  throw new Error(
+    erroBuscaWms.message
+  );
+}
 
-  // Corrige o local na linha mais recente, já na forma canônica.
-  // A trigger do banco atualiza o local_normalizado sozinha.
-  await supabase
-    .from("assurant_triagem")
-    .update({ local: cont.endereco })
-    .eq("id", alvo.id);
+if (!posicoesWms?.length) {
+  return {
+    ok: false,
+    erro:
+      `${imei} não possui alocação física ativa no WMS.`,
+  };
+}
+
+const conflito =
+  posicoesWms.length > 1;
+
+const alvo =
+  posicoesWms[0];
+
+const anterior =
+  alvo.endereco;
 
   await supabase.from("inventario_itens").insert({
     contagem_id:       contagemId,
@@ -487,37 +515,20 @@ export async function mapaInventarioCiclo(cicloId) {
   }
 
 
-  // Todos os endereços que atualmente possuem estoque físico.
-  // É a mesma origem utilizada pelo sorteio do inventário.
-  const {
-    data: pecas,
-    error: erroPecas,
-  } = await supabase
-    .from("assurant_triagem")
-    .select("local_normalizado")
-    .not(
-      "local_normalizado",
-      "is",
-      null
-    )
-    .neq(
-      "local_normalizado",
-      "GENERICO"
-    )
-    .not(
-      "status_atual",
-      "in",
-      `(${STATUS_FORA_DO_ESTOQUE.map(
-        (status) =>
-          `"${status}"`
-      ).join(",")})`
-    );
+  // Todos os APs que atualmente possuem produto
+// segundo a fonte física oficial do WMS.
+const {
+  data: posicoesWms,
+  error: erroPosicoesWms,
+} = await supabase.rpc(
+  "wms_inventario_posicoes"
+);
 
-  if (erroPecas) {
-    throw new Error(
-      erroPecas.message
-    );
-  }
+if (erroPosicoesWms) {
+  throw new Error(
+    erroPosicoesWms.message
+  );
+}
 
 
   // Contagens já existentes neste ciclo.
@@ -565,10 +576,10 @@ export async function mapaInventarioCiclo(cicloId) {
   const enderecos =
   [
     ...new Set(
-      (pecas || [])
+      (posicoesWms || [])
         .map(
-          (peca) =>
-            peca.local_normalizado
+          (posicao) =>
+            posicao.endereco
         )
         .filter(
           enderecoEhWms
