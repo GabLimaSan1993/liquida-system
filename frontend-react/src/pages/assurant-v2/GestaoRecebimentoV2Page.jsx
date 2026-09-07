@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   AlertTriangle,
+  CalendarDays,
   Clock3,
   FileSpreadsheet,
   FileText,
@@ -24,25 +25,8 @@ import {
   fmtDataHora,
 } from "../../services/gestaoRecebimentoService.js";
 
-const PERIODOS = [
-  {
-    key: "7d",
-    label: "7 dias",
-  },
-  {
-    key: "30d",
-    label: "30 dias",
-  },
-  {
-    key: "tudo",
-    label: "Tudo",
-  },
-];
-
 function fmtNumber(value) {
-  return Number(
-    value || 0
-  ).toLocaleString("pt-BR");
+  return Number(value || 0).toLocaleString("pt-BR");
 }
 
 function iniciais(nome) {
@@ -52,12 +36,56 @@ function iniciais(nome) {
     .split(" ")
     .filter(Boolean)
     .slice(0, 2)
-    .map(
-      (parte) =>
-        parte[0]
-    )
+    .map((parte) => parte[0])
     .join("")
     .toUpperCase();
+}
+
+function formatDateInput(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function dataInicialPadrao() {
+  const date = new Date();
+  date.setDate(date.getDate() - 30);
+
+  return formatDateInput(date);
+}
+
+function dataFinalPadrao() {
+  return formatDateInput(new Date());
+}
+
+function minutos(inicio, fim) {
+  if (!inicio || !fim) return null;
+
+  const a = new Date(inicio).getTime();
+  const b = new Date(fim).getTime();
+
+  if (
+    Number.isNaN(a) ||
+    Number.isNaN(b) ||
+    b < a
+  ) {
+    return null;
+  }
+
+  return Math.round((b - a) / 60000);
+}
+
+function media(valores) {
+  if (!valores.length) return null;
+
+  return Math.round(
+    valores.reduce(
+      (soma, valor) => soma + valor,
+      0
+    ) / valores.length
+  );
 }
 
 function Panel({
@@ -108,10 +136,13 @@ function KpiCard({
   const config = {
     violet:
       "bg-violet-50 text-violet-700",
+
     emerald:
       "bg-emerald-50 text-emerald-700",
+
     amber:
       "bg-amber-50 text-amber-700",
+
     blue:
       "bg-blue-50 text-blue-700",
   };
@@ -135,9 +166,7 @@ function KpiCard({
 
         <div
           className={`flex h-10 w-10 items-center justify-center rounded-xl ${
-            config[
-              variant
-            ]
+            config[variant]
           }`}
         >
           <Icon className="h-[18px] w-[18px]" />
@@ -153,7 +182,7 @@ function exportarExcel(
 ) {
   const cab = [
     [
-      "ROMANEIO DE RECEBIMENTO — YBV",
+      "ROMANEIO DE RECEBIMENTO — LOJAS",
     ],
     [],
     [
@@ -162,13 +191,11 @@ function exportarExcel(
     ],
     [
       "Motorista",
-      rec.motorista_nome ||
-        "—",
+      rec.motorista_nome || "—",
     ],
     [
       "CPF",
-      rec.motorista_cpf ||
-        "—",
+      rec.motorista_cpf || "—",
     ],
     [
       "Placa",
@@ -176,26 +203,19 @@ function exportarExcel(
     ],
     [
       "Lacres",
-      (
-        rec.lacres || []
-      ).join(", ") || "—",
+      (rec.lacres || []).join(", ") || "—",
     ],
     [
       "Colaborador",
-      rec.iniciado_por_nome ||
-        "—",
+      rec.iniciado_por_nome || "—",
     ],
     [
       "Início",
-      fmtDataHora(
-        rec.iniciado_em
-      ),
+      fmtDataHora(rec.iniciado_em),
     ],
     [
       "Término",
-      fmtDataHora(
-        rec.concluido_em
-      ),
+      fmtDataHora(rec.concluido_em),
     ],
     [
       "Total de vouchers",
@@ -230,18 +250,10 @@ function exportarExcel(
     ]);
 
   ws["!cols"] = [
-    {
-      wch: 6,
-    },
-    {
-      wch: 22,
-    },
-    {
-      wch: 22,
-    },
-    {
-      wch: 22,
-    },
+    { wch: 6 },
+    { wch: 22 },
+    { wch: 22 },
+    { wch: 22 },
   ];
 
   const wb =
@@ -272,7 +284,7 @@ function exportarPDF(
   doc.setFontSize(14);
 
   doc.text(
-    "Romaneio de Recebimento — YBV",
+    "Romaneio de Recebimento — Lojas",
     14,
     16
   );
@@ -281,29 +293,29 @@ function exportarPDF(
 
   const info = [
     `Transportadora: ${rec.transportadora}`,
+
     `Motorista: ${
-      rec.motorista_nome ||
-      "—"
+      rec.motorista_nome || "—"
     }   CPF: ${
-      rec.motorista_cpf ||
-      "—"
+      rec.motorista_cpf || "—"
     }   Placa: ${
       rec.placa || "—"
     }`,
+
     `Lacres: ${
-      (
-        rec.lacres || []
-      ).join(", ") || "—"
+      (rec.lacres || []).join(", ") || "—"
     }`,
+
     `Colaborador: ${
-      rec.iniciado_por_nome ||
-      "—"
+      rec.iniciado_por_nome || "—"
     }`,
+
     `Início: ${fmtDataHora(
       rec.iniciado_em
     )}   Término: ${fmtDataHora(
       rec.concluido_em
     )}`,
+
     `Total de vouchers: ${vouchers.length}`,
   ];
 
@@ -336,9 +348,11 @@ function exportarPDF(
         (voucher, index) => [
           index + 1,
           voucher.voucher,
+
           fmtDataHora(
             voucher.bipado_em
           ),
+
           voucher.bipado_por_nome ||
             "—",
         ]
@@ -367,18 +381,33 @@ function exportarPDF(
 
 export default function GestaoRecebimentoV2Page() {
   const [
-    periodo,
-    setPeriodo,
-  ] = useState("30d");
+    dataDe,
+    setDataDe,
+  ] = useState(
+    dataInicialPadrao
+  );
 
-  const [dados, setDados] =
-    useState(null);
+  const [
+    dataAte,
+    setDataAte,
+  ] = useState(
+    dataFinalPadrao
+  );
 
-  const [loading, setLoading] =
-    useState(true);
+  const [
+    dados,
+    setDados,
+  ] = useState(null);
 
-  const [busca, setBusca] =
-    useState("");
+  const [
+    loading,
+    setLoading,
+  ] = useState(true);
+
+  const [
+    busca,
+    setBusca,
+  ] = useState("");
 
   const [
     baixando,
@@ -389,17 +418,23 @@ export default function GestaoRecebimentoV2Page() {
     setLoading(true);
 
     try {
+      /*
+       * Carregamos o histórico disponível.
+       * O período selecionado é aplicado nesta tela,
+       * sem alterar a lógica atual do serviço.
+       */
       const res =
         await buscarGestaoRecebimento(
-          periodo
+          "tudo"
         );
 
       setDados(
-        res.ok ? res : null
+        res.ok
+          ? res
+          : null
       );
     } catch (error) {
       console.error(error);
-
       setDados(null);
     } finally {
       setLoading(false);
@@ -408,7 +443,7 @@ export default function GestaoRecebimentoV2Page() {
 
   useEffect(() => {
     carregar();
-  }, [periodo]);
+  }, []);
 
   async function baixar(
     recebimentoId,
@@ -446,22 +481,329 @@ export default function GestaoRecebimentoV2Page() {
     }
   }
 
-  const kpis =
-    dados?.kpis;
+  const historicoCompleto =
+    dados?.historico || [];
 
-  const transportadoras =
-    dados?.transportadoras ||
-    [];
-
-  const colaboradores =
-    dados?.colaboradores ||
-    [];
-
-  const emAndamento =
+  const andamentoCompleto =
     dados?.emAndamento || [];
 
-  const historico =
-    dados?.historico || [];
+  const intervalo = useMemo(() => {
+    const inicio =
+      dataDe
+        ? new Date(
+            `${dataDe}T00:00:00`
+          )
+        : null;
+
+    const fim =
+      dataAte
+        ? new Date(
+            `${dataAte}T23:59:59.999`
+          )
+        : null;
+
+    return {
+      inicio,
+      fim,
+    };
+  }, [
+    dataDe,
+    dataAte,
+  ]);
+
+  const dataInvalida =
+    intervalo.inicio &&
+    intervalo.fim &&
+    intervalo.inicio >
+      intervalo.fim;
+
+  function estaNoPeriodo(
+    value
+  ) {
+    if (!value) return false;
+
+    const data =
+      new Date(value);
+
+    if (
+      Number.isNaN(
+        data.getTime()
+      )
+    ) {
+      return false;
+    }
+
+    if (
+      intervalo.inicio &&
+      data <
+        intervalo.inicio
+    ) {
+      return false;
+    }
+
+    if (
+      intervalo.fim &&
+      data >
+        intervalo.fim
+    ) {
+      return false;
+    }
+
+    return true;
+  }
+
+  const historicoPeriodo =
+    useMemo(() => {
+      if (
+        dataInvalida
+      ) {
+        return [];
+      }
+
+      return historicoCompleto.filter(
+        (item) =>
+          estaNoPeriodo(
+            item.iniciado_em
+          )
+      );
+    }, [
+      historicoCompleto,
+      intervalo,
+      dataInvalida,
+    ]);
+
+  const andamentoPeriodo =
+    useMemo(() => {
+      if (
+        dataInvalida
+      ) {
+        return [];
+      }
+
+      return andamentoCompleto.filter(
+        (item) =>
+          estaNoPeriodo(
+            item.iniciado_em
+          )
+      );
+    }, [
+      andamentoCompleto,
+      intervalo,
+      dataInvalida,
+    ]);
+
+  const kpis =
+    useMemo(() => {
+      const totalVouchers =
+        historicoPeriodo.reduce(
+          (
+            soma,
+            recebimento
+          ) =>
+            soma +
+            (
+              recebimento.total_vouchers ||
+              0
+            ),
+          0
+        );
+
+      const tempos =
+        historicoPeriodo
+          .map(
+            (recebimento) =>
+              minutos(
+                recebimento.iniciado_em,
+                recebimento.concluido_em
+              )
+          )
+          .filter(
+            (valor) =>
+              valor != null
+          );
+
+      return {
+        recebimentos:
+          historicoPeriodo.length,
+
+        vouchers:
+          totalVouchers,
+
+        voucherPorCarga:
+          historicoPeriodo.length
+            ? Math.round(
+                totalVouchers /
+                  historicoPeriodo.length
+              )
+            : 0,
+
+        tempoMedioMin:
+          media(tempos),
+
+        emAndamento:
+          andamentoPeriodo.length,
+      };
+    }, [
+      historicoPeriodo,
+      andamentoPeriodo,
+    ]);
+
+  const transportadoras =
+    useMemo(() => {
+      const agrupado = {};
+
+      historicoPeriodo.forEach(
+        (recebimento) => {
+          const nome =
+            recebimento.transportadora ||
+            "—";
+
+          if (
+            !agrupado[nome]
+          ) {
+            agrupado[nome] = {
+              transportadora:
+                nome,
+
+              qtd: 0,
+              vouchers: 0,
+              tempos: [],
+            };
+          }
+
+          agrupado[nome].qtd += 1;
+
+          agrupado[nome].vouchers +=
+            recebimento.total_vouchers ||
+            0;
+
+          const tempo =
+            minutos(
+              recebimento.iniciado_em,
+              recebimento.concluido_em
+            );
+
+          if (
+            tempo != null
+          ) {
+            agrupado[
+              nome
+            ].tempos.push(
+              tempo
+            );
+          }
+        }
+      );
+
+      return Object.values(
+        agrupado
+      )
+        .map(
+          (item) => ({
+            transportadora:
+              item.transportadora,
+
+            qtd:
+              item.qtd,
+
+            vouchers:
+              item.vouchers,
+
+            tempoMedioMin:
+              media(
+                item.tempos
+              ),
+          })
+        )
+        .sort(
+          (
+            a,
+            b
+          ) =>
+            b.qtd -
+            a.qtd
+        );
+    }, [
+      historicoPeriodo,
+    ]);
+
+  const colaboradores =
+    useMemo(() => {
+      const agrupado = {};
+
+      historicoPeriodo.forEach(
+        (recebimento) => {
+          const nome =
+            recebimento.iniciado_por_nome ||
+            "—";
+
+          if (
+            !agrupado[nome]
+          ) {
+            agrupado[nome] = {
+              nome,
+              cargas: 0,
+              vouchers: 0,
+              tempos: [],
+            };
+          }
+
+          agrupado[nome].cargas +=
+            1;
+
+          agrupado[nome].vouchers +=
+            recebimento.total_vouchers ||
+            0;
+
+          const tempo =
+            minutos(
+              recebimento.iniciado_em,
+              recebimento.concluido_em
+            );
+
+          if (
+            tempo != null
+          ) {
+            agrupado[
+              nome
+            ].tempos.push(
+              tempo
+            );
+          }
+        }
+      );
+
+      return Object.values(
+        agrupado
+      )
+        .map(
+          (item) => ({
+            nome:
+              item.nome,
+
+            cargas:
+              item.cargas,
+
+            vouchers:
+              item.vouchers,
+
+            tempoMedioMin:
+              media(
+                item.tempos
+              ),
+          })
+        )
+        .sort(
+          (
+            a,
+            b
+          ) =>
+            b.vouchers -
+            a.vouchers
+        );
+    }, [
+      historicoPeriodo,
+    ]);
 
   const maxTransportadora =
     Math.max(
@@ -480,10 +822,10 @@ export default function GestaoRecebimentoV2Page() {
           .toLowerCase();
 
       if (!termo) {
-        return historico;
+        return historicoPeriodo;
       }
 
-      return historico.filter(
+      return historicoPeriodo.filter(
         (item) => {
           const campos = [
             item.motorista_nome,
@@ -498,18 +840,25 @@ export default function GestaoRecebimentoV2Page() {
                 campo || ""
               )
                 .toLowerCase()
-                .includes(termo)
+                .includes(
+                  termo
+                )
           );
         }
       );
     }, [
-      historico,
+      historicoPeriodo,
       busca,
     ]);
 
+  function limparPeriodo() {
+    setDataDe("");
+    setDataAte("");
+  }
+
   return (
     <div className="mx-auto max-w-[1680px] space-y-5">
-      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
+      <div className="flex flex-col justify-between gap-5 xl:flex-row xl:items-end">
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-lg bg-violet-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-violet-700">
@@ -522,7 +871,7 @@ export default function GestaoRecebimentoV2Page() {
           </div>
 
           <h1 className="mt-3 text-2xl font-black tracking-tight text-slate-900 lg:text-[30px]">
-            Gestão de Recebimento YBV
+            Gestão de Recebimento Lojas
           </h1>
 
           <p className="mt-1 text-sm text-slate-500">
@@ -530,39 +879,81 @@ export default function GestaoRecebimentoV2Page() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {PERIODOS.map(
-            (item) => (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() =>
-                  setPeriodo(
-                    item.key
+        <div className="flex flex-wrap items-end gap-2">
+          <label>
+            <span className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-slate-400">
+              De
+            </span>
+
+            <div className="relative">
+              <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-violet-500" />
+
+              <input
+                type="date"
+                value={dataDe}
+                onChange={(
+                  event
+                ) =>
+                  setDataDe(
+                    event.target.value
                   )
                 }
-                className={`h-9 rounded-xl px-3 text-xs font-bold transition ${
-                  periodo ===
-                  item.key
-                    ? "bg-violet-700 text-white"
-                    : "border border-slate-200 bg-white text-slate-500 hover:bg-violet-50"
-                }`}
-              >
-                {item.label}
-              </button>
-            )
-          )}
+                className="h-10 rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-xs font-semibold text-slate-600 outline-none transition focus:border-violet-300 focus:ring-4 focus:ring-violet-100"
+              />
+            </div>
+          </label>
+
+          <label>
+            <span className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-slate-400">
+              Até
+            </span>
+
+            <div className="relative">
+              <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-violet-500" />
+
+              <input
+                type="date"
+                value={dataAte}
+                onChange={(
+                  event
+                ) =>
+                  setDataAte(
+                    event.target.value
+                  )
+                }
+                className="h-10 rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-xs font-semibold text-slate-600 outline-none transition focus:border-violet-300 focus:ring-4 focus:ring-violet-100"
+              />
+            </div>
+          </label>
+
+          <button
+            type="button"
+            onClick={
+              limparPeriodo
+            }
+            className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-500 transition hover:bg-slate-50"
+          >
+            Todo período
+          </button>
 
           <button
             type="button"
             onClick={carregar}
-            className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 hover:bg-slate-50"
+            className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 shadow-sm transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700"
           >
             <RefreshCw className="h-4 w-4" />
             Atualizar
           </button>
         </div>
       </div>
+
+      {dataInvalida && (
+        <div className="flex items-center gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-semibold text-rose-700">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+
+          A data inicial não pode ser maior que a data final.
+        </div>
+      )}
 
       {loading ? (
         <div className="flex h-52 items-center justify-center">
@@ -614,13 +1005,13 @@ export default function GestaoRecebimentoV2Page() {
               value={fmtNumber(
                 kpis.emAndamento
               )}
-              helper="Cargas abertas agora"
+              helper="Cargas abertas no período"
               icon={PlayCircle}
               variant="emerald"
             />
           </div>
 
-          {emAndamento.length >
+          {andamentoPeriodo.length >
             0 && (
             <Panel
               title="Em andamento agora"
@@ -629,14 +1020,16 @@ export default function GestaoRecebimentoV2Page() {
               action={
                 <span className="rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-black text-emerald-700">
                   {
-                    emAndamento.length
+                    andamentoPeriodo.length
                   }
                 </span>
               }
             >
               <div className="grid gap-3 p-5 lg:grid-cols-2 2xl:grid-cols-3">
-                {emAndamento.map(
-                  (recebimento) => (
+                {andamentoPeriodo.map(
+                  (
+                    recebimento
+                  ) => (
                     <div
                       key={
                         recebimento.id
@@ -775,7 +1168,9 @@ export default function GestaoRecebimentoV2Page() {
                   </div>
                 ) : (
                   colaboradores.map(
-                    (colaborador) => (
+                    (
+                      colaborador
+                    ) => (
                       <div
                         key={
                           colaborador.nome
@@ -824,7 +1219,9 @@ export default function GestaoRecebimentoV2Page() {
 
           <Panel
             title="Histórico de recebimentos"
-            subtitle="Cargas concluídas e romaneios disponíveis."
+            subtitle={`${fmtNumber(
+              historicoPeriodo.length
+            )} cargas no período selecionado.`}
             icon={Package}
             action={
               <div className="relative">
@@ -832,7 +1229,9 @@ export default function GestaoRecebimentoV2Page() {
 
                 <input
                   value={busca}
-                  onChange={(event) =>
+                  onChange={(
+                    event
+                  ) =>
                     setBusca(
                       event.target.value
                     )
@@ -851,7 +1250,7 @@ export default function GestaoRecebimentoV2Page() {
                 <p className="mt-2 text-xs text-slate-400">
                   {busca
                     ? "Nenhum recebimento encontrado."
-                    : "Nenhum recebimento concluído ainda."}
+                    : "Nenhum recebimento no período selecionado."}
                 </p>
               </div>
             ) : (
@@ -887,17 +1286,14 @@ export default function GestaoRecebimentoV2Page() {
 
                   <tbody>
                     {historicoFiltrado.map(
-                      (recebimento) => {
+                      (
+                        recebimento
+                      ) => {
                         const tempoMin =
                           recebimento.concluido_em
-                            ? Math.round(
-                                (new Date(
-                                  recebimento.concluido_em
-                                ) -
-                                  new Date(
-                                    recebimento.iniciado_em
-                                  )) /
-                                  60000
+                            ? minutos(
+                                recebimento.iniciado_em,
+                                recebimento.concluido_em
                               )
                             : null;
 
@@ -963,6 +1359,7 @@ export default function GestaoRecebimentoV2Page() {
                                 className="mr-2 inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-[10px] font-bold text-emerald-700 disabled:opacity-40"
                               >
                                 <FileSpreadsheet className="h-3.5 w-3.5" />
+
                                 Excel
                               </button>
 
@@ -981,6 +1378,7 @@ export default function GestaoRecebimentoV2Page() {
                                 className="inline-flex items-center gap-1 rounded-lg bg-rose-50 px-2.5 py-1.5 text-[10px] font-bold text-rose-700 disabled:opacity-40"
                               >
                                 <FileText className="h-3.5 w-3.5" />
+
                                 PDF
                               </button>
                             </td>
