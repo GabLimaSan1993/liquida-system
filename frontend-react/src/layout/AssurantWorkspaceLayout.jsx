@@ -170,10 +170,12 @@ const MENU_GROUPS = [
 },
 
       {
-        label: "Carga Inicial",
-        icon: Activity,
-        enabled: false,
-      },
+  label: "Carga Inicial",
+  icon: Activity,
+  to: "/v2/assurant/estoque/carga-inicial",
+  exact: true,
+  enabled: true,
+},
     ],
   },
 
