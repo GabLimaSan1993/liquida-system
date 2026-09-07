@@ -1360,9 +1360,7 @@ export default function B2BV2Page() {
 ====================================================== */
 
 .b2b-v2
-  > .space-y-5
-  > .space-y-4
-  > .grid.grid-cols-1.lg\:grid-cols-4.gap-3 {
+  .grid.grid-cols-1[class~="lg:grid-cols-4"].gap-3 {
   display: none !important;
 }
       `}</style>
