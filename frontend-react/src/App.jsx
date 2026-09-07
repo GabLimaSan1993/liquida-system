@@ -53,6 +53,7 @@ import GestaoTrocasDevolucoesPage from "./pages/GestaoTrocasDevolucoesPage.jsx";
 
 import RecebimentoV2Page from "./pages/assurant-v2/RecebimentoV2Page.jsx";
 import GestaoRecebimentoV2Page from "./pages/assurant-v2/GestaoRecebimentoV2Page.jsx";
+import TriagensV2Page from "./pages/assurant-v2/TriagensV2Page.jsx";
 
 function ProtectedRoute({ tela, children }) {
   const { user, loading, hasAccess } = useAuth();
@@ -133,7 +134,9 @@ function SemAcessoPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#FAF6FF]">
       <div className="text-center">
-        <div className="text-6xl mb-4">🔒</div>
+        <div className="text-6xl mb-4">
+          🔒
+        </div>
 
         <h1 className="text-2xl font-black text-[#6B1F87] mb-2">
           Acesso negado
@@ -166,7 +169,10 @@ export default function App() {
           !user ? (
             <LoginPage />
           ) : (
-            <Navigate to="/" replace />
+            <Navigate
+              to="/"
+              replace
+            />
           )
         }
       />
@@ -188,14 +194,48 @@ export default function App() {
           </ProtectedRoute>
         }
       >
+        {/* Recebimento */}
         <Route
           path="recebimento"
-          element={<RecebimentoV2Page />}
+          element={
+            <RecebimentoV2Page />
+          }
         />
 
         <Route
           path="recebimento/gestao"
-          element={<GestaoRecebimentoV2Page />}
+          element={
+            <GestaoRecebimentoV2Page />
+          }
+        />
+
+        {/* Triagens */}
+        <Route
+          path="triagens/funcional"
+          element={
+            <TriagensV2Page tipo="funcional" />
+          }
+        />
+
+        <Route
+          path="triagens/laudo"
+          element={
+            <TriagensV2Page tipo="laudo" />
+          }
+        />
+
+        <Route
+          path="triagens/cosmetica"
+          element={
+            <TriagensV2Page tipo="cosmetica" />
+          }
+        />
+
+        <Route
+          path="triagens/oracle"
+          element={
+            <TriagensV2Page tipo="oracle" />
+          }
         />
       </Route>
 
@@ -212,7 +252,9 @@ export default function App() {
       >
         <Route
           path="/"
-          element={<DefaultRedirect />}
+          element={
+            <DefaultRedirect />
+          }
         />
 
         <Route
@@ -287,6 +329,7 @@ export default function App() {
           }
         />
 
+        {/* Linha Branca */}
         <Route
           path="/linha-branca/triagem"
           element={
@@ -368,6 +411,7 @@ export default function App() {
           }
         />
 
+        {/* Sistema */}
         <Route
           path="/gerenciar-usuarios"
           element={
@@ -377,6 +421,7 @@ export default function App() {
           }
         />
 
+        {/* Assurant */}
         <Route
           path="/assurant/dashboard"
           element={
@@ -553,7 +598,7 @@ export default function App() {
           }
         />
 
-        {/* Triagens */}
+        {/* Triagens atuais preservadas */}
         <Route
           path="/triagens/funcional"
           element={
