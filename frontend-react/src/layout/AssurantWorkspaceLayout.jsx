@@ -146,10 +146,12 @@ const MENU_GROUPS = [
     label: "ESTOQUE",
     items: [
       {
-        label: "Armazenagem",
-        icon: Package,
-        enabled: false,
-      },
+  label: "Armazenagem",
+  icon: Package,
+  to: "/v2/assurant/estoque/armazenagem",
+  exact: true,
+  enabled: true,
+},
 
       {
         label: "Consulta do Estoque",
