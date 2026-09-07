@@ -1032,6 +1032,339 @@ export default function B2BV2Page() {
   background: #211136 !important;
   color: #ffffff !important;
 }
+
+/* =====================================================
+   FATURAMENTO B2B — VISUAL CORPORATIVO
+====================================================== */
+
+
+/* -----------------------------------------------------
+   KPIs GERAIS DO FATURAMENTO
+------------------------------------------------------ */
+
+.b2b-v2
+  .grid.grid-cols-1.lg\:grid-cols-4.gap-3
+  > div {
+  position: relative;
+  overflow: hidden;
+
+  min-height: 100px;
+
+  padding: 16px 17px !important;
+
+  background: #ffffff !important;
+
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 14px !important;
+
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.025) !important;
+
+  color: #334155 !important;
+}
+
+
+/* Faixa semântica superior */
+.b2b-v2
+  .grid.grid-cols-1.lg\:grid-cols-4.gap-3
+  > div::before {
+  content: "";
+
+  position: absolute;
+
+  top: 0;
+  left: 0;
+  right: 0;
+
+  height: 3px;
+}
+
+
+/* Aguardando */
+.b2b-v2
+  .grid.grid-cols-1.lg\:grid-cols-4.gap-3
+  > div:nth-child(1)::before {
+  background: #f59e0b;
+}
+
+
+/* Faturado */
+.b2b-v2
+  .grid.grid-cols-1.lg\:grid-cols-4.gap-3
+  > div:nth-child(2)::before {
+  background: #10b981;
+}
+
+
+/* Não faturar */
+.b2b-v2
+  .grid.grid-cols-1.lg\:grid-cols-4.gap-3
+  > div:nth-child(3)::before {
+  background: #ef4444;
+}
+
+
+/* Erro NF */
+.b2b-v2
+  .grid.grid-cols-1.lg\:grid-cols-4.gap-3
+  > div:nth-child(4)::before {
+  background: #dc2626;
+}
+
+
+/* Valor principal dos KPIs */
+.b2b-v2
+  .grid.grid-cols-1.lg\:grid-cols-4.gap-3
+  .text-2xl {
+  color: #0f172a !important;
+
+  font-size: 21px !important;
+  font-weight: 900 !important;
+
+  letter-spacing: -0.04em;
+}
+
+
+/* Label KPI */
+.b2b-v2
+  .grid.grid-cols-1.lg\:grid-cols-4.gap-3
+  .text-xs.font-semibold {
+  color: #475569 !important;
+}
+
+
+/* Subtexto KPI */
+.b2b-v2
+  .grid.grid-cols-1.lg\:grid-cols-4.gap-3
+  .text-xs.opacity-60 {
+  color: #94a3b8 !important;
+
+  opacity: 1 !important;
+}
+
+
+
+/* =====================================================
+   CARDS DOS PEDIDOS DE FATURAMENTO
+====================================================== */
+
+.b2b-v2
+  .space-y-3
+  > .bg-white.rounded-2xl.p-5.ring-1.shadow-sm {
+  position: relative;
+
+  padding: 18px 20px !important;
+
+  border: 1px solid #e2e8f0 !important;
+  border-left: 3px solid #cbd5e1 !important;
+
+  border-radius: 14px !important;
+
+  background: #ffffff !important;
+
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.025),
+    0 3px 10px rgba(15, 23, 42, 0.025) !important;
+}
+
+
+/* Erro de NF */
+.b2b-v2
+  .space-y-3
+  > .bg-white.rounded-2xl.p-5.ring-1.shadow-sm:has(
+    span.bg-red-100
+  ) {
+  border-left-color: #dc2626 !important;
+}
+
+
+/* Faturamento parcial */
+.b2b-v2
+  .space-y-3
+  > .bg-white.rounded-2xl.p-5.ring-1.shadow-sm:has(
+    span.bg-blue-100
+  ) {
+  border-left-color: #3b82f6 !important;
+}
+
+
+/* Em faturamento */
+.b2b-v2
+  .space-y-3
+  > .bg-white.rounded-2xl.p-5.ring-1.shadow-sm:has(
+    span.bg-purple-100
+  ) {
+  border-left-color: #211136 !important;
+}
+
+
+/* Em separação */
+.b2b-v2
+  .space-y-3
+  > .bg-white.rounded-2xl.p-5.ring-1.shadow-sm:has(
+    span.bg-yellow-100
+  ) {
+  border-left-color: #d97706 !important;
+}
+
+
+
+/* =====================================================
+   CABEÇALHO DO PEDIDO
+====================================================== */
+
+.b2b-v2
+  .space-y-3
+  > .bg-white.rounded-2xl.p-5.ring-1.shadow-sm
+  > .flex.items-start.justify-between {
+  padding-bottom: 13px;
+
+  margin-bottom: 13px !important;
+
+  border-bottom: 1px solid #f1f5f9;
+}
+
+
+/* Lote */
+.b2b-v2
+  .space-y-3
+  > .bg-white.rounded-2xl.p-5.ring-1.shadow-sm
+  .font-bold.text-slate-800.text-sm {
+  color: #0f172a !important;
+
+  font-size: 13px !important;
+  font-weight: 850 !important;
+
+  letter-spacing: -0.015em;
+}
+
+
+/* Cliente */
+.b2b-v2
+  .space-y-3
+  > .bg-white.rounded-2xl.p-5.ring-1.shadow-sm
+  .text-xs.text-slate-500 {
+  color: #64748b !important;
+}
+
+
+/* Valor total à direita */
+.b2b-v2
+  .space-y-3
+  > .bg-white.rounded-2xl.p-5.ring-1.shadow-sm
+  .text-sm.font-black.text-slate-800 {
+  color: #0f172a !important;
+
+  font-size: 13px !important;
+}
+
+
+
+/* =====================================================
+   MINI KPIs DENTRO DE CADA PEDIDO
+====================================================== */
+
+.b2b-v2
+  .grid.grid-cols-2.lg\:grid-cols-4.gap-2.mb-4
+  > div {
+  min-height: 72px;
+
+  padding: 11px 12px !important;
+
+  background: #fafbfc !important;
+
+  border: 1px solid #e8edf2 !important;
+  border-radius: 11px !important;
+
+  box-shadow: none !important;
+}
+
+
+.b2b-v2
+  .grid.grid-cols-2.lg\:grid-cols-4.gap-2.mb-4
+  p {
+  line-height: 1.3;
+}
+
+
+
+/* =====================================================
+   PROGRESSO
+====================================================== */
+
+/* Converte barras antigas roxas para o plum do menu */
+.b2b-v2
+  [style*="#7F2D92"] {
+  background: #211136 !important;
+}
+
+
+/* Barra um pouco mais fina */
+.b2b-v2
+  .space-y-3
+  > .bg-white.rounded-2xl.p-5.ring-1.shadow-sm
+  .h-2.bg-slate-100 {
+  height: 5px !important;
+
+  background: #edf0f4 !important;
+}
+
+
+
+/* =====================================================
+   AÇÕES DO FATURAMENTO
+====================================================== */
+
+.b2b-v2
+  .space-y-3
+  > .bg-white.rounded-2xl.p-5.ring-1.shadow-sm
+  .flex.gap-2.flex-wrap.items-center
+  button,
+
+.b2b-v2
+  .space-y-3
+  > .bg-white.rounded-2xl.p-5.ring-1.shadow-sm
+  .flex.gap-2.flex-wrap.items-center
+  label {
+  min-height: 34px;
+
+  border-radius: 9px !important;
+
+  padding-left: 12px;
+  padding-right: 12px;
+
+  font-size: 11px !important;
+  font-weight: 750 !important;
+}
+
+
+
+/* =====================================================
+   STATUS
+====================================================== */
+
+.b2b-v2
+  .space-y-3
+  > .bg-white.rounded-2xl.p-5.ring-1.shadow-sm
+  span[class*="rounded-lg"][class*="ring-1"] {
+  font-size: 10px !important;
+
+  font-weight: 750 !important;
+
+  border-radius: 8px !important;
+}
+
+/* =====================================================
+   FATURAMENTO — OCULTA KPIs GLOBAIS
+   Mantém somente os indicadores de cada pedido
+====================================================== */
+
+.b2b-v2
+  > .space-y-5
+  > .space-y-4
+  > .grid.grid-cols-1.lg\:grid-cols-4.gap-3 {
+  display: none !important;
+}
       `}</style>
 
       <B2BPickingPage abaInicial="picking" />
