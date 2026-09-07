@@ -69,6 +69,57 @@ const MESES = [
   "dezembro",
 ];
 
+const COLUNAS_INVENTARIO = [
+  "F",
+  "E",
+  "D",
+  "C",
+  "B",
+  "A",
+];
+
+const LINHAS_INVENTARIO = [
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9,
+  10,
+];
+
+const STATUS_MAPA_INVENTARIO = {
+  validado: {
+    label: "Validado",
+    dot: "bg-emerald-600",
+    cell:
+      "bg-emerald-100 text-emerald-950 ring-emerald-300 hover:bg-emerald-200",
+  },
+
+  divergencia: {
+    label: "Divergência",
+    dot: "bg-red-600",
+    cell:
+      "bg-red-100 text-red-950 ring-red-300 hover:bg-red-200",
+  },
+
+  pendente: {
+    label: "Pendente",
+    dot: "bg-amber-500",
+    cell:
+      "bg-amber-100 text-amber-950 ring-amber-300 hover:bg-amber-200",
+  },
+
+  sem_estoque: {
+    label: "Sem estoque",
+    dot: "bg-slate-300",
+    cell:
+      "bg-slate-50 text-slate-400 ring-slate-200",
+  },
+};
 
 function nomeDoCicloAtual() {
   const d =
@@ -2760,6 +2811,91 @@ const resumoMapa = {
         "pendente"
     ).length,
 };
+
+const mapaPorPosicaoInventario =
+  new Map();
+
+apartamentosMapa.forEach(
+  (item) => {
+    const apartamento =
+      String(
+        item.apartamento || ""
+      )
+        .trim()
+        .toUpperCase()
+        .replace(
+          /\s+/g,
+          ""
+        )
+        .replace(
+          /^AP[-_/]?/,
+          ""
+        );
+
+    const match =
+      apartamento.match(
+        /^([A-F])0?(\d{1,2})$/
+      );
+
+    if (!match) {
+      return;
+    }
+
+    const coluna =
+      match[1];
+
+    const linha =
+      Number(
+        match[2]
+      );
+
+    if (
+      linha < 1 ||
+      linha > 10
+    ) {
+      return;
+    }
+
+    mapaPorPosicaoInventario.set(
+      `${coluna}-${linha}`,
+      item
+    );
+  }
+);
+
+function statusGrupoInventario(
+  itensGrupo
+) {
+  if (
+    !itensGrupo ||
+    itensGrupo.length === 0
+  ) {
+    return "sem_estoque";
+  }
+
+  if (
+    itensGrupo.some(
+      (item) =>
+        item.status_mapa ===
+        "divergencia"
+    )
+  ) {
+    return "divergencia";
+  }
+
+  if (
+    itensGrupo.some(
+      (item) =>
+        item.status_mapa ===
+        "pendente"
+    )
+  ) {
+    return "pendente";
+  }
+
+  return "validado";
+}
+
   if (!ciclo) {
     return (
       <div className="space-y-4">
@@ -2935,6 +3071,364 @@ const resumoMapa = {
               />
             </div>
 
+<Card>
+  <div className="border-b border-slate-100 px-5 py-4">
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex items-center gap-3">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-50 text-violet-700">
+          <Warehouse className="h-4 w-4" />
+        </div>
+
+        <div>
+          <div className="text-sm font-black text-slate-800">
+            Mapa do inventário
+          </div>
+
+          <div className="mt-0.5 text-[10px] text-slate-400">
+            Status físico dos endereços neste ciclo.
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 text-[9px] font-bold">
+        <span className="flex items-center gap-1.5 text-emerald-700">
+          <span className="h-2.5 w-2.5 rounded-full bg-emerald-600" />
+          Validado ({fmtN(resumoMapa.validado)})
+        </span>
+
+        <span className="flex items-center gap-1.5 text-red-700">
+          <span className="h-2.5 w-2.5 rounded-full bg-red-600" />
+          Divergência ({fmtN(resumoMapa.divergencia)})
+        </span>
+
+        <span className="flex items-center gap-1.5 text-amber-700">
+          <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
+          Pendente ({fmtN(resumoMapa.pendente)})
+        </span>
+
+        <span className="flex items-center gap-1.5 text-slate-400">
+          <span className="h-2.5 w-2.5 rounded-full bg-slate-300" />
+          Sem estoque
+        </span>
+      </div>
+    </div>
+  </div>
+
+
+  <div className="p-5">
+    <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 xl:grid-cols-[repeat(15,minmax(0,1fr))]">
+      {ruasMapa.map(
+        (numero) => {
+          const itensRua =
+            mapaInventario.filter(
+              (item) =>
+                Number(item.rua) ===
+                numero
+            );
+
+          const status =
+            statusGrupoInventario(
+              itensRua
+            );
+
+          const config =
+            STATUS_MAPA_INVENTARIO[
+              status
+            ];
+
+          return (
+            <button
+              type="button"
+              key={numero}
+              onClick={() =>
+                setRuaMapa(
+                  numero
+                )
+              }
+              className={`min-h-[58px] rounded-xl px-3 py-2 text-left ring-1 transition ${
+                config.cell
+              } ${
+                ruaMapa === numero
+                  ? "outline outline-2 outline-offset-1 outline-violet-600"
+                  : ""
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] font-black">
+                  RUA{" "}
+                  {String(
+                    numero
+                  ).padStart(
+                    2,
+                    "0"
+                  )}
+                </span>
+
+                <span
+                  className={`h-2 w-2 rounded-full ${config.dot}`}
+                />
+              </div>
+
+              <div className="mt-2 text-[8px] font-black uppercase opacity-75">
+                {config.label}
+              </div>
+            </button>
+          );
+        }
+      )}
+    </div>
+
+
+    <div className="mt-5 flex flex-wrap items-center gap-2">
+      <span className="mr-1 text-[10px] font-black uppercase text-slate-400">
+        Bloco
+      </span>
+
+      {blocosMapa.map(
+        (numero) => {
+          const itensBloco =
+            mapaInventario.filter(
+              (item) =>
+                Number(item.rua) ===
+                  ruaMapa &&
+                Number(item.bloco) ===
+                  numero
+            );
+
+          const status =
+            statusGrupoInventario(
+              itensBloco
+            );
+
+          const config =
+            STATUS_MAPA_INVENTARIO[
+              status
+            ];
+
+          return (
+            <button
+              type="button"
+              key={numero}
+              onClick={() =>
+                setBlocoMapa(
+                  numero
+                )
+              }
+              className={`min-h-11 rounded-lg px-3 py-1.5 text-[10px] font-bold ring-1 transition ${
+                config.cell
+              } ${
+                blocoMapa === numero
+                  ? "outline outline-2 outline-offset-1 outline-violet-600"
+                  : ""
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                BL{" "}
+                {String(
+                  numero
+                ).padStart(
+                  2,
+                  "0"
+                )}
+
+                <span
+                  className={`h-2 w-2 rounded-full ${config.dot}`}
+                />
+              </span>
+            </button>
+          );
+        }
+      )}
+
+
+      <span className="ml-3 mr-1 text-[10px] font-black uppercase text-slate-400">
+        Andar
+      </span>
+
+      {andaresMapa.map(
+        (numero) => {
+          const itensAndar =
+            mapaInventario.filter(
+              (item) =>
+                Number(item.rua) ===
+                  ruaMapa &&
+                Number(item.bloco) ===
+                  blocoMapa &&
+                Number(item.andar) ===
+                  numero
+            );
+
+          const status =
+            statusGrupoInventario(
+              itensAndar
+            );
+
+          const config =
+            STATUS_MAPA_INVENTARIO[
+              status
+            ];
+
+          return (
+            <button
+              type="button"
+              key={numero}
+              onClick={() =>
+                setAndarMapa(
+                  numero
+                )
+              }
+              className={`min-h-11 rounded-lg px-3 py-1.5 text-[10px] font-bold ring-1 transition ${
+                config.cell
+              } ${
+                andarMapa === numero
+                  ? "outline outline-2 outline-offset-1 outline-violet-600"
+                  : ""
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                AD{" "}
+                {String(
+                  numero
+                ).padStart(
+                  2,
+                  "0"
+                )}
+
+                <span
+                  className={`h-2 w-2 rounded-full ${config.dot}`}
+                />
+              </span>
+            </button>
+          );
+        }
+      )}
+    </div>
+    <div className="mt-5 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-3">
+  <div className="min-w-[690px]">
+    <div
+      className="grid gap-2"
+      style={{
+        gridTemplateColumns:
+          "38px repeat(6, minmax(92px, 1fr))",
+      }}
+    >
+      <div />
+
+      {COLUNAS_INVENTARIO.map(
+        (coluna) => (
+          <div
+            key={coluna}
+            className="pb-1 text-center text-[10px] font-black text-slate-400"
+          >
+            COL {coluna}
+          </div>
+        )
+      )}
+
+
+      {LINHAS_INVENTARIO.flatMap(
+        (linha) => [
+          <div
+            key={`linha-${linha}`}
+            className="flex items-center justify-center text-[10px] font-black text-slate-400"
+          >
+            {String(
+              linha
+            ).padStart(
+              2,
+              "0"
+            )}
+          </div>,
+
+          ...COLUNAS_INVENTARIO.map(
+            (coluna) => {
+              const item =
+                mapaPorPosicaoInventario.get(
+                  `${coluna}-${linha}`
+                );
+
+              const status =
+                item?.status_mapa ||
+                "sem_estoque";
+
+              const config =
+                STATUS_MAPA_INVENTARIO[
+                  status
+                ] ||
+                STATUS_MAPA_INVENTARIO
+                  .sem_estoque;
+
+              const textoSecundario =
+                status ===
+                "divergencia"
+                  ? `${fmtN(
+                      item?.divergencias ||
+                        0
+                    )} divergência(s)`
+                  : status ===
+                    "validado"
+                  ? "Validado"
+                  : status ===
+                    "pendente"
+                  ? item?.status_contagem ===
+                    "em_contagem"
+                    ? "Em contagem"
+                    : "Pendente"
+                  : "Sem estoque";
+
+              return (
+                <div
+                  key={`${coluna}-${linha}`}
+                  title={
+                    item?.endereco ||
+                    `AP ${coluna}${String(
+                      linha
+                    ).padStart(
+                      2,
+                      "0"
+                    )}`
+                  }
+                  className={`min-h-[66px] rounded-xl p-2 text-left ring-1 transition ${config.cell}`}
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-[11px] font-black">
+                      AP{" "}
+                      {coluna}
+                      {String(
+                        linha
+                      ).padStart(
+                        2,
+                        "0"
+                      )}
+                    </span>
+
+                    <span
+                      className={`h-2.5 w-2.5 shrink-0 rounded-full ${config.dot}`}
+                    />
+                  </div>
+
+                  <div className="mt-1 truncate text-[9px] font-black">
+                    {
+                      config.label
+                    }
+                  </div>
+
+                  <div className="mt-0.5 truncate text-[8px] font-semibold opacity-70">
+                    {
+                      textoSecundario
+                    }
+                  </div>
+                </div>
+              );
+            }
+          ),
+        ]
+      )}
+    </div>
+  </div>
+</div>
+  </div>
+</Card>
 
             <Card>
               <div className="border-b border-slate-100 px-5 py-4">
