@@ -522,7 +522,7 @@ function ExpandableSidebarItem({
       <div
         className={`overflow-hidden transition-all duration-200 ${
           open
-            ? "mt-1 max-h-40 opacity-100"
+            ? "mt-1 max-h-[360px] opacity-100"
             : "max-h-0 opacity-0"
         }`}
       >
@@ -842,32 +842,6 @@ function SidebarContent({
           )}
         </button>
       </div>
-
-      {!mobile && (
-        <button
-          type="button"
-          onClick={
-            onToggleCollapsed
-          }
-          className="
-            absolute -right-3 top-[92px] z-50 flex h-7 w-7
-            items-center justify-center rounded-full border border-violet-200
-            bg-white text-[#5B21B6] shadow-md transition
-            hover:border-violet-300 hover:bg-violet-50
-          "
-          aria-label={
-            collapsed
-              ? "Expandir menu"
-              : "Recolher menu"
-          }
-        >
-          {collapsed ? (
-            <ChevronRight className="h-4 w-4" />
-          ) : (
-            <ChevronLeft className="h-4 w-4" />
-          )}
-        </button>
-      )}
     </div>
   );
 }
