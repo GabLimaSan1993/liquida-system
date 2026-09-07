@@ -51,6 +51,9 @@ import PortalTrocasDevolucoesAssurantPage from "./pages/PortalTrocasDevolucoesAs
 import PortalTrocasDevolucoesFurbtechPage from "./pages/PortalTrocasDevolucoesFurbtechPage.jsx";
 import GestaoTrocasDevolucoesPage from "./pages/GestaoTrocasDevolucoesPage.jsx";
 
+import RecebimentoV2Page from "./pages/assurant-v2/RecebimentoV2Page.jsx";
+import GestaoRecebimentoV2Page from "./pages/assurant-v2/GestaoRecebimentoV2Page.jsx";
+
 function ProtectedRoute({ tela, children }) {
   const { user, loading, hasAccess } = useAuth();
 
@@ -175,15 +178,7 @@ export default function App() {
 
       {/* =====================================================
           ASSURANT WAREHOUSE V2
-          Workspace piloto independente do layout atual.
-
-          Nesta fase:
-          - não substitui nenhuma tela existente;
-          - não altera banco;
-          - não altera WMS;
-          - não executa processos operacionais;
-          - somente usuários com acesso /v2/assurant entram.
-          Master possui acesso automaticamente pelo AuthContext.
+          Workspace piloto paralelo ao sistema atual.
       ====================================================== */}
       <Route
         path="/v2/assurant"
@@ -192,12 +187,21 @@ export default function App() {
             <AssurantWorkspaceLayout />
           </ProtectedRoute>
         }
-      />
+      >
+        <Route
+          path="recebimento"
+          element={<RecebimentoV2Page />}
+        />
+
+        <Route
+          path="recebimento/gestao"
+          element={<GestaoRecebimentoV2Page />}
+        />
+      </Route>
 
       {/* =====================================================
           LIQUIDA SYSTEM ATUAL
-          Todas as rotas operacionais existentes permanecem
-          sob o MainLayout original.
+          Rotas existentes preservadas.
       ====================================================== */}
       <Route
         element={
@@ -400,7 +404,7 @@ export default function App() {
           }
         />
 
-        {/* Recebimento YBV — entrada do processo */}
+        {/* Recebimento atual preservado */}
         <Route
           path="/recebimento"
           element={
@@ -475,7 +479,7 @@ export default function App() {
           }
         />
 
-        {/* Trocas e Devoluções — portais unificados */}
+        {/* Trocas e Devoluções */}
         <Route
           path="/trocas-devolucoes/assurant"
           element={
@@ -503,7 +507,7 @@ export default function App() {
           }
         />
 
-        {/* Pedidos B2C — novo módulo */}
+        {/* B2C */}
         <Route
           path="/b2c/pedidos"
           element={
@@ -614,7 +618,7 @@ export default function App() {
           }
         />
 
-        {/* Inventário Cíclico */}
+        {/* Inventário */}
         <Route
           path="/inventario"
           element={
