@@ -627,6 +627,150 @@ function SidebarMenuItem({
   );
 }
 
+function SidebarGroup({
+  group,
+  collapsed,
+  closeMobile,
+  pathname,
+}) {
+  const temRotaAtiva =
+    group.items.some(
+      (item) =>
+        pathname === item.to ||
+        item.children?.some(
+          (child) =>
+            pathname === child.to
+        )
+    );
+
+  const [
+    open,
+    setOpen,
+  ] = useState(
+    temRotaAtiva
+  );
+
+  useEffect(() => {
+    if (temRotaAtiva) {
+      setOpen(true);
+    }
+  }, [temRotaAtiva]);
+
+  if (!group.label) {
+    return (
+      <div className="space-y-1">
+        {group.items.map(
+          (item) => (
+            <SidebarMenuItem
+              key={item.label}
+              item={item}
+              collapsed={
+                collapsed
+              }
+              closeMobile={
+                closeMobile
+              }
+              pathname={
+                pathname
+              }
+            />
+          )
+        )}
+      </div>
+    );
+  }
+
+  if (collapsed) {
+    return (
+      <div>
+        <div className="mx-auto mb-2 h-px w-7 bg-white/10" />
+
+        <div className="space-y-1">
+          {group.items.map(
+            (item) => (
+              <SidebarMenuItem
+                key={item.label}
+                item={item}
+                collapsed
+                closeMobile={
+                  closeMobile
+                }
+                pathname={
+                  pathname
+                }
+              />
+            )
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() =>
+          setOpen(
+            (current) =>
+              !current
+          )
+        }
+        className={`
+          flex h-9 w-full items-center
+          justify-between rounded-lg
+          px-3 text-left transition
+          ${
+            temRotaAtiva
+              ? "bg-white/5 text-violet-200"
+              : "text-white/40 hover:bg-white/5 hover:text-white/70"
+          }
+        `}
+      >
+        <span className="text-[10px] font-black tracking-[0.16em]">
+          {group.label}
+        </span>
+
+        <ChevronDown
+          className={`h-3.5 w-3.5 transition-transform ${
+            open
+              ? "rotate-180"
+              : ""
+          }`}
+        />
+      </button>
+
+      <div
+        className={`overflow-hidden ${
+          open
+            ? "mt-1 max-h-[700px] opacity-100"
+            : "max-h-0 opacity-0"
+        }`}
+      >
+        <div className="space-y-1">
+          {group.items.map(
+            (item) => (
+              <SidebarMenuItem
+                key={item.label}
+                item={item}
+                collapsed={
+                  collapsed
+                }
+                closeMobile={
+                  closeMobile
+                }
+                pathname={
+                  pathname
+                }
+              />
+            )
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SidebarContent({
   collapsed,
   onToggleCollapsed,
