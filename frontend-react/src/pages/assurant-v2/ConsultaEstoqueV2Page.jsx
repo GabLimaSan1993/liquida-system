@@ -108,6 +108,8 @@ const FAIXAS_AGING = [
     label: "Até 30 dias",
     dot: "bg-emerald-500",
     fundo: "bg-emerald-50",
+    classe:
+      "bg-emerald-100 text-emerald-900 ring-emerald-300 hover:bg-emerald-200",
   },
 
   {
@@ -115,6 +117,8 @@ const FAIXAS_AGING = [
     label: "31 a 60 dias",
     dot: "bg-lime-500",
     fundo: "bg-lime-50",
+    classe:
+      "bg-lime-100 text-lime-900 ring-lime-300 hover:bg-lime-200",
   },
 
   {
@@ -122,6 +126,8 @@ const FAIXAS_AGING = [
     label: "61 a 90 dias",
     dot: "bg-amber-500",
     fundo: "bg-amber-50",
+    classe:
+      "bg-amber-100 text-amber-950 ring-amber-300 hover:bg-amber-200",
   },
 
   {
@@ -129,6 +135,8 @@ const FAIXAS_AGING = [
     label: "91 a 120 dias",
     dot: "bg-orange-500",
     fundo: "bg-orange-50",
+    classe:
+      "bg-orange-200 text-orange-950 ring-orange-400 hover:bg-orange-300",
   },
 
   {
@@ -136,6 +144,8 @@ const FAIXAS_AGING = [
     label: "Acima de 120 dias",
     dot: "bg-rose-600",
     fundo: "bg-rose-50",
+    classe:
+      "bg-red-600 text-white ring-red-700 hover:bg-red-700",
   },
 ];
 
@@ -212,10 +222,12 @@ function faixaAging(
     valor === ""
   ) {
     return {
-      label: "Sem aging",
-      dot: "bg-slate-300",
-      fundo: "bg-slate-50",
-    };
+  label: "Sem aging",
+  dot: "bg-slate-300",
+  fundo: "bg-slate-50",
+  classe:
+    "bg-slate-50 text-slate-700 ring-slate-200 hover:bg-slate-100",
+};
   }
 
   const dias =
@@ -229,23 +241,27 @@ function faixaAging(
     )
   ) {
     return {
-      label: "Sem aging",
-      dot: "bg-slate-300",
-      fundo: "bg-slate-50",
-    };
+  label: "Sem aging",
+  dot: "bg-slate-300",
+  fundo: "bg-slate-50",
+  classe:
+    "bg-slate-50 text-slate-700 ring-slate-200 hover:bg-slate-100",
+};
   }
 
   return (
-    FAIXAS_AGING.find(
-      (faixa) =>
-        dias <=
-        faixa.ate
-    ) || {
-      label: "Sem aging",
-      dot: "bg-slate-300",
-      fundo: "bg-slate-50",
-    }
-  );
+  FAIXAS_AGING.find(
+    (faixa) =>
+      dias <=
+      faixa.ate
+  ) || {
+    label: "Sem aging",
+    dot: "bg-slate-300",
+    fundo: "bg-slate-50",
+    classe:
+      "bg-slate-50 text-slate-700 ring-slate-200 hover:bg-slate-100",
+  }
+);
 }
 
 
@@ -829,6 +845,37 @@ export default function ConsultaEstoqueV2Page() {
         ) === rua
     );
 
+    const blocoResumo =
+  (
+    resumo?.por_bloco ||
+    []
+  ).find(
+    (item) =>
+      Number(
+        item.rua
+      ) === rua &&
+      Number(
+        item.bloco
+      ) === bloco
+  );
+
+
+const andarResumo =
+  (
+    resumo?.por_andar ||
+    []
+  ).find(
+    (item) =>
+      Number(
+        item.rua
+      ) === rua &&
+      Number(
+        item.bloco
+      ) === bloco &&
+      Number(
+        item.andar
+      ) === andar
+  );
 
   return (
     <div className="space-y-5">
@@ -1506,74 +1553,135 @@ export default function ConsultaEstoqueV2Page() {
                 </span>
 
                 {BLOCOS.map(
-                  (numero) => (
-                    <button
-                      type="button"
-                      key={
-                        numero
-                      }
-                      disabled={
-                        rua ===
-                          15 &&
-                        numero !==
-                          1
-                      }
-                      onClick={() =>
-                        setBloco(
-                          numero
-                        )
-                      }
-                      className={`h-9 rounded-lg border px-3 text-[10px] font-bold transition ${
-                        bloco ===
-                        numero
-                          ? "border-violet-500 bg-violet-50 text-violet-700"
-                          : "border-slate-200 bg-white text-slate-500"
-                      } disabled:opacity-25`}
-                    >
-                      BL{" "}
-                      {String(
-                        numero
-                      ).padStart(
-                        2,
-                        "0"
-                      )}
-                    </button>
-                  )
-                )}
+  (numero) => {
+    const dadosBloco =
+      (
+        resumo?.por_bloco ||
+        []
+      ).find(
+        (item) =>
+          Number(
+            item.rua
+          ) === rua &&
+          Number(
+            item.bloco
+          ) === numero
+      );
+
+    const aging =
+      faixaAging(
+        dadosBloco?.aging_medio_dias
+      );
+
+    return (
+      <button
+        type="button"
+        key={
+          numero
+        }
+        disabled={
+          rua === 15 &&
+          numero !== 1
+        }
+        onClick={() =>
+          setBloco(
+            numero
+          )
+        }
+        className={`min-h-11 rounded-lg px-3 py-1.5 text-left text-[10px] font-bold ring-1 transition ${
+          aging.classe
+        } ${
+          bloco === numero
+            ? "outline outline-2 outline-offset-1 outline-violet-600"
+            : ""
+        } disabled:cursor-not-allowed disabled:opacity-25`}
+      >
+        <span className="block">
+          BL{" "}
+          {String(
+            numero
+          ).padStart(
+            2,
+            "0"
+          )}
+        </span>
+
+        <span className="mt-0.5 block text-[9px] font-black opacity-75">
+          {fmtAging(
+            dadosBloco?.aging_medio_dias
+          )}
+        </span>
+      </button>
+    );
+  }
+)}
 
                 <span className="ml-3 mr-1 text-[10px] font-black uppercase text-slate-400">
                   Andar
                 </span>
 
                 {ANDARES.map(
-                  (numero) => (
-                    <button
-                      type="button"
-                      key={
-                        numero
-                      }
-                      onClick={() =>
-                        setAndar(
-                          numero
-                        )
-                      }
-                      className={`h-9 rounded-lg border px-3 text-[10px] font-bold transition ${
-                        andar ===
-                        numero
-                          ? "border-violet-500 bg-violet-50 text-violet-700"
-                          : "border-slate-200 bg-white text-slate-500"
-                      }`}
-                    >
-                      AD{" "}
-                      {String(
-                        numero
-                      ).padStart(
-                        2,
-                        "0"
-                      )}
-                    </button>
-                  )
-                )}
+  (numero) => {
+    const dadosAndar =
+      (
+        resumo?.por_andar ||
+        []
+      ).find(
+        (item) =>
+          Number(
+            item.rua
+          ) === rua &&
+          Number(
+            item.bloco
+          ) === bloco &&
+          Number(
+            item.andar
+          ) === numero
+      );
+
+    const aging =
+      faixaAging(
+        dadosAndar?.aging_medio_dias
+      );
+
+    return (
+      <button
+        type="button"
+        key={
+          numero
+        }
+        onClick={() =>
+          setAndar(
+            numero
+          )
+        }
+        className={`min-h-11 rounded-lg px-3 py-1.5 text-left text-[10px] font-bold ring-1 transition ${
+          aging.classe
+        } ${
+          andar === numero
+            ? "outline outline-2 outline-offset-1 outline-violet-600"
+            : ""
+        }`}
+      >
+        <span className="block">
+          AD{" "}
+          {String(
+            numero
+          ).padStart(
+            2,
+            "0"
+          )}
+        </span>
+
+        <span className="mt-0.5 block text-[9px] font-black opacity-75">
+          {fmtAging(
+            dadosAndar?.aging_medio_dias
+          )}
+        </span>
+      </button>
+    );
+  }
+)}
               </div>
 
 
@@ -1602,11 +1710,19 @@ export default function ConsultaEstoqueV2Page() {
                 )}
 
                 <span className="ml-auto text-[9px] font-bold text-slate-500">
-                  Rua{" "}
-                  {fmtAging(
-                    ruaResumo?.aging_medio_dias
-                  )}
-                </span>
+  Rua{" "}
+  {fmtAging(
+    ruaResumo?.aging_medio_dias
+  )}{" "}
+  · Bloco{" "}
+  {fmtAging(
+    blocoResumo?.aging_medio_dias
+  )}{" "}
+  · Andar{" "}
+  {fmtAging(
+    andarResumo?.aging_medio_dias
+  )}
+</span>
               </div>
 
 
@@ -1671,18 +1787,23 @@ export default function ConsultaEstoqueV2Page() {
                                   );
 
                                 const status =
-                                  item?.status_endereco ||
-                                  "livre";
+  item?.status_endereco ||
+  "livre";
 
-                                const config =
-                                  STATUS_CONFIG[
-                                    status
-                                  ] ||
-                                  STATUS_CONFIG.livre;
+const config =
+  STATUS_CONFIG[
+    status
+  ] ||
+  STATUS_CONFIG.livre;
 
-                                const ativo =
-                                  selecionado?.endereco_id ===
-                                  item?.endereco_id;
+const aging =
+  faixaAging(
+    item?.aging_dias
+  );
+
+const ativo =
+  selecionado?.endereco_id ===
+  item?.endereco_id;
 
                                 return (
                                   <button
@@ -1696,13 +1817,13 @@ export default function ConsultaEstoqueV2Page() {
                                         item
                                       )
                                     }
-                                    className={`min-h-[66px] rounded-xl border p-2 text-left transition ${
-                                      config.cell
-                                    } ${
-                                      ativo
-                                        ? "ring-2 ring-violet-500 ring-offset-2"
-                                        : ""
-                                    } disabled:opacity-30`}
+                                    className={`min-h-[66px] rounded-xl p-2 text-left ring-1 transition ${
+  aging.classe
+} ${
+  ativo
+    ? "outline outline-2 outline-offset-2 outline-violet-600"
+    : ""
+} disabled:opacity-30`}
                                   >
                                     <div className="flex items-center justify-between gap-1">
                                       <span className="text-[11px] font-black">
