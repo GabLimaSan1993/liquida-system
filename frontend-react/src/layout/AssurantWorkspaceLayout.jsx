@@ -1079,9 +1079,7 @@ function Topbar({
             "
           />
 
-          <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">
-            V2
-          </div>
+
         </div>
 
         <div className="ml-auto flex items-center gap-2">
@@ -1089,7 +1087,7 @@ function Topbar({
             <span className="h-2 w-2 rounded-full bg-emerald-500" />
 
             <span className="text-[11px] font-bold text-violet-700">
-              Workspace piloto
+              Operação ativa
             </span>
           </div>
 

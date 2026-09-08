@@ -120,15 +120,13 @@ function DefaultRedirect() {
   }
 
   if (profile.area_tecnica === "assurant") {
-    const primeira = profile.telas_permitidas?.[0];
-
-    return (
-      <Navigate
-        to={primeira || "/sem-acesso"}
-        replace
-      />
-    );
-  }
+  return (
+    <Navigate
+      to="/v2/assurant"
+      replace
+    />
+  );
+}
 
   if (profile.telas_permitidas?.length > 0) {
     return <Navigate to={profile.telas_permitidas[0]} replace />;
