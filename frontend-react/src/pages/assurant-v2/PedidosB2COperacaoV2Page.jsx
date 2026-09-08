@@ -616,7 +616,7 @@ function TabPicking() {
 
   if (!grupoSel) {
     return (
-      <div className="space-y-4">
+      <div className="b2c-picking-grupos space-y-4">
         <div className="flex items-center justify-between">
           <p className="text-sm text-slate-500">Selecione um grupo de picking:</p>
           <button onClick={carregarGrupos} className="text-xs text-slate-500 hover:text-purple-700 font-semibold flex items-center gap-1">
@@ -640,7 +640,7 @@ function TabPicking() {
           <div className="text-center py-12 text-slate-400">
             <Package className="h-8 w-8 mx-auto mb-2 opacity-30" />
             <p className="text-sm">Nenhum grupo de picking em aberto.</p>
-            <p className="text-xs mt-1">Aloque 20 pedidos na aba Alocação para criar um grupo automaticamente.</p>
+            <p className="text-xs mt-1">Os grupos serão exibidos aqui conforme a alocação automática do sistema.</p>
           </div>
         ) : (
           <div className="grid gap-3">
@@ -744,7 +744,7 @@ function TabPicking() {
         </div>
       )}
 
-      <div className="space-y-4">
+      <div className="b2c-picking-grupo-aberto space-y-4">
         <div className="flex items-center gap-3 flex-wrap">
           <button onClick={() => { setGrupoSel(null); setPedidos([]); carregarGrupos(); }}
             className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1">
@@ -763,7 +763,7 @@ function TabPicking() {
           <KpiMini label="Em Análise" value={fmtN(emAnalise)}                 color="bg-orange-50 ring-orange-200 text-orange-700" />
         </div>
 
-        <Card>
+        <Card className="b2c-picking-bipagem">
           <div className="h-3 bg-slate-100 rounded-full overflow-hidden mb-4">
             <div className="h-full rounded-full bg-[#7F2D92] transition-all" style={{ width: `${pct}%` }} />
           </div>
@@ -869,7 +869,7 @@ function TabPicking() {
               {ruasSel.length > 0 && <span className="text-xs text-purple-600 font-semibold ml-1">{pedidosFiltrados.filter(p => p.status === "em_picking").length} pendentes nas ruas selecionadas</span>}
             </div>
           )}
-          <div className="space-y-2">
+          <div className="b2c-picking-pedidos-grid">
             {pedidosFiltrados.map(p => {
               const concluido = ["embalado", "faturado", "concluido"].includes(p.status);
               return (
@@ -1200,7 +1200,7 @@ function TabAnalise() {
             <p className="text-sm font-semibold text-emerald-600">Nenhum pedido em análise!</p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="b2c-analise-grid">
             {filtrados.map(p => (
               <Card key={p.id} className="ring-1 ring-orange-200">
                 <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -1521,7 +1521,7 @@ function TabFaturamento() {
             <p className="text-sm">{faturados.length === 0 ? "Nenhum grupo faturado ainda." : "Nenhum faturamento no período selecionado."}</p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="b2c-faturamento-grid">
             {fatFiltrados.map(g => {
               const aberto = expandido === g.id;
               const lista  = pedidosGrupo[g.id] || [];
@@ -1620,7 +1620,7 @@ function TabFaturamento() {
           <p className="text-xs mt-1">Os grupos aparecem aqui quando o picking é concluído.</p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="b2c-faturamento-grid">
           {gruposVis.map(g => {
             const fb = feedback[g.id];
             const aberto = expandido === g.id;
@@ -1949,7 +1949,7 @@ function TabAguardandoDefinicao() {
             <p className="text-sm">Nenhum pedido aguardando definição de produto.</p>
           </div>
         ) : (
-        <div className="space-y-3">
+        <div className="b2c-definicao-grid">
           <p className="text-xs text-slate-500 font-semibold">{fmtN(pedidos.length)} pedido{pedidos.length > 1 ? "s" : ""} aguardando definição</p>
           {pedidos.map(p => (
             <Card key={p.id} className="ring-1 ring-amber-200">
@@ -1998,8 +1998,8 @@ function TabAguardandoDefinicao() {
         concluidos.length === 0 ? (
           <div className="text-center py-12 text-slate-400"><CheckCircle className="h-8 w-8 mx-auto mb-2 opacity-30" /><p className="text-sm">Nenhum pedido definido ainda.</p></div>
         ) : (
-        <div className="space-y-2">
-          {concluidos.map(p => (
+        <div className="b2c-definicao-grid">
+  {concluidos.map(p => (
             <Card key={p.id} className="ring-1 ring-emerald-100">
               <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div className="flex-1 min-w-0">
@@ -2021,8 +2021,8 @@ function TabAguardandoDefinicao() {
         cancelados.length === 0 ? (
           <div className="text-center py-12 text-slate-400"><Ban className="h-8 w-8 mx-auto mb-2 opacity-30" /><p className="text-sm">Nenhum pedido cancelado.</p></div>
         ) : (
-        <div className="space-y-2">
-          {cancelados.map(p => (
+        <div className="b2c-definicao-grid">
+  {cancelados.map(p => (
             <Card key={p.id} className="ring-1 ring-red-100">
               <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div className="flex-1 min-w-0">
@@ -2095,10 +2095,10 @@ function TabAguardandoDefinicao() {
             <label className="block text-xs text-slate-600 mb-1">IMEI <span className="text-slate-400">(opcional)</span></label>
             <input value={imeiDef} onChange={e => setImeiDef(e.target.value)} placeholder="Bipe ou digite o IMEI"
               className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm mb-1.5 focus:ring-2 focus:ring-purple-200 outline-none" />
-            <p className="text-xs text-slate-400 mb-5 leading-relaxed">
-              Com IMEI: aloca direto neste aparelho, aguarda formar grupo.<br />
-              Sem IMEI: volta para alocação e o FIFO sugere pelo SKU{mesmoSku ? "" : " novo"}.
-            </p>
+          <p className="text-xs text-slate-400 mb-5 leading-relaxed">
+  Com IMEI: o aparelho definido segue automaticamente para formação do grupo.<br />
+  Sem IMEI: o sistema retorna o pedido para alocação automática e busca uma opção pelo SKU{mesmoSku ? "" : " novo"}.
+</p>
 
             <div className="flex gap-2 justify-end">
               <button onClick={fecharModal} className="px-4 py-2 rounded-xl text-sm font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 transition">Cancelar</button>
@@ -2308,7 +2308,7 @@ export default function PedidosB2COperacaoV2Page() {
         <span className="text-2xl">🛍️</span>
         <div>
           <h2 className="text-lg font-black text-slate-800">Pedidos B2C</h2>
-          <p className="text-xs text-slate-500">Alocação FIFO, picking, embalagem e faturamento · Marketplace</p>
+          <p className="text-xs text-slate-500">Picking, análise, definição de produto e faturamento · Marketplace</p>
         </div>
       </div>
 

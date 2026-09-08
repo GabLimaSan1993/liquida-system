@@ -503,7 +503,1076 @@ export default function B2CV2Page() {
 
   box-shadow: none !important;
 }
+/* =====================================================
+   B2C — PICKING / SELEÇÃO DE GRUPOS
+====================================================== */
 
+.b2c-v2 .b2c-picking-grupos {
+  padding-top: 2px;
+}
+
+
+/* Cabeçalho da fila */
+.b2c-v2
+  .b2c-picking-grupos
+  > .flex.items-center.justify-between {
+  min-height: 48px;
+
+  padding: 0 4px 8px;
+
+  border-bottom: 1px solid #e8edf3;
+}
+
+
+.b2c-v2
+  .b2c-picking-grupos
+  > .flex.items-center.justify-between
+  > p {
+  color: #475569;
+
+  font-size: 12px;
+  font-weight: 700;
+}
+
+
+/* Atualizar */
+.b2c-v2
+  .b2c-picking-grupos
+  > .flex.items-center.justify-between
+  > button {
+  min-height: 34px;
+
+  padding: 0 11px;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+
+  background: #ffffff;
+
+  color: #64748b !important;
+
+  font-size: 10px;
+  font-weight: 700;
+
+  box-shadow: none !important;
+}
+
+
+.b2c-v2
+  .b2c-picking-grupos
+  > .flex.items-center.justify-between
+  > button:hover {
+  border-color: #c9bdd3;
+
+  background: #f8fafc !important;
+
+  color: #211136 !important;
+}
+
+
+/* Grid de grupos */
+.b2c-v2
+  .b2c-picking-grupos
+  > .grid.gap-3 {
+  display: grid;
+
+  grid-template-columns:
+    repeat(4, minmax(0, 1fr));
+
+  gap: 12px;
+}
+
+
+/* Notebook / tela média */
+@media (max-width: 1450px) {
+  .b2c-v2
+    .b2c-picking-grupos
+    > .grid.gap-3 {
+    grid-template-columns:
+      repeat(3, minmax(0, 1fr));
+  }
+}
+
+
+/* Tablet / janela menor */
+@media (max-width: 980px) {
+  .b2c-v2
+    .b2c-picking-grupos
+    > .grid.gap-3 {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+}
+
+
+/* Mobile */
+@media (max-width: 640px) {
+  .b2c-v2
+    .b2c-picking-grupos
+    > .grid.gap-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* Cards dos grupos */
+.b2c-v2
+  .b2c-picking-grupos
+  > .grid.gap-3
+  > div {
+  min-height: 118px;
+
+  padding: 16px !important;
+
+  border-radius: 14px !important;
+
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.03) !important;
+}
+
+
+/* Grupo disponível */
+.b2c-v2
+  .b2c-picking-grupos
+  > .grid.gap-3
+  > div[class*="bg-white"] {
+  border-color: #e2e8f0 !important;
+
+  background: #ffffff !important;
+}
+
+
+.b2c-v2
+  .b2c-picking-grupos
+  > .grid.gap-3
+  > div[class*="bg-white"]:hover {
+  border-color: #bcaec9 !important;
+
+  background: #faf9fb !important;
+
+  box-shadow:
+    0 4px 12px rgba(33, 17, 54, 0.06) !important;
+}
+
+
+/* Título Grupo # */
+.b2c-v2
+  .b2c-picking-grupos
+  .font-black.text-slate-800 {
+  color: #172033 !important;
+
+  font-size: 13px;
+  font-weight: 850;
+}
+
+
+/* Marketplace */
+.b2c-v2
+  .b2c-picking-grupos
+  span[class*="bg-purple-50"] {
+  border-color: #ded6e6 !important;
+
+  background: #f6f3f8 !important;
+
+  color: #2a1747 !important;
+}
+
+
+/* Barra de progresso */
+.b2c-v2
+  .b2c-picking-grupos
+  .h-2.bg-slate-100 {
+  height: 5px !important;
+
+  margin-top: 2px;
+
+  background: #eef2f6 !important;
+}
+
+
+.b2c-v2
+  .b2c-picking-grupos
+  .h-2.bg-slate-100
+  > div {
+  background:
+    linear-gradient(
+      90deg,
+      #2a1747 0%,
+      #211136 100%
+    ) !important;
+}
+
+/* =====================================================
+   B2C — PICKING / GRUPO ABERTO
+====================================================== */
+
+.b2c-v2 .b2c-picking-grupo-aberto {
+  padding-top: 2px;
+}
+
+
+/* Cabeçalho do grupo */
+.b2c-v2
+  .b2c-picking-grupo-aberto
+  > .flex.items-center.gap-3.flex-wrap {
+  min-height: 64px;
+
+  padding: 12px 14px;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+
+  background: #ffffff;
+
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.03);
+}
+
+
+/* Botão trocar grupo */
+.b2c-v2
+  .b2c-picking-grupo-aberto
+  > .flex.items-center.gap-3.flex-wrap
+  > button {
+  min-height: 32px;
+
+  padding: 0 10px;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+
+  background: #f8fafc;
+
+  color: #64748b !important;
+
+  font-size: 10px;
+  font-weight: 700;
+}
+
+
+.b2c-v2
+  .b2c-picking-grupo-aberto
+  > .flex.items-center.gap-3.flex-wrap
+  > button:hover {
+  border-color: #c9bdd3;
+
+  background: #f6f3f8 !important;
+
+  color: #211136 !important;
+}
+
+
+/* Nome do grupo */
+.b2c-v2
+  .b2c-picking-grupo-aberto
+  > .flex.items-center.gap-3.flex-wrap
+  h3 {
+  color: #172033 !important;
+
+  font-size: 14px !important;
+  font-weight: 850 !important;
+}
+
+
+/* Quantidade de pedidos */
+.b2c-v2
+  .b2c-picking-grupo-aberto
+  > .flex.items-center.gap-3.flex-wrap
+  p {
+  margin-top: 2px;
+
+  color: #64748b !important;
+
+  font-size: 10px !important;
+  font-weight: 600;
+}
+
+
+/* =====================================================
+   KPIs DO GRUPO
+====================================================== */
+
+.b2c-v2
+  .b2c-picking-grupo-aberto
+  > .grid.grid-cols-3.gap-3 {
+  gap: 10px;
+}
+
+
+.b2c-v2
+  .b2c-picking-grupo-aberto
+  > .grid.grid-cols-3.gap-3
+  > div {
+  min-height: 82px;
+
+  padding: 13px 14px !important;
+
+  border-radius: 12px !important;
+
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.02) !important;
+}
+
+
+/* Valor principal */
+.b2c-v2
+  .b2c-picking-grupo-aberto
+  > .grid.grid-cols-3.gap-3
+  .text-2xl.font-black {
+  font-size: 20px !important;
+  line-height: 1.1;
+
+  letter-spacing: -0.025em;
+}
+
+
+/* Label */
+.b2c-v2
+  .b2c-picking-grupo-aberto
+  > .grid.grid-cols-3.gap-3
+  .text-xs.font-semibold {
+  margin-top: 4px;
+
+  font-size: 10px !important;
+  font-weight: 750 !important;
+}
+
+
+/* Subtexto / percentual */
+.b2c-v2
+  .b2c-picking-grupo-aberto
+  > .grid.grid-cols-3.gap-3
+  .opacity-60 {
+  font-size: 10px !important;
+}
+
+
+@media (max-width: 720px) {
+  .b2c-v2
+    .b2c-picking-grupo-aberto
+    > .grid.grid-cols-3.gap-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* =====================================================
+   B2C — PICKING / BIPAGEM
+====================================================== */
+
+.b2c-v2 .b2c-picking-bipagem {
+  padding: 18px !important;
+
+  border: 1px solid #ded6e6 !important;
+  border-radius: 16px !important;
+
+  background: #ffffff !important;
+
+  box-shadow:
+    0 2px 8px rgba(33, 17, 54, 0.04) !important;
+}
+
+
+/* Barra de progresso */
+.b2c-v2
+  .b2c-picking-bipagem
+  > .h-3.bg-slate-100 {
+  height: 6px !important;
+
+  margin-bottom: 16px !important;
+
+  background: #eef2f6 !important;
+}
+
+
+.b2c-v2
+  .b2c-picking-bipagem
+  > .h-3.bg-slate-100
+  > div {
+  background:
+    linear-gradient(
+      90deg,
+      #2a1747 0%,
+      #211136 100%
+    ) !important;
+}
+
+
+/* Título Bipar IMEI */
+.b2c-v2
+  .b2c-picking-bipagem
+  > h3 {
+  margin-bottom: 10px !important;
+
+  color: #172033 !important;
+
+  font-size: 12px !important;
+  font-weight: 850 !important;
+}
+
+
+/* Linha de bipagem */
+.b2c-v2
+  .b2c-picking-bipagem
+  > form {
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 1fr) auto;
+
+  gap: 10px;
+}
+
+
+/* Campo de IMEI */
+.b2c-v2
+  .b2c-picking-bipagem
+  > form
+  input {
+  min-height: 46px;
+
+  padding-left: 14px;
+  padding-right: 14px;
+
+  border: 1px solid #dbe1e8 !important;
+  border-radius: 11px !important;
+
+  background: #fbfcfd !important;
+
+  font-size: 13px !important;
+  font-weight: 650 !important;
+}
+
+
+/* Botão confirmar */
+.b2c-v2
+  .b2c-picking-bipagem
+  > form
+  button {
+  min-width: 132px;
+  min-height: 46px;
+
+  padding-left: 18px !important;
+  padding-right: 18px !important;
+
+  border-radius: 11px !important;
+
+  background:
+    linear-gradient(
+      180deg,
+      #2a1747 0%,
+      #211136 100%
+    ) !important;
+
+  font-size: 11px !important;
+  font-weight: 800 !important;
+
+  box-shadow:
+    0 2px 5px rgba(33, 17, 54, 0.16) !important;
+}
+
+
+/* Painel de conferência */
+.b2c-v2
+  .b2c-picking-bipagem
+  > .mt-4.rounded-2xl {
+  margin-top: 14px !important;
+
+  padding: 16px !important;
+
+  border: 1px solid #ded6e6 !important;
+  border-radius: 13px !important;
+
+  background: #f8f6fa !important;
+
+  box-shadow: none !important;
+}
+
+
+@media (max-width: 720px) {
+  .b2c-v2
+    .b2c-picking-bipagem
+    > form {
+    grid-template-columns: 1fr;
+  }
+
+  .b2c-v2
+    .b2c-picking-bipagem
+    > form
+    button {
+    width: 100%;
+  }
+}
+
+/* =====================================================
+   B2C — PICKING / PEDIDOS DO GRUPO EM GRADE
+====================================================== */
+
+.b2c-v2
+  .b2c-picking-pedidos-grid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(4, minmax(0, 1fr));
+
+  gap: 10px;
+}
+
+
+/* Card de cada pedido */
+.b2c-v2
+  .b2c-picking-pedidos-grid
+  > div {
+  min-width: 0;
+  min-height: 132px;
+
+  display: flex !important;
+  flex-direction: column;
+  align-items: stretch !important;
+  justify-content: space-between !important;
+
+  gap: 10px !important;
+
+  padding: 13px 14px !important;
+
+  border-radius: 12px !important;
+
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.025) !important;
+}
+
+
+/* Conteúdo principal do pedido */
+.b2c-v2
+  .b2c-picking-pedidos-grid
+  > div
+  > .flex-1 {
+  width: 100%;
+}
+
+
+/* Pedido */
+.b2c-v2
+  .b2c-picking-pedidos-grid
+  .font-black.text-slate-800.text-xs {
+  font-size: 11px !important;
+}
+
+
+/* IMEI */
+.b2c-v2
+  .b2c-picking-pedidos-grid
+  .font-mono.text-xs {
+  font-size: 10px !important;
+}
+
+
+/* Produto */
+.b2c-v2
+  .b2c-picking-pedidos-grid
+  p {
+  font-size: 10px !important;
+
+  line-height: 1.35;
+}
+
+
+/* Localização e voucher */
+.b2c-v2
+  .b2c-picking-pedidos-grid
+  span[class*="rounded-lg"] {
+  font-size: 9px !important;
+}
+
+
+/* Status + Não localizado */
+.b2c-v2
+  .b2c-picking-pedidos-grid
+  > div
+  > .flex.items-center.gap-2.shrink-0 {
+  width: 100%;
+
+  justify-content: space-between;
+
+  flex-wrap: wrap;
+}
+
+
+/* Botão Não localizado */
+.b2c-v2
+  .b2c-picking-pedidos-grid
+  button {
+  min-height: 28px;
+
+  padding: 0 9px !important;
+
+  border-radius: 8px !important;
+
+  font-size: 9px !important;
+}
+
+
+/* Notebook */
+@media (max-width: 1450px) {
+  .b2c-v2
+    .b2c-picking-pedidos-grid {
+    grid-template-columns:
+      repeat(3, minmax(0, 1fr));
+  }
+}
+
+
+/* Tela menor */
+@media (max-width: 980px) {
+  .b2c-v2
+    .b2c-picking-pedidos-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+}
+
+
+/* Mobile */
+@media (max-width: 640px) {
+  .b2c-v2
+    .b2c-picking-pedidos-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* =====================================================
+   B2C — EM ANÁLISE / PEDIDOS EM GRADE
+====================================================== */
+
+.b2c-v2
+  .b2c-analise-grid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(4, minmax(0, 1fr));
+
+  gap: 12px;
+}
+
+
+/* Card */
+.b2c-v2
+  .b2c-analise-grid
+  > .bg-white.rounded-2xl {
+  min-width: 0;
+  min-height: 210px;
+
+  padding: 15px !important;
+
+  border-radius: 14px !important;
+
+  box-shadow:
+    0 1px 3px rgba(15, 23, 42, 0.03) !important;
+}
+
+
+/* Conteúdo interno vira vertical */
+.b2c-v2
+  .b2c-analise-grid
+  > .bg-white.rounded-2xl
+  > .flex.items-start.justify-between {
+  height: 100%;
+
+  display: flex;
+
+  flex-direction: column;
+
+  align-items: stretch;
+
+  justify-content: space-between;
+
+  gap: 12px;
+}
+
+
+/* Área das informações */
+.b2c-v2
+  .b2c-analise-grid
+  .flex-1.min-w-0 {
+  width: 100%;
+}
+
+
+/* Número do pedido */
+.b2c-v2
+  .b2c-analise-grid
+  .font-black.text-slate-800.text-sm {
+  font-size: 12px !important;
+}
+
+
+/* Produto */
+.b2c-v2
+  .b2c-analise-grid
+  p.text-sm {
+  font-size: 11px !important;
+
+  line-height: 1.35;
+}
+
+
+/* Informações secundárias */
+.b2c-v2
+  .b2c-analise-grid
+  p.text-xs,
+.b2c-v2
+  .b2c-analise-grid
+  span.text-xs {
+  font-size: 9px !important;
+
+  line-height: 1.35;
+}
+
+
+/* Botão Resolver */
+.b2c-v2
+  .b2c-analise-grid
+  > .bg-white.rounded-2xl
+  > .flex.items-start.justify-between
+  > button {
+  width: 100%;
+  min-height: 34px;
+
+  justify-content: center;
+
+  border-radius: 9px !important;
+
+  font-size: 10px !important;
+  font-weight: 800 !important;
+}
+
+
+/* Notebook */
+@media (max-width: 1450px) {
+  .b2c-v2
+    .b2c-analise-grid {
+    grid-template-columns:
+      repeat(3, minmax(0, 1fr));
+  }
+}
+
+
+/* Tela menor */
+@media (max-width: 980px) {
+  .b2c-v2
+    .b2c-analise-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+}
+
+
+/* Mobile */
+@media (max-width: 640px) {
+  .b2c-v2
+    .b2c-analise-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* =====================================================
+   B2C — AGUARDANDO DEFINIÇÃO / GRADE
+====================================================== */
+
+.b2c-v2
+  .b2c-definicao-grid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(4, minmax(0, 1fr));
+
+  gap: 12px;
+}
+
+
+/* Texto de quantidade dos pendentes ocupa a linha inteira */
+.b2c-v2
+  .b2c-definicao-grid
+  > p:first-child {
+  grid-column: 1 / -1;
+
+  margin-bottom: 0;
+}
+
+
+/* Cards */
+.b2c-v2
+  .b2c-definicao-grid
+  > .bg-white.rounded-2xl {
+  min-width: 0;
+  min-height: 190px;
+
+  padding: 15px !important;
+
+  border-radius: 14px !important;
+
+  box-shadow:
+    0 1px 3px rgba(15, 23, 42, 0.03) !important;
+}
+
+
+/* Estrutura interna vertical */
+.b2c-v2
+  .b2c-definicao-grid
+  > .bg-white.rounded-2xl
+  > .flex.items-start.justify-between {
+  height: 100%;
+
+  display: flex;
+
+  flex-direction: column;
+
+  align-items: stretch;
+
+  justify-content: space-between;
+
+  gap: 12px;
+}
+
+
+/* Informações */
+.b2c-v2
+  .b2c-definicao-grid
+  .flex-1.min-w-0 {
+  width: 100%;
+}
+
+
+/* Número do pedido */
+.b2c-v2
+  .b2c-definicao-grid
+  .font-black.text-slate-800.text-sm {
+  font-size: 12px !important;
+}
+
+
+/* Produto */
+.b2c-v2
+  .b2c-definicao-grid
+  p.text-sm {
+  font-size: 11px !important;
+
+  line-height: 1.35;
+}
+
+
+/* Informações menores */
+.b2c-v2
+  .b2c-definicao-grid
+  p.text-xs,
+.b2c-v2
+  .b2c-definicao-grid
+  span.text-xs {
+  font-size: 9px !important;
+}
+
+
+/* Área dos botões */
+.b2c-v2
+  .b2c-definicao-grid
+  .flex.items-center.gap-2.shrink-0 {
+  width: 100%;
+
+  display: grid;
+
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr));
+
+  gap: 6px;
+}
+
+
+/* Botões dos pendentes */
+.b2c-v2
+  .b2c-definicao-grid
+  .flex.items-center.gap-2.shrink-0
+  button {
+  min-width: 0;
+  min-height: 34px;
+
+  justify-content: center;
+
+  padding-left: 7px !important;
+  padding-right: 7px !important;
+
+  border-radius: 9px !important;
+
+  font-size: 9px !important;
+}
+
+
+/* Notebook */
+@media (max-width: 1450px) {
+  .b2c-v2
+    .b2c-definicao-grid {
+    grid-template-columns:
+      repeat(3, minmax(0, 1fr));
+  }
+}
+
+
+/* Tela menor */
+@media (max-width: 980px) {
+  .b2c-v2
+    .b2c-definicao-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+}
+
+
+/* Mobile */
+@media (max-width: 640px) {
+  .b2c-v2
+    .b2c-definicao-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .b2c-v2
+    .b2c-definicao-grid
+    .flex.items-center.gap-2.shrink-0 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* =====================================================
+   B2C — FATURAMENTO / GRUPOS EM GRADE
+====================================================== */
+
+.b2c-v2
+  .b2c-faturamento-grid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(4, minmax(0, 1fr));
+
+  gap: 12px;
+}
+
+
+/* Card de grupo */
+.b2c-v2
+  .b2c-faturamento-grid
+  > .bg-white.rounded-2xl {
+  min-width: 0;
+  min-height: 190px;
+
+  display: flex;
+  flex-direction: column;
+
+  padding: 15px !important;
+
+  border-radius: 14px !important;
+
+  box-shadow:
+    0 1px 3px rgba(15, 23, 42, 0.03) !important;
+}
+
+
+/* Cabeçalho */
+.b2c-v2
+  .b2c-faturamento-grid
+  > .bg-white.rounded-2xl
+  > .flex.items-start.justify-between {
+  width: 100%;
+
+  gap: 10px !important;
+}
+
+
+/* Nome Grupo */
+.b2c-v2
+  .b2c-faturamento-grid
+  .font-black.text-slate-800 {
+  font-size: 12px !important;
+}
+
+
+/* Informações */
+.b2c-v2
+  .b2c-faturamento-grid
+  .text-xs {
+  font-size: 9px !important;
+
+  line-height: 1.4;
+}
+
+
+/* Área de ações */
+.b2c-v2
+  .b2c-faturamento-grid
+  > .bg-white.rounded-2xl
+  > .flex.items-center.gap-2.flex-wrap {
+  margin-top: auto;
+
+  padding-top: 12px;
+
+  display: grid;
+
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+
+  gap: 7px;
+}
+
+
+/* Botões */
+.b2c-v2
+  .b2c-faturamento-grid
+  button {
+  min-width: 0;
+  min-height: 34px;
+
+  justify-content: center;
+
+  padding-left: 8px !important;
+  padding-right: 8px !important;
+
+  border-radius: 9px !important;
+
+  font-size: 9px !important;
+}
+
+
+/* Conteúdo expandido */
+.b2c-v2
+  .b2c-faturamento-grid
+  .border-t.border-slate-100 {
+  width: 100%;
+}
+
+
+/* Notebook */
+@media (max-width: 1450px) {
+  .b2c-v2
+    .b2c-faturamento-grid {
+    grid-template-columns:
+      repeat(3, minmax(0, 1fr));
+  }
+}
+
+
+/* Tela menor */
+@media (max-width: 980px) {
+  .b2c-v2
+    .b2c-faturamento-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+}
+
+
+/* Mobile */
+@media (max-width: 640px) {
+  .b2c-v2
+    .b2c-faturamento-grid {
+    grid-template-columns: 1fr;
+  }
+}
       `}</style>
 
       <PedidosB2COperacaoV2Page />
