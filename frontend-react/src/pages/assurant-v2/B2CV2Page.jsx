@@ -1,4 +1,4 @@
-import PedidosB2CPage from "../PedidosB2CPage.jsx";
+import PedidosB2COperacaoV2Page from "./PedidosB2COperacaoV2Page.jsx";
 
 export default function B2CV2Page() {
   return (
@@ -506,7 +506,7 @@ export default function B2CV2Page() {
 
       `}</style>
 
-      <PedidosB2CPage />
+      <PedidosB2COperacaoV2Page />
     </div>
   );
 }
