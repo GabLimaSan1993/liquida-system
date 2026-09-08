@@ -139,9 +139,44 @@ const MENU_GROUPS = [
       {
   label: "B2C",
   icon: ShoppingCart,
-  to: "/v2/assurant/b2c",
-  exact: true,
   enabled: true,
+
+  children: [
+    {
+      label: "Pedidos",
+      icon: Search,
+      to: "/v2/assurant/b2c",
+      exact: true,
+    },
+
+    {
+      label: "Embalagem",
+      icon: Package,
+      to: "/v2/assurant/b2c/embalagem",
+      exact: true,
+    },
+
+    {
+      label: "Expedição",
+      icon: Truck,
+      to: "/v2/assurant/b2c/expedicao",
+      exact: true,
+    },
+
+    {
+      label: "Etiquetas",
+      icon: FileText,
+      to: "/v2/assurant/b2c/etiquetas",
+      exact: true,
+    },
+
+    {
+      label: "Gestão B2C",
+      icon: BarChart3,
+      to: "/v2/assurant/b2c/gestao",
+      exact: true,
+    },
+  ],
 },
     ],
   },

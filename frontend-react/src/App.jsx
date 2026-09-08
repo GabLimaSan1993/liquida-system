@@ -60,6 +60,7 @@ import InventarioV2Page from "./pages/assurant-v2/InventarioV2Page.jsx";
 import CargaInicialV2Page from "./pages/assurant-v2/CargaInicialV2Page.jsx";
 import B2BV2Page from "./pages/assurant-v2/B2BV2Page.jsx";
 import B2CV2Page from "./pages/assurant-v2/B2CV2Page.jsx";
+import B2CFluxoComplementarV2Page from "./pages/assurant-v2/B2CFluxoComplementarV2Page.jsx";
 
 function ProtectedRoute({ tela, children }) {
   const { user, loading, hasAccess } = useAuth();
@@ -281,6 +282,34 @@ export default function App() {
   path="b2c"
   element={
     <B2CV2Page />
+  }
+/>
+
+<Route
+  path="b2c/embalagem"
+  element={
+    <B2CFluxoComplementarV2Page tipo="embalagem" />
+  }
+/>
+
+<Route
+  path="b2c/expedicao"
+  element={
+    <B2CFluxoComplementarV2Page tipo="expedicao" />
+  }
+/>
+
+<Route
+  path="b2c/etiquetas"
+  element={
+    <B2CFluxoComplementarV2Page tipo="etiquetas" />
+  }
+/>
+
+<Route
+  path="b2c/gestao"
+  element={
+    <B2CFluxoComplementarV2Page tipo="gestao" />
   }
 />
 
