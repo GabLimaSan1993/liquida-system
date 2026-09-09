@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 
 import {
+  Navigate,
   NavLink,
   Outlet,
   useLocation,
@@ -244,10 +245,18 @@ const MENU_GROUPS = [
   },
 
   {
-    label: "GESTÃO",
-    items: [
-      {
-        label: "Indicadores",
+  label: "GESTÃO",
+  items: [
+    {
+      label: "Usuários",
+      icon: User,
+      to: "/v2/assurant/usuarios",
+      exact: true,
+      enabled: true,
+    },
+
+    {
+      label: "Indicadores",
         icon: BarChart3,
         enabled: false,
       },
@@ -840,6 +849,39 @@ function SidebarContent({
   pathname,
   mobile = false,
 }) {
+  const podeVerRota = (to) =>
+    !to ||
+    profile?.is_master ||
+    profile?.telas_permitidas?.includes(to);
+
+  const menuGroupsVisiveis = MENU_GROUPS
+    .map((group) => ({
+      ...group,
+      items: group.items
+        .map((item) => {
+          if (item.children?.length) {
+            return {
+              ...item,
+              children: item.children.filter((child) =>
+                podeVerRota(child.to)
+              ),
+            };
+          }
+
+          return item;
+        })
+        .filter((item) => {
+          if (!item.enabled) return true;
+
+          if (item.children) {
+            return item.children.length > 0;
+          }
+
+          return podeVerRota(item.to);
+        }),
+    }))
+    .filter((group) => group.items.length > 0);
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div
@@ -942,7 +984,7 @@ function SidebarContent({
         `}
       >
         <div className="space-y-5">
-          {MENU_GROUPS.map(
+          {menuGroupsVisiveis.map(
   (
     group,
     groupIndex
@@ -2523,6 +2565,7 @@ function AssurantDashboard({
 export default function AssurantWorkspaceLayout() {
   const {
     profile,
+    hasAccess,
   } = useAuth();
 
   const location =
@@ -2607,12 +2650,36 @@ export default function AssurantWorkspaceLayout() {
   }
 
   async function handleLogout() {
-    await signOut();
+  await signOut();
 
-    navigate(
-      "/login"
-    );
-  }
+  navigate(
+    "/login"
+  );
+}
+
+const rotaAtualProtegida =
+  location.pathname !== "/v2/assurant";
+
+const rotaSomenteMaster =
+  location.pathname === "/v2/assurant/usuarios";
+
+if (
+  !profile?.is_master &&
+  (
+    rotaSomenteMaster ||
+    (
+      rotaAtualProtegida &&
+      !hasAccess(location.pathname)
+    )
+  )
+) {
+  return (
+    <Navigate
+      to="/sem-acesso"
+      replace
+    />
+  );
+}
 
   return (
     <div className="min-h-screen bg-[#F7F7FA] text-slate-900">

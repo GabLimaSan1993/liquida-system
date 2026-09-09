@@ -3,6 +3,30 @@ import { Plus, X, Shield } from "lucide-react";
 import { fetchAllProfiles, createUser, updateUserPermissions } from "../services/authService";
 
 const TELAS = [
+    { id: "/v2/assurant", label: "Assurant V2 — Acesso ao Workspace", grupo: "Assurant V2" },
+
+  { id: "/v2/assurant/recebimento", label: "Recebimento — Lojas", grupo: "Assurant V2 — Operação" },
+  { id: "/v2/assurant/recebimento/gestao", label: "Recebimento — Gestão", grupo: "Assurant V2 — Operação" },
+
+  { id: "/v2/assurant/triagens/funcional", label: "Triagem Funcional", grupo: "Assurant V2 — Triagens" },
+  { id: "/v2/assurant/triagens/laudo", label: "Laudo", grupo: "Assurant V2 — Triagens" },
+  { id: "/v2/assurant/triagens/cosmetica", label: "Triagem Cosmética", grupo: "Assurant V2 — Triagens" },
+  { id: "/v2/assurant/triagens/oracle", label: "Entrada Oracle", grupo: "Assurant V2 — Triagens" },
+
+  { id: "/v2/assurant/b2b", label: "B2B", grupo: "Assurant V2 — Operação" },
+
+  { id: "/v2/assurant/b2c", label: "B2C — Pedidos", grupo: "Assurant V2 — B2C" },
+  { id: "/v2/assurant/b2c/embalagem", label: "B2C — Embalagem", grupo: "Assurant V2 — B2C" },
+  { id: "/v2/assurant/b2c/expedicao", label: "B2C — Expedição", grupo: "Assurant V2 — B2C" },
+  { id: "/v2/assurant/b2c/etiquetas", label: "B2C — Etiquetas", grupo: "Assurant V2 — B2C" },
+  { id: "/v2/assurant/b2c/gestao", label: "B2C — Gestão", grupo: "Assurant V2 — B2C" },
+
+  { id: "/v2/assurant/estoque/armazenagem", label: "Estoque — Armazenagem", grupo: "Assurant V2 — Estoque" },
+  { id: "/v2/assurant/estoque/consulta", label: "Estoque — Consulta", grupo: "Assurant V2 — Estoque" },
+  { id: "/v2/assurant/estoque/inventario", label: "Estoque — Inventário", grupo: "Assurant V2 — Estoque" },
+  { id: "/v2/assurant/estoque/carga-inicial", label: "Estoque — Carga Inicial", grupo: "Assurant V2 — Estoque" },
+
+  { id: "/v2/assurant/uploads", label: "Dados — Uploads", grupo: "Assurant V2 — Dados" },
   { id: "/upload",                        label: "Uploads",                          grupo: "Geral" },
   { id: "/analise-entrada",               label: "Análise de Entrada",               grupo: "Geral" },
   { id: "/faturamento",                   label: "Faturamento",                      grupo: "Geral" },
