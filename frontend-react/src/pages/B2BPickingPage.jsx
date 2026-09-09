@@ -1791,7 +1791,10 @@ function TabConcluidos({ onVoltar }) {
 // ══════════════════════════════════════════════════════════
 // PÁGINA PRINCIPAL
 // ══════════════════════════════════════════════════════════
-export default function B2BPickingPage({ abaInicial = "picking" }) {
+export default function B2BPickingPage({
+  abaInicial = "picking",
+  usarPermissoesV2 = false,
+}) {
   const { profile }                         = useAuth();
   const [pedidos, setPedidos]               = useState([]);
   const [verConcluidos, setVerConcluidos]   = useState(false);
@@ -1799,11 +1802,39 @@ export default function B2BPickingPage({ abaInicial = "picking" }) {
   const [itensAnalise, setItensAnalise]     = useState({});
 
   const TODAS_ABAS = [
-    { key: "picking",   label: "Picking",     icon: Search,      tela: "/b2b/picking"     },
-    { key: "analise",   label: "Em Análise",  icon: AlertCircle, tela: "/b2b/picking"     },
-    { key: "embalagem", label: "Embalagem",   icon: Box,         tela: "/b2b/embalagem"   },
-    { key: "pedidos",   label: "Faturamento", icon: BarChart3,   tela: "/b2b/faturamento" },
-  ];
+  {
+    key: "picking",
+    label: "Picking",
+    icon: Search,
+    tela: usarPermissoesV2
+      ? "/v2/assurant/b2b/picking"
+      : "/b2b/picking",
+  },
+  {
+    key: "analise",
+    label: "Em Análise",
+    icon: AlertCircle,
+    tela: usarPermissoesV2
+      ? "/v2/assurant/b2b/picking"
+      : "/b2b/picking",
+  },
+  {
+    key: "embalagem",
+    label: "Embalagem",
+    icon: Box,
+    tela: usarPermissoesV2
+      ? "/v2/assurant/b2b/embalagem"
+      : "/b2b/embalagem",
+  },
+  {
+    key: "pedidos",
+    label: "Faturamento",
+    icon: BarChart3,
+    tela: usarPermissoesV2
+      ? "/v2/assurant/b2b/faturamento"
+      : "/b2b/faturamento",
+  },
+];
 
   const ABAS = profile?.is_master
     ? TODAS_ABAS

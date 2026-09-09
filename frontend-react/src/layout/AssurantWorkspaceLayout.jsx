@@ -132,9 +132,37 @@ const MENU_GROUPS = [
       {
   label: "B2B",
   icon: Boxes,
-  to: "/v2/assurant/b2b",
-  exact: true,
   enabled: true,
+
+  children: [
+    {
+      label: "Picking",
+      icon: Boxes,
+      to: "/v2/assurant/b2b/picking",
+      exact: true,
+    },
+
+    {
+      label: "Embalagem",
+      icon: Package,
+      to: "/v2/assurant/b2b/embalagem",
+      exact: true,
+    },
+
+    {
+      label: "Faturamento",
+      icon: FileText,
+      to: "/v2/assurant/b2b/faturamento",
+      exact: true,
+    },
+
+    {
+      label: "Gestão B2B",
+      icon: BarChart3,
+      to: "/v2/assurant/b2b/gestao",
+      exact: true,
+    },
+  ],
 },
 
       {

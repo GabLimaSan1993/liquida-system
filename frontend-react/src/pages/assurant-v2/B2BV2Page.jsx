@@ -1,6 +1,11 @@
 import B2BPickingPage from "../B2BPickingPage.jsx";
+import B2BPainelGestorPage from "../B2BPainelGestorPage.jsx";
 
-export default function B2BV2Page() {
+export default function B2BV2Page({ tipo = "picking" }) {
+  const abaInicial =
+    tipo === "faturamento"
+      ? "pedidos"
+      : tipo;
   return (
     <div className="b2b-v2">
       <style>{`
@@ -1405,7 +1410,14 @@ export default function B2BV2Page() {
 }
       `}</style>
 
-      <B2BPickingPage abaInicial="picking" />
+      {tipo === "gestao" ? (
+  <B2BPainelGestorPage />
+) : (
+  <B2BPickingPage
+  abaInicial={abaInicial}
+  usarPermissoesV2
+/>
+)}
     </div>
   );
 }

@@ -272,9 +272,30 @@ export default function App() {
 />
 
 <Route
-  path="b2b"
+  path="b2b/picking"
   element={
-    <B2BV2Page />
+    <B2BV2Page tipo="picking" />
+  }
+/>
+
+<Route
+  path="b2b/embalagem"
+  element={
+    <B2BV2Page tipo="embalagem" />
+  }
+/>
+
+<Route
+  path="b2b/faturamento"
+  element={
+    <B2BV2Page tipo="faturamento" />
+  }
+/>
+
+<Route
+  path="b2b/gestao"
+  element={
+    <B2BV2Page tipo="gestao" />
   }
 />
 

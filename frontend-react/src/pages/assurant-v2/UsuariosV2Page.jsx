@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -21,9 +21,17 @@ const TELAS_V2 = [
       { id: "/v2/assurant", label: "Visão Geral" },
       { id: "/v2/assurant/recebimento", label: "Recebimento Lojas" },
       { id: "/v2/assurant/recebimento/gestao", label: "Gestão de Recebimento" },
-      { id: "/v2/assurant/b2b", label: "B2B" },
     ],
   },
+  {
+  grupo: "B2B",
+  telas: [
+    { id: "/v2/assurant/b2b/picking", label: "Picking" },
+    { id: "/v2/assurant/b2b/embalagem", label: "Embalagem" },
+    { id: "/v2/assurant/b2b/faturamento", label: "Faturamento" },
+    { id: "/v2/assurant/b2b/gestao", label: "Gestão B2B" },
+  ],
+},
   {
     grupo: "TRIAGENS",
     telas: [
@@ -220,11 +228,11 @@ function UsuarioExpandido({ usuario, onSaved }) {
       }
 
       await updateUserPermissions(
-        usuario.id,
-        novasTelas,
-        isMaster,
-        usuario.area_tecnica || "assurant"
-      );
+  usuario.id,
+  novasTelas,
+  isMaster,
+  isMaster ? "" : "assurant"
+);
 
       setStatus("Permissões salvas.");
       await onSaved();
@@ -378,7 +386,13 @@ export default function UsuariosV2Page() {
 
       const data = await fetchAllProfiles();
 
-      setUsuarios(data || []);
+setUsuarios(
+  (data || []).filter(
+    (usuario) =>
+      usuario.is_master ||
+      usuario.area_tecnica === "assurant"
+  )
+);
       setUpdatedAt(new Date());
     } catch (error) {
       setErro(error?.message || "Erro ao carregar usuários.");
@@ -572,7 +586,7 @@ export default function UsuariosV2Page() {
                     const telasLiberadas = countV2Permissions(usuario);
 
                     return (
-                      <>
+  <Fragment key={usuario.id}>
                         <tr
                           key={usuario.id}
                           onClick={() =>
@@ -634,8 +648,8 @@ export default function UsuariosV2Page() {
                             </td>
                           </tr>
                         )}
-                      </>
-                    );
+                        </Fragment>
+);
                   })
                 )}
               </tbody>

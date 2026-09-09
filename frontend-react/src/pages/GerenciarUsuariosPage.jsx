@@ -13,7 +13,10 @@ const TELAS = [
   { id: "/v2/assurant/triagens/cosmetica", label: "Triagem Cosmética", grupo: "Assurant V2 — Triagens" },
   { id: "/v2/assurant/triagens/oracle", label: "Entrada Oracle", grupo: "Assurant V2 — Triagens" },
 
-  { id: "/v2/assurant/b2b", label: "B2B", grupo: "Assurant V2 — Operação" },
+  { id: "/v2/assurant/b2b/picking", label: "B2B — Picking", grupo: "Assurant V2 — B2B" },
+  { id: "/v2/assurant/b2b/embalagem", label: "B2B — Embalagem", grupo: "Assurant V2 — B2B" },
+  { id: "/v2/assurant/b2b/faturamento", label: "B2B — Faturamento", grupo: "Assurant V2 — B2B" },
+  { id: "/v2/assurant/b2b/gestao", label: "B2B — Gestão", grupo: "Assurant V2 — B2B" },
 
   { id: "/v2/assurant/b2c", label: "B2C — Pedidos", grupo: "Assurant V2 — B2C" },
   { id: "/v2/assurant/b2c/embalagem", label: "B2C — Embalagem", grupo: "Assurant V2 — B2C" },
