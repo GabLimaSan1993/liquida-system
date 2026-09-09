@@ -1,8 +1,19 @@
 import { supabase } from "../lib/supabase";
 
-// Peças que não estão fisicamente no armazém não entram na contagem.
-const STATUS_FORA_DO_ESTOQUE = ["Finalizado"];
+function enderecoEhWms(local) {
+  if (!local) {
+    return false;
+  }
 
+  const endereco =
+    String(local)
+      .trim()
+      .toUpperCase();
+
+  return /^RUA\s*\d{1,2}\/BL\d{2}\/AD\d{2}\/AP\s+[A-F](0[1-9]|10)$/.test(
+    endereco
+  );
+}
 // ══════════════════════════════════════════════════════════
 // NORMALIZAÇÃO DE ENDEREÇO
 // A base tem "RA 12/BL01/AD01/A", "R12/BL4/AD1/A" e "RUA 12/BL02/AD05/A".
@@ -99,17 +110,32 @@ export async function abrirCiclo(nome, userId) {
 // e concluía, com razão, que o sistema estava travado.
 // ══════════════════════════════════════════════════════════
 export async function sortearDia(cicloId, quantidade = 131) {
-  // Endereços que existem no estoque (a coluna local_normalizado é mantida por trigger)
-  const { data: pecas, error } = await supabase
-    .from("assurant_triagem")
-    .select("local_normalizado")
-    .not("local_normalizado", "is", null)
-    .neq("local_normalizado", "GENERICO")
-    .not("status_atual", "in", `(${STATUS_FORA_DO_ESTOQUE.map(s => `"${s}"`).join(",")})`);
-  if (error) throw new Error(error.message);
+  // Fonte oficial do estoque físico:
+ // wms_enderecos + wms_alocacoes confirmadas.
+const {
+  data: posicoesWms,
+  error,
+} = await supabase.rpc(
+  "wms_inventario_posicoes"
+);
 
-  const enderecos = new Set();
-  (pecas || []).forEach(p => enderecos.add(p.local_normalizado));
+if (error) {
+  throw new Error(
+    error.message
+  );
+}
+
+const enderecos =
+  new Set(
+    (posicoesWms || [])
+      .map(
+        (posicao) =>
+          posicao.endereco
+      )
+      .filter(
+        enderecoEhWms
+      )
+  );
 
   // Os que já foram contados neste ciclo.
   // O erro é verificado de propósito: se esta consulta falhar sem ninguém olhar,
@@ -158,7 +184,20 @@ export async function listarContagensPendentes(cicloId) {
   // A ordenação é feita aqui, e não no banco: o .order() do Postgres é alfabético e
   // colocaria "RUA 10" antes de "RUA 2". Com a contagem presa nas ruas 1 e 2 isso
   // nunca apareceu; com o sorteio espalhando pelo armazém, apareceria todo dia.
-  return (data || []).sort((a, b) => ordemEndereco(a.endereco, b.endereco));
+  return (data || [])
+  .filter(
+    (contagem) =>
+      enderecoEhWms(
+        contagem.endereco
+      )
+  )
+  .sort(
+    (a, b) =>
+      ordemEndereco(
+        a.endereco,
+        b.endereco
+      )
+  );
 }
 
 // ══════════════════════════════════════════════════════════
@@ -170,6 +209,13 @@ export async function abrirContagem(contagemId, userId, userNome) {
   const { data: cont } = await supabase
     .from("inventario_contagens").select("*").eq("id", contagemId).single();
   if (!cont) return { ok: false, erro: "Contagem não encontrada." };
+  if (!enderecoEhWms(cont.endereco)) {
+  return {
+    ok: false,
+    erro:
+      "Este endereço não pertence ao layout atual do WMS.",
+  };
+}
   if (cont.status === "concluida") return { ok: false, erro: "Contagem já concluída." };
 
   // Já congelada? Devolve o que está lá.
@@ -178,20 +224,33 @@ export async function abrirContagem(contagemId, userId, userNome) {
     return { ok: true, contagem: cont, itens, reaberta: true };
   }
 
-  // Peças que o sistema espera neste endereço — filtro direto no banco, via índice.
-  const { data: esperadas, error } = await supabase
-    .from("assurant_triagem")
-    .select("imei, voucher, local, sku, grade, status_atual")
-    .eq("local_normalizado", cont.endereco)
-    .not("status_atual", "in", `(${STATUS_FORA_DO_ESTOQUE.map(s => `"${s}"`).join(",")})`);
-  if (error) throw new Error(error.message);
+  /// Produto esperado no AP segundo a fonte física oficial do WMS.
+const {
+  data: posicoesWms,
+  error,
+} = await supabase.rpc(
+  "wms_inventario_posicao",
+  {
+    p_endereco:
+      cont.endereco,
+  }
+);
+
+if (error) {
+  throw new Error(
+    error.message
+  );
+}
+
+const esperadas =
+  posicoesWms || [];
 
   const linhas = (esperadas || []).map(p => ({
     contagem_id:       contagemId,
     ciclo_id:          cont.ciclo_id,
     imei:              p.imei,
     veredito:          "esperado",
-    endereco_anterior: p.local,
+    endereco_anterior: p.endereco,
   }));
 
   if (linhas.length) {
@@ -207,7 +266,7 @@ export async function abrirContagem(contagemId, userId, userNome) {
       operador_id:     userId,
       operador_nome:   userNome || "Operador",
       aberta_em:       new Date().toISOString(),
-      endereco_origem: esperadas?.[0]?.local || null,
+      endereco_origem: esperadas?.[0]?.endereco || null,
     })
     .eq("id", contagemId);
   if (errUpd) throw new Error(errUpd.message);
@@ -274,29 +333,40 @@ export async function biparItem(contagemId, imeiDigitado) {
     .maybeSingle();
   if (repetido) return { ok: false, erro: `${imei} já foi bipado nesta contagem.` };
 
-  // SOBRA: a peça está aqui, mas o sistema a esperava em outro lugar (ou lugar nenhum).
-  const { data: linhas } = await supabase
-    .from("assurant_triagem")
-    .select("id, imei, voucher, local, criado_em, atualizado_em")
-    .eq("imei", imei)
-    .not("status_atual", "in", `(${STATUS_FORA_DO_ESTOQUE.map(s => `"${s}"`).join(",")})`)
-    .order("atualizado_em", { ascending: false })
-    .order("criado_em", { ascending: false });
-
-  if (!linhas?.length) {
-    return { ok: false, erro: `${imei} não existe no estoque (ou já foi expedido).` };
+  // SOBRA: o aparelho foi encontrado fisicamente neste AP,
+// mas o WMS o espera em outro endereço.
+const {
+  data: posicoesWms,
+  error: erroBuscaWms,
+} = await supabase.rpc(
+  "wms_inventario_buscar_item",
+  {
+    p_imei: imei,
   }
+);
 
-  const conflito = linhas.length > 1;
-  const alvo = linhas[0];  // a mais recente
-  const anterior = alvo.local;
+if (erroBuscaWms) {
+  throw new Error(
+    erroBuscaWms.message
+  );
+}
 
-  // Corrige o local na linha mais recente, já na forma canônica.
-  // A trigger do banco atualiza o local_normalizado sozinha.
-  await supabase
-    .from("assurant_triagem")
-    .update({ local: cont.endereco })
-    .eq("id", alvo.id);
+if (!posicoesWms?.length) {
+  return {
+    ok: false,
+    erro:
+      `${imei} não possui alocação física ativa no WMS.`,
+  };
+}
+
+const conflito =
+  posicoesWms.length > 1;
+
+const alvo =
+  posicoesWms[0];
+
+const anterior =
+  alvo.endereco;
 
   await supabase.from("inventario_itens").insert({
     contagem_id:       contagemId,
@@ -427,6 +497,354 @@ export async function painelCiclo(cicloId) {
     acuraciaEndereco,
     perfeitos,
   };
+}
+
+// ══════════════════════════════════════════════════════════
+// MAPA DO INVENTÁRIO
+// Leitura consolidada por endereço físico do estoque.
+// Não grava nada no banco.
+//
+// Status visual:
+// - validado    = contagem concluída sem divergência
+// - divergencia = contagem concluída com falta/sobra/conflito
+// - pendente    = ainda não concluído no ciclo
+// ══════════════════════════════════════════════════════════
+export async function mapaInventarioCiclo(cicloId) {
+  if (!cicloId) {
+    return [];
+  }
+
+
+  // Todos os APs que atualmente possuem produto
+// segundo a fonte física oficial do WMS.
+const {
+  data: posicoesWms,
+  error: erroPosicoesWms,
+} = await supabase.rpc(
+  "wms_inventario_posicoes"
+);
+
+if (erroPosicoesWms) {
+  throw new Error(
+    erroPosicoesWms.message
+  );
+}
+
+
+  // Contagens já existentes neste ciclo.
+  const {
+    data: contagens,
+    error: erroContagens,
+  } = await supabase
+    .from("inventario_contagens")
+    .select(
+      "id, endereco, status, esperadas, encontradas, operador_nome, aberta_em, fechada_em"
+    )
+    .eq(
+      "ciclo_id",
+      cicloId
+    );
+
+  if (erroContagens) {
+    throw new Error(
+      erroContagens.message
+    );
+  }
+
+
+  // Divergências registradas no ciclo.
+  const {
+    data: itens,
+    error: erroItens,
+  } = await supabase
+    .from("inventario_itens")
+    .select(
+  "contagem_id, veredito, reconciliado_em"
+)
+    .eq(
+      "ciclo_id",
+      cicloId
+    );
+
+  if (erroItens) {
+    throw new Error(
+      erroItens.message
+    );
+  }
+
+
+  const enderecos =
+  [
+    ...new Set(
+      (posicoesWms || [])
+        .map(
+          (posicao) =>
+            posicao.endereco
+        )
+        .filter(
+          enderecoEhWms
+        )
+    ),
+  ];
+
+
+  const contagemPorEndereco =
+    new Map(
+      (contagens || []).map(
+        (contagem) => [
+          normalizarEndereco(
+            contagem.endereco
+          ),
+          contagem,
+        ]
+      )
+    );
+
+
+  const divergenciasPorContagem =
+  new Map();
+
+const metricasPorContagem =
+  new Map();
+
+
+(itens || []).forEach(
+  (item) => {
+    const metricas =
+      metricasPorContagem.get(
+        item.contagem_id
+      ) || {
+        conferidos: 0,
+        sobras: 0,
+        conflitos: 0,
+        fantasmas: 0,
+      };
+
+
+    if (
+      item.veredito ===
+      "conferido"
+    ) {
+      metricas.conferidos +=
+        1;
+    }
+
+
+    if (
+      item.veredito ===
+      "sobra"
+    ) {
+      metricas.sobras +=
+        1;
+    }
+
+
+    if (
+      item.veredito ===
+      "conflito"
+    ) {
+      metricas.conflitos +=
+        1;
+    }
+
+
+    if (
+      item.veredito ===
+        "falta" &&
+      !item.reconciliado_em
+    ) {
+      metricas.fantasmas +=
+        1;
+    }
+
+
+    metricasPorContagem.set(
+      item.contagem_id,
+      metricas
+    );
+
+
+    if (
+      [
+        "falta",
+        "sobra",
+        "conflito",
+      ].includes(
+        item.veredito
+      )
+    ) {
+      divergenciasPorContagem.set(
+        item.contagem_id,
+        (
+          divergenciasPorContagem.get(
+            item.contagem_id
+          ) || 0
+        ) + 1
+      );
+    }
+  }
+);
+
+
+  return enderecos
+    .map(
+      (enderecoBruto) => {
+        const endereco =
+          normalizarEndereco(
+            enderecoBruto
+          );
+
+        const contagem =
+          contagemPorEndereco.get(
+            endereco
+          );
+
+        const partes =
+          String(
+            endereco || ""
+          ).split("/");
+
+        const rua =
+          Number(
+            (
+              partes[0] ||
+              ""
+            ).match(
+              /\d+/
+            )?.[0]
+          ) || null;
+
+        const bloco =
+          Number(
+            (
+              partes[1] ||
+              ""
+            ).match(
+              /\d+/
+            )?.[0]
+          ) || null;
+
+        const andar =
+          Number(
+            (
+              partes[2] ||
+              ""
+            ).match(
+              /\d+/
+            )?.[0]
+          ) || null;
+
+        const apartamento =
+          partes
+            .slice(3)
+            .join("/") ||
+          null;
+
+
+        const divergencias =
+          contagem
+            ? divergenciasPorContagem.get(
+                contagem.id
+              ) || 0
+            : 0;
+            const metricas =
+  contagem
+    ? metricasPorContagem.get(
+        contagem.id
+      ) || {
+        conferidos: 0,
+        sobras: 0,
+        conflitos: 0,
+        fantasmas: 0,
+      }
+    : {
+        conferidos: 0,
+        sobras: 0,
+        conflitos: 0,
+        fantasmas: 0,
+      };
+
+
+const totalAvaliado =
+  metricas.conferidos +
+  metricas.sobras +
+  metricas.conflitos +
+  metricas.fantasmas;
+
+
+const acuraciaPeca =
+  contagem?.status ===
+  "concluida"
+    ? divergencias > 0
+      ? 0
+      : 100
+    : null;
+
+
+        let statusMapa =
+          "pendente";
+
+
+        if (
+          contagem?.status ===
+          "concluida"
+        ) {
+          statusMapa =
+            divergencias > 0
+              ? "divergencia"
+              : "validado";
+        }
+
+
+        return {
+          endereco,
+          rua,
+          bloco,
+          andar,
+          apartamento,
+
+          status_mapa:
+            statusMapa,
+
+          contagem_id:
+            contagem?.id ||
+            null,
+
+          status_contagem:
+            contagem?.status ||
+            null,
+
+          esperadas:
+            contagem?.esperadas ||
+            0,
+
+          encontradas:
+            contagem?.encontradas ||
+            0,
+
+          divergencias,
+
+          operador:
+            contagem?.operador_nome ||
+            null,
+
+          aberta_em:
+            contagem?.aberta_em ||
+            null,
+
+          fechada_em:
+            contagem?.fechada_em ||
+            null,
+        };
+      }
+    )
+    .sort(
+      (a, b) =>
+        ordemEndereco(
+          a.endereco,
+          b.endereco
+        )
+    );
 }
 
 // Lista os conflitos do ciclo (mesmo IMEI em mais de um registro) para tratar com a Assurant.
