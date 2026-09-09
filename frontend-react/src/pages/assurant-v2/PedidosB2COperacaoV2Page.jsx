@@ -1900,9 +1900,12 @@ function TabAguardandoDefinicao() {
       const res = await definirProduto(modalDef.id,
         { mesmoSku, novoSku, novaGrade, imei: imeiDef }, user.id);
       setPedidos(prev => prev.filter(x => x.id !== modalDef.id));
-      setFeedback({ tipo: "ok", msg: res.alocadoDireto
-        ? `✓ Pedido #${modalDef.id_anymarket} alocado direto no IMEI ${imeiDef.trim()} — aguardando grupo.`
-        : `✓ Pedido #${modalDef.id_anymarket} devolvido para alocação${mesmoSku ? "" : " com novo SKU"}.` });
+      setFeedback({
+  tipo: "ok",
+  msg: res.grupoFormado
+    ? `✓ Pedido #${modalDef.id_anymarket} definido no IMEI ${imeiDef.trim()} — grupo criado e enviado para Picking.`
+    : `✓ Item definido no IMEI ${imeiDef.trim()} — aguardando os demais itens do pedido #${modalDef.id_anymarket} para formar um único grupo.`,
+});
       setTimeout(() => setFeedback(null), 4000);
       fecharModal();
     } catch (e) { setFeedback({ tipo: "erro", msg: e.message }); }

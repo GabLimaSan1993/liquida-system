@@ -663,7 +663,43 @@ async function verificarECriarGrupo(userId) {
 
   return { ...grupos[0], gruposCriados: grupos.length };
 }
+// Cria um grupo exclusivo para um pedido vindo de Aguardando Definição.
+//
+// - pedido simples: cria o grupo imediatamente;
+// - multiproduto: espera TODOS os itens estarem alocados;
+// - todos os itens do mesmo id_anymarket entram juntos;
+// - nunca mistura com outro pedido.
+async function criarGrupoExclusivoPedidoDefinido(idAnyMarket, userId) {
+  const { data: itens, error } = await supabase
+    .from("pedidos_b2c")
+    .select("id, status, grupo_id")
+    .eq("id_anymarket", idAnyMarket);
 
+  if (error) {
+    throw new Error(
+      `Falha ao verificar itens do pedido ${idAnyMarket}: ${error.message}`
+    );
+  }
+
+  if (!itens?.length) {
+    return null;
+  }
+
+  const todosAlocados = itens.every(
+    (item) =>
+      item.status === "alocado" &&
+      !item.grupo_id
+  );
+
+  if (!todosAlocados) {
+    return null;
+  }
+
+  return _criarGrupo(
+    itens.map((item) => item.id),
+    userId
+  );
+}
 async function _criarGrupo(pedidoIds, userId) {
   // Busca o próximo número de grupo
   const { data: ultimoGrupo } = await supabase
@@ -1659,7 +1695,10 @@ export async function validarSkuDefinicao(skuDigitado, grade) {
 //   e o FIFO passa a sugerir pelo SKU/grade definidos (ou originais, se mesmoSku).
 export async function definirProduto(pedidoId, { mesmoSku, novoSku, novaGrade, imei }, userId) {
   const { data: pedido } = await supabase
-    .from("pedidos_b2c").select("sku_produto, grade_produto").eq("id", pedidoId).single();
+  .from("pedidos_b2c")
+  .select("id_anymarket, sku_produto, grade_produto")
+  .eq("id", pedidoId)
+  .single();
   if (!pedido) throw new Error("Pedido não encontrado.");
 
   // O que passa a valer para o FIFO/alocação.
@@ -1675,7 +1714,11 @@ export async function definirProduto(pedidoId, { mesmoSku, novoSku, novaGrade, i
   const skuEfetivo   = mesmoSku ? pedido.sku_produto   : skuVal;
   const gradeEfetiva = mesmoSku ? pedido.grade_produto : gradeVal;
   const imeiTrim = String(imei || "").trim();
-
+if (!imeiTrim) {
+  throw new Error(
+    "Informe o IMEI substituto para concluir a definição."
+  );
+}
   // Resumo do que foi definido, para o histórico da aba Concluídos.
   const parteSku = mesmoSku ? "mesmo SKU" : `${skuVal} ${gradeVal}`;
   const parteImei = imeiTrim ? `alocado direto no IMEI ${imeiTrim}` : "voltou ao FIFO";
@@ -1715,17 +1758,20 @@ export async function definirProduto(pedidoId, { mesmoSku, novoSku, novaGrade, i
       .eq("imei", imeiTrim);
     if (errTri) throw new Error(errTri.message);
 
-    const grupoFormado = await verificarECriarGrupo(userId);
-    return { ok: true, alocadoDireto: true, grupoFormado };
+    const grupoFormado =
+  await criarGrupoExclusivoPedidoDefinido(
+    pedido.id_anymarket,
+    userId
+  );
+
+return {
+  ok: true,
+  alocadoDireto: true,
+  grupoFormado,
+};
   }
 
-  // Sem IMEI: volta para a fila; o FIFO usará o SKU/grade efetivos.
-  await supabase.from("pedidos_b2c").update({
-    ...campos,
-    status: "aguardando_alocacao",
-  }).eq("id", pedidoId);
 
-  return { ok: true, alocadoDireto: false };
 }
 
 // Gera o PDF de solicitação de produto substituto — só dados do pedido e o que precisa.
