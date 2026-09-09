@@ -73,26 +73,20 @@ function pagamentoParaOrdenacao(valor) {
   );
 }
 
-async function buscarPedidosDoLote(idsAnymarket, horaCorte) {
-  const ids = [...new Set((idsAnymarket || []).filter(v => v != null))];
-  if (!ids.length) return [];
+async function buscarPedidosDoLote(horaCorte) {
+  const { data, error } = await supabase
+    .from("pedidos_b2c")
+    .select("*")
+    .eq("status", "aguardando_alocacao")
+    .eq("status_anymarket", "Pago");
 
-  const pedidos = [];
-
-  for (let i = 0; i < ids.length; i += BLOCO_IDS) {
-    const { data, error } = await supabase
-      .from("pedidos_b2c")
-      .select("*")
-      .in("id_anymarket", ids.slice(i, i + BLOCO_IDS))
-      .eq("status", "aguardando_alocacao")
-      .eq("status_anymarket", "Pago");
-
-    if (error) {
-      throw new Error(`Falha ao buscar pedidos para alocação: ${error.message}`);
-    }
-
-    pedidos.push(...(data || []));
+  if (error) {
+    throw new Error(
+      `Falha ao buscar pedidos para alocação: ${error.message}`
+    );
   }
+
+  const pedidos = data || [];
 
   return pedidos
     .filter(p => dentroDaHoraCorte(p.data_de_pagamento, horaCorte))
@@ -291,7 +285,7 @@ export async function alocarPedidosAutomaticamente({
   horaCorte,
   onProgress,
 }) {
-  const pedidos = await buscarPedidosDoLote(idsAnymarket, horaCorte);
+  const pedidos = await buscarPedidosDoLote(horaCorte);
   const resultado = {
     total: pedidos.length,
     alocados: 0,
@@ -373,11 +367,19 @@ export async function alocarPedidosAutomaticamente({
     }
   }
 
-  const gruposFinais = await criarListasAutomaticas(
-    idsAnymarket,
-    userId,
-    horaCorte
-  );
+  const idsProcessados = [
+  ...new Set(
+    pedidos
+      .map((pedido) => pedido.id_anymarket)
+      .filter((id) => id != null)
+  ),
+];
+
+const gruposFinais = await criarListasAutomaticas(
+  idsProcessados,
+  userId,
+  horaCorte
+);
 
   resultado.grupos.push(...gruposFinais);
   resultado.gruposCriados += gruposFinais.length;
