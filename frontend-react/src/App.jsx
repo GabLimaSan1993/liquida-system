@@ -62,6 +62,7 @@ import B2BV2Page from "./pages/assurant-v2/B2BV2Page.jsx";
 import B2CV2Page from "./pages/assurant-v2/B2CV2Page.jsx";
 import B2CFluxoComplementarV2Page from "./pages/assurant-v2/B2CFluxoComplementarV2Page.jsx";
 import UploadsV2Page from "./pages/assurant-v2/UploadsV2Page.jsx";
+import UsuariosV2Page from "./pages/assurant-v2/UsuariosV2Page.jsx";
 
 function ProtectedRoute({ tela, children }) {
   const { user, loading, hasAccess } = useAuth();
@@ -271,9 +272,30 @@ export default function App() {
 />
 
 <Route
-  path="b2b"
+  path="b2b/picking"
   element={
-    <B2BV2Page />
+    <B2BV2Page tipo="picking" />
+  }
+/>
+
+<Route
+  path="b2b/embalagem"
+  element={
+    <B2BV2Page tipo="embalagem" />
+  }
+/>
+
+<Route
+  path="b2b/faturamento"
+  element={
+    <B2BV2Page tipo="faturamento" />
+  }
+/>
+
+<Route
+  path="b2b/gestao"
+  element={
+    <B2BV2Page tipo="gestao" />
   }
 />
 
@@ -316,6 +338,13 @@ export default function App() {
   path="uploads"
   element={
     <UploadsV2Page />
+  }
+/>
+
+<Route
+  path="usuarios"
+  element={
+    <UsuariosV2Page />
   }
 />
 
