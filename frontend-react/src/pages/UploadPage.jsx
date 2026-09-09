@@ -896,6 +896,7 @@ export default function UploadPage({ warehouseV2 = false }) {
             }
           />
 {!warehouseV2 && (
+  <>
           {/* ── Movimentação Assurant ── */}
           <UploadBox
             title="Movimentação Assurant — Histórico"
@@ -915,6 +916,7 @@ export default function UploadPage({ warehouseV2 = false }) {
               </div>
             }
           />
+  </>
 )}
           {/* ── Pedido B2B ── */}
           <div className="rounded-[24px] border border-dashed border-[#D8B4FE] bg-[#FCFAFF] p-5">
@@ -990,6 +992,7 @@ export default function UploadPage({ warehouseV2 = false }) {
             )}
           </div>
 {!warehouseV2 && (
+  <>
           {/* ── NF B2B ── */}
           <div className="rounded-[24px] border border-dashed border-[#D8B4FE] bg-[#FCFAFF] p-5">
             <div className="flex items-start justify-between">
@@ -1071,6 +1074,7 @@ export default function UploadPage({ warehouseV2 = false }) {
               </div>
             )}
           </div>
+  </>
 )}
           {/* ── AnyMarket ── */}
           <div className="rounded-[24px] border border-dashed border-[#D8B4FE] bg-[#FCFAFF] p-5">
