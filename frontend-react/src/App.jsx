@@ -61,6 +61,7 @@ import CargaInicialV2Page from "./pages/assurant-v2/CargaInicialV2Page.jsx";
 import B2BV2Page from "./pages/assurant-v2/B2BV2Page.jsx";
 import B2CV2Page from "./pages/assurant-v2/B2CV2Page.jsx";
 import B2CFluxoComplementarV2Page from "./pages/assurant-v2/B2CFluxoComplementarV2Page.jsx";
+import UploadsV2Page from "./pages/assurant-v2/UploadsV2Page.jsx";
 
 function ProtectedRoute({ tela, children }) {
   const { user, loading, hasAccess } = useAuth();
@@ -308,6 +309,13 @@ export default function App() {
   path="b2c/gestao"
   element={
     <B2CFluxoComplementarV2Page tipo="gestao" />
+  }
+/>
+
+<Route
+  path="uploads"
+  element={
+    <UploadsV2Page />
   }
 />
 

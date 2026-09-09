@@ -218,6 +218,20 @@ const MENU_GROUPS = [
     ],
   },
 
+
+  {
+  label: "DADOS",
+  items: [
+    {
+      label: "Uploads",
+      icon: FileText,
+      to: "/v2/assurant/uploads",
+      exact: true,
+      enabled: true,
+    },
+  ],
+},
+
   {
     label: "PÓS-VENDA",
     items: [

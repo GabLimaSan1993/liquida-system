@@ -142,7 +142,7 @@ function UploadBox({
   );
 }
 
-export default function UploadPage() {
+export default function UploadPage({ warehouseV2 = false }) {
   const { profile, user } = useAuth();
   const isMaster = profile?.is_master;
 
@@ -220,22 +220,36 @@ export default function UploadPage() {
   const [status, setStatus]     = useState("");
   const [progress, setProgress] = useState(0);
 
-  const [historyCards, setHistoryCards] = useState([
-    ...(isMaster ? [
-      { type: "Aging",       name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
-      { type: "Faturamento", name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
-      { type: "Extrato OFX", name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
-    ] : []),
-    { type: "Triagem Assurant",      name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
-    { type: "Movimentação Assurant", name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
-    { type: "Pedido B2B",            name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
-    { type: "NF B2B",                name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
-    { type: "AnyMarket",             name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
-    { type: "Aging Subinventário",   name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
-    { type: "Relatório AP Oracle",   name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
-    { type: "TradeIn",               name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
-    { type: "Base de SKU",           name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
-  ]);
+  const [historyCards, setHistoryCards] = useState(
+  warehouseV2
+    ? [
+        { type: "Triagem Assurant", name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+        { type: "Pedido B2B", name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+        { type: "AnyMarket", name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+        { type: "Relatório AP Oracle", name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+        { type: "TradeIn", name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+        { type: "Aging Subinventário", name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+        { type: "Base de SKU", name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+      ]
+    : [
+        ...(isMaster
+          ? [
+              { type: "Aging", name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+              { type: "Faturamento", name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+              { type: "Extrato OFX", name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+            ]
+          : []),
+        { type: "Triagem Assurant", name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+        { type: "Movimentação Assurant", name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+        { type: "Pedido B2B", name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+        { type: "NF B2B", name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+        { type: "AnyMarket", name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+        { type: "Aging Subinventário", name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+        { type: "Relatório AP Oracle", name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+        { type: "TradeIn", name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+        { type: "Base de SKU", name: "Aguardando upload", status: "Pendente", rows: "--", progress: 0 },
+      ]
+);
 
   useEffect(() => {
     async function carregarPedidos() {
@@ -810,7 +824,7 @@ export default function UploadPage() {
         <div className="mt-4 grid gap-4 xl:grid-cols-2">
 
           {/* ── Blocos só para Master ── */}
-          {isMaster && (
+          {isMaster && !warehouseV2 && (
             <>
               <UploadBox
                 title="Base de Aging"
@@ -881,7 +895,7 @@ export default function UploadPage() {
               </div>
             }
           />
-
+{!warehouseV2 && (
           {/* ── Movimentação Assurant ── */}
           <UploadBox
             title="Movimentação Assurant — Histórico"
@@ -901,7 +915,7 @@ export default function UploadPage() {
               </div>
             }
           />
-
+)}
           {/* ── Pedido B2B ── */}
           <div className="rounded-[24px] border border-dashed border-[#D8B4FE] bg-[#FCFAFF] p-5">
             <div className="flex items-start justify-between">
@@ -975,7 +989,7 @@ export default function UploadPage() {
               </div>
             )}
           </div>
-
+{!warehouseV2 && (
           {/* ── NF B2B ── */}
           <div className="rounded-[24px] border border-dashed border-[#D8B4FE] bg-[#FCFAFF] p-5">
             <div className="flex items-start justify-between">
@@ -1057,7 +1071,7 @@ export default function UploadPage() {
               </div>
             )}
           </div>
-
+)}
           {/* ── AnyMarket ── */}
           <div className="rounded-[24px] border border-dashed border-[#D8B4FE] bg-[#FCFAFF] p-5">
             <div className="flex items-start justify-between">
