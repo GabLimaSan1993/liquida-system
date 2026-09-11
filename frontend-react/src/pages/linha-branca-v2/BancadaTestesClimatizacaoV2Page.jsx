@@ -256,7 +256,65 @@ export default function BancadaTestesClimatizacaoV2Page() {
                   className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-4 text-sm text-slate-800 outline-none transition focus:border-[#765D81] focus:bg-white focus:ring-2 focus:ring-[#765D81]/10"
                 />
               </div>
+<div className="mt-3">
+  <select
+    value=""
+    onChange={(event) => {
+      const osSelecionada =
+        osFiltradas.find(
+          (os) =>
+            String(os.id) ===
+            String(event.target.value)
+        );
 
+      if (osSelecionada) {
+        selecionarOs(osSelecionada);
+      }
+    }}
+    disabled={
+      loading ||
+      osFiltradas.length === 0
+    }
+    className="
+      h-12 w-full rounded-xl
+      border border-slate-200
+      bg-white px-4
+      text-sm font-semibold
+      text-slate-700
+      outline-none transition
+      focus:border-[#765D81]
+      focus:ring-2
+      focus:ring-[#765D81]/10
+      disabled:cursor-not-allowed
+      disabled:bg-slate-100
+      disabled:text-slate-400
+    "
+  >
+    <option value="">
+      {loading
+        ? "Carregando OS..."
+        : osFiltradas.length === 0
+        ? "Nenhuma OS disponível"
+        : "Selecione uma OS"}
+    </option>
+
+    {osFiltradas.map((os) => (
+      <option
+        key={os.id}
+        value={os.id}
+      >
+        {os.numero_os}
+        {" — "}
+        {os.marca || "Sem marca"}
+        {" "}
+        {os.modelo || ""}
+        {os.serial_number
+          ? ` — ${os.serial_number}`
+          : ""}
+      </option>
+    ))}
+  </select>
+</div>
               {busca && (
                 <div className="mt-3 max-h-[320px] overflow-y-auto rounded-xl border border-slate-200">
                   {osFiltradas.length === 0 ? (
