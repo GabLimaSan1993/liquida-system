@@ -63,6 +63,7 @@ import B2CV2Page from "./pages/assurant-v2/B2CV2Page.jsx";
 import B2CFluxoComplementarV2Page from "./pages/assurant-v2/B2CFluxoComplementarV2Page.jsx";
 import UploadsV2Page from "./pages/assurant-v2/UploadsV2Page.jsx";
 import UsuariosV2Page from "./pages/assurant-v2/UsuariosV2Page.jsx";
+import SistemasPage from "./pages/SistemasPage.jsx";
 
 function ProtectedRoute({ tela, children }) {
   const { user, loading, hasAccess } = useAuth();
@@ -91,7 +92,7 @@ function DefaultRedirect() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-purple-700 font-bold">
+      <div className="min-h-screen flex items-center justify-center text-[#43284F] font-bold">
         Carregando...
       </div>
     );
@@ -101,40 +102,7 @@ function DefaultRedirect() {
     return <Navigate to="/login" replace />;
   }
 
-  if (profile.is_master) {
-    return <Navigate to="/upload" replace />;
-  }
-
-  if (profile.area_tecnica === "assurant_trocas") {
-    return <Navigate to="/trocas-devolucoes/assurant" replace />;
-  }
-
-  if (profile.area_tecnica === "refrigeracao") {
-    return <Navigate to="/linha-branca/triagem" replace />;
-  }
-
-  if (
-    ["climatizacao", "lavadoras", "diversos"].includes(
-      profile.area_tecnica
-    )
-  ) {
-    return <Navigate to="/linha-branca/triagem-reparos" replace />;
-  }
-
-  if (profile.area_tecnica === "assurant") {
-  return (
-    <Navigate
-      to="/v2/assurant"
-      replace
-    />
-  );
-}
-
-  if (profile.telas_permitidas?.length > 0) {
-    return <Navigate to={profile.telas_permitidas[0]} replace />;
-  }
-
-  return <Navigate to="/sem-acesso" replace />;
+  return <Navigate to="/sistemas" replace />;
 }
 
 function SemAcessoPage() {
@@ -169,26 +137,32 @@ export default function App() {
   }
 
   return (
-    <Routes>
-      <Route
-        path="/login"
-        element={
-          !user ? (
-            <LoginPage />
-          ) : (
-            <Navigate
-              to="/"
-              replace
-            />
-          )
-        }
+    <Route
+  path="/login"
+  element={
+    !user ? (
+      <LoginPage />
+    ) : (
+      <Navigate
+        to="/sistemas"
+        replace
       />
+    )
+  }
+/>
 
       <Route
         path="/sem-acesso"
         element={<SemAcessoPage />}
       />
-
+<Route
+  path="/sistemas"
+  element={
+    <ProtectedRoute>
+      <SistemasPage />
+    </ProtectedRoute>
+  }
+/>
       {/* =====================================================
           ASSURANT WAREHOUSE V2
           Workspace piloto paralelo ao sistema atual.
