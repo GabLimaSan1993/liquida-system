@@ -137,19 +137,20 @@ export default function App() {
   }
 
   return (
+  <Routes>
     <Route
-  path="/login"
-  element={
-    !user ? (
-      <LoginPage />
-    ) : (
-      <Navigate
-        to="/sistemas"
-        replace
-      />
-    )
-  }
-/>
+      path="/login"
+      element={
+        !user ? (
+          <LoginPage />
+        ) : (
+          <Navigate
+            to="/sistemas"
+            replace
+          />
+        )
+      }
+    />
 
       <Route
         path="/sem-acesso"
