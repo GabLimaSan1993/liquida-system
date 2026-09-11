@@ -3,6 +3,7 @@ import { useAuth } from "./AuthContext.jsx";
 
 import MainLayout from "./layout/MainLayout.jsx";
 import AssurantWorkspaceLayout from "./layout/AssurantWorkspaceLayout.jsx";
+import LinhaBrancaWorkspaceLayout from "./layout/LinhaBrancaWorkspaceLayout.jsx";
 
 import LoginPage from "./pages/LoginPage.jsx";
 import GerenciarUsuariosPage from "./pages/GerenciarUsuariosPage.jsx";
@@ -63,6 +64,8 @@ import B2CV2Page from "./pages/assurant-v2/B2CV2Page.jsx";
 import B2CFluxoComplementarV2Page from "./pages/assurant-v2/B2CFluxoComplementarV2Page.jsx";
 import UploadsV2Page from "./pages/assurant-v2/UploadsV2Page.jsx";
 import UsuariosV2Page from "./pages/assurant-v2/UsuariosV2Page.jsx";
+import LinhaBrancaHomePage from "./pages/linha-branca-v2/LinhaBrancaHomePage.jsx";
+import RefrigeracaoV2Page from "./pages/linha-branca-v2/RefrigeracaoV2Page.jsx";
 import SistemasPage from "./pages/SistemasPage.jsx";
 
 function ProtectedRoute({ tela, children }) {
@@ -164,6 +167,30 @@ export default function App() {
     </ProtectedRoute>
   }
 />
+
+{/* =====================================================
+    LINHA BRANCA V2
+    Nova estrutura paralela ao legado.
+====================================================== */}
+<Route
+  path="/v2/linha-branca"
+  element={
+    <ProtectedRoute>
+      <LinhaBrancaWorkspaceLayout />
+    </ProtectedRoute>
+  }
+>
+  <Route
+    index
+    element={<LinhaBrancaHomePage />}
+  />
+
+  <Route
+    path="refrigeracao"
+    element={<RefrigeracaoV2Page />}
+  />
+</Route>
+
       {/* =====================================================
           ASSURANT WAREHOUSE V2
           Workspace piloto paralelo ao sistema atual.

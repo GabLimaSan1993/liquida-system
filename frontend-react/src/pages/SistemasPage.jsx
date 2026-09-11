@@ -158,17 +158,8 @@ export default function SistemasPage() {
   }, [profile, areaTecnica, telas]);
 
   function abrirLinhaBranca() {
-    if (
-      ["climatizacao", "lavadoras", "diversos"].includes(
-        areaTecnica
-      )
-    ) {
-      navigate("/linha-branca/triagem-reparos");
-      return;
-    }
-
-    navigate("/linha-branca/triagem");
-  }
+  navigate("/v2/linha-branca");
+}
 
   async function sair() {
     await signOut();
