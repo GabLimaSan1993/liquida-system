@@ -66,7 +66,9 @@ import UploadsV2Page from "./pages/assurant-v2/UploadsV2Page.jsx";
 import UsuariosV2Page from "./pages/assurant-v2/UsuariosV2Page.jsx";
 import LinhaBrancaHomePage from "./pages/linha-branca-v2/LinhaBrancaHomePage.jsx";
 import RefrigeracaoV2Page from "./pages/linha-branca-v2/RefrigeracaoV2Page.jsx";
+import TriagemRefrigeracaoV2Page from "./pages/linha-branca-v2/TriagemRefrigeracaoV2Page.jsx";
 import SistemasPage from "./pages/SistemasPage.jsx";
+import RefrigeracaoWorkspaceLayout from "./layout/RefrigeracaoWorkspaceLayout.jsx";
 
 function ProtectedRoute({ tela, children }) {
   const { user, loading, hasAccess } = useAuth();
@@ -184,9 +186,22 @@ export default function App() {
     index
     element={<LinhaBrancaHomePage />}
   />
+</Route>
 
+<Route
+  path="/v2/linha-branca/refrigeracao"
+  element={
+    <ProtectedRoute>
+      <RefrigeracaoWorkspaceLayout />
+    </ProtectedRoute>
+  }
+>
   <Route
-    path="refrigeracao"
+  path="triagem"
+  element={<TriagemRefrigeracaoV2Page />}
+/>
+  <Route
+    index
     element={<RefrigeracaoV2Page />}
   />
 </Route>
