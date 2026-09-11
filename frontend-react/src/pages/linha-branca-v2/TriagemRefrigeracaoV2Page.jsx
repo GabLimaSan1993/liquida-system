@@ -512,11 +512,13 @@ export default function TriagemRefrigeracaoV2Page() {
   3. Classificação do reparo
 </h2>
 
-        className={`rounded-2xl border border-slate-200 bg-white p-5 ${
-  !selectedOs || triagem.precisa_reparo !== true
-    ? "pointer-events-none opacity-40"
-    : ""
-}`}
+        <div
+          className={`rounded-2xl border border-slate-200 bg-white p-5 ${
+            !selectedOs || triagem.precisa_reparo !== true
+              ? "pointer-events-none opacity-40"
+              : ""
+          }`}
+        >
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
             {REPAROS_MECANICOS.map(
               (item) => {
@@ -570,87 +572,6 @@ export default function TriagemRefrigeracaoV2Page() {
               }
             )}
           </div>
-        </div>
-      </section>
-
-      {/* RESULTADO */}
-      <section className="mt-8">
-        <h2 className="mb-3 text-sm font-black text-slate-800">
-          3. Resultado da triagem
-        </h2>
-
-        <div
-          className={`grid gap-3 sm:grid-cols-2 ${
-            !selectedOs
-              ? "pointer-events-none opacity-40"
-              : ""
-          }`}
-        >
-          <button
-            type="button"
-            onClick={() =>
-              definirResultado(false)
-            }
-            className={`
-              flex items-center gap-4
-              rounded-2xl border bg-white
-              p-5 text-left transition
-              ${
-                triagem.precisa_reparo ===
-                false
-                  ? "border-emerald-500 ring-2 ring-emerald-100"
-                  : "border-slate-200 hover:border-slate-300"
-              }
-            `}
-          >
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-              <Check className="h-5 w-5" />
-            </div>
-
-            <div>
-              <div className="text-sm font-black text-slate-800">
-                Sem necessidade de reparo
-              </div>
-
-              <div className="mt-1 text-xs text-slate-500">
-                Equipamento aprovado na
-                triagem.
-              </div>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={() =>
-              definirResultado(true)
-            }
-            className={`
-              flex items-center gap-4
-              rounded-2xl border bg-white
-              p-5 text-left transition
-              ${
-                triagem.precisa_reparo ===
-                true
-                  ? "border-[#765D81] ring-2 ring-[#765D81]/10"
-                  : "border-slate-200 hover:border-slate-300"
-              }
-            `}
-          >
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#F3EFF5] text-[#43284F]">
-              <Wrench className="h-5 w-5" />
-            </div>
-
-            <div>
-              <div className="text-sm font-black text-slate-800">
-                Encaminhar para reparo
-              </div>
-
-              <div className="mt-1 text-xs text-slate-500">
-                Equipamento necessita
-                intervenção técnica.
-              </div>
-            </div>
-          </button>
         </div>
       </section>
 
