@@ -44,7 +44,7 @@ const AREAS = [
     descricao: "Operação de lavadoras e equipamentos relacionados.",
     icon: WashingMachine,
     rota: "/v2/linha-branca/lavadoras",
-    disponivel: false,
+    disponivel: true,
   },
   {
     nome: "Portáteis",

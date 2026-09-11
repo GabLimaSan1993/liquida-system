@@ -69,9 +69,13 @@ import RefrigeracaoV2Page from "./pages/linha-branca-v2/RefrigeracaoV2Page.jsx";
 import TriagemRefrigeracaoV2Page from "./pages/linha-branca-v2/TriagemRefrigeracaoV2Page.jsx";
 import ReparosRefrigeracaoV2Page from "./pages/linha-branca-v2/ReparosRefrigeracaoV2Page.jsx";
 import BancadaTestesRefrigeracaoV2Page from "./pages/linha-branca-v2/BancadaTestesRefrigeracaoV2Page.jsx";
-
+import LavadorasV2Page from "./pages/linha-branca-v2/LavadorasV2Page.jsx";
+import TriagemLavadorasV2Page from "./pages/linha-branca-v2/TriagemLavadorasV2Page.jsx";
+import ReparosLavadorasV2Page from "./pages/linha-branca-v2/ReparosLavadorasV2Page.jsx";
+import BancadaTestesLavadorasV2Page from "./pages/linha-branca-v2/BancadaTestesLavadorasV2Page.jsx";
 import SistemasPage from "./pages/SistemasPage.jsx";
 import RefrigeracaoWorkspaceLayout from "./layout/RefrigeracaoWorkspaceLayout.jsx";
+import LavadorasWorkspaceLayout from "./layout/LavadorasWorkspaceLayout.jsx";
 
 function ProtectedRoute({ tela, children }) {
   const { user, loading, hasAccess } = useAuth();
@@ -218,6 +222,35 @@ export default function App() {
   element={<BancadaTestesRefrigeracaoV2Page />}
 />
 
+</Route>
+
+<Route
+  path="/v2/linha-branca/lavadoras"
+  element={
+    <ProtectedRoute>
+      <LavadorasWorkspaceLayout />
+    </ProtectedRoute>
+  }
+>
+  <Route
+    index
+    element={<LavadorasV2Page />}
+  />
+
+  <Route
+    path="triagem"
+    element={<TriagemLavadorasV2Page />}
+  />
+
+  <Route
+    path="reparos"
+    element={<ReparosLavadorasV2Page />}
+  />
+
+  <Route
+    path="testes"
+    element={<BancadaTestesLavadorasV2Page />}
+  />
 </Route>
 
       {/* =====================================================
