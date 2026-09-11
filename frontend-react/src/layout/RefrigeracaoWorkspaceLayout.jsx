@@ -66,7 +66,7 @@ function MenuItem({
         }
         ${
           isActive
-            ? "bg-white text-[#43284F] shadow-sm"
+            ? "bg-white text-[#4C1D95] shadow-sm"
             : "text-white/65 hover:bg-white/10 hover:text-white"
         }
       `}
@@ -109,7 +109,7 @@ export default function RefrigeracaoWorkspaceLayout() {
       <aside
         className={`
           fixed inset-y-0 left-0 z-40 hidden flex-col
-          bg-[#24152D] transition-all duration-200 lg:flex
+          bg-[linear-gradient(180deg,#2A1747_0%,#211136_52%,#190D2A_100%)] transition-all duration-200 lg:flex
           ${
             collapsed
               ? "w-[76px]"
@@ -174,9 +174,9 @@ export default function RefrigeracaoWorkspaceLayout() {
         >
           {!collapsed ? (
             <div className="rounded-xl bg-white/5 px-3.5 py-3 ring-1 ring-white/10">
-              <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/35">
-                Área
-              </div>
+              <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-violet-200/60">
+  Área
+</div>
 
               <div className="mt-1 text-sm font-bold text-white">
                 Refrigeração
@@ -328,14 +328,14 @@ export default function RefrigeracaoWorkspaceLayout() {
             }
           />
 
-          <aside className="fixed inset-y-0 left-0 z-50 w-[280px] bg-[#24152D] p-4 lg:hidden">
-            <div className="mb-5">
-              <img
-                src="/brand/liquida-logo-full.png"
-                alt="LiquidaPreço"
-                className="h-10 max-w-[180px] object-contain"
-              />
-            </div>
+          <aside className="fixed inset-y-0 left-0 z-50 w-[280px] bg-[linear-gradient(180deg,#2A1747_0%,#211136_52%,#190D2A_100%)] p-4 lg:hidden">
+            <div className="-mx-4 -mt-4 mb-5 flex h-[72px] items-center bg-white px-5">
+  <img
+    src="/brand/liquida-logo-full.png"
+    alt="LiquidaPreço"
+    className="h-10 max-w-[180px] object-contain"
+  />
+</div>
 
             <button
               type="button"

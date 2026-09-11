@@ -392,36 +392,28 @@ function Logo({
 }) {
   return (
     <div
-      className={`flex items-center ${
+      className={`flex w-full items-center ${
         collapsed
           ? "justify-center"
-          : "gap-3"
+          : "justify-start"
       }`}
     >
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/15">
-        <span className="text-sm font-black tracking-tight text-white">
-          LP
-        </span>
-      </div>
-
-      {!collapsed && (
-        <div className="min-w-0">
-          <div className="truncate text-[17px] font-black tracking-tight text-white">
-            liquida
-            <span className="text-violet-300">
-              preço
-            </span>
-          </div>
-
-          <div className="truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-white/45">
-            Liquida System
-          </div>
-        </div>
-      )}
+      <img
+        src={
+          collapsed
+            ? "/brand/liquida-logo-icon.png"
+            : "/brand/liquida-logo-full.png"
+        }
+        alt="LiquidaPreço"
+        className={
+          collapsed
+            ? "h-10 w-10 object-contain"
+            : "h-10 max-w-[180px] object-contain"
+        }
+      />
     </div>
   );
 }
-
 function DisabledSidebarItem({
   item,
   collapsed,
@@ -913,16 +905,16 @@ function SidebarContent({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div
-        className={`
-          flex h-[72px] shrink-0 items-center border-b border-white/10
+  className={`
+    flex h-[72px] shrink-0 items-center border-b border-slate-200 bg-white
 
-          ${
-            collapsed
-              ? "justify-center px-3"
-              : "justify-between px-5"
-          }
-        `}
-      >
+    ${
+      collapsed
+        ? "justify-center px-3"
+        : "justify-start px-5"
+    }
+  `}
+>
         <Logo
           collapsed={
             collapsed

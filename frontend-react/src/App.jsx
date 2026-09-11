@@ -67,6 +67,9 @@ import UsuariosV2Page from "./pages/assurant-v2/UsuariosV2Page.jsx";
 import LinhaBrancaHomePage from "./pages/linha-branca-v2/LinhaBrancaHomePage.jsx";
 import RefrigeracaoV2Page from "./pages/linha-branca-v2/RefrigeracaoV2Page.jsx";
 import TriagemRefrigeracaoV2Page from "./pages/linha-branca-v2/TriagemRefrigeracaoV2Page.jsx";
+import ReparosRefrigeracaoV2Page from "./pages/linha-branca-v2/ReparosRefrigeracaoV2Page.jsx";
+import BancadaTestesRefrigeracaoV2Page from "./pages/linha-branca-v2/BancadaTestesRefrigeracaoV2Page.jsx";
+
 import SistemasPage from "./pages/SistemasPage.jsx";
 import RefrigeracaoWorkspaceLayout from "./layout/RefrigeracaoWorkspaceLayout.jsx";
 
@@ -196,7 +199,7 @@ export default function App() {
     </ProtectedRoute>
   }
 >
-  <Route
+    <Route
   path="triagem"
   element={<TriagemRefrigeracaoV2Page />}
 />
@@ -204,6 +207,17 @@ export default function App() {
     index
     element={<RefrigeracaoV2Page />}
   />
+
+  <Route
+  path="reparos"
+  element={<ReparosRefrigeracaoV2Page />}
+/>
+
+<Route
+  path="testes"
+  element={<BancadaTestesRefrigeracaoV2Page />}
+/>
+
 </Route>
 
       {/* =====================================================
