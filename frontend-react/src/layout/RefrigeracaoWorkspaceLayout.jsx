@@ -117,7 +117,7 @@ export default function RefrigeracaoWorkspaceLayout() {
           }
         `}
       >
-        <div className="flex h-[72px] items-center border-b border-white/10 px-3">
+        <div className="flex h-[72px] items-center border-b border-slate-200 bg-white px-3">
           <div
             className={`flex w-full items-center ${
               collapsed
