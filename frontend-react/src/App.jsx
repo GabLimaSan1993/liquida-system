@@ -76,6 +76,13 @@ import BancadaTestesLavadorasV2Page from "./pages/linha-branca-v2/BancadaTestesL
 import SistemasPage from "./pages/SistemasPage.jsx";
 import RefrigeracaoWorkspaceLayout from "./layout/RefrigeracaoWorkspaceLayout.jsx";
 import LavadorasWorkspaceLayout from "./layout/LavadorasWorkspaceLayout.jsx";
+import ClimatizacaoWorkspaceLayout from "./layout/ClimatizacaoWorkspaceLayout.jsx";
+
+import ClimatizacaoV2Page from "./pages/linha-branca-v2/ClimatizacaoV2Page.jsx";
+import TriagemClimatizacaoV2Page from "./pages/linha-branca-v2/TriagemClimatizacaoV2Page.jsx";
+import ReparosClimatizacaoV2Page from "./pages/linha-branca-v2/ReparosClimatizacaoV2Page.jsx";
+import BancadaTestesClimatizacaoV2Page from "./pages/linha-branca-v2/BancadaTestesClimatizacaoV2Page.jsx";
+
 
 function ProtectedRoute({ tela, children }) {
   const { user, loading, hasAccess } = useAuth();
@@ -222,6 +229,35 @@ export default function App() {
   element={<BancadaTestesRefrigeracaoV2Page />}
 />
 
+</Route>
+
+<Route
+  path="/v2/linha-branca/climatizacao"
+  element={
+    <ProtectedRoute>
+      <ClimatizacaoWorkspaceLayout />
+    </ProtectedRoute>
+  }
+>
+  <Route
+    index
+    element={<ClimatizacaoV2Page />}
+  />
+
+  <Route
+    path="triagem"
+    element={<TriagemClimatizacaoV2Page />}
+  />
+
+  <Route
+    path="reparos"
+    element={<ReparosClimatizacaoV2Page />}
+  />
+
+  <Route
+    path="testes"
+    element={<BancadaTestesClimatizacaoV2Page />}
+  />
 </Route>
 
 <Route

@@ -30,7 +30,7 @@ const AREAS = [
     descricao: "Operação de equipamentos de climatização.",
     icon: Snowflake,
     rota: "/v2/linha-branca/climatizacao",
-    disponivel: false,
+    disponivel: true,
   },
   {
     nome: "Refrigeração",
