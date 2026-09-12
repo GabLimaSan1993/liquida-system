@@ -1,0 +1,63 @@
+name: One-time B2B faturamento fix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fix-b2b-faturamento.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend-react/package-lock.json
+
+      - name: Patch B2B faturamento filters
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('frontend-react/src/pages/B2BPickingPage.jsx')
+          text = path.read_text(encoding='utf-8')
+
+          old_1 = '  const pedidosAbertos      = pedidos.filter(p => p.status !== "concluido");'
+          new_1 = '  const pedidosAbertos      = pedidos.filter(p => p.status !== "concluido" && !p.encerrado_sem_faturamento_em);'
+
+          old_2 = '    pedidos:   { aberto: pedidos.filter(p => p.status !== "concluido").length, concluido: pedidos.filter(p => p.status === "concluido").length, erro: pedidos.filter(p => p.status_faturamento === "erro_nf").length, labelAberto: "aguardando faturamento", labelConcluido: "faturado",   aoConcluido: () => { setAba("pedidos"); setVerConcluidos(true); } },'
+          new_2 = '    pedidos:   { aberto: pedidos.filter(p => p.status !== "concluido" && !p.encerrado_sem_faturamento_em).length, concluido: pedidos.filter(p => p.status === "concluido" && !p.encerrado_sem_faturamento_em).length, erro: pedidos.filter(p => !p.encerrado_sem_faturamento_em && p.status_faturamento === "erro_nf").length, labelAberto: "aguardando faturamento", labelConcluido: "faturado",   aoConcluido: () => { setAba("pedidos"); setVerConcluidos(true); } },'
+
+          if text.count(old_1) != 1:
+              raise SystemExit(f'Expected exactly one pedidosAbertos pattern, found {text.count(old_1)}')
+          if text.count(old_2) != 1:
+              raise SystemExit(f'Expected exactly one faturamento counter pattern, found {text.count(old_2)}')
+
+          text = text.replace(old_1, new_1).replace(old_2, new_2)
+          path.write_text(text, encoding='utf-8')
+
+      - name: Install dependencies
+        working-directory: frontend-react
+        run: npm ci
+
+      - name: Build
+        working-directory: frontend-react
+        run: npm run build
+
+      - name: Commit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend-react/src/pages/B2BPickingPage.jsx
+          git diff --cached --quiet && exit 0
+          git commit -m "fix: hide no-billing B2B orders from faturamento"
+          git push origin main
