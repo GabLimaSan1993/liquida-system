@@ -1363,7 +1363,7 @@ function TabPedidos({ pedidosIniciais, onAtualizarSilencioso }) {
     } finally { setMarcandoErro(null); }
   }
 
-  const pedidosAbertos      = pedidos.filter(p => p.status !== "concluido");
+  const pedidosAbertos      = pedidos.filter(p => p.status !== "concluido" && !p.encerrado_sem_faturamento_em);
   const totalFaturadoGlobal = Object.values(resumos).reduce((s, r) => s + (r?.valorFaturado || 0), 0);
   const totalNaoFaturar     = Object.values(resumos).reduce((s, r) => s + (r?.valorNaoFaturar || 0), 0);
   const totalAguardando     = Object.values(resumos).reduce((s, r) => s + Math.max(0, (r?.valorBipado || 0) - (r?.valorFaturado || 0)), 0);
@@ -1876,7 +1876,7 @@ export default function B2BPickingPage({
     picking:   { aberto: pedidos.filter(p => p.status === "aberto").length,   concluido: pedidos.filter(p => p.status === "concluido").length, labelAberto: "em aberto",              labelConcluido: "concluído",  aoConcluido: () => setVerConcluidos(false) },
     analise:   { aberto: pedidosComAnalise.length,                             concluido: pedidosSemAnalise.length,                            labelAberto: "com itens pendentes",     labelConcluido: "resolvido",  aoConcluido: () => {} },
     embalagem: { aberto: pedidos.filter(p => (p.total_bipados || 0) > 0 && p.status !== "concluido").length, concluido: pedidos.filter(p => p.status === "concluido").length, labelAberto: "para embalar", labelConcluido: "embalado", aoConcluido: () => setVerConcluidos(false) },
-    pedidos:   { aberto: pedidos.filter(p => p.status !== "concluido").length, concluido: pedidos.filter(p => p.status === "concluido").length, erro: pedidos.filter(p => p.status_faturamento === "erro_nf").length, labelAberto: "aguardando faturamento", labelConcluido: "faturado",   aoConcluido: () => { setAba("pedidos"); setVerConcluidos(true); } },
+    pedidos:   { aberto: pedidos.filter(p => p.status !== "concluido" && !p.encerrado_sem_faturamento_em).length, concluido: pedidos.filter(p => p.status === "concluido" && !p.encerrado_sem_faturamento_em).length, erro: pedidos.filter(p => !p.encerrado_sem_faturamento_em && p.status_faturamento === "erro_nf").length, labelAberto: "aguardando faturamento", labelConcluido: "faturado",   aoConcluido: () => { setAba("pedidos"); setVerConcluidos(true); } },
   };
 
   const ctx = contadores[aba] || contadores["picking"];
