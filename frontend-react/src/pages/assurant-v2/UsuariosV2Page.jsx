@@ -66,6 +66,15 @@ const TELAS_V2 = [
       { id: "/v2/assurant/uploads", label: "Uploads" },
     ],
   },
+  {
+  grupo: "GESTÃO",
+  telas: [
+    {
+      id: "/v2/assurant/indicadores",
+      label: "Indicadores Executivos",
+    },
+  ],
+},
 ];
 
 const TODAS_TELAS_V2 = TELAS_V2.flatMap((grupo) => grupo.telas);

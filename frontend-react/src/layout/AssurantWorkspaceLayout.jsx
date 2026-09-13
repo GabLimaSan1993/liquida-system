@@ -284,10 +284,12 @@ const MENU_GROUPS = [
     },
 
     {
-      label: "Indicadores",
-        icon: BarChart3,
-        enabled: false,
-      },
+  label: "Indicadores",
+  icon: BarChart3,
+  to: "/v2/assurant/indicadores",
+  exact: true,
+  enabled: true,
+},
 
       {
         label: "SLA & Rastreabilidade",

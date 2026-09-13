@@ -64,6 +64,8 @@ import B2CV2Page from "./pages/assurant-v2/B2CV2Page.jsx";
 import B2CFluxoComplementarV2Page from "./pages/assurant-v2/B2CFluxoComplementarV2Page.jsx";
 import UploadsV2Page from "./pages/assurant-v2/UploadsV2Page.jsx";
 import UsuariosV2Page from "./pages/assurant-v2/UsuariosV2Page.jsx";
+import IndicadoresExecutivosV2Page from "./pages/assurant-v2/IndicadoresExecutivosV2Page.jsx";
+
 import LinhaBrancaHomePage from "./pages/linha-branca-v2/LinhaBrancaHomePage.jsx";
 import RefrigeracaoV2Page from "./pages/linha-branca-v2/RefrigeracaoV2Page.jsx";
 import TriagemRefrigeracaoV2Page from "./pages/linha-branca-v2/TriagemRefrigeracaoV2Page.jsx";
@@ -156,143 +158,147 @@ export default function App() {
   }
 
   return (
-  <Routes>
-    <Route
-      path="/login"
-      element={
-        !user ? (
-          <LoginPage />
-        ) : (
-          <Navigate
-            to="/sistemas"
-            replace
-          />
-        )
-      }
-    />
+    <Routes>
+      <Route
+        path="/login"
+        element={
+          !user ? (
+            <LoginPage />
+          ) : (
+            <Navigate
+              to="/sistemas"
+              replace
+            />
+          )
+        }
+      />
 
       <Route
         path="/sem-acesso"
         element={<SemAcessoPage />}
       />
-<Route
-  path="/sistemas"
-  element={
-    <ProtectedRoute>
-      <SistemasPage />
-    </ProtectedRoute>
-  }
-/>
 
-{/* =====================================================
-    LINHA BRANCA V2
-    Nova estrutura paralela ao legado.
-====================================================== */}
-<Route
-  path="/v2/linha-branca"
-  element={
-    <ProtectedRoute>
-      <LinhaBrancaWorkspaceLayout />
-    </ProtectedRoute>
-  }
->
-  <Route
-    index
-    element={<LinhaBrancaHomePage />}
-  />
-</Route>
+      <Route
+        path="/sistemas"
+        element={
+          <ProtectedRoute>
+            <SistemasPage />
+          </ProtectedRoute>
+        }
+      />
 
-<Route
-  path="/v2/linha-branca/refrigeracao"
-  element={
-    <ProtectedRoute>
-      <RefrigeracaoWorkspaceLayout />
-    </ProtectedRoute>
-  }
->
-    <Route
-  path="triagem"
-  element={<TriagemRefrigeracaoV2Page />}
-/>
-  <Route
-    index
-    element={<RefrigeracaoV2Page />}
-  />
+      {/* =====================================================
+          LINHA BRANCA V2
+          Nova estrutura paralela ao legado.
+      ====================================================== */}
 
-  <Route
-  path="reparos"
-  element={<ReparosRefrigeracaoV2Page />}
-/>
+      <Route
+        path="/v2/linha-branca"
+        element={
+          <ProtectedRoute>
+            <LinhaBrancaWorkspaceLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route
+          index
+          element={<LinhaBrancaHomePage />}
+        />
+      </Route>
 
-<Route
-  path="testes"
-  element={<BancadaTestesRefrigeracaoV2Page />}
-/>
+      <Route
+        path="/v2/linha-branca/refrigeracao"
+        element={
+          <ProtectedRoute>
+            <RefrigeracaoWorkspaceLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route
+          path="triagem"
+          element={<TriagemRefrigeracaoV2Page />}
+        />
 
-</Route>
+        <Route
+          index
+          element={<RefrigeracaoV2Page />}
+        />
 
-<Route
-  path="/v2/linha-branca/climatizacao"
-  element={
-    <ProtectedRoute>
-      <ClimatizacaoWorkspaceLayout />
-    </ProtectedRoute>
-  }
->
-  <Route
-    index
-    element={<ClimatizacaoV2Page />}
-  />
+        <Route
+          path="reparos"
+          element={<ReparosRefrigeracaoV2Page />}
+        />
 
-  <Route
-    path="triagem"
-    element={<TriagemClimatizacaoV2Page />}
-  />
+        <Route
+          path="testes"
+          element={<BancadaTestesRefrigeracaoV2Page />}
+        />
+      </Route>
 
-  <Route
-    path="reparos"
-    element={<ReparosClimatizacaoV2Page />}
-  />
+      <Route
+        path="/v2/linha-branca/climatizacao"
+        element={
+          <ProtectedRoute>
+            <ClimatizacaoWorkspaceLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route
+          index
+          element={<ClimatizacaoV2Page />}
+        />
 
-  <Route
-    path="testes"
-    element={<BancadaTestesClimatizacaoV2Page />}
-  />
-</Route>
+        <Route
+          path="triagem"
+          element={<TriagemClimatizacaoV2Page />}
+        />
 
-<Route
-  path="/v2/linha-branca/lavadoras"
-  element={
-    <ProtectedRoute>
-      <LavadorasWorkspaceLayout />
-    </ProtectedRoute>
-  }
->
-  <Route
-    index
-    element={<LavadorasV2Page />}
-  />
+        <Route
+          path="reparos"
+          element={<ReparosClimatizacaoV2Page />}
+        />
 
-  <Route
-    path="triagem"
-    element={<TriagemLavadorasV2Page />}
-  />
+        <Route
+          path="testes"
+          element={<BancadaTestesClimatizacaoV2Page />}
+        />
+      </Route>
 
-  <Route
-    path="reparos"
-    element={<ReparosLavadorasV2Page />}
-  />
+      <Route
+        path="/v2/linha-branca/lavadoras"
+        element={
+          <ProtectedRoute>
+            <LavadorasWorkspaceLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route
+          index
+          element={<LavadorasV2Page />}
+        />
 
-  <Route
-    path="testes"
-    element={<BancadaTestesLavadorasV2Page />}
-  />
-</Route>
+        <Route
+          path="triagem"
+          element={<TriagemLavadorasV2Page />}
+        />
+
+        <Route
+          path="reparos"
+          element={<ReparosLavadorasV2Page />}
+        />
+
+        <Route
+          path="testes"
+          element={<BancadaTestesLavadorasV2Page />}
+        />
+      </Route>
+
 
       {/* =====================================================
           ASSURANT WAREHOUSE V2
           Workspace piloto paralelo ao sistema atual.
       ====================================================== */}
+
       <Route
         path="/v2/assurant"
         element={
@@ -302,6 +308,7 @@ export default function App() {
         }
       >
         {/* Recebimento */}
+
         <Route
           path="recebimento"
           element={
@@ -317,6 +324,7 @@ export default function App() {
         />
 
         {/* Triagens */}
+
         <Route
           path="triagens/funcional"
           element={
@@ -345,116 +353,137 @@ export default function App() {
           }
         />
 
-{/* Estoque */}
-<Route
-  path="estoque/armazenagem"
-  element={
-    <ArmazenagemV2Page />
-  }
-/>
-<Route
-  path="estoque/consulta"
-  element={
-    <ConsultaEstoqueV2Page />
-  }
-/>
-<Route
-  path="estoque/inventario"
-  element={
-    <InventarioV2Page />
-  }
-/>
-<Route
-  path="estoque/carga-inicial"
-  element={
-    <CargaInicialV2Page />
-  }
-/>
+        {/* Estoque */}
 
-<Route
-  path="b2b/picking"
-  element={
-    <B2BV2Page tipo="picking" />
-  }
-/>
+        <Route
+          path="estoque/armazenagem"
+          element={
+            <ArmazenagemV2Page />
+          }
+        />
 
-<Route
-  path="b2b/embalagem"
-  element={
-    <B2BV2Page tipo="embalagem" />
-  }
-/>
+        <Route
+          path="estoque/consulta"
+          element={
+            <ConsultaEstoqueV2Page />
+          }
+        />
 
-<Route
-  path="b2b/faturamento"
-  element={
-    <B2BV2Page tipo="faturamento" />
-  }
-/>
+        <Route
+          path="estoque/inventario"
+          element={
+            <InventarioV2Page />
+          }
+        />
 
-<Route
-  path="b2b/gestao"
-  element={
-    <B2BV2Page tipo="gestao" />
-  }
-/>
+        <Route
+          path="estoque/carga-inicial"
+          element={
+            <CargaInicialV2Page />
+          }
+        />
 
-<Route
-  path="b2c"
-  element={
-    <B2CV2Page />
-  }
-/>
+        {/* B2B */}
 
-<Route
-  path="b2c/embalagem"
-  element={
-    <B2CFluxoComplementarV2Page tipo="embalagem" />
-  }
-/>
+        <Route
+          path="b2b/picking"
+          element={
+            <B2BV2Page tipo="picking" />
+          }
+        />
 
-<Route
-  path="b2c/expedicao"
-  element={
-    <B2CFluxoComplementarV2Page tipo="expedicao" />
-  }
-/>
+        <Route
+          path="b2b/embalagem"
+          element={
+            <B2BV2Page tipo="embalagem" />
+          }
+        />
 
-<Route
-  path="b2c/etiquetas"
-  element={
-    <B2CFluxoComplementarV2Page tipo="etiquetas" />
-  }
-/>
+        <Route
+          path="b2b/faturamento"
+          element={
+            <B2BV2Page tipo="faturamento" />
+          }
+        />
 
-<Route
-  path="b2c/gestao"
-  element={
-    <B2CFluxoComplementarV2Page tipo="gestao" />
-  }
-/>
+        <Route
+          path="b2b/gestao"
+          element={
+            <B2BV2Page tipo="gestao" />
+          }
+        />
 
-<Route
-  path="uploads"
-  element={
-    <UploadsV2Page />
-  }
-/>
+        {/* B2C */}
 
-<Route
-  path="usuarios"
-  element={
-    <UsuariosV2Page />
-  }
-/>
+        <Route
+          path="b2c"
+          element={
+            <B2CV2Page />
+          }
+        />
 
-</Route>
+        <Route
+          path="b2c/embalagem"
+          element={
+            <B2CFluxoComplementarV2Page tipo="embalagem" />
+          }
+        />
+
+        <Route
+          path="b2c/expedicao"
+          element={
+            <B2CFluxoComplementarV2Page tipo="expedicao" />
+          }
+        />
+
+        <Route
+          path="b2c/etiquetas"
+          element={
+            <B2CFluxoComplementarV2Page tipo="etiquetas" />
+          }
+        />
+
+        <Route
+          path="b2c/gestao"
+          element={
+            <B2CFluxoComplementarV2Page tipo="gestao" />
+          }
+        />
+
+        {/* Dados */}
+
+        <Route
+          path="uploads"
+          element={
+            <UploadsV2Page />
+          }
+        />
+
+        {/* Gestão */}
+
+        <Route
+          path="usuarios"
+          element={
+            <UsuariosV2Page />
+          }
+        />
+
+        <Route
+          path="indicadores"
+          element={
+            <ProtectedRoute tela="/v2/assurant/indicadores">
+              <IndicadoresExecutivosV2Page />
+            </ProtectedRoute>
+          }
+        />
+      </Route>
 
 
       {/* =====================================================
           LIQUIDA SYSTEM ATUAL
           Rotas existentes preservadas.
       ====================================================== */}
+
       <Route
         element={
           <ProtectedRoute>
@@ -542,6 +571,7 @@ export default function App() {
         />
 
         {/* Linha Branca */}
+
         <Route
           path="/linha-branca/triagem"
           element={
@@ -624,6 +654,7 @@ export default function App() {
         />
 
         {/* Sistema */}
+
         <Route
           path="/gerenciar-usuarios"
           element={
@@ -634,6 +665,7 @@ export default function App() {
         />
 
         {/* Assurant */}
+
         <Route
           path="/assurant/dashboard"
           element={
@@ -662,6 +694,7 @@ export default function App() {
         />
 
         {/* Recebimento atual preservado */}
+
         <Route
           path="/recebimento"
           element={
@@ -681,6 +714,7 @@ export default function App() {
         />
 
         {/* B2B */}
+
         <Route
           path="/b2b/picking"
           element={
@@ -718,6 +752,7 @@ export default function App() {
         />
 
         {/* Trocas B2C Assurant */}
+
         <Route
           path="/trocas-b2c/nova"
           element={
@@ -737,6 +772,7 @@ export default function App() {
         />
 
         {/* Trocas e Devoluções */}
+
         <Route
           path="/trocas-devolucoes/assurant"
           element={
@@ -765,6 +801,7 @@ export default function App() {
         />
 
         {/* B2C */}
+
         <Route
           path="/b2c/pedidos"
           element={
@@ -811,6 +848,7 @@ export default function App() {
         />
 
         {/* Triagens atuais preservadas */}
+
         <Route
           path="/triagens/funcional"
           element={
@@ -857,6 +895,7 @@ export default function App() {
         />
 
         {/* WMS */}
+
         <Route
           path="/wms/estoque"
           element={
@@ -876,6 +915,7 @@ export default function App() {
         />
 
         {/* Inventário */}
+
         <Route
           path="/inventario"
           element={
@@ -885,7 +925,8 @@ export default function App() {
           }
         />
 
-        {/* Indicadores */}
+        {/* Indicadores legado */}
+
         <Route
           path="/indicadores"
           element={
