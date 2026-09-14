@@ -65,6 +65,7 @@ import B2CFluxoComplementarV2Page from "./pages/assurant-v2/B2CFluxoComplementar
 import UploadsV2Page from "./pages/assurant-v2/UploadsV2Page.jsx";
 import UsuariosV2Page from "./pages/assurant-v2/UsuariosV2Page.jsx";
 import IndicadoresExecutivosV2Page from "./pages/assurant-v2/IndicadoresExecutivosV2Page.jsx";
+import EstoqueAgingDetalheV2Page from "./pages/assurant-v2/EstoqueAgingDetalheV2Page.jsx";
 
 import LinhaBrancaHomePage from "./pages/linha-branca-v2/LinhaBrancaHomePage.jsx";
 import RefrigeracaoV2Page from "./pages/linha-branca-v2/RefrigeracaoV2Page.jsx";
@@ -552,6 +553,15 @@ export default function App() {
           element={
             <ProtectedRoute tela="/v2/assurant/indicadores">
               <IndicadoresExecutivosV2Page />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="indicadores/estoque/aging"
+          element={
+            <ProtectedRoute tela="/v2/assurant/indicadores">
+              <EstoqueAgingDetalheV2Page />
             </ProtectedRoute>
           }
         />

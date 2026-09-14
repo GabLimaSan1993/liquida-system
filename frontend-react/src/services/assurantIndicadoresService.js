@@ -2,7 +2,7 @@ import { supabase } from "../lib/supabase";
 
 
 /* =========================================================
-   PERÍODO OFICIAL DO COCKPIT
+   PERÍODO OFICIAL DO COCKPIT OPERACIONAL
 ========================================================= */
 
 export const DATA_INICIAL_ANALISE = "2026-08-01";
@@ -107,6 +107,85 @@ const NUMERIC_FIELDS = new Set([
   "imei_invalido",
   "sem_triagem",
   "integros",
+
+  /* Drill-down estoque */
+  "dias_estoque",
+  "aging_medio_dias",
+  "aging_min_dias",
+  "aging_max_dias",
+  "rua",
+  "bloco",
+  "andar",
+  "linha",
+
+  /* Pricing Intelligence */
+  "quantidade",
+  "valor_unitario",
+  "valor_produtos",
+
+  "estoque_atual",
+  "estoque_mais_90_dias",
+  "estoque_mais_180_dias",
+
+  "saidas_brutas_total",
+  "saidas_liquidas_total",
+
+  "saidas_liq_7d",
+  "saidas_liq_15d",
+  "saidas_liq_30d",
+  "saidas_liq_60d",
+  "saidas_liq_90d",
+
+  "saidas_brutas_30d",
+  "saidas_brutas_90d",
+
+  "registros_preco_90d",
+  "registros_preco_365d",
+
+  "preco_medio_90d",
+  "preco_p25_90d",
+  "preco_mediano_90d",
+  "preco_p75_90d",
+  "preco_min_90d",
+  "preco_max_90d",
+
+  "preco_p25_365d",
+  "preco_mediano_365d",
+  "preco_p75_365d",
+
+  "preco_p25_total",
+  "preco_mediano_total",
+  "preco_p75_total",
+
+  "ultimo_preco_saida",
+
+  "demanda_diaria_ponderada",
+  "cobertura_dias",
+
+  "pct_rank_demanda_30d",
+
+  "score_recencia",
+  "score_cobertura",
+  "score_aging",
+  "score_liquidez",
+
+  "chance_estimada_saida_7d_pct",
+  "chance_estimada_saida_15d_pct",
+  "chance_estimada_saida_30d_pct",
+  "chance_estimada_saida_60d_pct",
+
+  "preco_p25_ref",
+  "preco_mediano_ref",
+  "preco_p75_ref",
+  "preco_recomendado",
+
+  "saidas_brutas",
+  "saidas_liquidas_estimadas",
+
+  "preco_medio",
+  "preco_mediano",
+  "preco_min",
+  "preco_max",
 ]);
 
 
@@ -142,12 +221,40 @@ function normalizarLinha(row) {
   );
 }
 
+
 function normalizarLinhas(rows) {
   return (
     rows || []
   ).map(
     normalizarLinha
   );
+}
+
+
+function normalizarSkuBase(
+  sku
+) {
+  if (!sku) {
+    return "";
+  }
+
+  return String(sku)
+    .trim()
+    .replace(
+      /-CC\d+$/i,
+      ""
+    );
+}
+
+
+function normalizarGrade(
+  grade
+) {
+  return String(
+    grade || ""
+  )
+    .trim()
+    .toUpperCase();
 }
 
 
@@ -209,6 +316,72 @@ async function consultarView(
 
 
 /* =========================================================
+   CONSULTA PAGINADA COMPLETA
+
+   IMPORTANTE:
+   não utiliza amostragem.
+
+   Continua buscando páginas até trazer 100% dos registros
+   elegíveis para o filtro solicitado.
+========================================================= */
+
+async function consultarTodasPaginas(
+  criarQuery,
+  {
+    tamanhoPagina = 1000,
+  } = {}
+) {
+  const resultado = [];
+
+  let inicio = 0;
+
+  while (true) {
+    const fim =
+      inicio +
+      tamanhoPagina -
+      1;
+
+    const query =
+      criarQuery()
+        .range(
+          inicio,
+          fim
+        );
+
+    const {
+      data,
+      error,
+    } = await query;
+
+    if (error) {
+      throw error;
+    }
+
+    const lote =
+      data || [];
+
+    resultado.push(
+      ...lote
+    );
+
+    if (
+      lote.length <
+      tamanhoPagina
+    ) {
+      break;
+    }
+
+    inicio +=
+      tamanhoPagina;
+  }
+
+  return normalizarLinhas(
+    resultado
+  );
+}
+
+
+/* =========================================================
    B2C / B2B — COMPARATIVOS EXECUTIVOS
 ========================================================= */
 
@@ -217,6 +390,7 @@ export async function fetchComparativoPeriodoAtual() {
     "vw_assurant_comparativo_periodo_atual"
   );
 }
+
 
 export async function fetchKpisSemanais() {
   return consultarView(
@@ -234,6 +408,7 @@ export async function fetchKpisSemanais() {
   );
 }
 
+
 export async function fetchKpisMensais() {
   return consultarView(
     "vw_assurant_kpis_mensais",
@@ -250,6 +425,7 @@ export async function fetchKpisMensais() {
   );
 }
 
+
 export async function fetchEtapasSemanais() {
   return consultarView(
     "vw_assurant_etapas_semanais",
@@ -265,6 +441,7 @@ export async function fetchEtapasSemanais() {
     }
   );
 }
+
 
 export async function fetchEtapasMensais() {
   return consultarView(
@@ -302,6 +479,7 @@ export async function fetchOperacaoDiaria() {
     }
   );
 }
+
 
 export async function fetchOperacaoMensal() {
   return consultarView(
@@ -400,6 +578,7 @@ export async function fetchB2BOperacaoDiaria() {
   );
 }
 
+
 export async function fetchB2BOperacaoMensal() {
   return consultarView(
     "vw_assurant_b2b_operacao_mes",
@@ -437,6 +616,7 @@ export async function fetchB2CCanaisMensal() {
   );
 }
 
+
 export async function fetchB2CCanaisFaixasMensal() {
   return consultarView(
     "vw_assurant_b2c_canal_faixas_mes",
@@ -452,6 +632,7 @@ export async function fetchB2CCanaisFaixasMensal() {
     }
   );
 }
+
 
 export async function fetchExpedicaoDiaria() {
   return consultarView(
@@ -471,7 +652,7 @@ export async function fetchExpedicaoDiaria() {
 
 
 /* =========================================================
-   OCORRÊNCIAS — VENDA SEM ESTOQUE / DIVERGÊNCIAS
+   OCORRÊNCIAS
 ========================================================= */
 
 export async function fetchOcorrenciasMensais() {
@@ -531,7 +712,7 @@ export async function fetchEstoquePosicaoAtual() {
 
 
 /* =========================================================
-   ESTOQUE — AGING
+   ESTOQUE — AGING EXECUTIVO
 ========================================================= */
 
 export async function fetchEstoqueAgingAtual() {
@@ -549,7 +730,7 @@ export async function fetchEstoqueAgingAtual() {
 
 
 /* =========================================================
-   ESTOQUE — QUALIDADE DO DADO
+   ESTOQUE — QUALIDADE
 ========================================================= */
 
 export async function fetchEstoqueQualidadeAtual() {
@@ -568,6 +749,780 @@ export async function fetchEstoqueQualidadeAtual() {
       integros: 0,
     }
   );
+}
+
+
+/* =========================================================
+   ESTOQUE — DRILL-DOWN POR AGING
+========================================================= */
+
+function limparBuscaFiltro(
+  value
+) {
+  return String(
+    value || ""
+  )
+    .replace(
+      /[,()%]/g,
+      " "
+    )
+    .trim();
+}
+
+
+export async function fetchEstoqueAgingResumoSku({
+  faixa,
+  limite = 100,
+} = {}) {
+  let query =
+    supabase
+      .from(
+        "vw_assurant_estoque_aging_resumo_sku"
+      )
+      .select("*")
+      .order(
+        "aparelhos",
+        {
+          ascending:
+            false,
+        }
+      );
+
+  if (faixa) {
+    query =
+      query.eq(
+        "faixa_aging",
+        faixa
+      );
+  }
+
+  if (limite) {
+    query =
+      query.limit(
+        limite
+      );
+  }
+
+  const {
+    data,
+    error,
+  } = await query;
+
+  if (error) {
+    throw new Error(
+      `vw_assurant_estoque_aging_resumo_sku: ${error.message}`
+    );
+  }
+
+  return normalizarLinhas(
+    data
+  );
+}
+
+
+export async function fetchEstoqueAgingDetalhe({
+  faixa,
+  busca = "",
+  grade = "",
+  sku = "",
+  pagina = 1,
+  tamanhoPagina = 50,
+} = {}) {
+  const page =
+    Math.max(
+      1,
+      Number(
+        pagina || 1
+      )
+    );
+
+  const pageSize =
+    Math.min(
+      200,
+      Math.max(
+        10,
+        Number(
+          tamanhoPagina ||
+            50
+        )
+      )
+    );
+
+  const inicio =
+    (
+      page -
+      1
+    ) *
+    pageSize;
+
+  const fim =
+    inicio +
+    pageSize -
+    1;
+
+  let query =
+    supabase
+      .from(
+        "vw_assurant_estoque_detalhe_atual"
+      )
+      .select(
+        "*",
+        {
+          count:
+            "exact",
+        }
+      );
+
+  if (faixa) {
+    query =
+      query.eq(
+        "faixa_aging",
+        faixa
+      );
+  }
+
+  if (grade) {
+    query =
+      query.eq(
+        "grade",
+        grade
+      );
+  }
+
+  if (sku) {
+    query =
+      query.eq(
+        "sku",
+        sku
+      );
+  }
+
+  const termo =
+    limparBuscaFiltro(
+      busca
+    );
+
+  if (termo) {
+    query =
+      query.or(
+        [
+          `imei.ilike.%${termo}%`,
+          `sku.ilike.%${termo}%`,
+          `modelo.ilike.%${termo}%`,
+          `marca.ilike.%${termo}%`,
+          `voucher.ilike.%${termo}%`,
+          `local_subinv.ilike.%${termo}%`,
+        ].join(",")
+      );
+  }
+
+  query =
+    query
+      .order(
+        "dias_estoque",
+        {
+          ascending:
+            false,
+          nullsFirst:
+            false,
+        }
+      )
+      .range(
+        inicio,
+        fim
+      );
+
+  const {
+    data,
+    error,
+    count,
+  } = await query;
+
+  if (error) {
+    throw new Error(
+      `vw_assurant_estoque_detalhe_atual: ${error.message}`
+    );
+  }
+
+  return {
+    itens:
+      normalizarLinhas(
+        data
+      ),
+
+    total:
+      Number(
+        count || 0
+      ),
+
+    pagina:
+      page,
+
+    tamanhoPagina:
+      pageSize,
+
+    totalPaginas:
+      Math.max(
+        1,
+        Math.ceil(
+          Number(
+            count || 0
+          ) /
+            pageSize
+        )
+      ),
+  };
+}
+
+
+/* =========================================================
+   ESTOQUE — ITEM / IMEI
+========================================================= */
+
+export async function fetchEstoqueItem(
+  imei
+) {
+  if (!imei) {
+    return null;
+  }
+
+  const {
+    data,
+    error,
+  } =
+    await supabase
+      .from(
+        "vw_assurant_estoque_detalhe_atual"
+      )
+      .select("*")
+      .eq(
+        "imei",
+        imei
+      )
+      .limit(1);
+
+  if (error) {
+    throw new Error(
+      `vw_assurant_estoque_detalhe_atual: ${error.message}`
+    );
+  }
+
+  return normalizarLinha(
+    data?.[0] ||
+      null
+  );
+}
+
+
+/* =========================================================
+   PRICING INTELLIGENCE — RESUMO SKU × GRADE
+========================================================= */
+
+export async function fetchPricingResumoSkuGrade({
+  skuBase,
+  grade,
+} = {}) {
+  const sku =
+    normalizarSkuBase(
+      skuBase
+    );
+
+  if (!sku) {
+    return null;
+  }
+
+  let query =
+    supabase
+      .from(
+        "vw_assurant_pricing_recomendacao"
+      )
+      .select("*")
+      .eq(
+        "sku_base",
+        sku
+      );
+
+  if (grade) {
+    query =
+      query.eq(
+        "grade",
+        normalizarGrade(
+          grade
+        )
+      );
+  }
+
+  const {
+    data,
+    error,
+  } = await query;
+
+  if (error) {
+    throw new Error(
+      `vw_assurant_pricing_recomendacao: ${error.message}`
+    );
+  }
+
+  if (grade) {
+    return normalizarLinha(
+      data?.[0] ||
+        null
+    );
+  }
+
+  return normalizarLinhas(
+    data
+  );
+}
+
+
+/* =========================================================
+   PRICING INTELLIGENCE — COMPARATIVO ENTRE GRADES
+========================================================= */
+
+export async function fetchPricingComparativoGrades(
+  skuBase
+) {
+  const sku =
+    normalizarSkuBase(
+      skuBase
+    );
+
+  if (!sku) {
+    return [];
+  }
+
+  const {
+    data,
+    error,
+  } =
+    await supabase
+      .from(
+        "vw_assurant_pricing_recomendacao"
+      )
+      .select("*")
+      .eq(
+        "sku_base",
+        sku
+      )
+      .order(
+        "estoque_atual",
+        {
+          ascending:
+            false,
+        }
+      );
+
+  if (error) {
+    throw new Error(
+      `vw_assurant_pricing_recomendacao: ${error.message}`
+    );
+  }
+
+  return normalizarLinhas(
+    data
+  );
+}
+
+
+/* =========================================================
+   PRICING INTELLIGENCE — PERFORMANCE POR CANAL
+========================================================= */
+
+export async function fetchPricingCanaisSku({
+  skuBase,
+  grade,
+} = {}) {
+  const sku =
+    normalizarSkuBase(
+      skuBase
+    );
+
+  if (!sku) {
+    return [];
+  }
+
+  let query =
+    supabase
+      .from(
+        "vw_assurant_pricing_sku_canal"
+      )
+      .select("*")
+      .eq(
+        "sku_base",
+        sku
+      );
+
+  if (grade) {
+    query =
+      query.eq(
+        "grade",
+        normalizarGrade(
+          grade
+        )
+      );
+  }
+
+  query =
+    query.order(
+      "saidas_liq_90d",
+      {
+        ascending:
+          false,
+      }
+    );
+
+  const {
+    data,
+    error,
+  } = await query;
+
+  if (error) {
+    throw new Error(
+      `vw_assurant_pricing_sku_canal: ${error.message}`
+    );
+  }
+
+  return normalizarLinhas(
+    data
+  );
+}
+
+
+/* =========================================================
+   PRICING INTELLIGENCE — CURVA MENSAL
+========================================================= */
+
+export async function fetchPricingCurvaMensalSku({
+  skuBase,
+  grade,
+  marketplace = "",
+} = {}) {
+  const sku =
+    normalizarSkuBase(
+      skuBase
+    );
+
+  if (!sku) {
+    return [];
+  }
+
+  let query =
+    supabase
+      .from(
+        "vw_assurant_pricing_sku_mes"
+      )
+      .select("*")
+      .eq(
+        "sku_base",
+        sku
+      );
+
+  if (grade) {
+    query =
+      query.eq(
+        "grade",
+        normalizarGrade(
+          grade
+        )
+      );
+  }
+
+  if (marketplace) {
+    query =
+      query.eq(
+        "marketplace",
+        marketplace
+      );
+  }
+
+  query =
+    query.order(
+      "mes",
+      {
+        ascending:
+          true,
+      }
+    );
+
+  const {
+    data,
+    error,
+  } = await query;
+
+  if (error) {
+    throw new Error(
+      `vw_assurant_pricing_sku_mes: ${error.message}`
+    );
+  }
+
+  return normalizarLinhas(
+    data
+  );
+}
+
+
+/* =========================================================
+   PRICING INTELLIGENCE — HISTÓRICO COMPLETO DE PREÇOS
+
+   Sem amostragem.
+   Busca todas as páginas elegíveis.
+========================================================= */
+
+export async function fetchPricingHistoricoPrecos({
+  skuBase,
+  grade,
+  marketplace = "",
+} = {}) {
+  const sku =
+    normalizarSkuBase(
+      skuBase
+    );
+
+  if (!sku) {
+    return [];
+  }
+
+  try {
+    return await consultarTodasPaginas(
+      () => {
+        let query =
+          supabase
+            .from(
+              "vw_assurant_pricing_venda_eventos"
+            )
+            .select("*")
+            .eq(
+              "sku_base",
+              sku
+            );
+
+        if (grade) {
+          query =
+            query.eq(
+              "grade",
+              normalizarGrade(
+                grade
+              )
+            );
+        }
+
+        if (marketplace) {
+          query =
+            query.eq(
+              "marketplace",
+              marketplace
+            );
+        }
+
+        return query.order(
+          "data_venda",
+          {
+            ascending:
+              true,
+          }
+        );
+      }
+    );
+  } catch (error) {
+    throw new Error(
+      `vw_assurant_pricing_venda_eventos: ${error.message}`
+    );
+  }
+}
+
+
+/* =========================================================
+   PRICING INTELLIGENCE — RANKING DE ESTOQUE
+========================================================= */
+
+export async function fetchPricingRankingEstoque({
+  limite = 100,
+  ordenarPor = "score_liquidez",
+  ascending = true,
+} = {}) {
+  const camposPermitidos =
+    new Set([
+      "score_liquidez",
+      "aging_medio_dias",
+      "estoque_atual",
+      "estoque_mais_90_dias",
+      "estoque_mais_180_dias",
+      "cobertura_dias",
+      "saidas_liq_30d",
+      "saidas_liq_90d",
+    ]);
+
+  const campo =
+    camposPermitidos.has(
+      ordenarPor
+    )
+      ? ordenarPor
+      : "score_liquidez";
+
+  let query =
+    supabase
+      .from(
+        "vw_assurant_pricing_recomendacao"
+      )
+      .select("*")
+      .gt(
+        "estoque_atual",
+        0
+      )
+      .order(
+        campo,
+        {
+          ascending,
+          nullsFirst:
+            false,
+        }
+      );
+
+  if (limite) {
+    query =
+      query.limit(
+        limite
+      );
+  }
+
+  const {
+    data,
+    error,
+  } = await query;
+
+  if (error) {
+    throw new Error(
+      `vw_assurant_pricing_recomendacao: ${error.message}`
+    );
+  }
+
+  return normalizarLinhas(
+    data
+  );
+}
+
+
+/* =========================================================
+   PRICING INTELLIGENCE — PACOTE COMPLETO DO SKU
+========================================================= */
+
+export async function fetchPricingInteligenciaSku({
+  skuBase,
+  grade,
+  marketplace = "",
+} = {}) {
+  const sku =
+    normalizarSkuBase(
+      skuBase
+    );
+
+  if (!sku) {
+    return {
+      resumo: null,
+      grades: [],
+      canais: [],
+      curvaMensal: [],
+      historicoPrecos: [],
+    };
+  }
+
+  const [
+    resumo,
+    grades,
+    canais,
+    curvaMensal,
+    historicoPrecos,
+  ] =
+    await Promise.all([
+      fetchPricingResumoSkuGrade({
+        skuBase:
+          sku,
+
+        grade,
+      }),
+
+      fetchPricingComparativoGrades(
+        sku
+      ),
+
+      fetchPricingCanaisSku({
+        skuBase:
+          sku,
+
+        grade,
+      }),
+
+      fetchPricingCurvaMensalSku({
+        skuBase:
+          sku,
+
+        grade,
+
+        marketplace,
+      }),
+
+      fetchPricingHistoricoPrecos({
+        skuBase:
+          sku,
+
+        grade,
+
+        marketplace,
+      }),
+    ]);
+
+  return {
+    resumo,
+    grades,
+    canais,
+    curvaMensal,
+    historicoPrecos,
+  };
+}
+
+
+/* =========================================================
+   PRICING INTELLIGENCE — ITEM DO ESTOQUE + SKU
+========================================================= */
+
+export async function fetchInteligenciaEstoqueItem(
+  imei
+) {
+  const item =
+    await fetchEstoqueItem(
+      imei
+    );
+
+  if (!item) {
+    return {
+      item: null,
+      inteligencia: null,
+    };
+  }
+
+  const skuBase =
+    normalizarSkuBase(
+      item.sku
+    );
+
+  const inteligencia =
+    await fetchPricingInteligenciaSku({
+      skuBase,
+
+      grade:
+        item.grade,
+    });
+
+  return {
+    item: {
+      ...item,
+      sku_base:
+        skuBase,
+    },
+
+    inteligencia,
+  };
 }
 
 

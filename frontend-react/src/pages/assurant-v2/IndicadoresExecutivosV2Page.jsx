@@ -8,6 +8,7 @@ import {
   Activity,
   AlertTriangle,
   ArrowDownRight,
+  ArrowRight,
   ArrowUpRight,
   BarChart3,
   Boxes,
@@ -19,7 +20,6 @@ import {
   Layers3,
   PackageCheck,
   RefreshCw,
-  ShoppingCart,
   Target,
   Timer,
   TrendingDown,
@@ -43,6 +43,10 @@ import {
 } from "recharts";
 
 import {
+  useNavigate,
+} from "react-router-dom";
+
+import {
   fetchIndicadoresExecutivos,
 } from "../../services/assurantIndicadoresService.js";
 
@@ -57,21 +61,29 @@ function fmtNumero(
 ) {
   if (
     value == null ||
-    Number.isNaN(Number(value))
+    Number.isNaN(
+      Number(
+        value
+      )
+    )
   ) {
     return "—";
   }
 
-  return Number(value).toLocaleString(
+  return Number(
+    value
+  ).toLocaleString(
     "pt-BR",
     {
       minimumFractionDigits:
         casas,
+
       maximumFractionDigits:
         casas,
     }
   );
 }
+
 
 function fmtPercentual(
   value,
@@ -79,7 +91,11 @@ function fmtPercentual(
 ) {
   if (
     value == null ||
-    Number.isNaN(Number(value))
+    Number.isNaN(
+      Number(
+        value
+      )
+    )
   ) {
     return "—";
   }
@@ -90,18 +106,25 @@ function fmtPercentual(
   )}%`;
 }
 
+
 function fmtVariacao(
   value
 ) {
   if (
     value == null ||
-    Number.isNaN(Number(value))
+    Number.isNaN(
+      Number(
+        value
+      )
+    )
   ) {
     return "—";
   }
 
   const numero =
-    Number(value);
+    Number(
+      value
+    );
 
   return `${
     numero > 0
@@ -113,36 +136,53 @@ function fmtVariacao(
   )}%`;
 }
 
+
 function calcularVariacao(
   atual,
   anterior
 ) {
   const a =
-    Number(atual);
+    Number(
+      atual
+    );
 
   const b =
-    Number(anterior);
+    Number(
+      anterior
+    );
 
   if (
-    !Number.isFinite(a) ||
-    !Number.isFinite(b) ||
+    !Number.isFinite(
+      a
+    ) ||
+    !Number.isFinite(
+      b
+    ) ||
     b === 0
   ) {
     return null;
   }
 
   return (
-    (a - b) /
+    (
+      a -
+      b
+    ) /
     b
   ) * 100;
 }
+
 
 function fmtDuracao(
   minutos
 ) {
   if (
     minutos == null ||
-    Number.isNaN(Number(minutos))
+    Number.isNaN(
+      Number(
+        minutos
+      )
+    )
   ) {
     return "—";
   }
@@ -151,23 +191,33 @@ function fmtDuracao(
     Math.max(
       0,
       Math.round(
-        Number(minutos)
+        Number(
+          minutos
+        )
       )
     );
 
-  if (total < 60) {
+  if (
+    total <
+    60
+  ) {
     return `${total} min`;
   }
 
   const horas =
     Math.floor(
-      total / 60
+      total /
+        60
     );
 
   const resto =
-    total % 60;
+    total %
+    60;
 
-  if (horas < 24) {
+  if (
+    horas <
+    24
+  ) {
     return resto
       ? `${horas}h ${resto}m`
       : `${horas}h`;
@@ -175,33 +225,46 @@ function fmtDuracao(
 
   const dias =
     Math.floor(
-      horas / 24
+      horas /
+        24
     );
 
   const horasRestantes =
-    horas % 24;
+    horas %
+    24;
 
   return horasRestantes
     ? `${dias}d ${horasRestantes}h`
     : `${dias}d`;
 }
 
+
 function fmtHoras(
   horas
 ) {
   if (
     horas == null ||
-    Number.isNaN(Number(horas))
+    Number.isNaN(
+      Number(
+        horas
+      )
+    )
   ) {
     return "—";
   }
 
   const valor =
-    Number(horas);
+    Number(
+      horas
+    );
 
-  if (valor < 1) {
+  if (
+    valor <
+    1
+  ) {
     return `${fmtNumero(
-      valor * 60,
+      valor *
+        60,
       0
     )} min`;
   }
@@ -212,17 +275,26 @@ function fmtHoras(
   )}h`;
 }
 
+
 function fmtCobertura(
   validos,
   total
 ) {
   const qtdValidos =
-    Number(validos || 0);
+    Number(
+      validos ||
+        0
+    );
 
   const qtdTotal =
-    Number(total || 0);
+    Number(
+      total ||
+        0
+    );
 
-  if (!qtdTotal) {
+  if (
+    !qtdTotal
+  ) {
     return "—";
   }
 
@@ -243,10 +315,13 @@ function fmtCobertura(
   )}%`;
 }
 
+
 function fmtDataCurta(
   value
 ) {
-  if (!value) {
+  if (
+    !value
+  ) {
     return "—";
   }
 
@@ -255,9 +330,16 @@ function fmtDataCurta(
     mes,
     dia,
   ] =
-    String(value)
-      .slice(0, 10)
-      .split("-");
+    String(
+      value
+    )
+      .slice(
+        0,
+        10
+      )
+      .split(
+        "-"
+      );
 
   if (
     !ano ||
@@ -270,10 +352,13 @@ function fmtDataCurta(
   return `${dia}/${mes}`;
 }
 
+
 function fmtMes(
   value
 ) {
-  if (!value) {
+  if (
+    !value
+  ) {
     return "—";
   }
 
@@ -281,9 +366,16 @@ function fmtMes(
     ano,
     mes,
   ] =
-    String(value)
-      .slice(0, 10)
-      .split("-");
+    String(
+      value
+    )
+      .slice(
+        0,
+        10
+      )
+      .split(
+        "-"
+      );
 
   const meses = [
     "",
@@ -303,17 +395,25 @@ function fmtMes(
 
   return `${
     meses[
-      Number(mes)
-    ] || mes
+      Number(
+        mes
+      )
+    ] ||
+    mes
   }/${String(
     ano
-  ).slice(-2)}`;
+  ).slice(
+    -2
+  )}`;
 }
+
 
 function fmtMesLongo(
   value
 ) {
-  if (!value) {
+  if (
+    !value
+  ) {
     return "—";
   }
 
@@ -321,9 +421,16 @@ function fmtMesLongo(
     ano,
     mes,
   ] =
-    String(value)
-      .slice(0, 10)
-      .split("-");
+    String(
+      value
+    )
+      .slice(
+        0,
+        10
+      )
+      .split(
+        "-"
+      );
 
   const meses = [
     "",
@@ -343,18 +450,25 @@ function fmtMesLongo(
 
   return `${
     meses[
-      Number(mes)
-    ] || mes
+      Number(
+        mes
+      )
+    ] ||
+    mes
   }/${ano}`;
 }
+
 
 function normalizarTexto(
   value
 ) {
   return String(
-    value || ""
+    value ||
+      ""
   )
-    .normalize("NFD")
+    .normalize(
+      "NFD"
+    )
     .replace(
       /[\u0300-\u036f]/g,
       ""
@@ -362,6 +476,85 @@ function normalizarTexto(
     .trim()
     .toUpperCase();
 }
+
+
+/* =========================================================
+   NORMALIZAÇÃO DE AGING
+========================================================= */
+
+function normalizarFaixaAging(
+  value
+) {
+  const texto =
+    String(
+      value ||
+        ""
+    )
+      .replace(
+        /^\s*\d+\.\s*/,
+        ""
+      )
+      .trim();
+
+  const normalizado =
+    normalizarTexto(
+      texto
+    );
+
+  if (
+    normalizado.includes(
+      "ATE 30"
+    )
+  ) {
+    return "Até 30 dias";
+  }
+
+  if (
+    normalizado.includes(
+      "31 A 60"
+    )
+  ) {
+    return "31 a 60 dias";
+  }
+
+  if (
+    normalizado.includes(
+      "61 A 90"
+    )
+  ) {
+    return "61 a 90 dias";
+  }
+
+  if (
+    normalizado.includes(
+      "91 A 180"
+    )
+  ) {
+    return "91 a 180 dias";
+  }
+
+  if (
+    normalizado.includes(
+      "MAIS DE 180"
+    ) ||
+    normalizado.includes(
+      "> 180"
+    )
+  ) {
+    return "Mais de 180 dias";
+  }
+
+  return texto;
+}
+
+
+const ORDEM_AGING = [
+  "Até 30 dias",
+  "31 a 60 dias",
+  "61 a 90 dias",
+  "91 a 180 dias",
+  "Mais de 180 dias",
+];
 
 
 /* =========================================================
@@ -376,7 +569,11 @@ function VariacaoBadge({
 }) {
   if (
     value == null ||
-    Number.isNaN(Number(value))
+    Number.isNaN(
+      Number(
+        value
+      )
+    )
   ) {
     return (
       <span className="text-[10px] font-semibold text-slate-400">
@@ -386,10 +583,13 @@ function VariacaoBadge({
   }
 
   const numero =
-    Number(value);
+    Number(
+      value
+    );
 
   const positivo =
-    numero > 0;
+    numero >
+    0;
 
   const bom =
     inverso
@@ -397,23 +597,30 @@ function VariacaoBadge({
       : numero > 0;
 
   const semVariacao =
-    numero === 0;
+    numero ===
+    0;
 
   const Icon =
     positivo
       ? ArrowUpRight
       : numero < 0
-      ? ArrowDownRight
-      : Activity;
+        ? ArrowDownRight
+        : Activity;
 
   let classes =
     "bg-slate-100 text-slate-600";
 
-  if (!neutro) {
-    if (semVariacao) {
+  if (
+    !neutro
+  ) {
+    if (
+      semVariacao
+    ) {
       classes =
         "bg-slate-100 text-slate-500";
-    } else if (bom) {
+    } else if (
+      bom
+    ) {
       classes =
         "bg-emerald-50 text-emerald-700";
     } else {
@@ -447,6 +654,7 @@ function VariacaoBadge({
   );
 }
 
+
 function KpiCard({
   title,
   value,
@@ -462,6 +670,7 @@ function KpiCard({
     violet: {
       icon:
         "bg-violet-50 text-violet-700",
+
       line:
         "bg-violet-500",
     },
@@ -469,6 +678,7 @@ function KpiCard({
     blue: {
       icon:
         "bg-blue-50 text-blue-700",
+
       line:
         "bg-blue-500",
     },
@@ -476,6 +686,7 @@ function KpiCard({
     emerald: {
       icon:
         "bg-emerald-50 text-emerald-700",
+
       line:
         "bg-emerald-500",
     },
@@ -483,6 +694,7 @@ function KpiCard({
     amber: {
       icon:
         "bg-amber-50 text-amber-700",
+
       line:
         "bg-amber-500",
     },
@@ -490,6 +702,7 @@ function KpiCard({
     rose: {
       icon:
         "bg-rose-50 text-rose-700",
+
       line:
         "bg-rose-500",
     },
@@ -497,13 +710,16 @@ function KpiCard({
     slate: {
       icon:
         "bg-slate-100 text-slate-700",
+
       line:
         "bg-slate-500",
     },
   };
 
   const cfg =
-    accents[accent] ||
+    accents[
+      accent
+    ] ||
     accents.violet;
 
   return (
@@ -558,6 +774,7 @@ function KpiCard({
   );
 }
 
+
 function SectionCard({
   title,
   subtitle,
@@ -587,6 +804,7 @@ function SectionCard({
   );
 }
 
+
 function PeriodButton({
   active,
   onClick,
@@ -614,6 +832,7 @@ function PeriodButton({
   );
 }
 
+
 function CanalButton({
   active,
   onClick,
@@ -640,6 +859,7 @@ function CanalButton({
     </button>
   );
 }
+
 
 function StatusBadge({
   children,
@@ -701,7 +921,9 @@ function TempoTooltip({
 
       <div className="space-y-1">
         {payload.map(
-          (item) => (
+          (
+            item
+          ) => (
             <div
               key={`${item.dataKey}-${item.name}`}
               className="flex min-w-[160px] items-center justify-between gap-4 text-[10px]"
@@ -744,26 +966,31 @@ function EtapaCard({
     );
 
   const cobertura =
-    totalBase > 0
+    totalBase >
+    0
       ? (
           Number(
             etapa.amostra ||
               0
           ) /
-          Number(totalBase)
+          Number(
+            totalBase
+          )
         ) *
         100
       : null;
 
   const baixaCobertura =
     cobertura != null &&
-    cobertura < 20;
+    cobertura <
+      20;
 
   const melhorou =
     Number.isFinite(
       variacao
     )
-      ? variacao < 0
+      ? variacao <
+        0
       : null;
 
   return (
@@ -780,9 +1007,7 @@ function EtapaCard({
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-[10px] font-black text-slate-700">
-            {
-              etapa.etapa
-            }
+            {etapa.etapa}
           </div>
 
           <div className="mt-2 text-2xl font-black text-slate-900">
@@ -802,11 +1027,13 @@ function EtapaCard({
             items-center justify-center
             rounded-xl
             ${
-              melhorou === true
+              melhorou ===
+              true
                 ? "bg-emerald-50 text-emerald-700"
-                : melhorou === false
-                ? "bg-rose-50 text-rose-700"
-                : "bg-slate-100 text-slate-500"
+                : melhorou ===
+                    false
+                  ? "bg-rose-50 text-rose-700"
+                  : "bg-slate-100 text-slate-500"
             }
           `}
         >
@@ -862,7 +1089,8 @@ function EtapaCard({
         </span>
 
         <span className="text-[10px] font-black text-slate-700">
-          {cobertura != null
+          {cobertura !=
+          null
             ? fmtPercentual(
                 cobertura
               )
@@ -889,7 +1117,7 @@ function EtapaCard({
 
 
 /* =========================================================
-   BARRA HORIZONTAL SIMPLES
+   BARRA HORIZONTAL
 ========================================================= */
 
 function BarraLinha({
@@ -899,12 +1127,14 @@ function BarraLinha({
   detalhe,
 }) {
   const percentual =
-    max > 0
+    max >
+    0
       ? Math.min(
           100,
           (
             Number(
-              value || 0
+              value ||
+                0
             ) /
             max
           ) *
@@ -936,7 +1166,8 @@ function BarraLinha({
         <div
           className="h-full rounded-full bg-[#4C1D95]"
           style={{
-            width: `${percentual}%`,
+            width:
+              `${percentual}%`,
           }}
         />
       </div>
@@ -946,77 +1177,215 @@ function BarraLinha({
 
 
 /* =========================================================
+   LINHA DE AGING CLICÁVEL
+========================================================= */
+
+function AgingLinha({
+  label,
+  value,
+  max,
+  onClick,
+}) {
+  const faixa =
+    normalizarFaixaAging(
+      label
+    );
+
+  const percentual =
+    max >
+    0
+      ? Math.min(
+          100,
+          (
+            Number(
+              value ||
+                0
+            ) /
+            max
+          ) *
+            100
+        )
+      : 0;
+
+  return (
+    <button
+      type="button"
+      onClick={() =>
+        onClick(
+          faixa
+        )
+      }
+      className="
+        group
+        w-full
+        rounded-xl
+        border
+        border-transparent
+        px-3
+        py-2.5
+        text-left
+        transition
+        hover:border-violet-100
+        hover:bg-violet-50/50
+      "
+    >
+      <div className="mb-2 flex items-center justify-between gap-4">
+        <div className="min-w-0">
+          <div className="truncate text-[10px] font-black text-slate-700 transition group-hover:text-violet-800">
+            {faixa}
+          </div>
+
+          <div className="mt-0.5 text-[9px] font-medium text-slate-400">
+            Abrir composição por SKU, grade e IMEI
+          </div>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="text-[11px] font-black text-slate-900">
+            {fmtNumero(
+              value
+            )}
+          </span>
+
+          <ArrowRight className="h-3.5 w-3.5 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-violet-700" />
+        </div>
+      </div>
+
+      <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+        <div
+          className="h-full rounded-full bg-[#4C1D95] transition-all group-hover:bg-violet-700"
+          style={{
+            width:
+              `${percentual}%`,
+          }}
+        />
+      </div>
+    </button>
+  );
+}
+
+
+/* =========================================================
    PÁGINA
 ========================================================= */
 
 export default function IndicadoresExecutivosV2Page() {
+  const navigate =
+    useNavigate();
+
   const [
     loading,
     setLoading,
   ] =
-    useState(true);
+    useState(
+      true
+    );
 
   const [
     error,
     setError,
   ] =
-    useState("");
+    useState(
+      ""
+    );
 
   const [
     dados,
     setDados,
   ] =
     useState({
-      comparativoAtual: [],
-      kpisSemanais: [],
-      kpisMensais: [],
-      etapasSemanais: [],
-      etapasMensais: [],
+      comparativoAtual:
+        [],
 
-      operacaoDiaria: [],
-      operacaoMensal: [],
-      leadtimeTriagemMensal: [],
-      filasAtuais: [],
-      gradesMensais: [],
+      kpisSemanais:
+        [],
 
-      b2bOperacaoDiaria: [],
-      b2bOperacaoMensal: [],
+      kpisMensais:
+        [],
 
-      b2cCanaisMensal: [],
-      b2cCanaisFaixasMensal: [],
-      expedicaoDiaria: [],
+      etapasSemanais:
+        [],
 
-      ocorrenciasMensais: [],
-      errosProcessoMensais: [],
+      etapasMensais:
+        [],
 
-      estoquePosicaoAtual: [],
-      estoqueAgingAtual: [],
-      estoqueQualidadeAtual: {},
+      operacaoDiaria:
+        [],
+
+      operacaoMensal:
+        [],
+
+      leadtimeTriagemMensal:
+        [],
+
+      filasAtuais:
+        [],
+
+      gradesMensais:
+        [],
+
+      b2bOperacaoDiaria:
+        [],
+
+      b2bOperacaoMensal:
+        [],
+
+      b2cCanaisMensal:
+        [],
+
+      b2cCanaisFaixasMensal:
+        [],
+
+      expedicaoDiaria:
+        [],
+
+      ocorrenciasMensais:
+        [],
+
+      errosProcessoMensais:
+        [],
+
+      estoquePosicaoAtual:
+        [],
+
+      estoqueAgingAtual:
+        [],
+
+      estoqueQualidadeAtual:
+        {},
     });
 
   const [
     granularidade,
     setGranularidade,
   ] =
-    useState("MTD");
+    useState(
+      "MTD"
+    );
 
   const [
     canal,
     setCanal,
   ] =
-    useState("B2C");
+    useState(
+      "B2C"
+    );
 
   const [
     visualizacaoEtapa,
     setVisualizacaoEtapa,
   ] =
-    useState("semanal");
+    useState(
+      "semanal"
+    );
 
   const [
     mesSelecionado,
     setMesSelecionado,
   ] =
-    useState("");
+    useState(
+      ""
+    );
 
 
   /* =======================================================
@@ -1029,7 +1398,9 @@ export default function IndicadoresExecutivosV2Page() {
         true
       );
 
-      setError("");
+      setError(
+        ""
+      );
 
       const resultado =
         await fetchIndicadoresExecutivos();
@@ -1055,9 +1426,13 @@ export default function IndicadoresExecutivosV2Page() {
     }
   }
 
-  useEffect(() => {
-    carregar();
-  }, []);
+
+  useEffect(
+    () => {
+      carregar();
+    },
+    []
+  );
 
 
   /* =======================================================
@@ -1065,68 +1440,83 @@ export default function IndicadoresExecutivosV2Page() {
   ======================================================= */
 
   const mesesDisponiveis =
-    useMemo(() => {
-      const meses =
-        new Set();
+    useMemo(
+      () => {
+        const meses =
+          new Set();
 
-      const fontes = [
-        dados.operacaoMensal,
-        dados.kpisMensais,
-        dados.gradesMensais,
-        dados.b2bOperacaoMensal,
-        dados.b2cCanaisMensal,
-        dados.ocorrenciasMensais,
-        dados.errosProcessoMensais,
-      ];
+        const fontes = [
+          dados.operacaoMensal,
+          dados.kpisMensais,
+          dados.gradesMensais,
+          dados.b2bOperacaoMensal,
+          dados.b2cCanaisMensal,
+          dados.ocorrenciasMensais,
+          dados.errosProcessoMensais,
+        ];
 
-      fontes.forEach(
-        (fonte) => {
+        fontes.forEach(
           (
-            fonte || []
-          ).forEach(
-            (row) => {
-              const valor =
-                row.mes ||
-                row.periodo_inicio;
+            fonte
+          ) => {
+            (
+              fonte ||
+              []
+            ).forEach(
+              (
+                row
+              ) => {
+                const valor =
+                  row.mes ||
+                  row.periodo_inicio;
 
-              if (valor) {
-                meses.add(
-                  String(
-                    valor
-                  ).slice(
-                    0,
-                    10
-                  )
-                );
+                if (
+                  valor
+                ) {
+                  meses.add(
+                    String(
+                      valor
+                    ).slice(
+                      0,
+                      10
+                    )
+                  );
+                }
               }
-            }
-          );
-        }
-      );
+            );
+          }
+        );
 
-      return Array.from(
-        meses
-      ).sort();
-    }, [
-      dados,
-    ]);
+        return Array.from(
+          meses
+        ).sort();
+      },
+      [
+        dados,
+      ]
+    );
 
-  useEffect(() => {
-    if (
-      !mesSelecionado &&
-      mesesDisponiveis.length
-    ) {
-      setMesSelecionado(
-        mesesDisponiveis[
-          mesesDisponiveis.length -
-            1
-        ]
-      );
-    }
-  }, [
-    mesesDisponiveis,
-    mesSelecionado,
-  ]);
+
+  useEffect(
+    () => {
+      if (
+        !mesSelecionado &&
+        mesesDisponiveis.length
+      ) {
+        setMesSelecionado(
+          mesesDisponiveis[
+            mesesDisponiveis.length -
+              1
+          ]
+        );
+      }
+    },
+    [
+      mesesDisponiveis,
+      mesSelecionado,
+    ]
+  );
+
 
   const indiceMesAtual =
     mesesDisponiveis.indexOf(
@@ -1134,7 +1524,8 @@ export default function IndicadoresExecutivosV2Page() {
     );
 
   const mesAnterior =
-    indiceMesAtual > 0
+    indiceMesAtual >
+    0
       ? mesesDisponiveis[
           indiceMesAtual -
             1
@@ -1147,37 +1538,49 @@ export default function IndicadoresExecutivosV2Page() {
   ======================================================= */
 
   const comparativos =
-    useMemo(() => {
-      return (
-        dados
-          .comparativoAtual ||
-        []
-      ).filter(
-        (item) =>
-          item.granularidade ===
-          granularidade
-      );
-    }, [
-      dados.comparativoAtual,
-      granularidade,
-    ]);
+    useMemo(
+      () =>
+        (
+          dados
+            .comparativoAtual ||
+          []
+        ).filter(
+          (
+            item
+          ) =>
+            item.granularidade ===
+            granularidade
+        ),
+      [
+        dados.comparativoAtual,
+        granularidade,
+      ]
+    );
+
 
   const atualB2C =
     comparativos.find(
-      (item) =>
+      (
+        item
+      ) =>
         item.canal ===
         "B2C"
-    ) || null;
+    ) ||
+    null;
 
   const atualB2B =
     comparativos.find(
-      (item) =>
+      (
+        item
+      ) =>
         item.canal ===
         "B2B"
-    ) || null;
+    ) ||
+    null;
 
   const atual =
-    canal === "B2C"
+    canal ===
+    "B2C"
       ? atualB2C
       : atualB2B;
 
@@ -1191,7 +1594,9 @@ export default function IndicadoresExecutivosV2Page() {
       dados.operacaoMensal ||
       []
     ).find(
-      (row) =>
+      (
+        row
+      ) =>
         String(
           row.mes
         ).slice(
@@ -1199,14 +1604,18 @@ export default function IndicadoresExecutivosV2Page() {
           10
         ) ===
         mesSelecionado
-    ) || {};
+    ) ||
+    {};
+
 
   const operacaoMesAnterior =
     (
       dados.operacaoMensal ||
       []
     ).find(
-      (row) =>
+      (
+        row
+      ) =>
         String(
           row.mes
         ).slice(
@@ -1214,36 +1623,44 @@ export default function IndicadoresExecutivosV2Page() {
           10
         ) ===
         mesAnterior
-    ) || {};
+    ) ||
+    {};
+
 
   const operacaoDiariaMes =
     (
       dados.operacaoDiaria ||
       []
-    ).filter(
-      (row) =>
-        String(
-          row.dia
-        ).slice(
-          0,
-          7
-        ) ===
-        String(
-          mesSelecionado
-        ).slice(
-          0,
-          7
-        )
     )
-    .map(
-      (row) => ({
-        ...row,
-        label:
-          fmtDataCurta(
+      .filter(
+        (
+          row
+        ) =>
+          String(
             row.dia
-          ),
-      })
-    );
+          ).slice(
+            0,
+            7
+          ) ===
+          String(
+            mesSelecionado
+          ).slice(
+            0,
+            7
+          )
+      )
+      .map(
+        (
+          row
+        ) => ({
+          ...row,
+
+          label:
+            fmtDataCurta(
+              row.dia
+            ),
+        })
+      );
 
 
   /* =======================================================
@@ -1256,7 +1673,9 @@ export default function IndicadoresExecutivosV2Page() {
         .leadtimeTriagemMensal ||
       []
     ).find(
-      (row) =>
+      (
+        row
+      ) =>
         String(
           row.mes
         ).slice(
@@ -1264,7 +1683,8 @@ export default function IndicadoresExecutivosV2Page() {
           10
         ) ===
         mesSelecionado
-    ) || {};
+    ) ||
+    {};
 
 
   /* =======================================================
@@ -1272,34 +1692,41 @@ export default function IndicadoresExecutivosV2Page() {
   ======================================================= */
 
   const filasOrdenadas =
-    useMemo(() => {
-      return [
-        ...(dados
-          .filasAtuais ||
-          []),
-      ].sort(
-        (
-          a,
-          b
-        ) =>
-          Number(
-            b.aparelhos ||
-              0
-          ) -
-          Number(
-            a.aparelhos ||
-              0
-          )
-      );
-    }, [
-      dados.filasAtuais,
-    ]);
+    useMemo(
+      () =>
+        [
+          ...(
+            dados
+              .filasAtuais ||
+            []
+          ),
+        ].sort(
+          (
+            a,
+            b
+          ) =>
+            Number(
+              b.aparelhos ||
+                0
+            ) -
+            Number(
+              a.aparelhos ||
+                0
+            )
+        ),
+      [
+        dados.filasAtuais,
+      ]
+    );
+
 
   const maxFila =
     Math.max(
       1,
       ...filasOrdenadas.map(
-        (item) =>
+        (
+          item
+        ) =>
           Number(
             item.aparelhos ||
               0
@@ -1316,30 +1743,34 @@ export default function IndicadoresExecutivosV2Page() {
     (
       dados.gradesMensais ||
       []
-    ).filter(
-      (row) =>
-        String(
-          row.mes
-        ).slice(
-          0,
-          10
-        ) ===
-        mesSelecionado
     )
-    .sort(
-      (
-        a,
-        b
-      ) =>
-        Number(
-          b.aparelhos ||
-            0
-        ) -
-        Number(
-          a.aparelhos ||
-            0
-        )
-    );
+      .filter(
+        (
+          row
+        ) =>
+          String(
+            row.mes
+          ).slice(
+            0,
+            10
+          ) ===
+          mesSelecionado
+      )
+      .sort(
+        (
+          a,
+          b
+        ) =>
+          Number(
+            b.aparelhos ||
+              0
+          ) -
+          Number(
+            a.aparelhos ||
+              0
+          )
+      );
+
 
   const totalGrades =
     gradesMes.reduce(
@@ -1355,22 +1786,23 @@ export default function IndicadoresExecutivosV2Page() {
       0
     );
 
+
   const naoAlocaveis =
     gradesMes.reduce(
       (
         total,
         row
       ) => {
-        const grade =
+        const gradeNormalizada =
           normalizarTexto(
             row.grade
           );
 
         const naoAlocavel =
-          grade.includes(
+          gradeNormalizada.includes(
             "QUEBRAD"
           ) ||
-          grade.includes(
+          gradeNormalizada.includes(
             "REGULAR"
           );
 
@@ -1387,8 +1819,10 @@ export default function IndicadoresExecutivosV2Page() {
       0
     );
 
+
   const pctNaoAlocavel =
-    totalGrades > 0
+    totalGrades >
+    0
       ? (
           naoAlocaveis /
           totalGrades
@@ -1396,11 +1830,14 @@ export default function IndicadoresExecutivosV2Page() {
         100
       : null;
 
+
   const maxGrade =
     Math.max(
       1,
       ...gradesMes.map(
-        (row) =>
+        (
+          row
+        ) =>
           Number(
             row.aparelhos ||
               0
@@ -1419,7 +1856,9 @@ export default function IndicadoresExecutivosV2Page() {
         .b2bOperacaoMensal ||
       []
     ).find(
-      (row) =>
+      (
+        row
+      ) =>
         String(
           row.mes
         ).slice(
@@ -1427,7 +1866,9 @@ export default function IndicadoresExecutivosV2Page() {
           10
         ) ===
         mesSelecionado
-    ) || {};
+    ) ||
+    {};
+
 
   const b2bMesAnterior =
     (
@@ -1435,7 +1876,9 @@ export default function IndicadoresExecutivosV2Page() {
         .b2bOperacaoMensal ||
       []
     ).find(
-      (row) =>
+      (
+        row
+      ) =>
         String(
           row.mes
         ).slice(
@@ -1443,11 +1886,12 @@ export default function IndicadoresExecutivosV2Page() {
           10
         ) ===
         mesAnterior
-    ) || {};
+    ) ||
+    {};
 
 
   /* =======================================================
-     B2C CANAIS
+     B2C
   ======================================================= */
 
   const canaisMes =
@@ -1455,30 +1899,34 @@ export default function IndicadoresExecutivosV2Page() {
       dados
         .b2cCanaisMensal ||
       []
-    ).filter(
-      (row) =>
-        String(
-          row.mes
-        ).slice(
-          0,
-          10
-        ) ===
-        mesSelecionado
     )
-    .sort(
-      (
-        a,
-        b
-      ) =>
-        Number(
-          b.pagos ||
-            0
-        ) -
-        Number(
-          a.pagos ||
-            0
-        )
-    );
+      .filter(
+        (
+          row
+        ) =>
+          String(
+            row.mes
+          ).slice(
+            0,
+            10
+          ) ===
+          mesSelecionado
+      )
+      .sort(
+        (
+          a,
+          b
+        ) =>
+          Number(
+            b.pagos ||
+              0
+          ) -
+          Number(
+            a.pagos ||
+              0
+          )
+      );
+
 
   const faixasMes =
     (
@@ -1486,7 +1934,9 @@ export default function IndicadoresExecutivosV2Page() {
         .b2cCanaisFaixasMensal ||
       []
     ).filter(
-      (row) =>
+      (
+        row
+      ) =>
         String(
           row.mes
         ).slice(
@@ -1496,12 +1946,15 @@ export default function IndicadoresExecutivosV2Page() {
         mesSelecionado
     );
 
+
   const expedicaoMes =
     (
       dados.expedicaoDiaria ||
       []
     ).filter(
-      (row) =>
+      (
+        row
+      ) =>
         String(
           row.dia
         ).slice(
@@ -1515,6 +1968,7 @@ export default function IndicadoresExecutivosV2Page() {
           7
         )
     );
+
 
   const expedidosMes =
     expedicaoMes.reduce(
@@ -1530,10 +1984,13 @@ export default function IndicadoresExecutivosV2Page() {
       0
     );
 
+
   const diasExpedicao =
     new Set(
       expedicaoMes.map(
-        (row) =>
+        (
+          row
+        ) =>
           String(
             row.dia
           ).slice(
@@ -1543,8 +2000,10 @@ export default function IndicadoresExecutivosV2Page() {
       )
     ).size;
 
+
   const mediaExpedicao =
-    diasExpedicao > 0
+    diasExpedicao >
+    0
       ? expedidosMes /
         diasExpedicao
       : 0;
@@ -1559,30 +2018,34 @@ export default function IndicadoresExecutivosV2Page() {
       dados
         .ocorrenciasMensais ||
       []
-    ).filter(
-      (row) =>
-        String(
-          row.mes
-        ).slice(
-          0,
-          10
-        ) ===
-        mesSelecionado
     )
-    .sort(
-      (
-        a,
-        b
-      ) =>
-        Number(
-          b.ocorrencias ||
-            0
-        ) -
-        Number(
-          a.ocorrencias ||
-            0
-        )
-    );
+      .filter(
+        (
+          row
+        ) =>
+          String(
+            row.mes
+          ).slice(
+            0,
+            10
+          ) ===
+          mesSelecionado
+      )
+      .sort(
+        (
+          a,
+          b
+        ) =>
+          Number(
+            b.ocorrencias ||
+              0
+          ) -
+          Number(
+            a.ocorrencias ||
+              0
+          )
+      );
+
 
   const totalOcorrencias =
     ocorrenciasMes.reduce(
@@ -1598,11 +2061,14 @@ export default function IndicadoresExecutivosV2Page() {
       0
     );
 
+
   const maxOcorrencia =
     Math.max(
       1,
       ...ocorrenciasMes.map(
-        (row) =>
+        (
+          row
+        ) =>
           Number(
             row.ocorrencias ||
               0
@@ -1621,7 +2087,9 @@ export default function IndicadoresExecutivosV2Page() {
         .errosProcessoMensais ||
       []
     ).find(
-      (row) =>
+      (
+        row
+      ) =>
         String(
           row.mes
         ).slice(
@@ -1629,7 +2097,8 @@ export default function IndicadoresExecutivosV2Page() {
           10
         ) ===
         mesSelecionado
-    ) || {};
+    ) ||
+    {};
 
 
   /* =======================================================
@@ -1641,36 +2110,154 @@ export default function IndicadoresExecutivosV2Page() {
       .estoqueQualidadeAtual ||
     {};
 
+
   const estoquePosicao =
-    [
-      ...(dados
-        .estoquePosicaoAtual ||
-        []),
-    ].sort(
-      (
-        a,
-        b
-      ) =>
-        Number(
-          b.aparelhos ||
-            0
-        ) -
-        Number(
-          a.aparelhos ||
-            0
-        )
+    useMemo(
+      () =>
+        [
+          ...(
+            dados
+              .estoquePosicaoAtual ||
+            []
+          ),
+        ].sort(
+          (
+            a,
+            b
+          ) =>
+            Number(
+              b.aparelhos ||
+                0
+            ) -
+            Number(
+              a.aparelhos ||
+                0
+            )
+        ),
+      [
+        dados
+          .estoquePosicaoAtual,
+      ]
     );
 
+
+  /*
+   * Aqui normalizamos a nomenclatura antiga da VIEW.
+   *
+   * Ex.:
+   * 0. Até 30 dias
+   * 1. 31 a 60 dias
+   *
+   * passa a:
+   *
+   * Até 30 dias
+   * 31 a 60 dias
+   *
+   * Isso garante que o Cockpit envie exatamente o texto que
+   * a rota EstoqueAgingDetalheV2Page espera.
+   */
   const estoqueAging =
-    dados
-      .estoqueAgingAtual ||
-    [];
+    useMemo(
+      () => {
+        const agrupado =
+          new Map();
+
+        (
+          dados
+            .estoqueAgingAtual ||
+          []
+        ).forEach(
+          (
+            row
+          ) => {
+            const faixa =
+              normalizarFaixaAging(
+                row.faixa
+              );
+
+            if (
+              !faixa
+            ) {
+              return;
+            }
+
+            const atualFaixa =
+              agrupado.get(
+                faixa
+              ) || {
+                ...row,
+
+                faixa,
+
+                aparelhos:
+                  0,
+              };
+
+            atualFaixa.aparelhos =
+              Number(
+                atualFaixa.aparelhos ||
+                  0
+              ) +
+              Number(
+                row.aparelhos ||
+                  0
+              );
+
+            agrupado.set(
+              faixa,
+              atualFaixa
+            );
+          }
+        );
+
+        return Array.from(
+          agrupado.values()
+        ).sort(
+          (
+            a,
+            b
+          ) => {
+            const indiceA =
+              ORDEM_AGING.indexOf(
+                a.faixa
+              );
+
+            const indiceB =
+              ORDEM_AGING.indexOf(
+                b.faixa
+              );
+
+            return (
+              (
+                indiceA ===
+                -1
+                  ? 999
+                  : indiceA
+              ) -
+              (
+                indiceB ===
+                -1
+                  ? 999
+                  : indiceB
+              )
+            );
+          }
+        );
+      },
+      [
+        dados
+          .estoqueAgingAtual,
+      ]
+    );
+
 
   const maxEstoque =
     Math.max(
       1,
       ...estoquePosicao.map(
-        (row) =>
+        (
+          row
+        ) =>
           Number(
             row.aparelhos ||
               0
@@ -1678,24 +2265,29 @@ export default function IndicadoresExecutivosV2Page() {
       )
     );
 
+
   const maxAging =
     Math.max(
       1,
       ...estoqueAging.map(
-        (row) =>
+        (
+          row
+        ) =>
           Number(
             row.aparelhos ||
               0
           )
       )
     );
+
 
   const pctMais90 =
     Number(
       estoqueQualidade
         .total_estoque ||
         0
-    ) > 0
+    ) >
+    0
       ? (
           Number(
             estoqueQualidade
@@ -1710,12 +2302,14 @@ export default function IndicadoresExecutivosV2Page() {
         100
       : null;
 
+
   const pctIntegro =
     Number(
       estoqueQualidade
         .total_estoque ||
         0
-    ) > 0
+    ) >
+    0
       ? (
           Number(
             estoqueQualidade
@@ -1732,6 +2326,32 @@ export default function IndicadoresExecutivosV2Page() {
 
 
   /* =======================================================
+     NAVEGAÇÃO STOCK INTELLIGENCE
+  ======================================================= */
+
+  function abrirAgingEstoque(
+    faixa
+  ) {
+    const faixaNormalizada =
+      normalizarFaixaAging(
+        faixa
+      );
+
+    if (
+      !faixaNormalizada
+    ) {
+      return;
+    }
+
+    navigate(
+      `/v2/assurant/indicadores/estoque/aging?faixa=${encodeURIComponent(
+        faixaNormalizada
+      )}`
+    );
+  }
+
+
+  /* =======================================================
      ETAPAS B2C / B2B
   ======================================================= */
 
@@ -1741,63 +2361,80 @@ export default function IndicadoresExecutivosV2Page() {
       ? dados.etapasSemanais
       : dados.etapasMensais;
 
+
   const kpisFonte =
     visualizacaoEtapa ===
     "semanal"
       ? dados.kpisSemanais
       : dados.kpisMensais;
 
-  const periodoEtapaAtual =
-    useMemo(() => {
-      const periodos =
-        (
-          etapasFonte ||
-          []
-        )
-          .filter(
-            (item) =>
-              item.canal ===
-              canal
-          )
-          .map(
-            (item) =>
-              item.periodo_inicio
-          )
-          .sort()
-          .reverse();
 
-      return (
-        periodos[0] ||
-        null
-      );
-    }, [
-      etapasFonte,
-      canal,
-    ]);
+  const periodoEtapaAtual =
+    useMemo(
+      () => {
+        const periodos =
+          (
+            etapasFonte ||
+            []
+          )
+            .filter(
+              (
+                item
+              ) =>
+                item.canal ===
+                canal
+            )
+            .map(
+              (
+                item
+              ) =>
+                item.periodo_inicio
+            )
+            .sort()
+            .reverse();
+
+        return (
+          periodos[0] ||
+          null
+        );
+      },
+      [
+        etapasFonte,
+        canal,
+      ]
+    );
+
 
   const etapasAtuais =
     (
       etapasFonte ||
       []
     ).filter(
-      (item) =>
+      (
+        item
+      ) =>
         item.canal ===
           canal &&
         item.periodo_inicio ===
           periodoEtapaAtual
     );
 
+
   const kpiPeriodoEtapa =
     (
       kpisFonte ||
       []
     ).find(
-      (item) =>
+      (
+        item
+      ) =>
         item.canal ===
           canal &&
         item.periodo_inicio ===
           periodoEtapaAtual
-    ) || {};
+    ) ||
+    {};
+
 
   const totalBaseEtapa =
     Number(
@@ -1805,6 +2442,7 @@ export default function IndicadoresExecutivosV2Page() {
         .itens ||
         0
     );
+
 
   const etapaBaixaCobertura =
     (
@@ -1817,27 +2455,33 @@ export default function IndicadoresExecutivosV2Page() {
       }
 
       return (
-        Number(
-          etapa.amostra ||
-            0
-        ) /
-        totalBaseEtapa
-      ) *
-        100 <
+        (
+          Number(
+            etapa.amostra ||
+              0
+          ) /
+          totalBaseEtapa
+        ) *
+        100
+      ) <
         20;
     };
+
 
   const gargalos =
     etapasAtuais
       .filter(
-        (item) =>
+        (
+          item
+        ) =>
           item
             .variacao_mediana_pct !=
             null &&
           Number(
             item
               .variacao_mediana_pct
-          ) > 0 &&
+          ) >
+            0 &&
           !etapaBaixaCobertura(
             item
           )
@@ -1861,6 +2505,7 @@ export default function IndicadoresExecutivosV2Page() {
         5
       );
 
+
   const sinaisBaixaCobertura =
     etapasAtuais.filter(
       etapaBaixaCobertura
@@ -1868,86 +2513,93 @@ export default function IndicadoresExecutivosV2Page() {
 
 
   /* =======================================================
-     EVOLUÇÃO LEAD TIME B2C/B2B
+     EVOLUÇÃO LEAD TIME B2C / B2B
   ======================================================= */
 
   const evolucaoSemanal =
-    useMemo(() => {
-      const mapa =
-        new Map();
+    useMemo(
+      () => {
+        const mapa =
+          new Map();
 
-      (
-        dados.kpisSemanais ||
-        []
-      ).forEach(
-        (item) => {
-          const chave =
-            item.periodo_inicio;
-
-          if (
-            !mapa.has(
-              chave
-            )
-          ) {
-            mapa.set(
-              chave,
-              {
-                periodo_inicio:
-                  chave,
-
-                semana:
-                  fmtDataCurta(
-                    chave
-                  ),
-
-                B2C:
-                  null,
-
-                B2B:
-                  null,
-              }
-            );
-          }
-
-          mapa.get(
-            chave
-          )[
-            item.canal
-          ] =
-            item.mediana_leadtime_min !=
-            null
-              ? Number(
-                  item.mediana_leadtime_min
-                )
-              : null;
-        }
-      );
-
-      return Array.from(
-        mapa.values()
-      ).sort(
         (
-          a,
-          b
-        ) =>
-          String(
-            a.periodo_inicio
-          ).localeCompare(
+          dados.kpisSemanais ||
+          []
+        ).forEach(
+          (
+            item
+          ) => {
+            const chave =
+              item.periodo_inicio;
+
+            if (
+              !mapa.has(
+                chave
+              )
+            ) {
+              mapa.set(
+                chave,
+                {
+                  periodo_inicio:
+                    chave,
+
+                  semana:
+                    fmtDataCurta(
+                      chave
+                    ),
+
+                  B2C:
+                    null,
+
+                  B2B:
+                    null,
+                }
+              );
+            }
+
+            mapa.get(
+              chave
+            )[
+              item.canal
+            ] =
+              item.mediana_leadtime_min !=
+              null
+                ? Number(
+                    item.mediana_leadtime_min
+                  )
+                : null;
+          }
+        );
+
+        return Array.from(
+          mapa.values()
+        ).sort(
+          (
+            a,
+            b
+          ) =>
             String(
-              b.periodo_inicio
+              a.periodo_inicio
+            ).localeCompare(
+              String(
+                b.periodo_inicio
+              )
             )
-          )
-      );
-    }, [
-      dados.kpisSemanais,
-    ]);
+        );
+      },
+      [
+        dados.kpisSemanais,
+      ]
+    );
 
 
   /* =======================================================
-     LOADING / ERRO
+     LOADING
   ======================================================= */
 
-  if (loading) {
+  if (
+    loading
+  ) {
     return (
       <div className="flex min-h-[520px] items-center justify-center">
         <div className="text-center">
@@ -1965,7 +2617,14 @@ export default function IndicadoresExecutivosV2Page() {
     );
   }
 
-  if (error) {
+
+  /* =======================================================
+     ERRO
+  ======================================================= */
+
+  if (
+    error
+  ) {
     return (
       <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6">
         <div className="flex gap-3">
@@ -1995,6 +2654,10 @@ export default function IndicadoresExecutivosV2Page() {
     );
   }
 
+
+  /* =======================================================
+     RENDER
+  ======================================================= */
 
   return (
     <div className="space-y-6 pb-10">
@@ -2040,7 +2703,9 @@ export default function IndicadoresExecutivosV2Page() {
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex rounded-xl bg-slate-100 p-1">
               {mesesDisponiveis.map(
-                (mes) => (
+                (
+                  mes
+                ) => (
                   <PeriodButton
                     key={
                       mes
@@ -2068,7 +2733,7 @@ export default function IndicadoresExecutivosV2Page() {
               onClick={
                 carregar
               }
-              className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 hover:bg-slate-50"
+              className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 transition hover:bg-slate-50"
             >
               <RefreshCw className="h-4 w-4" />
 
@@ -2185,7 +2850,9 @@ export default function IndicadoresExecutivosV2Page() {
               operacaoMes
                 .maior_entrada_dia
             )}`}
-            variation={null}
+            variation={
+              null
+            }
             icon={
               AlertTriangle
             }
@@ -2225,7 +2892,9 @@ export default function IndicadoresExecutivosV2Page() {
                 <XAxis
                   dataKey="label"
                   tick={{
-                    fontSize: 9,
+                    fontSize:
+                      9,
+
                     fill:
                       "#94A3B8",
                   }}
@@ -2239,7 +2908,9 @@ export default function IndicadoresExecutivosV2Page() {
 
                 <YAxis
                   tick={{
-                    fontSize: 9,
+                    fontSize:
+                      9,
+
                     fill:
                       "#94A3B8",
                   }}
@@ -2388,15 +3059,21 @@ export default function IndicadoresExecutivosV2Page() {
           leadtimeWarehouse
             .excluidos_tempo_zero ||
             0
-        ) > 0 && (
+        ) >
+          0 && (
           <div className="border-t border-amber-100 bg-amber-50 px-5 py-3 text-[10px] text-amber-800">
             <strong>
               Transparência:
             </strong>{" "}
+
             {fmtNumero(
               leadtimeWarehouse
                 .excluidos_tempo_zero
-            )} registros de Recebimento → Funcional com intervalo inferior a 1h foram identificados separadamente para não distorcer a mediana operacional.
+            )}{" "}
+
+            registros de Recebimento → Funcional com intervalo
+            inferior a 1h foram identificados separadamente para
+            não distorcer a mediana operacional.
           </div>
         )}
       </SectionCard>
@@ -2418,7 +3095,9 @@ export default function IndicadoresExecutivosV2Page() {
                 10
               )
               .map(
-                (item) => (
+                (
+                  item
+                ) => (
                   <BarraLinha
                     key={
                       item.etapa
@@ -2495,7 +3174,9 @@ export default function IndicadoresExecutivosV2Page() {
         <div className="grid gap-5 p-5 xl:grid-cols-[1.6fr_1fr]">
           <div className="space-y-4">
             {gradesMes.map(
-              (item) => (
+              (
+                item
+              ) => (
                 <BarraLinha
                   key={
                     item.grade
@@ -2555,7 +3236,9 @@ export default function IndicadoresExecutivosV2Page() {
               <div className="mt-1 text-[10px] text-rose-600">
                 {fmtNumero(
                   naoAlocaveis
-                )} aparelhos classificados
+                )}{" "}
+
+                aparelhos classificados
               </div>
             </div>
           </div>
@@ -2584,6 +3267,7 @@ export default function IndicadoresExecutivosV2Page() {
             variation={calcularVariacao(
               b2bMes
                 .pedidos_recebidos,
+
               b2bMesAnterior
                 .pedidos_recebidos
             )}
@@ -2604,6 +3288,7 @@ export default function IndicadoresExecutivosV2Page() {
             variation={calcularVariacao(
               b2bMes
                 .itens_recebidos,
+
               b2bMesAnterior
                 .itens_recebidos
             )}
@@ -2624,6 +3309,7 @@ export default function IndicadoresExecutivosV2Page() {
             variation={calcularVariacao(
               b2bMes
                 .itens_faturados,
+
               b2bMesAnterior
                 .itens_faturados
             )}
@@ -2644,6 +3330,7 @@ export default function IndicadoresExecutivosV2Page() {
             variation={calcularVariacao(
               b2bMes
                 .notas_emitidas,
+
               b2bMesAnterior
                 .notas_emitidas
             )}
@@ -2664,6 +3351,7 @@ export default function IndicadoresExecutivosV2Page() {
             variation={calcularVariacao(
               b2bMes
                 .erros_nf,
+
               b2bMesAnterior
                 .erros_nf
             )}
@@ -2782,7 +3470,9 @@ export default function IndicadoresExecutivosV2Page() {
 
             <tbody className="divide-y divide-slate-100">
               {canaisMes.map(
-                (row) => (
+                (
+                  row
+                ) => (
                   <tr
                     key={
                       row.marketplace
@@ -2833,12 +3523,12 @@ export default function IndicadoresExecutivosV2Page() {
                           90
                             ? "good"
                             : Number(
-                                row.pct_ate_24h ||
-                                  0
-                              ) >=
-                              80
-                            ? "warning"
-                            : "danger"
+                                  row.pct_ate_24h ||
+                                    0
+                                ) >=
+                                80
+                              ? "warning"
+                              : "danger"
                         }
                       >
                         {fmtPercentual(
@@ -2883,11 +3573,15 @@ export default function IndicadoresExecutivosV2Page() {
               "24 a 48h",
               "Mais de 48h",
             ].map(
-              (faixa) => {
+              (
+                faixa
+              ) => {
                 const total =
                   faixasMes
                     .filter(
-                      (row) =>
+                      (
+                        row
+                      ) =>
                         normalizarTexto(
                           row.faixa
                         ) ===
@@ -3065,6 +3759,7 @@ export default function IndicadoresExecutivosV2Page() {
               variation={calcularVariacao(
                 atual
                   ?.p90_leadtime_atual_min,
+
                 atual
                   ?.p90_leadtime_anterior_min
               )}
@@ -3080,11 +3775,14 @@ export default function IndicadoresExecutivosV2Page() {
               value={fmtCobertura(
                 atual
                   ?.amostra_leadtime_atual,
+
                 atual
                   ?.pedidos_atual
               )}
               subtitle="Ciclos ponta a ponta calculáveis"
-              variation={null}
+              variation={
+                null
+              }
               icon={
                 Activity
               }
@@ -3157,10 +3855,13 @@ export default function IndicadoresExecutivosV2Page() {
 
             <div className="text-[10px] text-slate-400">
               Base da cobertura:{" "}
+
               <strong className="text-slate-600">
                 {fmtNumero(
                   totalBaseEtapa
-                )} itens
+                )}{" "}
+
+                itens
               </strong>
             </div>
 
@@ -3173,15 +3874,20 @@ export default function IndicadoresExecutivosV2Page() {
 
                 <div className="mt-2 space-y-1">
                   {sinaisBaixaCobertura.map(
-                    (item) => (
+                    (
+                      item
+                    ) => (
                       <div
                         key={`baixa-${item.etapa}`}
                         className="text-[10px] text-amber-800"
                       >
                         • {item.etapa}:{" "}
+
                         {fmtNumero(
                           item.amostra
-                        )} registros
+                        )}{" "}
+
+                        registros
                       </div>
                     )
                   )}
@@ -3192,7 +3898,9 @@ export default function IndicadoresExecutivosV2Page() {
 
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {etapasAtuais.map(
-              (etapa) => (
+              (
+                etapa
+              ) => (
                 <EtapaCard
                   key={`${etapa.canal}-${etapa.etapa}`}
                   etapa={
@@ -3240,7 +3948,9 @@ export default function IndicadoresExecutivosV2Page() {
                   <XAxis
                     dataKey="semana"
                     tick={{
-                      fontSize: 9,
+                      fontSize:
+                        9,
+
                       fill:
                         "#94A3B8",
                     }}
@@ -3254,7 +3964,9 @@ export default function IndicadoresExecutivosV2Page() {
 
                   <YAxis
                     tick={{
-                      fontSize: 9,
+                      fontSize:
+                        9,
+
                       fill:
                         "#94A3B8",
                     }}
@@ -3287,7 +3999,8 @@ export default function IndicadoresExecutivosV2Page() {
                       2.5
                     }
                     dot={{
-                      r: 3,
+                      r:
+                        3,
                     }}
                     connectNulls
                   />
@@ -3300,7 +4013,8 @@ export default function IndicadoresExecutivosV2Page() {
                       2.5
                     }
                     dot={{
-                      r: 3,
+                      r:
+                        3,
                     }}
                     connectNulls
                   />
@@ -3330,7 +4044,8 @@ export default function IndicadoresExecutivosV2Page() {
                         <div>
                           <div className="text-[10px] font-black text-slate-700">
                             {index +
-                              1}.{" "}
+                              1}
+                            .{" "}
                             {item.etapa}
                           </div>
 
@@ -3375,7 +4090,9 @@ export default function IndicadoresExecutivosV2Page() {
         <div className="grid gap-5 p-5 xl:grid-cols-[1.5fr_1fr]">
           <div className="space-y-4">
             {ocorrenciasMes.map(
-              (item) => (
+              (
+                item
+              ) => (
                 <BarraLinha
                   key={
                     item.categoria
@@ -3406,7 +4123,8 @@ export default function IndicadoresExecutivosV2Page() {
             </div>
 
             <div className="mt-2 text-[10px] leading-5 text-amber-800">
-              Inclui ausência de estoque em lista, ausência física, divergências e ocorrências ainda não classificadas.
+              Inclui ausência de estoque em lista, ausência física,
+              divergências e ocorrências ainda não classificadas.
             </div>
           </div>
         </div>
@@ -3493,12 +4211,33 @@ export default function IndicadoresExecutivosV2Page() {
 
 
       {/* ===================================================
-          10. ESTOQUE
+          10. STOCK INTELLIGENCE
       =================================================== */}
 
       <SectionCard
-        title="10. Estoque & Aging"
-        subtitle="Posição atual do estoque físico — fotografia do momento"
+        title="10. Stock Intelligence"
+        subtitle="Estoque físico, envelhecimento e drill-down analítico por SKU, grade e IMEI"
+        action={
+          <div className="flex items-center gap-2">
+            <span className="hidden rounded-full bg-violet-50 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-violet-700 sm:inline-flex">
+              Investigável
+            </span>
+
+            <button
+              type="button"
+              onClick={() =>
+                abrirAgingEstoque(
+                  "Mais de 180 dias"
+                )
+              }
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[10px] font-black text-slate-600 transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-800"
+            >
+              Abrir Aging
+
+              <ArrowRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        }
       >
         <div className="grid gap-4 border-b border-slate-100 p-5 sm:grid-cols-2 xl:grid-cols-5">
           <KpiCard
@@ -3571,11 +4310,21 @@ export default function IndicadoresExecutivosV2Page() {
           />
         </div>
 
-        <div className="grid gap-6 p-5 xl:grid-cols-2">
-          <div>
+
+        <div className="grid gap-6 p-5 xl:grid-cols-[1.05fr_0.95fr]">
+
+          {/* ================================================
+              SUBINVENTÁRIOS
+          ================================================ */}
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/40 p-4">
             <div className="mb-4">
-              <div className="text-xs font-black text-slate-700">
-                Posição por subinventário
+              <div className="flex items-center gap-2">
+                <Warehouse className="h-4 w-4 text-slate-400" />
+
+                <div className="text-xs font-black text-slate-700">
+                  Posição por subinventário
+                </div>
               </div>
 
               <div className="mt-1 text-[10px] text-slate-400">
@@ -3590,7 +4339,9 @@ export default function IndicadoresExecutivosV2Page() {
                   12
                 )
                 .map(
-                  (item) => (
+                  (
+                    item
+                  ) => (
                     <BarraLinha
                       key={
                         item.subinventario
@@ -3610,21 +4361,40 @@ export default function IndicadoresExecutivosV2Page() {
             </div>
           </div>
 
-          <div>
-            <div className="mb-4">
-              <div className="text-xs font-black text-slate-700">
-                Aging do estoque
-              </div>
 
-              <div className="mt-1 text-[10px] text-slate-400">
-                Tempo em subinventário
+          {/* ================================================
+              AGING CLICÁVEL
+          ================================================ */}
+
+          <div className="overflow-hidden rounded-2xl border border-violet-100 bg-white shadow-sm">
+            <div className="border-b border-violet-100 bg-gradient-to-r from-violet-50/80 to-white px-4 py-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Clock3 className="h-4 w-4 text-violet-700" />
+
+                    <div className="text-xs font-black text-slate-800">
+                      Aging do estoque
+                    </div>
+                  </div>
+
+                  <div className="mt-1 max-w-xl text-[10px] leading-4 text-slate-400">
+                    Clique em uma faixa para abrir a composição física
+                    do estoque e avançar para SKU, grade, IMEI e
+                    inteligência comercial.
+                  </div>
+                </div>
+
+                <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-violet-300" />
               </div>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-1 p-2">
               {estoqueAging.map(
-                (item) => (
-                  <BarraLinha
+                (
+                  item
+                ) => (
+                  <AgingLinha
                     key={
                       item.faixa
                     }
@@ -3637,9 +4407,67 @@ export default function IndicadoresExecutivosV2Page() {
                     max={
                       maxAging
                     }
+                    onClick={
+                      abrirAgingEstoque
+                    }
                   />
                 )
               )}
+
+              {!estoqueAging.length && (
+                <div className="rounded-xl border border-dashed border-slate-200 px-4 py-8 text-center">
+                  <div className="text-xs font-black text-slate-500">
+                    Aging indisponível
+                  </div>
+
+                  <div className="mt-1 text-[10px] text-slate-400">
+                    A base atual não retornou faixas de aging.
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+
+        {/* ================================================
+            FLUXO ANALÍTICO
+        ================================================ */}
+
+        <div className="border-t border-slate-100 bg-slate-50/60 px-5 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-[9px] font-black uppercase tracking-[0.12em] text-slate-400">
+                Fluxo analítico
+              </div>
+
+              <div className="mt-1 text-[10px] text-slate-400">
+                O número deixa de ser apenas informativo e passa a ser investigável.
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 text-[10px] font-black text-slate-600">
+              <span className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5">
+                Cockpit
+              </span>
+
+              <ArrowRight className="h-3 w-3 text-slate-300" />
+
+              <span className="rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-violet-700">
+                Aging
+              </span>
+
+              <ArrowRight className="h-3 w-3 text-slate-300" />
+
+              <span className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5">
+                SKU
+              </span>
+
+              <ArrowRight className="h-3 w-3 text-slate-300" />
+
+              <span className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5">
+                Preço / Giro / Score / Recomendação
+              </span>
             </div>
           </div>
         </div>
@@ -3660,16 +4488,20 @@ export default function IndicadoresExecutivosV2Page() {
             </div>
 
             <div className="mt-2 max-w-6xl text-[10px] leading-5 text-amber-800">
-              Todos os volumes utilizam 100% dos registros disponíveis de agosto e setembro.
-              Tempos de processo são calculados somente quando os timestamps necessários existem e respeitam a cronologia válida.
-              Etapas com cobertura histórica inferior a 20% são destacadas e não entram automaticamente no ranking de principais gargalos.
-              A etiquetagem B2C ainda não possui timestamp exclusivo, portanto o intervalo Embalagem → Faturamento contempla esse período.
-              Indicadores de estoque representam a posição atual e não uma fotografia histórica do mês selecionado.
+              Todos os volumes utilizam 100% dos registros disponíveis
+              de agosto e setembro. Tempos de processo são calculados
+              somente quando os timestamps necessários existem e
+              respeitam a cronologia válida. Etapas com cobertura
+              histórica inferior a 20% são destacadas e não entram
+              automaticamente no ranking de principais gargalos.
+              A etiquetagem B2C ainda não possui timestamp exclusivo,
+              portanto o intervalo Embalagem → Faturamento contempla
+              esse período. Indicadores de estoque representam a posição
+              atual e não uma fotografia histórica do mês selecionado.
             </div>
           </div>
         </div>
       </div>
-
     </div>
   );
 }
