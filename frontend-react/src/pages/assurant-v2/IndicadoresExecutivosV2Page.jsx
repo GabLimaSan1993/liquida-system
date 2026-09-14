@@ -1,8 +1,4 @@
-import {
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   Activity,
@@ -11,6 +7,7 @@ import {
   BarChart3,
   Clock3,
   RefreshCw,
+  ShieldCheck,
   Warehouse,
 } from "lucide-react";
 
@@ -30,18 +27,10 @@ import {
   YAxis,
 } from "recharts";
 
-import {
-  useNavigate,
-} from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
-import {
-  fetchIndicadoresExecutivos,
-} from "../../services/assurantIndicadoresService.js";
-
-
-/* =========================================================
-   CONSTANTES
-========================================================= */
+import { supabase } from "../../lib/supabase";
+import { fetchIndicadoresExecutivos } from "../../services/assurantIndicadoresService.js";
 
 const ORDEM_AGING = [
   "Até 30 dias",
@@ -58,295 +47,135 @@ const FAIXAS_B2C = [
   "Mais de 48h",
 ];
 
-
-/* =========================================================
-   FORMATADORES
-========================================================= */
-
-function fmtNumero(
-  value,
-  casas = 0
-) {
-  if (
-    value == null ||
-    Number.isNaN(
-      Number(
-        value
-      )
-    )
-  ) {
+function fmtNumero(value, casas = 0) {
+  if (value == null || Number.isNaN(Number(value))) {
     return "—";
   }
 
-  return Number(
-    value
-  ).toLocaleString(
-    "pt-BR",
-    {
-      minimumFractionDigits:
-        casas,
-
-      maximumFractionDigits:
-        casas,
-    }
-  );
+  return Number(value).toLocaleString("pt-BR", {
+    minimumFractionDigits: casas,
+    maximumFractionDigits: casas,
+  });
 }
 
-
-function fmtPercentual(
-  value,
-  casas = 1
-) {
-  if (
-    value == null ||
-    Number.isNaN(
-      Number(
-        value
-      )
-    )
-  ) {
+function fmtPercentual(value, casas = 1) {
+  if (value == null || Number.isNaN(Number(value))) {
     return "—";
   }
 
-  return `${fmtNumero(
-    value,
-    casas
-  )}%`;
+  return `${fmtNumero(value, casas)}%`;
 }
 
-
-function fmtVariacao(
-  value
-) {
-  if (
-    value == null ||
-    Number.isNaN(
-      Number(
-        value
-      )
-    )
-  ) {
+function fmtVariacao(value) {
+  if (value == null || Number.isNaN(Number(value))) {
     return "—";
   }
 
-  const numero =
-    Number(
-      value
-    );
+  const numero = Number(value);
 
-  return `${
-    numero >
-    0
-      ? "+"
-      : ""
-  }${fmtNumero(
-    numero,
-    1
-  )}%`;
+  return `${numero > 0 ? "+" : ""}${fmtNumero(numero, 1)}%`;
 }
 
+function fmtPontosPercentuais(value) {
+  if (value == null || Number.isNaN(Number(value))) {
+    return "—";
+  }
 
-function calcularVariacao(
-  atual,
-  anterior
-) {
-  const a =
-    Number(
-      atual
-    );
+  const numero = Number(value);
 
-  const b =
-    Number(
-      anterior
-    );
+  return `${numero > 0 ? "+" : ""}${fmtNumero(numero, 1)} p.p.`;
+}
+
+function calcularVariacao(atual, anterior) {
+  const a = Number(atual);
+  const b = Number(anterior);
 
   if (
-    !Number.isFinite(
-      a
-    ) ||
-    !Number.isFinite(
-      b
-    ) ||
-    b ===
-      0
+    !Number.isFinite(a) ||
+    !Number.isFinite(b) ||
+    b === 0
   ) {
     return null;
   }
 
-  return (
-    (
-      a -
-      b
-    ) /
-    b
-  ) *
-    100;
+  return ((a - b) / b) * 100;
 }
 
-
-function fmtDuracao(
-  minutos
-) {
+function fmtDuracao(minutos) {
   if (
     minutos == null ||
-    Number.isNaN(
-      Number(
-        minutos
-      )
-    )
+    Number.isNaN(Number(minutos))
   ) {
     return "—";
   }
 
-  const total =
-    Math.max(
-      0,
-      Math.round(
-        Number(
-          minutos
-        )
-      )
-    );
+  const total = Math.max(
+    0,
+    Math.round(Number(minutos))
+  );
 
-  if (
-    total <
-    60
-  ) {
+  if (total < 60) {
     return `${total} min`;
   }
 
-  const horas =
-    Math.floor(
-      total /
-        60
-    );
+  const horas = Math.floor(total / 60);
+  const minutosRestantes = total % 60;
 
-  const minutosRestantes =
-    total %
-    60;
-
-  if (
-    horas <
-    24
-  ) {
+  if (horas < 24) {
     return minutosRestantes
       ? `${horas}h ${minutosRestantes}m`
       : `${horas}h`;
   }
 
-  const dias =
-    Math.floor(
-      horas /
-        24
-    );
-
-  const horasRestantes =
-    horas %
-    24;
+  const dias = Math.floor(horas / 24);
+  const horasRestantes = horas % 24;
 
   return horasRestantes
     ? `${dias}d ${horasRestantes}h`
     : `${dias}d`;
 }
 
-
-function fmtHoras(
-  horas
-) {
+function fmtHoras(horas) {
   if (
     horas == null ||
-    Number.isNaN(
-      Number(
-        horas
-      )
-    )
+    Number.isNaN(Number(horas))
   ) {
     return "—";
   }
 
-  const valor =
-    Number(
-      horas
-    );
+  const valor = Number(horas);
 
-  if (
-    valor <
-    1
-  ) {
-    return `${fmtNumero(
-      valor *
-        60,
-      0
-    )} min`;
+  if (valor < 1) {
+    return `${fmtNumero(valor * 60, 0)} min`;
   }
 
-  return `${fmtNumero(
-    valor,
-    1
-  )}h`;
+  return `${fmtNumero(valor, 1)}h`;
 }
 
-
-function fmtDataCurta(
-  value
-) {
-  if (
-    !value
-  ) {
+function fmtDataCurta(value) {
+  if (!value) {
     return "—";
   }
 
-  const [
-    ano,
-    mes,
-    dia,
-  ] =
-    String(
-      value
-    )
-      .slice(
-        0,
-        10
-      )
-      .split(
-        "-"
-      );
+  const [ano, mes, dia] = String(value)
+    .slice(0, 10)
+    .split("-");
 
-  if (
-    !ano ||
-    !mes ||
-    !dia
-  ) {
+  if (!ano || !mes || !dia) {
     return value;
   }
 
   return `${dia}/${mes}`;
 }
 
-
-function fmtMes(
-  value
-) {
-  if (
-    !value
-  ) {
+function fmtMes(value) {
+  if (!value) {
     return "—";
   }
 
-  const [
-    ano,
-    mes,
-  ] =
-    String(
-      value
-    )
-      .slice(
-        0,
-        10
-      )
-      .split(
-        "-"
-      );
+  const [ano, mes] = String(value)
+    .slice(0, 10)
+    .split("-");
 
   const meses = [
     "",
@@ -364,44 +193,19 @@ function fmtMes(
     "Dez",
   ];
 
-  return `${
-    meses[
-      Number(
-        mes
-      )
-    ] ||
-    mes
-  }/${String(
+  return `${meses[Number(mes)] || mes}/${String(
     ano
-  ).slice(
-    -2
-  )}`;
+  ).slice(-2)}`;
 }
 
-
-function fmtMesLongo(
-  value
-) {
-  if (
-    !value
-  ) {
+function fmtMesLongo(value) {
+  if (!value) {
     return "—";
   }
 
-  const [
-    ano,
-    mes,
-  ] =
-    String(
-      value
-    )
-      .slice(
-        0,
-        10
-      )
-      .split(
-        "-"
-      );
+  const [ano, mes] = String(value)
+    .slice(0, 10)
+    .split("-");
 
   const meses = [
     "",
@@ -419,94 +223,43 @@ function fmtMesLongo(
     "Dezembro",
   ];
 
-  return `${
-    meses[
-      Number(
-        mes
-      )
-    ] ||
-    mes
-  }/${ano}`;
+  return `${meses[Number(mes)] || mes}/${ano}`;
 }
 
-
-function normalizarTexto(
-  value
-) {
-  return String(
-    value ||
-      ""
-  )
-    .normalize(
-      "NFD"
-    )
-    .replace(
-      /[\u0300-\u036f]/g,
-      ""
-    )
+function normalizarTexto(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
     .trim()
     .toUpperCase();
 }
 
+function normalizarFaixaAging(value) {
+  const texto = String(value || "")
+    .replace(/^\s*\d+\.\s*/, "")
+    .trim();
 
-function normalizarFaixaAging(
-  value
-) {
-  const texto =
-    String(
-      value ||
-        ""
-    )
-      .replace(
-        /^\s*\d+\.\s*/,
-        ""
-      )
-      .trim();
+  const normalizado = normalizarTexto(texto);
 
-  const normalizado =
-    normalizarTexto(
-      texto
-    );
-
-  if (
-    normalizado.includes(
-      "ATE 30"
-    )
-  ) {
+  if (normalizado.includes("ATE 30")) {
     return "Até 30 dias";
   }
 
-  if (
-    normalizado.includes(
-      "31 A 60"
-    )
-  ) {
+  if (normalizado.includes("31 A 60")) {
     return "31 a 60 dias";
   }
 
-  if (
-    normalizado.includes(
-      "61 A 90"
-    )
-  ) {
+  if (normalizado.includes("61 A 90")) {
     return "61 a 90 dias";
   }
 
-  if (
-    normalizado.includes(
-      "91 A 180"
-    )
-  ) {
+  if (normalizado.includes("91 A 180")) {
     return "91 a 180 dias";
   }
 
   if (
-    normalizado.includes(
-      "MAIS DE 180"
-    ) ||
-    normalizado.includes(
-      "> 180"
-    )
+    normalizado.includes("MAIS DE 180") ||
+    normalizado.includes("> 180")
   ) {
     return "Mais de 180 dias";
   }
@@ -514,49 +267,27 @@ function normalizarFaixaAging(
   return texto;
 }
 
-
 function chaveMesAtual() {
-  const agora =
-    new Date();
+  const agora = new Date();
 
   return `${agora.getFullYear()}-${String(
-    agora.getMonth() +
-      1
-  ).padStart(
-    2,
-    "0"
-  )}-01`;
+    agora.getMonth() + 1
+  ).padStart(2, "0")}-01`;
 }
 
-
-function rotuloComparacao(
-  mesSelecionado
-) {
-  if (
-    mesSelecionado !==
-    chaveMesAtual()
-  ) {
+function rotuloComparacao(mesSelecionado) {
+  if (mesSelecionado !== chaveMesAtual()) {
     return "vs mês anterior";
   }
 
-  const hoje =
-    new Date();
+  const hoje = new Date();
 
-  const dia =
-    String(
-      hoje.getDate()
-    ).padStart(
-      2,
-      "0"
-    );
+  const dia = String(
+    hoje.getDate()
+  ).padStart(2, "0");
 
   return `01–${dia} vs mesmo período anterior`;
 }
-
-
-/* =========================================================
-   COMPONENTES VISUAIS
-========================================================= */
 
 function Section({
   index,
@@ -596,7 +327,6 @@ function Section({
   );
 }
 
-
 function MetricStrip({
   items,
 }) {
@@ -604,60 +334,46 @@ function MetricStrip({
     <div
       className="grid border-b border-slate-100 bg-slate-50/40"
       style={{
-        gridTemplateColumns:
-          `repeat(${Math.max(
-            1,
-            items.length
-          )}, minmax(0, 1fr))`,
+        gridTemplateColumns: `repeat(${Math.max(
+          1,
+          items.length
+        )}, minmax(0, 1fr))`,
       }}
     >
-      {items.map(
-        (
-          item,
-          index
-        ) => (
-          <div
-            key={`${item.label}-${index}`}
-            className="min-w-0 border-r border-slate-100 px-4 py-4 last:border-r-0"
-          >
-            <div className="text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">
-              {item.label}
-            </div>
-
-            <div
-              className={[
-                "mt-1.5 truncate text-xl font-black tracking-tight",
-                item.tone ===
-                "danger"
-                  ? "text-rose-700"
-                  : item.tone ===
-                      "warning"
-                    ? "text-amber-700"
-                    : item.tone ===
-                        "good"
-                      ? "text-emerald-700"
-                      : item.tone ===
-                          "violet"
-                        ? "text-violet-800"
-                        : "text-slate-900",
-              ].join(
-                " "
-              )}
-            >
-              {item.value}
-            </div>
-
-            <div className="mt-1 truncate text-[9px] text-slate-400">
-              {item.detail ||
-                "—"}
-            </div>
+      {items.map((item, index) => (
+        <div
+          key={`${item.label}-${index}`}
+          className="min-w-0 border-r border-slate-100 px-4 py-4 last:border-r-0"
+        >
+          <div className="text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">
+            {item.label}
           </div>
-        )
-      )}
+
+          <div
+            className={[
+              "mt-1.5 truncate text-xl font-black tracking-tight",
+              item.tone === "danger"
+                ? "text-rose-700"
+                : item.tone === "warning"
+                  ? "text-amber-700"
+                  : item.tone === "good"
+                    ? "text-emerald-700"
+                    : item.tone === "violet"
+                      ? "text-violet-800"
+                      : "text-slate-900",
+            ].join(" ")}
+          >
+            {item.value}
+          </div>
+
+          <div className="mt-1 truncate text-[9px] text-slate-400">
+            {item.detail || "—"}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
-
 
 function PeriodButton({
   active,
@@ -667,23 +383,18 @@ function PeriodButton({
   return (
     <button
       type="button"
-      onClick={
-        onClick
-      }
+      onClick={onClick}
       className={[
         "rounded-lg px-3 py-1.5 text-[10px] font-black transition",
         active
           ? "bg-slate-950 text-white shadow-sm"
           : "text-slate-500 hover:bg-white hover:text-slate-900",
-      ].join(
-        " "
-      )}
+      ].join(" ")}
     >
       {children}
     </button>
   );
 }
-
 
 function ToggleButton({
   active,
@@ -693,23 +404,18 @@ function ToggleButton({
   return (
     <button
       type="button"
-      onClick={
-        onClick
-      }
+      onClick={onClick}
       className={[
         "rounded-lg px-3 py-2 text-[10px] font-black transition",
         active
           ? "bg-slate-950 text-white"
           : "border border-slate-200 bg-white text-slate-500 hover:bg-slate-50",
-      ].join(
-        " "
-      )}
+      ].join(" ")}
     >
       {children}
     </button>
   );
 }
-
 
 function EmptyState({
   children,
@@ -719,15 +425,13 @@ function EmptyState({
     <div
       className="flex items-center justify-center text-center text-xs font-medium text-slate-400"
       style={{
-        minHeight:
-          height,
+        minHeight: height,
       }}
     >
       {children}
     </div>
   );
 }
-
 
 function NumeroTooltip({
   active,
@@ -748,31 +452,24 @@ function NumeroTooltip({
       </div>
 
       <div className="space-y-1">
-        {payload.map(
-          (
-            item
-          ) => (
-            <div
-              key={`${item.dataKey}-${item.name}`}
-              className="flex min-w-[170px] items-center justify-between gap-4 text-[10px]"
-            >
-              <span className="font-semibold text-slate-500">
-                {item.name}
-              </span>
+        {payload.map((item) => (
+          <div
+            key={`${item.dataKey}-${item.name}`}
+            className="flex min-w-[170px] items-center justify-between gap-4 text-[10px]"
+          >
+            <span className="font-semibold text-slate-500">
+              {item.name}
+            </span>
 
-              <span className="font-black text-slate-800">
-                {fmtNumero(
-                  item.value
-                )}
-              </span>
-            </div>
-          )
-        )}
+            <span className="font-black text-slate-800">
+              {fmtNumero(item.value)}
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
-
 
 function TempoTooltipHoras({
   active,
@@ -793,31 +490,24 @@ function TempoTooltipHoras({
       </div>
 
       <div className="space-y-1">
-        {payload.map(
-          (
-            item
-          ) => (
-            <div
-              key={`${item.dataKey}-${item.name}`}
-              className="flex min-w-[190px] items-center justify-between gap-4 text-[10px]"
-            >
-              <span className="font-semibold text-slate-500">
-                {item.name}
-              </span>
+        {payload.map((item) => (
+          <div
+            key={`${item.dataKey}-${item.name}`}
+            className="flex min-w-[190px] items-center justify-between gap-4 text-[10px]"
+          >
+            <span className="font-semibold text-slate-500">
+              {item.name}
+            </span>
 
-              <span className="font-black text-slate-800">
-                {fmtHoras(
-                  item.value
-                )}
-              </span>
-            </div>
-          )
-        )}
+            <span className="font-black text-slate-800">
+              {fmtHoras(item.value)}
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
-
 
 function TempoTooltip({
   active,
@@ -838,31 +528,24 @@ function TempoTooltip({
       </div>
 
       <div className="space-y-1">
-        {payload.map(
-          (
-            item
-          ) => (
-            <div
-              key={`${item.dataKey}-${item.name}`}
-              className="flex min-w-[180px] items-center justify-between gap-4 text-[10px]"
-            >
-              <span className="font-semibold text-slate-500">
-                {item.name}
-              </span>
+        {payload.map((item) => (
+          <div
+            key={`${item.dataKey}-${item.name}`}
+            className="flex min-w-[180px] items-center justify-between gap-4 text-[10px]"
+          >
+            <span className="font-semibold text-slate-500">
+              {item.name}
+            </span>
 
-              <span className="font-black text-slate-800">
-                {fmtDuracao(
-                  item.value
-                )}
-              </span>
-            </div>
-          )
-        )}
+            <span className="font-black text-slate-800">
+              {fmtDuracao(item.value)}
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
-
 
 function VariacaoTexto({
   value,
@@ -870,11 +553,7 @@ function VariacaoTexto({
 }) {
   if (
     value == null ||
-    Number.isNaN(
-      Number(
-        value
-      )
-    )
+    Number.isNaN(Number(value))
   ) {
     return (
       <span className="text-slate-400">
@@ -883,283 +562,180 @@ function VariacaoTexto({
     );
   }
 
-  const numero =
-    Number(
-      value
-    );
+  const numero = Number(value);
 
   const bom =
-    numero ===
-    0
+    numero === 0
       ? null
       : inverso
-        ? numero <
-          0
-        : numero >
-          0;
+        ? numero < 0
+        : numero > 0;
 
   return (
     <span
       className={
-        bom ===
-        true
+        bom === true
           ? "font-black text-emerald-700"
-          : bom ===
-              false
+          : bom === false
             ? "font-black text-rose-700"
             : "font-black text-slate-500"
       }
     >
-      {fmtVariacao(
-        numero
-      )}
+      {fmtVariacao(numero)}
     </span>
   );
 }
 
-
-/* =========================================================
-   PÁGINA
-========================================================= */
-
 export default function IndicadoresExecutivosV2Page() {
-  const navigate =
-    useNavigate();
+  const navigate = useNavigate();
 
   const [
     loading,
     setLoading,
-  ] =
-    useState(
-      true
-    );
+  ] = useState(true);
 
   const [
     error,
     setError,
-  ] =
-    useState(
-      ""
-    );
-
-  const [
-    dados,
-    setDados,
-  ] =
-    useState({
-      comparativoAtual:
-        [],
-
-      operacaoComparativoAtual:
-        [],
-
-      b2bComparativoAtual:
-        [],
-
-      b2cCanaisComparativoAtual:
-        [],
-
-      etapasComparativoAtual:
-        [],
-
-      kpisSemanais:
-        [],
-
-      kpisMensais:
-        [],
-
-      etapasSemanais:
-        [],
-
-      etapasMensais:
-        [],
-
-      operacaoDiaria:
-        [],
-
-      operacaoMensal:
-        [],
-
-      leadtimeTriagemMensal:
-        [],
-
-      gradesMensais:
-        [],
-
-      b2bOperacaoDiaria:
-        [],
-
-      b2bOperacaoMensal:
-        [],
-
-      b2cCanaisMensal:
-        [],
-
-      b2cCanaisFaixasMensal:
-        [],
-
-      b2cColetasMensal:
-        [],
-
-      expedicaoDiaria:
-        [],
-
-      errosProcessoMensais:
-        [],
-
-      estoquePosicaoAtual:
-        [],
-
-      estoqueAgingAtual:
-        [],
-
-      estoqueQualidadeAtual:
-        {},
-    });
+  ] = useState("");
 
   const [
     canalTempos,
     setCanalTempos,
-  ] =
-    useState(
-      "B2C"
-    );
+  ] = useState("B2C");
 
   const [
     mesSelecionado,
     setMesSelecionado,
-  ] =
-    useState(
-      ""
-    );
+  ] = useState("");
 
+  const [
+    dados,
+    setDados,
+  ] = useState({
+    comparativoAtual: [],
+    operacaoComparativoAtual: [],
+    b2bComparativoAtual: [],
+    b2cCanaisComparativoAtual: [],
+    etapasComparativoAtual: [],
+    fifoComparativoAtual: {},
 
-  /* =======================================================
-     CARREGAMENTO
-  ======================================================= */
+    kpisSemanais: [],
+    kpisMensais: [],
+    etapasSemanais: [],
+    etapasMensais: [],
+
+    operacaoDiaria: [],
+    operacaoMensal: [],
+    leadtimeTriagemMensal: [],
+    gradesMensais: [],
+
+    b2bOperacaoDiaria: [],
+    b2bOperacaoMensal: [],
+
+    b2cCanaisMensal: [],
+    b2cCanaisFaixasMensal: [],
+    b2cColetasMensal: [],
+    expedicaoDiaria: [],
+
+    errosProcessoMensais: [],
+
+    estoquePosicaoAtual: [],
+    estoqueAgingAtual: [],
+    estoqueQualidadeAtual: {},
+  });
 
   async function carregar() {
     try {
-      setLoading(
-        true
-      );
+      setLoading(true);
+      setError("");
 
-      setError(
-        ""
-      );
+      const [
+        resultado,
+        fifoResposta,
+      ] = await Promise.all([
+        fetchIndicadoresExecutivos(),
 
-      const resultado =
-        await fetchIndicadoresExecutivos();
+        supabase
+          .from(
+            "vw_assurant_fifo_comparativo_periodo_atual"
+          )
+          .select("*")
+          .limit(1),
+      ]);
 
-      setDados(
-        resultado
-      );
-    } catch (
-      err
-    ) {
-      console.error(
-        err
-      );
+      if (fifoResposta.error) {
+        throw new Error(
+          `vw_assurant_fifo_comparativo_periodo_atual: ${fifoResposta.error.message}`
+        );
+      }
+
+      setDados({
+        ...resultado,
+
+        fifoComparativoAtual:
+          fifoResposta.data?.[0] || {},
+      });
+    } catch (err) {
+      console.error(err);
 
       setError(
         err?.message ||
           "Não foi possível carregar os indicadores."
       );
     } finally {
-      setLoading(
-        false
-      );
+      setLoading(false);
     }
   }
 
+  useEffect(() => {
+    carregar();
+  }, []);
 
-  useEffect(
-    () => {
-      carregar();
-    },
-    []
-  );
+  const mesesDisponiveis = useMemo(() => {
+    const meses = new Set();
 
-
-  /* =======================================================
-     MESES
-  ======================================================= */
-
-  const mesesDisponiveis =
-    useMemo(
-      () => {
-        const meses =
-          new Set();
-
-        [
-          dados.operacaoMensal,
-          dados.kpisMensais,
-          dados.gradesMensais,
-          dados.b2bOperacaoMensal,
-          dados.b2cCanaisMensal,
-          dados.errosProcessoMensais,
-        ].forEach(
-          (
-            fonte
-          ) => {
-            (
-              fonte ||
-              []
-            ).forEach(
-              (
-                row
-              ) => {
-                const valor =
-                  row.mes ||
-                  row.periodo_inicio;
-
-                if (
-                  valor
-                ) {
-                  meses.add(
-                    String(
-                      valor
-                    ).slice(
-                      0,
-                      10
-                    )
-                  );
-                }
-              }
-            );
-          }
-        );
-
-        return Array.from(
-          meses
-        ).sort();
-      },
-      [
-        dados,
-      ]
-    );
-
-
-  useEffect(
-    () => {
-      if (
-        !mesSelecionado &&
-        mesesDisponiveis.length
-      ) {
-        setMesSelecionado(
-          mesesDisponiveis[
-            mesesDisponiveis.length -
-              1
-          ]
-        );
-      }
-    },
     [
-      mesesDisponiveis,
-      mesSelecionado,
-    ]
-  );
+      dados.operacaoMensal,
+      dados.kpisMensais,
+      dados.gradesMensais,
+      dados.b2bOperacaoMensal,
+      dados.b2cCanaisMensal,
+      dados.errosProcessoMensais,
+    ].forEach((fonte) => {
+      (fonte || []).forEach((row) => {
+        const valor =
+          row.mes ||
+          row.periodo_inicio;
 
+        if (valor) {
+          meses.add(
+            String(valor).slice(0, 10)
+          );
+        }
+      });
+    });
+
+    return Array.from(
+      meses
+    ).sort();
+  }, [dados]);
+
+  useEffect(() => {
+    if (
+      !mesSelecionado &&
+      mesesDisponiveis.length
+    ) {
+      setMesSelecionado(
+        mesesDisponiveis[
+          mesesDisponiveis.length - 1
+        ]
+      );
+    }
+  }, [
+    mesesDisponiveis,
+    mesSelecionado,
+  ]);
 
   const indiceMesAtual =
     mesesDisponiveis.indexOf(
@@ -1167,22 +743,16 @@ export default function IndicadoresExecutivosV2Page() {
     );
 
   const mesAnterior =
-    indiceMesAtual >
-    0
+    indiceMesAtual > 0
       ? mesesDisponiveis[
-          indiceMesAtual -
-            1
+          indiceMesAtual - 1
         ]
       : null;
 
   const prefixoMes =
     String(
-      mesSelecionado ||
-        ""
-    ).slice(
-      0,
-      7
-    );
+      mesSelecionado || ""
+    ).slice(0, 7);
 
   const ehMesCorrente =
     mesSelecionado ===
@@ -1193,46 +763,27 @@ export default function IndicadoresExecutivosV2Page() {
       mesSelecionado
     );
 
-
-  /* =======================================================
-     RECEBIMENTO / PRODUÇÃO
-  ======================================================= */
-
   const operacaoMes =
     (
-      dados.operacaoMensal ||
-      []
+      dados.operacaoMensal || []
     ).find(
-      (
-        row
-      ) =>
+      (row) =>
         String(
           row.mes
-        ).slice(
-          0,
-          10
-        ) ===
+        ).slice(0, 10) ===
         mesSelecionado
-    ) ||
-    {};
+    ) || {};
 
   const operacaoMesAnterior =
     (
-      dados.operacaoMensal ||
-      []
+      dados.operacaoMensal || []
     ).find(
-      (
-        row
-      ) =>
+      (row) =>
         String(
           row.mes
-        ).slice(
-          0,
-          10
-        ) ===
+        ).slice(0, 10) ===
         mesAnterior
-    ) ||
-    {};
+    ) || {};
 
   const operacaoComparativo =
     dados.operacaoComparativoAtual?.[0] ||
@@ -1334,428 +885,323 @@ export default function IndicadoresExecutivosV2Page() {
     useMemo(
       () =>
         (
-          dados.operacaoDiaria ||
-          []
+          dados.operacaoDiaria || []
         )
           .filter(
-            (
-              row
-            ) =>
+            (row) =>
               String(
                 row.dia
-              ).slice(
-                0,
-                7
-              ) ===
+              ).slice(0, 7) ===
               prefixoMes
           )
-          .map(
-            (
-              row
-            ) => ({
-              ...row,
+          .map((row) => ({
+            ...row,
 
-              label:
-                fmtDataCurta(
-                  row.dia
-                ),
-            })
-          ),
+            label:
+              fmtDataCurta(
+                row.dia
+              ),
+          })),
       [
         dados.operacaoDiaria,
         prefixoMes,
       ]
     );
 
-
-  /* =======================================================
-     LEAD TIME WAREHOUSE
-  ======================================================= */
-
   const leadtimeWarehouse =
     (
       dados.leadtimeTriagemMensal ||
       []
     ).find(
-      (
-        row
-      ) =>
+      (row) =>
         String(
           row.mes
-        ).slice(
-          0,
-          10
-        ) ===
+        ).slice(0, 10) ===
         mesSelecionado
-    ) ||
-    {};
+    ) || {};
 
   const leadtimeWarehouseAnterior =
     (
       dados.leadtimeTriagemMensal ||
       []
     ).find(
-      (
-        row
-      ) =>
+      (row) =>
         String(
           row.mes
-        ).slice(
-          0,
-          10
-        ) ===
+        ).slice(0, 10) ===
         mesAnterior
-    ) ||
-    {};
+    ) || {};
 
   const leadtimeTemComparativoEspecial =
-    leadtimeWarehouse.receb_funcional_mediana_atual_h !=
-      null;
+    leadtimeWarehouse
+      .receb_funcional_mediana_atual_h !=
+    null;
 
   const recebFuncionalMediana =
     leadtimeTemComparativoEspecial
       ? Number(
-          leadtimeWarehouse.receb_funcional_mediana_atual_h
+          leadtimeWarehouse
+            .receb_funcional_mediana_atual_h
         )
       : Number(
-          leadtimeWarehouse.receb_funcional_h ||
-            0
+          leadtimeWarehouse
+            .receb_funcional_h || 0
         );
 
   const recebFuncionalAnterior =
     leadtimeTemComparativoEspecial
       ? Number(
-          leadtimeWarehouse.receb_funcional_mediana_anterior_h
+          leadtimeWarehouse
+            .receb_funcional_mediana_anterior_h
         )
-      : (
-          leadtimeWarehouseAnterior.receb_funcional_h !=
-          null
-            ? Number(
-                leadtimeWarehouseAnterior.receb_funcional_h
-              )
-            : null
-        );
+      : leadtimeWarehouseAnterior
+            .receb_funcional_h != null
+        ? Number(
+            leadtimeWarehouseAnterior
+              .receb_funcional_h
+          )
+        : null;
 
   const recebFuncionalVariacao =
     leadtimeTemComparativoEspecial
       ? Number(
-          leadtimeWarehouse.receb_funcional_variacao_mediana_pct
+          leadtimeWarehouse
+            .receb_funcional_variacao_mediana_pct
         )
       : calcularVariacao(
           recebFuncionalMediana,
           recebFuncionalAnterior
         );
 
-  const recebFuncionalMedia =
-    leadtimeWarehouse.receb_funcional_media_atual_h !=
-      null
-      ? Number(
-          leadtimeWarehouse.receb_funcional_media_atual_h
-        )
-      : null;
-
-  const recebFuncionalP90 =
-    leadtimeWarehouse.receb_funcional_p90_atual_h !=
-      null
-      ? Number(
-          leadtimeWarehouse.receb_funcional_p90_atual_h
-        )
-      : null;
-
   const recebFuncionalAmostra =
     Number(
-      leadtimeWarehouse.receb_funcional_amostra_atual ??
+      leadtimeWarehouse
+        .receb_funcional_amostra_atual ??
         leadtimeWarehouse.aparelhos ??
         0
     );
 
   const prioridadesMenor1h =
     Number(
-      leadtimeWarehouse.receb_funcional_prioridades_menor_1h ??
-        leadtimeWarehouse.excluidos_tempo_zero ??
+      leadtimeWarehouse
+        .receb_funcional_prioridades_menor_1h ??
+        leadtimeWarehouse
+          .excluidos_tempo_zero ??
         0
     );
 
   const timestampsSimultaneos =
     Number(
-      leadtimeWarehouse.receb_funcional_timestamps_simultaneos ||
+      leadtimeWarehouse
+        .receb_funcional_timestamps_simultaneos ||
         0
     );
-
 
   const funcionalCosmeticaMediana =
     leadtimeTemComparativoEspecial
       ? Number(
-          leadtimeWarehouse.funcional_cosmetica_mediana_atual_h
+          leadtimeWarehouse
+            .funcional_cosmetica_mediana_atual_h
         )
       : Number(
-          leadtimeWarehouse.funcional_cosmetica_h ||
-            0
+          leadtimeWarehouse
+            .funcional_cosmetica_h || 0
         );
 
   const funcionalCosmeticaAnterior =
     leadtimeTemComparativoEspecial
       ? Number(
-          leadtimeWarehouse.funcional_cosmetica_mediana_anterior_h
+          leadtimeWarehouse
+            .funcional_cosmetica_mediana_anterior_h
         )
-      : (
-          leadtimeWarehouseAnterior.funcional_cosmetica_h !=
-          null
-            ? Number(
-                leadtimeWarehouseAnterior.funcional_cosmetica_h
-              )
-            : null
-        );
+      : leadtimeWarehouseAnterior
+            .funcional_cosmetica_h != null
+        ? Number(
+            leadtimeWarehouseAnterior
+              .funcional_cosmetica_h
+          )
+        : null;
 
   const funcionalCosmeticaVariacao =
     leadtimeTemComparativoEspecial
       ? Number(
-          leadtimeWarehouse.funcional_cosmetica_variacao_mediana_pct
+          leadtimeWarehouse
+            .funcional_cosmetica_variacao_mediana_pct
         )
       : calcularVariacao(
           funcionalCosmeticaMediana,
           funcionalCosmeticaAnterior
         );
 
-  const funcionalCosmeticaMedia =
-    leadtimeWarehouse.funcional_cosmetica_media_atual_h !=
-      null
-      ? Number(
-          leadtimeWarehouse.funcional_cosmetica_media_atual_h
-        )
-      : null;
-
-  const funcionalCosmeticaP90 =
-    leadtimeWarehouse.funcional_cosmetica_p90_atual_h !=
-      null
-      ? Number(
-          leadtimeWarehouse.funcional_cosmetica_p90_atual_h
-        )
-      : null;
-
   const funcionalCosmeticaAmostra =
     Number(
-      leadtimeWarehouse.funcional_cosmetica_amostra_atual ||
+      leadtimeWarehouse
+        .funcional_cosmetica_amostra_atual ||
         0
     );
 
-
   const cosmeticaWmsMediana =
-    leadtimeWarehouse.cosmetica_wms_mediana_h !=
-      null
+    leadtimeWarehouse
+      .cosmetica_wms_mediana_h != null
       ? Number(
-          leadtimeWarehouse.cosmetica_wms_mediana_h
-        )
-      : null;
-
-  const cosmeticaWmsMedia =
-    leadtimeWarehouse.cosmetica_wms_media_h !=
-      null
-      ? Number(
-          leadtimeWarehouse.cosmetica_wms_media_h
-        )
-      : null;
-
-  const cosmeticaWmsP90 =
-    leadtimeWarehouse.cosmetica_wms_p90_h !=
-      null
-      ? Number(
-          leadtimeWarehouse.cosmetica_wms_p90_h
+          leadtimeWarehouse
+            .cosmetica_wms_mediana_h
         )
       : null;
 
   const cosmeticaWmsAmostra =
     Number(
-      leadtimeWarehouse.cosmetica_wms_amostra ||
-        0
+      leadtimeWarehouse
+        .cosmetica_wms_amostra || 0
     );
 
   const cosmeticaWmsAte48 =
     Number(
-      leadtimeWarehouse.cosmetica_wms_ate_48h ||
-        0
+      leadtimeWarehouse
+        .cosmetica_wms_ate_48h || 0
     );
 
   const cosmeticaWmsPctAte48 =
-    leadtimeWarehouse.cosmetica_wms_pct_ate_48h !=
-      null
+    leadtimeWarehouse
+      .cosmetica_wms_pct_ate_48h != null
       ? Number(
-          leadtimeWarehouse.cosmetica_wms_pct_ate_48h
+          leadtimeWarehouse
+            .cosmetica_wms_pct_ate_48h
         )
       : null;
 
   const cosmeticaWmsPendentes =
     Number(
-      leadtimeWarehouse.cosmetica_wms_pendentes ||
-        0
+      leadtimeWarehouse
+        .cosmetica_wms_pendentes || 0
     );
 
   const baselineWmsInicio =
-    leadtimeWarehouse.baseline_wms_inicio ||
+    leadtimeWarehouse
+      .baseline_wms_inicio ||
     "2026-08-15";
 
   const corteLeadtime =
-    leadtimeWarehouse.corte_operacional ||
+    leadtimeWarehouse
+      .corte_operacional ||
     null;
 
-  const leadtimeEtapas =
-    [
-      {
-        etapa:
-          "Recebimento → Funcional",
+  const leadtimeEtapas = [
+    {
+      etapa:
+        "Recebimento → Funcional",
 
-        horas:
-          recebFuncionalMediana,
+      horas:
+        recebFuncionalMediana,
 
-        anterior:
-          recebFuncionalAnterior,
+      anterior:
+        recebFuncionalAnterior,
 
-        variacao:
-          recebFuncionalVariacao,
-      },
+      variacao:
+        recebFuncionalVariacao,
+    },
 
-      {
-        etapa:
-          "Funcional → Cosmética",
+    {
+      etapa:
+        "Funcional → Cosmética",
 
-        horas:
-          funcionalCosmeticaMediana,
+      horas:
+        funcionalCosmeticaMediana,
 
-        anterior:
-          funcionalCosmeticaAnterior,
+      anterior:
+        funcionalCosmeticaAnterior,
 
-        variacao:
-          funcionalCosmeticaVariacao,
-      },
+      variacao:
+        funcionalCosmeticaVariacao,
+    },
 
-      {
-        etapa:
-          "Cosmética → Alocação WMS",
+    {
+      etapa:
+        "Cosmética → Alocação WMS",
 
-        horas:
-          cosmeticaWmsMediana,
+      horas:
+        cosmeticaWmsMediana,
 
-        anterior:
-          null,
+      anterior:
+        null,
 
-        variacao:
-          null,
-      },
-    ].filter(
-      (
-        item
-      ) =>
-        item.horas !=
-          null &&
-        Number.isFinite(
-          Number(
-            item.horas
-          )
-        )
-    );
-
-
-  /* =======================================================
-     QUALIDADE
-  ======================================================= */
+      variacao:
+        null,
+    },
+  ].filter(
+    (item) =>
+      item.horas != null &&
+      Number.isFinite(
+        Number(item.horas)
+      )
+  );
 
   const gradesMes =
-    useMemo(
-      () => {
-        const linhas =
-          (
-            dados.gradesMensais ||
-            []
-          )
-            .filter(
-              (
-                row
-              ) =>
-                String(
-                  row.mes
-                ).slice(
-                  0,
-                  10
-                ) ===
-                mesSelecionado
-            );
+    useMemo(() => {
+      const linhas =
+        (
+          dados.gradesMensais || []
+        ).filter(
+          (row) =>
+            String(
+              row.mes
+            ).slice(0, 10) ===
+            mesSelecionado
+        );
 
-        const total =
-          linhas.reduce(
-            (
-              soma,
-              row
-            ) =>
-              soma +
-              Number(
-                row.aparelhos ||
-                  0
-              ),
-            0
-          );
+      const total =
+        linhas.reduce(
+          (soma, row) =>
+            soma +
+            Number(
+              row.aparelhos || 0
+            ),
+          0
+        );
 
-        return linhas
-          .map(
-            (
-              row
-            ) => ({
-              ...row,
+      return linhas
+        .map((row) => ({
+          ...row,
 
-              aparelhos:
-                Number(
-                  row.aparelhos ||
-                    0
-                ),
+          aparelhos:
+            Number(
+              row.aparelhos || 0
+            ),
 
-              percentual:
-                total >
-                0
-                  ? (
-                      Number(
-                        row.aparelhos ||
-                          0
-                      ) /
-                      total
-                    ) *
-                    100
-                  : 0,
-            })
-          )
-          .sort(
-            (
-              a,
-              b
-            ) =>
-              b.aparelhos -
-              a.aparelhos
-          );
-      },
-      [
-        dados.gradesMensais,
-        mesSelecionado,
-      ]
-    );
+          percentual:
+            total > 0
+              ? (
+                  Number(
+                    row.aparelhos || 0
+                  ) /
+                  total
+                ) *
+                100
+              : 0,
+        }))
+        .sort(
+          (a, b) =>
+            b.aparelhos -
+            a.aparelhos
+        );
+    }, [
+      dados.gradesMensais,
+      mesSelecionado,
+    ]);
 
   const totalGrades =
     gradesMes.reduce(
-      (
-        total,
-        row
-      ) =>
+      (total, row) =>
         total +
         Number(
-          row.aparelhos ||
-            0
+          row.aparelhos || 0
         ),
       0
     );
 
   const naoAlocaveis =
     gradesMes.reduce(
-      (
-        total,
-        row
-      ) => {
+      (total, row) => {
         const gradeNormalizada =
           normalizarTexto(
             row.grade
@@ -1769,7 +1215,8 @@ export default function IndicadoresExecutivosV2Page() {
             "REGULAR"
           );
 
-        return total +
+        return (
+          total +
           (
             naoAlocavel
               ? Number(
@@ -1777,14 +1224,14 @@ export default function IndicadoresExecutivosV2Page() {
                     0
                 )
               : 0
-          );
+          )
+        );
       },
       0
     );
 
   const pctNaoAlocavel =
-    totalGrades >
-    0
+    totalGrades > 0
       ? (
           naoAlocaveis /
           totalGrades
@@ -1792,46 +1239,29 @@ export default function IndicadoresExecutivosV2Page() {
         100
       : null;
 
-
-  /* =======================================================
-     B2B
-  ======================================================= */
-
   const b2bMes =
     (
       dados.b2bOperacaoMensal ||
       []
     ).find(
-      (
-        row
-      ) =>
+      (row) =>
         String(
           row.mes
-        ).slice(
-          0,
-          10
-        ) ===
+        ).slice(0, 10) ===
         mesSelecionado
-    ) ||
-    {};
+    ) || {};
 
   const b2bMesAnterior =
     (
       dados.b2bOperacaoMensal ||
       []
     ).find(
-      (
-        row
-      ) =>
+      (row) =>
         String(
           row.mes
-        ).slice(
-          0,
-          10
-        ) ===
+        ).slice(0, 10) ===
         mesAnterior
-    ) ||
-    {};
+    ) || {};
 
   const b2bComparativo =
     dados.b2bComparativoAtual?.[0] ||
@@ -1841,109 +1271,134 @@ export default function IndicadoresExecutivosV2Page() {
     ehMesCorrente
       ? {
           pedidos:
-            b2bComparativo.pedidos_recebidos_atual,
+            b2bComparativo
+              .pedidos_recebidos_atual,
 
           pedidosAnterior:
-            b2bComparativo.pedidos_recebidos_anterior,
+            b2bComparativo
+              .pedidos_recebidos_anterior,
 
           variacaoPedidos:
-            b2bComparativo.variacao_pedidos_pct,
+            b2bComparativo
+              .variacao_pedidos_pct,
 
           itensRecebidos:
-            b2bComparativo.itens_recebidos_atual,
+            b2bComparativo
+              .itens_recebidos_atual,
 
           itensRecebidosAnterior:
-            b2bComparativo.itens_recebidos_anterior,
+            b2bComparativo
+              .itens_recebidos_anterior,
 
           variacaoItensRecebidos:
-            b2bComparativo.variacao_itens_recebidos_pct,
+            b2bComparativo
+              .variacao_itens_recebidos_pct,
 
           itensFaturados:
-            b2bComparativo.itens_faturados_atual,
+            b2bComparativo
+              .itens_faturados_atual,
 
           itensFaturadosAnterior:
-            b2bComparativo.itens_faturados_anterior,
+            b2bComparativo
+              .itens_faturados_anterior,
 
           variacaoItensFaturados:
-            b2bComparativo.variacao_itens_faturados_pct,
+            b2bComparativo
+              .variacao_itens_faturados_pct,
 
           notas:
-            b2bComparativo.notas_emitidas_atual,
+            b2bComparativo
+              .notas_emitidas_atual,
 
           notasAnterior:
-            b2bComparativo.notas_emitidas_anterior,
+            b2bComparativo
+              .notas_emitidas_anterior,
 
           variacaoNotas:
-            b2bComparativo.variacao_notas_pct,
+            b2bComparativo
+              .variacao_notas_pct,
 
           erros:
-            b2bComparativo.erros_nf_atual,
+            b2bComparativo
+              .erros_nf_atual,
 
           errosAnterior:
-            b2bComparativo.erros_nf_anterior,
+            b2bComparativo
+              .erros_nf_anterior,
 
           variacaoErros:
-            b2bComparativo.variacao_erros_nf_pct,
+            b2bComparativo
+              .variacao_erros_nf_pct,
         }
       : {
           pedidos:
             b2bMes.pedidos_recebidos,
 
           pedidosAnterior:
-            b2bMesAnterior.pedidos_recebidos,
+            b2bMesAnterior
+              .pedidos_recebidos,
 
           variacaoPedidos:
             calcularVariacao(
               b2bMes.pedidos_recebidos,
-              b2bMesAnterior.pedidos_recebidos
+              b2bMesAnterior
+                .pedidos_recebidos
             ),
 
           itensRecebidos:
             b2bMes.itens_recebidos,
 
           itensRecebidosAnterior:
-            b2bMesAnterior.itens_recebidos,
+            b2bMesAnterior
+              .itens_recebidos,
 
           variacaoItensRecebidos:
             calcularVariacao(
               b2bMes.itens_recebidos,
-              b2bMesAnterior.itens_recebidos
+              b2bMesAnterior
+                .itens_recebidos
             ),
 
           itensFaturados:
             b2bMes.itens_faturados,
 
           itensFaturadosAnterior:
-            b2bMesAnterior.itens_faturados,
+            b2bMesAnterior
+              .itens_faturados,
 
           variacaoItensFaturados:
             calcularVariacao(
               b2bMes.itens_faturados,
-              b2bMesAnterior.itens_faturados
+              b2bMesAnterior
+                .itens_faturados
             ),
 
           notas:
             b2bMes.notas_emitidas,
 
           notasAnterior:
-            b2bMesAnterior.notas_emitidas,
+            b2bMesAnterior
+              .notas_emitidas,
 
           variacaoNotas:
             calcularVariacao(
               b2bMes.notas_emitidas,
-              b2bMesAnterior.notas_emitidas
+              b2bMesAnterior
+                .notas_emitidas
             ),
 
           erros:
             b2bMes.erros_nf,
 
           errosAnterior:
-            b2bMesAnterior.erros_nf,
+            b2bMesAnterior
+              .erros_nf,
 
           variacaoErros:
             calcularVariacao(
               b2bMes.erros_nf,
-              b2bMesAnterior.erros_nf
+              b2bMesAnterior
+                .erros_nf
             ),
         };
 
@@ -1955,119 +1410,37 @@ export default function IndicadoresExecutivosV2Page() {
           []
         )
           .filter(
-            (
-              row
-            ) =>
+            (row) =>
               String(
                 row.dia
-              ).slice(
-                0,
-                7
-              ) ===
+              ).slice(0, 7) ===
               prefixoMes
           )
-          .map(
-            (
-              row
-            ) => ({
-              ...row,
+          .map((row) => ({
+            ...row,
 
-              label:
-                fmtDataCurta(
-                  row.dia
-                ),
-            })
-          ),
+            label:
+              fmtDataCurta(
+                row.dia
+              ),
+          })),
       [
         dados.b2bOperacaoDiaria,
         prefixoMes,
       ]
     );
 
-
-  /* =======================================================
-     ETAPAS
-  ======================================================= */
-
-  function etapasCanal(
-    canal
-  ) {
-    if (
-      ehMesCorrente
-    ) {
+  function etapasCanal(canal) {
+    if (ehMesCorrente) {
       return (
         dados.etapasComparativoAtual ||
         []
       )
         .filter(
-          (
-            item
-          ) =>
-            item.canal ===
-            canal
+          (item) =>
+            item.canal === canal
         )
-        .map(
-          (
-            item
-          ) => ({
-            canal:
-              item.canal,
-
-            etapa:
-              item.etapa,
-
-            amostra:
-              item.amostra_atual,
-
-            amostraAnterior:
-              item.amostra_anterior,
-
-            media_min:
-              item.media_atual_min,
-
-            media_anterior_min:
-              item.media_anterior_min,
-
-            mediana_min:
-              item.mediana_atual_min,
-
-            mediana_anterior_min:
-              item.mediana_anterior_min,
-
-            p90_min:
-              item.p90_atual_min,
-
-            p90_anterior_min:
-              item.p90_anterior_min,
-
-            variacao_mediana_pct:
-              item.variacao_mediana_pct,
-          })
-        );
-    }
-
-    return (
-      dados.etapasMensais ||
-      []
-    )
-      .filter(
-        (
-          item
-        ) =>
-          item.canal ===
-            canal &&
-          String(
-            item.periodo_inicio
-          ).slice(
-            0,
-            10
-          ) ===
-            mesSelecionado
-      )
-      .map(
-        (
-          item
-        ) => ({
+        .map((item) => ({
           canal:
             item.canal,
 
@@ -2075,115 +1448,109 @@ export default function IndicadoresExecutivosV2Page() {
             item.etapa,
 
           amostra:
-            item.amostra,
+            item.amostra_atual,
 
           amostraAnterior:
             item.amostra_anterior,
 
-          media_min:
-            item.media_min,
-
           mediana_min:
-            item.mediana_min,
+            item.mediana_atual_min,
 
           mediana_anterior_min:
             item.mediana_anterior_min,
 
-          p90_min:
-            item.p90_min,
-
-          p90_anterior_min:
-            item.p90_anterior_min,
-
           variacao_mediana_pct:
             item.variacao_mediana_pct,
-        })
-      );
+        }));
+    }
+
+    return (
+      dados.etapasMensais || []
+    )
+      .filter(
+        (item) =>
+          item.canal ===
+            canal &&
+          String(
+            item.periodo_inicio
+          ).slice(0, 10) ===
+            mesSelecionado
+      )
+      .map((item) => ({
+        canal:
+          item.canal,
+
+        etapa:
+          item.etapa,
+
+        amostra:
+          item.amostra,
+
+        amostraAnterior:
+          item.amostra_anterior,
+
+        mediana_min:
+          item.mediana_min,
+
+        mediana_anterior_min:
+          item.mediana_anterior_min,
+
+        variacao_mediana_pct:
+          item.variacao_mediana_pct,
+      }));
   }
 
   const etapasB2B =
-    etapasCanal(
-      "B2B"
-    );
+    etapasCanal("B2B");
 
   const etapasB2C =
-    etapasCanal(
-      "B2C"
-    );
+    etapasCanal("B2C");
 
   const etapasAtuais =
-    canalTempos ===
-    "B2C"
+    canalTempos === "B2C"
       ? etapasB2C
       : etapasB2B;
 
-
-  /* =======================================================
-     RESUMO DE TEMPOS POR CANAL
-  ======================================================= */
-
-  function resumoCanal(
-    canal
-  ) {
-    if (
-      ehMesCorrente
-    ) {
+  function resumoCanal(canal) {
+    if (ehMesCorrente) {
       return (
         (
           dados.comparativoAtual ||
           []
         ).find(
-          (
-            item
-          ) =>
+          (item) =>
             item.granularidade ===
               "MTD" &&
-            item.canal ===
-              canal
-        ) ||
-        {}
+            item.canal === canal
+        ) || {}
       );
     }
 
     const atual =
       (
-        dados.kpisMensais ||
-        []
+        dados.kpisMensais || []
       ).find(
-        (
-          item
-        ) =>
+        (item) =>
           item.canal ===
             canal &&
           String(
             item.periodo_inicio
-          ).slice(
-            0,
-            10
-          ) ===
+          ).slice(0, 10) ===
             mesSelecionado
-      ) ||
-      {};
+      ) || {};
 
     const anterior =
       (
-        dados.kpisMensais ||
-        []
+        dados.kpisMensais || []
       ).find(
-        (
-          item
-        ) =>
+        (item) =>
           item.canal ===
             canal &&
           String(
             item.periodo_inicio
-          ).slice(
-            0,
-            10
-          ) ===
+          ).slice(0, 10) ===
             mesAnterior
-      ) ||
-      {};
+      ) || {};
 
     return {
       pedidos_atual:
@@ -2241,12 +1608,6 @@ export default function IndicadoresExecutivosV2Page() {
           anterior.mediana_leadtime_min
         ),
 
-      p90_leadtime_atual_min:
-        atual.p90_leadtime_min,
-
-      p90_leadtime_anterior_min:
-        anterior.p90_leadtime_min,
-
       amostra_leadtime_atual:
         atual.amostra_leadtime,
 
@@ -2260,398 +1621,305 @@ export default function IndicadoresExecutivosV2Page() {
       canalTempos
     );
 
-
-  /* =======================================================
-     EVOLUÇÃO SEMANAL
-  ======================================================= */
-
   const evolucaoSemanal =
-    useMemo(
-      () => {
-        const mapa =
-          new Map();
+    useMemo(() => {
+      const mapa = new Map();
 
-        (
-          dados.kpisSemanais ||
-          []
-        ).forEach(
-          (
-            item
-          ) => {
-            const chave =
-              item.periodo_inicio;
+      (
+        dados.kpisSemanais || []
+      ).forEach((item) => {
+        const chave =
+          item.periodo_inicio;
 
-            if (
-              !mapa.has(
-                chave
-              )
-            ) {
-              mapa.set(
-                chave,
-                {
-                  periodo_inicio:
-                    chave,
-
-                  semana:
-                    fmtDataCurta(
-                      chave
-                    ),
-
-                  B2C:
-                    null,
-
-                  B2B:
-                    null,
-                }
-              );
-            }
-
-            mapa.get(
-              chave
-            )[
-              item.canal
-            ] =
-              item.mediana_leadtime_min !=
-              null
-                ? Number(
-                    item.mediana_leadtime_min
-                  )
-                : null;
-          }
-        );
-
-        return Array.from(
-          mapa.values()
-        ).sort(
-          (
-            a,
-            b
-          ) =>
-            String(
-              a.periodo_inicio
-            ).localeCompare(
-              String(
-                b.periodo_inicio
-              )
-            )
-        );
-      },
-      [
-        dados.kpisSemanais,
-      ]
-    );
-
-
-  /* =======================================================
-     B2C
-  ======================================================= */
-
-  const canaisMes =
-    useMemo(
-      () => {
         if (
-          ehMesCorrente
+          !mapa.has(chave)
         ) {
-          return (
-            dados.b2cCanaisComparativoAtual ||
-            []
-          )
-            .map(
-              (
-                row
-              ) => ({
-                marketplace:
-                  row.marketplace,
+          mapa.set(
+            chave,
+            {
+              periodo_inicio:
+                chave,
 
-                pagos:
-                  Number(
-                    row.pagos_atual ||
-                      0
-                  ),
+              semana:
+                fmtDataCurta(
+                  chave
+                ),
 
-                pagosAnterior:
-                  Number(
-                    row.pagos_anterior ||
-                      0
-                  ),
+              B2C:
+                null,
 
-                embalados:
-                  Number(
-                    row.embalados_atual ||
-                      0
-                  ),
-
-                cancelados:
-                  Number(
-                    row.cancelados_atual ||
-                      0
-                  ),
-
-                coletas:
-                  Number(
-                    row.coletas_efetivas_atual ||
-                      0
-                  ),
-
-                coletasAnterior:
-                  Number(
-                    row.coletas_efetivas_anterior ||
-                      0
-                  ),
-
-                ciclos_validos:
-                  Number(
-                    row.ciclos_validos_atual ||
-                      0
-                  ),
-
-                ate_24h:
-                  Number(
-                    row.ate_24h_atual ||
-                      0
-                  ),
-
-                pct_ate_24h:
-                  row.pct_ate_24h_atual,
-
-                pct_ate_24h_anterior:
-                  row.pct_ate_24h_anterior,
-
-                mediana_h:
-                  row.mediana_h_atual,
-
-                mediana_h_anterior:
-                  row.mediana_h_anterior,
-
-                variacao_mediana_pct:
-                  row.variacao_mediana_pct,
-
-                p90_h:
-                  row.p90_h_atual,
-              })
-            )
-            .sort(
-              (
-                a,
-                b
-              ) =>
-                b.pagos -
-                a.pagos
-            );
+              B2B:
+                null,
+            }
+          );
         }
 
-        const linhas =
-          (
-            dados.b2cCanaisMensal ||
-            []
+        mapa.get(
+          chave
+        )[item.canal] =
+          item.mediana_leadtime_min !=
+          null
+            ? Number(
+                item.mediana_leadtime_min
+              )
+            : null;
+      });
+
+      return Array.from(
+        mapa.values()
+      ).sort(
+        (a, b) =>
+          String(
+            a.periodo_inicio
+          ).localeCompare(
+            String(
+              b.periodo_inicio
+            )
           )
-            .filter(
-              (
-                row
-              ) =>
-                String(
-                  row.mes
-                ).slice(
-                  0,
-                  10
-                ) ===
-                mesSelecionado
-            );
+      );
+    }, [
+      dados.kpisSemanais,
+    ]);
 
-        return linhas
-          .map(
-            (
-              row
-            ) => {
-              const anterior =
-                (
-                  dados.b2cCanaisMensal ||
-                  []
-                ).find(
-                  (
-                    item
-                  ) =>
-                    item.marketplace ===
-                      row.marketplace &&
-                    String(
-                      item.mes
-                    ).slice(
-                      0,
-                      10
-                    ) ===
-                      mesAnterior
-                ) ||
-                {};
+  const canaisMes =
+    useMemo(() => {
+      if (ehMesCorrente) {
+        return (
+          dados.b2cCanaisComparativoAtual ||
+          []
+        )
+          .map((row) => ({
+            marketplace:
+              row.marketplace,
 
-              const coleta =
-                (
-                  dados.b2cColetasMensal ||
-                  []
-                ).find(
-                  (
-                    item
-                  ) =>
-                    item.marketplace ===
-                      row.marketplace &&
-                    String(
-                      item.mes
-                    ).slice(
-                      0,
-                      10
-                    ) ===
-                      mesSelecionado
-                ) ||
-                {};
+            pagos:
+              Number(
+                row.pagos_atual || 0
+              ),
 
-              const coletaAnterior =
-                (
-                  dados.b2cColetasMensal ||
-                  []
-                ).find(
-                  (
-                    item
-                  ) =>
-                    item.marketplace ===
-                      row.marketplace &&
-                    String(
-                      item.mes
-                    ).slice(
-                      0,
-                      10
-                    ) ===
-                      mesAnterior
-                ) ||
-                {};
+            pagosAnterior:
+              Number(
+                row.pagos_anterior || 0
+              ),
 
-              const pagos =
-                Number(
-                  row.pagos ||
-                    0
-                );
+            embalados:
+              Number(
+                row.embalados_atual || 0
+              ),
 
-              const cancelados =
-                Number(
-                  row.cancelados ||
-                    0
-                );
+            cancelados:
+              Number(
+                row.cancelados_atual || 0
+              ),
 
-              return {
-                marketplace:
-                  row.marketplace,
+            coletas:
+              Number(
+                row.coletas_efetivas_atual ||
+                  0
+              ),
 
-                pagos,
+            coletasAnterior:
+              Number(
+                row.coletas_efetivas_anterior ||
+                  0
+              ),
 
-                pagosAnterior:
-                  Number(
-                    anterior.pagos ||
-                      0
-                  ),
+            ciclos_validos:
+              Number(
+                row.ciclos_validos_atual ||
+                  0
+              ),
 
-                embalados:
-                  Math.max(
-                    0,
-                    pagos -
-                      cancelados
-                  ),
+            ate_24h:
+              Number(
+                row.ate_24h_atual || 0
+              ),
 
-                cancelados,
+            pct_ate_24h:
+              row.pct_ate_24h_atual,
 
-                coletas:
-                  Number(
-                    coleta.coletas_efetivas ||
-                      0
-                  ),
+            pct_ate_24h_anterior:
+              row.pct_ate_24h_anterior,
 
-                coletasAnterior:
-                  Number(
-                    coletaAnterior.coletas_efetivas ||
-                      0
-                  ),
+            mediana_h:
+              row.mediana_h_atual,
 
-                ciclos_validos:
-                  Number(
-                    row.ciclos_validos ||
-                      0
-                  ),
+            mediana_h_anterior:
+              row.mediana_h_anterior,
 
-                ate_24h:
-                  Number(
-                    row.ate_24h ||
-                      0
-                  ),
-
-                pct_ate_24h:
-                  row.pct_ate_24h,
-
-                pct_ate_24h_anterior:
-                  anterior.pct_ate_24h,
-
-                mediana_h:
-                  row.mediana_h,
-
-                mediana_h_anterior:
-                  anterior.mediana_h,
-
-                variacao_mediana_pct:
-                  calcularVariacao(
-                    row.mediana_h,
-                    anterior.mediana_h
-                  ),
-
-                p90_h:
-                  row.p90_h,
-              };
-            }
-          )
+            variacao_mediana_pct:
+              row.variacao_mediana_pct,
+          }))
           .sort(
-            (
-              a,
-              b
-            ) =>
+            (a, b) =>
               b.pagos -
               a.pagos
           );
-      },
-      [
-        dados.b2cCanaisComparativoAtual,
-        dados.b2cCanaisMensal,
-        dados.b2cColetasMensal,
-        ehMesCorrente,
-        mesSelecionado,
-        mesAnterior,
-      ]
-    );
+      }
+
+      const linhas =
+        (
+          dados.b2cCanaisMensal ||
+          []
+        ).filter(
+          (row) =>
+            String(
+              row.mes
+            ).slice(0, 10) ===
+            mesSelecionado
+        );
+
+      return linhas
+        .map((row) => {
+          const anterior =
+            (
+              dados.b2cCanaisMensal ||
+              []
+            ).find(
+              (item) =>
+                item.marketplace ===
+                  row.marketplace &&
+                String(
+                  item.mes
+                ).slice(0, 10) ===
+                  mesAnterior
+            ) || {};
+
+          const coleta =
+            (
+              dados.b2cColetasMensal ||
+              []
+            ).find(
+              (item) =>
+                item.marketplace ===
+                  row.marketplace &&
+                String(
+                  item.mes
+                ).slice(0, 10) ===
+                  mesSelecionado
+            ) || {};
+
+          const coletaAnterior =
+            (
+              dados.b2cColetasMensal ||
+              []
+            ).find(
+              (item) =>
+                item.marketplace ===
+                  row.marketplace &&
+                String(
+                  item.mes
+                ).slice(0, 10) ===
+                  mesAnterior
+            ) || {};
+
+          const pagos =
+            Number(
+              row.pagos || 0
+            );
+
+          const cancelados =
+            Number(
+              row.cancelados || 0
+            );
+
+          return {
+            marketplace:
+              row.marketplace,
+
+            pagos,
+
+            pagosAnterior:
+              Number(
+                anterior.pagos || 0
+              ),
+
+            embalados:
+              Math.max(
+                0,
+                pagos -
+                  cancelados
+              ),
+
+            cancelados,
+
+            coletas:
+              Number(
+                coleta.coletas_efetivas ||
+                  0
+              ),
+
+            coletasAnterior:
+              Number(
+                coletaAnterior
+                  .coletas_efetivas ||
+                  0
+              ),
+
+            ciclos_validos:
+              Number(
+                row.ciclos_validos || 0
+              ),
+
+            ate_24h:
+              Number(
+                row.ate_24h || 0
+              ),
+
+            pct_ate_24h:
+              row.pct_ate_24h,
+
+            pct_ate_24h_anterior:
+              anterior.pct_ate_24h,
+
+            mediana_h:
+              row.mediana_h,
+
+            mediana_h_anterior:
+              anterior.mediana_h,
+
+            variacao_mediana_pct:
+              calcularVariacao(
+                row.mediana_h,
+                anterior.mediana_h
+              ),
+          };
+        })
+        .sort(
+          (a, b) =>
+            b.pagos -
+            a.pagos
+        );
+    }, [
+      dados.b2cCanaisComparativoAtual,
+      dados.b2cCanaisMensal,
+      dados.b2cColetasMensal,
+      ehMesCorrente,
+      mesSelecionado,
+      mesAnterior,
+    ]);
 
   const faixasMes =
     (
       dados.b2cCanaisFaixasMensal ||
       []
     ).filter(
-      (
-        row
-      ) =>
+      (row) =>
         String(
           row.mes
-        ).slice(
-          0,
-          10
-        ) ===
+        ).slice(0, 10) ===
         mesSelecionado
     );
 
   const faixasB2CChart =
     FAIXAS_B2C.map(
-      (
-        faixa
-      ) => ({
+      (faixa) => ({
         faixa,
 
         pedidos:
           faixasMes
             .filter(
-              (
-                row
-              ) =>
+              (row) =>
                 normalizarTexto(
                   row.faixa
                 ) ===
@@ -2660,14 +1928,10 @@ export default function IndicadoresExecutivosV2Page() {
                 )
             )
             .reduce(
-              (
-                total,
-                row
-              ) =>
+              (total, row) =>
                 total +
                 Number(
-                  row.pedidos ||
-                    0
+                  row.pedidos || 0
                 ),
               0
             ),
@@ -2675,268 +1939,308 @@ export default function IndicadoresExecutivosV2Page() {
     );
 
   const expedicaoMes =
-    useMemo(
-      () => {
-        const mapa =
-          new Map();
+    useMemo(() => {
+      const mapa = new Map();
 
-        (
-          dados.expedicaoDiaria ||
-          []
+      (
+        dados.expedicaoDiaria ||
+        []
+      )
+        .filter(
+          (row) =>
+            String(
+              row.dia
+            ).slice(0, 7) ===
+            prefixoMes
         )
-          .filter(
-            (
-              row
-            ) =>
-              String(
-                row.dia
-              ).slice(
-                0,
-                7
-              ) ===
-              prefixoMes
-          )
-          .forEach(
-            (
-              row
-            ) => {
-              const chave =
-                String(
-                  row.dia
-                ).slice(
-                  0,
-                  10
-                );
+        .forEach((row) => {
+          const chave =
+            String(
+              row.dia
+            ).slice(0, 10);
 
-              const atual =
-                mapa.get(
-                  chave
-                ) ||
-                {
-                  dia:
-                    chave,
-
-                  volumes:
-                    0,
-                };
-
-              atual.volumes +=
-                Number(
-                  row.pedidos ||
-                    0
-                );
-
-              mapa.set(
+          const atual =
+            mapa.get(
+              chave
+            ) || {
+              dia:
                 chave,
-                atual
-              );
-            }
-          );
 
-        return Array.from(
-          mapa.values()
-        )
-          .sort(
-            (
-              a,
-              b
-            ) =>
+              volumes:
+                0,
+            };
+
+          atual.volumes +=
+            Number(
+              row.pedidos || 0
+            );
+
+          mapa.set(
+            chave,
+            atual
+          );
+        });
+
+      return Array.from(
+        mapa.values()
+      )
+        .sort(
+          (a, b) =>
+            String(
+              a.dia
+            ).localeCompare(
               String(
-                a.dia
-              ).localeCompare(
-                String(
-                  b.dia
-                )
+                b.dia
               )
-          )
-          .map(
-            (
-              row
-            ) => ({
-              ...row,
+            )
+        )
+        .map((row) => ({
+          ...row,
 
-              label:
-                fmtDataCurta(
-                  row.dia
-                ),
-            })
-          );
-      },
-      [
-        dados.expedicaoDiaria,
-        prefixoMes,
-      ]
-    );
+          label:
+            fmtDataCurta(
+              row.dia
+            ),
+        }));
+    }, [
+      dados.expedicaoDiaria,
+      prefixoMes,
+    ]);
 
   const volumesExpedidos =
     expedicaoMes.reduce(
-      (
-        total,
-        row
-      ) =>
+      (total, row) =>
         total +
         Number(
-          row.volumes ||
-            0
+          row.volumes || 0
         ),
       0
     );
 
   const totalPagos =
     canaisMes.reduce(
-      (
-        total,
-        row
-      ) =>
+      (total, row) =>
         total +
         Number(
-          row.pagos ||
-            0
+          row.pagos || 0
         ),
       0
     );
 
   const totalEmbalados =
     canaisMes.reduce(
-      (
-        total,
-        row
-      ) =>
+      (total, row) =>
         total +
         Number(
-          row.embalados ||
-            0
+          row.embalados || 0
         ),
       0
     );
 
   const totalCancelados =
     canaisMes.reduce(
-      (
-        total,
-        row
-      ) =>
+      (total, row) =>
         total +
         Number(
-          row.cancelados ||
-            0
+          row.cancelados || 0
         ),
       0
     );
 
   const totalColetas =
     canaisMes.reduce(
-      (
-        total,
-        row
-      ) =>
+      (total, row) =>
         total +
         Number(
-          row.coletas ||
-            0
+          row.coletas || 0
         ),
       0
     );
 
+  const fifo =
+    dados.fifoComparativoAtual ||
+    {};
 
-  /* =======================================================
-     ERROS
-  ======================================================= */
+  const fifoAcuracidadeAtual =
+    fifo.acuracidade_fifo_atual_pct !=
+    null
+      ? Number(
+          fifo.acuracidade_fifo_atual_pct
+        )
+      : null;
+
+  const fifoAcuracidadeAnterior =
+    fifo.acuracidade_fifo_anterior_pct !=
+    null
+      ? Number(
+          fifo.acuracidade_fifo_anterior_pct
+        )
+      : null;
+
+  const fifoVariacaoAcuracidade =
+    fifo.variacao_acuracidade_pp !=
+    null
+      ? Number(
+          fifo.variacao_acuracidade_pp
+        )
+      : null;
+
+  const fifoCoberturaAtual =
+    fifo.cobertura_auditoria_atual_pct !=
+    null
+      ? Number(
+          fifo.cobertura_auditoria_atual_pct
+        )
+      : null;
+
+  const fifoCoberturaAnterior =
+    fifo.cobertura_auditoria_anterior_pct !=
+    null
+      ? Number(
+          fifo.cobertura_auditoria_anterior_pct
+        )
+      : null;
+
+  const fifoVariacaoCobertura =
+    fifo.variacao_cobertura_pp !=
+    null
+      ? Number(
+          fifo.variacao_cobertura_pp
+        )
+      : null;
+
+  const fifoDistribuicao = [
+    {
+      posicao:
+        "Posição 1",
+
+      atual:
+        Number(
+          fifo.posicao_1_atual || 0
+        ),
+
+      anterior:
+        Number(
+          fifo.posicao_1_anterior ||
+            0
+        ),
+    },
+
+    {
+      posicao:
+        "Posição 2",
+
+      atual:
+        Number(
+          fifo.posicao_2_atual || 0
+        ),
+
+      anterior:
+        Number(
+          fifo.posicao_2_anterior ||
+            0
+        ),
+    },
+
+    {
+      posicao:
+        "Posição 3+",
+
+      atual:
+        Number(
+          fifo.posicao_3_mais_atual ||
+            0
+        ),
+
+      anterior:
+        Number(
+          fifo.posicao_3_mais_anterior ||
+            0
+        ),
+    },
+  ];
 
   const errosMes =
     (
       dados.errosProcessoMensais ||
       []
     ).find(
-      (
-        row
-      ) =>
+      (row) =>
         String(
           row.mes
-        ).slice(
-          0,
-          10
-        ) ===
+        ).slice(0, 10) ===
         mesSelecionado
-    ) ||
-    {};
+    ) || {};
 
-  const errosChart =
-    [
-      {
-        categoria:
-          "Falha integração",
+  const errosChart = [
+    {
+      categoria:
+        "Falha integração",
 
-        valor:
-          Number(
-            errosMes.falhas_integracao ||
-              0
-          ),
-      },
+      valor:
+        Number(
+          errosMes
+            .falhas_integracao || 0
+        ),
+    },
 
-      {
-        categoria:
-          "Cancelado antes embalagem",
+    {
+      categoria:
+        "Cancelado antes embalagem",
 
-        valor:
-          Number(
-            errosMes.cancelados_marketplace ||
-              0
-          ),
-      },
+      valor:
+        Number(
+          errosMes
+            .cancelados_marketplace ||
+            0
+        ),
+    },
 
-      {
-        categoria:
-          "Cancelado após embalagem",
+    {
+      categoria:
+        "Cancelado após embalagem",
 
-        valor:
-          Number(
-            errosMes.cancelados_pos_embalagem ||
-              0
-          ),
-      },
+      valor:
+        Number(
+          errosMes
+            .cancelados_pos_embalagem ||
+            0
+        ),
+    },
 
-      {
-        categoria:
-          "Cancelado após faturamento",
+    {
+      categoria:
+        "Cancelado após faturamento",
 
-        valor:
-          Number(
-            errosMes.cancelados_pos_faturamento ||
-              0
-          ),
-      },
+      valor:
+        Number(
+          errosMes
+            .cancelados_pos_faturamento ||
+            0
+        ),
+    },
 
-      {
-        categoria:
-          "Erro NF B2B",
+    {
+      categoria:
+        "Erro NF B2B",
 
-        valor:
-          Number(
-            errosMes.erros_nf_b2b ||
-              0
-          ),
-      },
-    ];
+      valor:
+        Number(
+          errosMes
+            .erros_nf_b2b || 0
+        ),
+    },
+  ];
 
   const totalErros =
     errosChart.reduce(
-      (
-        total,
-        row
-      ) =>
+      (total, row) =>
         total +
         Number(
-          row.valor ||
-            0
+          row.valor || 0
         ),
       0
     );
-
-
-  /* =======================================================
-     ESTOQUE
-  ======================================================= */
 
   const estoqueQualidade =
     dados.estoqueQualidadeAtual ||
@@ -2951,17 +2255,12 @@ export default function IndicadoresExecutivosV2Page() {
             []
           ),
         ].sort(
-          (
-            a,
-            b
-          ) =>
+          (a, b) =>
             Number(
-              b.aparelhos ||
-                0
+              b.aparelhos || 0
             ) -
             Number(
-              a.aparelhos ||
-                0
+              a.aparelhos || 0
             )
         ),
       [
@@ -2970,79 +2269,64 @@ export default function IndicadoresExecutivosV2Page() {
     );
 
   const estoqueAging =
-    useMemo(
-      () => {
-        const agrupado =
-          new Map();
+    useMemo(() => {
+      const agrupado =
+        new Map();
 
-        (
-          dados.estoqueAgingAtual ||
-          []
-        ).forEach(
+      (
+        dados.estoqueAgingAtual ||
+        []
+      ).forEach((row) => {
+        const faixa =
+          normalizarFaixaAging(
+            row.faixa
+          );
+
+        if (!faixa) {
+          return;
+        }
+
+        agrupado.set(
+          faixa,
           (
-            row
-          ) => {
-            const faixa =
-              normalizarFaixaAging(
-                row.faixa
-              );
-
-            if (
-              !faixa
-            ) {
-              return;
-            }
-
-            agrupado.set(
-              faixa,
-              (
-                agrupado.get(
-                  faixa
-                ) ||
-                0
-              ) +
-                Number(
-                  row.aparelhos ||
-                    0
-                )
-            );
-          }
+            agrupado.get(
+              faixa
+            ) || 0
+          ) +
+            Number(
+              row.aparelhos || 0
+            )
         );
+      });
 
-        return ORDEM_AGING.map(
-          (
-            faixa
-          ) => ({
-            faixa,
+      return ORDEM_AGING.map(
+        (faixa) => ({
+          faixa,
 
-            aparelhos:
-              agrupado.get(
-                faixa
-              ) ||
-              0,
-          })
-        );
-      },
-      [
-        dados.estoqueAgingAtual,
-      ]
-    );
+          aparelhos:
+            agrupado.get(
+              faixa
+            ) || 0,
+        })
+      );
+    }, [
+      dados.estoqueAgingAtual,
+    ]);
 
   const totalEstoque =
     Number(
-      estoqueQualidade.total_estoque ||
-        0
+      estoqueQualidade
+        .total_estoque || 0
     );
 
   const mais90 =
     Number(
-      estoqueQualidade.mais_90_dias ||
-        0
+      estoqueQualidade
+        .mais_90_dias || 0
     );
 
   const pctMais90 =
-    totalEstoque >
-    0
+    totalEstoque > 0
       ? (
           mais90 /
           totalEstoque
@@ -3051,8 +2335,7 @@ export default function IndicadoresExecutivosV2Page() {
       : null;
 
   const pctIntegro =
-    totalEstoque >
-    0
+    totalEstoque > 0
       ? (
           Number(
             estoqueQualidade.integros ||
@@ -3063,22 +2346,13 @@ export default function IndicadoresExecutivosV2Page() {
         100
       : null;
 
-
-  /* =======================================================
-     NAVEGAÇÃO
-  ======================================================= */
-
-  function abrirAgingEstoque(
-    faixa
-  ) {
+  function abrirAgingEstoque(faixa) {
     const faixaNormalizada =
       normalizarFaixaAging(
         faixa
       );
 
-    if (
-      !faixaNormalizada
-    ) {
+    if (!faixaNormalizada) {
       return;
     }
 
@@ -3089,14 +2363,7 @@ export default function IndicadoresExecutivosV2Page() {
     );
   }
 
-
-  /* =======================================================
-     LOADING / ERROR
-  ======================================================= */
-
-  if (
-    loading
-  ) {
+  if (loading) {
     return (
       <div className="flex min-h-[520px] items-center justify-center">
         <div className="text-center">
@@ -3114,9 +2381,7 @@ export default function IndicadoresExecutivosV2Page() {
     );
   }
 
-  if (
-    error
-  ) {
+  if (error) {
     return (
       <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6">
         <div className="flex gap-3">
@@ -3133,9 +2398,7 @@ export default function IndicadoresExecutivosV2Page() {
 
             <button
               type="button"
-              onClick={
-                carregar
-              }
+              onClick={carregar}
               className="mt-4 rounded-xl bg-rose-700 px-4 py-2 text-xs font-bold text-white"
             >
               Tentar novamente
@@ -3146,18 +2409,8 @@ export default function IndicadoresExecutivosV2Page() {
     );
   }
 
-
-  /* =======================================================
-     RENDER
-  ======================================================= */
-
   return (
     <div className="space-y-6 pb-10">
-
-      {/* ===================================================
-          CABEÇALHO EXECUTIVO
-      =================================================== */}
-
       <header className="rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col justify-between gap-5 px-5 py-5 xl:flex-row xl:items-center">
           <div>
@@ -3185,13 +2438,9 @@ export default function IndicadoresExecutivosV2Page() {
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex rounded-xl bg-slate-100 p-1">
               {mesesDisponiveis.map(
-                (
-                  mes
-                ) => (
+                (mes) => (
                   <PeriodButton
-                    key={
-                      mes
-                    }
+                    key={mes}
                     active={
                       mesSelecionado ===
                       mes
@@ -3202,9 +2451,7 @@ export default function IndicadoresExecutivosV2Page() {
                       )
                     }
                   >
-                    {fmtMes(
-                      mes
-                    )}
+                    {fmtMes(mes)}
                   </PeriodButton>
                 )
               )}
@@ -3212,9 +2459,7 @@ export default function IndicadoresExecutivosV2Page() {
 
             <button
               type="button"
-              onClick={
-                carregar
-              }
+              onClick={carregar}
               className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 transition hover:bg-slate-50"
             >
               <RefreshCw className="h-4 w-4" />
@@ -3237,7 +2482,8 @@ export default function IndicadoresExecutivosV2Page() {
 
               detail:
                 `${fmtVariacao(
-                  operacaoResumo.variacaoRecebidos
+                  operacaoResumo
+                    .variacaoRecebidos
                 )} · ${textoComparacao}`,
 
               tone:
@@ -3305,44 +2551,39 @@ export default function IndicadoresExecutivosV2Page() {
                 )} acima de 90 dias`,
 
               tone:
-                pctMais90 !=
-                  null &&
-                pctMais90 >
-                  15
+                pctMais90 != null &&
+                pctMais90 > 15
                   ? "danger"
                   : "warning",
             },
 
             {
               label:
-                "Receb. → Funcional",
+                "Acuracidade FIFO",
 
               value:
-                fmtHoras(
-                  recebFuncionalMediana
+                fmtPercentual(
+                  fifoAcuracidadeAtual
                 ),
 
               detail:
-                `${fmtVariacao(
-                  recebFuncionalVariacao
-                )} na mediana`,
+                `${fmtPercentual(
+                  fifoAcuracidadeAnterior
+                )} anterior · ${fmtPontosPercentuais(
+                  fifoVariacaoAcuracidade
+                )}`,
 
               tone:
-                recebFuncionalVariacao !=
+                fifoAcuracidadeAtual !=
                   null &&
-                recebFuncionalVariacao <
-                  0
+                fifoAcuracidadeAtual >=
+                  99
                   ? "good"
-                  : undefined,
+                  : "warning",
             },
           ]}
         />
       </header>
-
-
-      {/* ===================================================
-          1. RECEBIMENTO E PRODUÇÃO
-      =================================================== */}
 
       <Section
         index="01"
@@ -3364,7 +2605,8 @@ export default function IndicadoresExecutivosV2Page() {
 
               detail:
                 `${fmtVariacao(
-                  operacaoResumo.variacaoRecebidos
+                  operacaoResumo
+                    .variacaoRecebidos
                 )} · ${textoComparacao}`,
             },
 
@@ -3379,7 +2621,8 @@ export default function IndicadoresExecutivosV2Page() {
 
               detail:
                 `${fmtVariacao(
-                  operacaoResumo.variacaoFuncional
+                  operacaoResumo
+                    .variacaoFuncional
                 )} · ${textoComparacao}`,
             },
 
@@ -3394,7 +2637,8 @@ export default function IndicadoresExecutivosV2Page() {
 
               detail:
                 `${fmtVariacao(
-                  operacaoResumo.variacaoCosmetica
+                  operacaoResumo
+                    .variacaoCosmetica
                 )} · ${textoComparacao}`,
             },
 
@@ -3409,7 +2653,8 @@ export default function IndicadoresExecutivosV2Page() {
 
               detail:
                 `${fmtVariacao(
-                  operacaoResumo.variacaoLaudos
+                  operacaoResumo
+                    .variacaoLaudos
                 )} · ${textoComparacao}`,
             },
 
@@ -3424,7 +2669,8 @@ export default function IndicadoresExecutivosV2Page() {
 
               detail:
                 `${fmtVariacao(
-                  operacaoResumo.variacaoOracle
+                  operacaoResumo
+                    .variacaoOracle
                 )} · ${textoComparacao}`,
             },
 
@@ -3434,7 +2680,8 @@ export default function IndicadoresExecutivosV2Page() {
 
               value:
                 fmtNumero(
-                  operacaoResumo.maiorEntradaDia
+                  operacaoResumo
+                    .maiorEntradaDia
                 ),
 
               detail:
@@ -3459,9 +2706,7 @@ export default function IndicadoresExecutivosV2Page() {
               >
                 <CartesianGrid
                   strokeDasharray="3 3"
-                  vertical={
-                    false
-                  }
+                  vertical={false}
                   stroke="#E2E8F0"
                 />
 
@@ -3474,12 +2719,8 @@ export default function IndicadoresExecutivosV2Page() {
                     fill:
                       "#94A3B8",
                   }}
-                  axisLine={
-                    false
-                  }
-                  tickLine={
-                    false
-                  }
+                  axisLine={false}
+                  tickLine={false}
                 />
 
                 <YAxis
@@ -3490,12 +2731,8 @@ export default function IndicadoresExecutivosV2Page() {
                     fill:
                       "#94A3B8",
                   }}
-                  axisLine={
-                    false
-                  }
-                  tickLine={
-                    false
-                  }
+                  axisLine={false}
+                  tickLine={false}
                 />
 
                 <Tooltip
@@ -3517,9 +2754,7 @@ export default function IndicadoresExecutivosV2Page() {
                   name="Recebidos"
                   fill="#EDE9FE"
                   stroke="#6D28D9"
-                  strokeWidth={
-                    2
-                  }
+                  strokeWidth={2}
                 />
 
                 <Line
@@ -3527,12 +2762,8 @@ export default function IndicadoresExecutivosV2Page() {
                   dataKey="funcional"
                   name="Funcional"
                   stroke="#0F172A"
-                  strokeWidth={
-                    2.4
-                  }
-                  dot={
-                    false
-                  }
+                  strokeWidth={2.4}
+                  dot={false}
                   connectNulls
                 />
 
@@ -3541,12 +2772,8 @@ export default function IndicadoresExecutivosV2Page() {
                   dataKey="cosmetica"
                   name="Cosmética"
                   stroke="#0284C7"
-                  strokeWidth={
-                    2
-                  }
-                  dot={
-                    false
-                  }
+                  strokeWidth={2}
+                  dot={false}
                   connectNulls
                 />
 
@@ -3555,12 +2782,8 @@ export default function IndicadoresExecutivosV2Page() {
                   dataKey="laudos"
                   name="Laudos"
                   stroke="#F59E0B"
-                  strokeWidth={
-                    1.8
-                  }
-                  dot={
-                    false
-                  }
+                  strokeWidth={1.8}
+                  dot={false}
                   connectNulls
                 />
 
@@ -3569,12 +2792,8 @@ export default function IndicadoresExecutivosV2Page() {
                   dataKey="oracle"
                   name="Oracle"
                   stroke="#059669"
-                  strokeWidth={
-                    2
-                  }
-                  dot={
-                    false
-                  }
+                  strokeWidth={2}
+                  dot={false}
                   connectNulls
                 />
               </ComposedChart>
@@ -3586,11 +2805,6 @@ export default function IndicadoresExecutivosV2Page() {
           )}
         </div>
       </Section>
-
-
-      {/* ===================================================
-          2. LEAD TIME WAREHOUSE
-      =================================================== */}
 
       <Section
         index="02"
@@ -3732,9 +2946,7 @@ export default function IndicadoresExecutivosV2Page() {
                   >
                     <CartesianGrid
                       strokeDasharray="3 3"
-                      horizontal={
-                        false
-                      }
+                      horizontal={false}
                       stroke="#E2E8F0"
                     />
 
@@ -3747,12 +2959,8 @@ export default function IndicadoresExecutivosV2Page() {
                         fill:
                           "#94A3B8",
                       }}
-                      axisLine={
-                        false
-                      }
-                      tickLine={
-                        false
-                      }
+                      axisLine={false}
+                      tickLine={false}
                       tickFormatter={(
                         value
                       ) =>
@@ -3766,9 +2974,7 @@ export default function IndicadoresExecutivosV2Page() {
                     <YAxis
                       type="category"
                       dataKey="etapa"
-                      width={
-                        175
-                      }
+                      width={175}
                       tick={{
                         fontSize:
                           10,
@@ -3776,12 +2982,8 @@ export default function IndicadoresExecutivosV2Page() {
                         fill:
                           "#64748B",
                       }}
-                      axisLine={
-                        false
-                      }
-                      tickLine={
-                        false
-                      }
+                      axisLine={false}
+                      tickLine={false}
                     />
 
                     <Tooltip
@@ -3840,7 +3042,7 @@ export default function IndicadoresExecutivosV2Page() {
               </div>
 
               <div className="mt-1 text-[10px] text-slate-400">
-                Média, mediana, P90 e cobertura da amostra.
+                Somente mediana, comparação anterior e tamanho da amostra.
               </div>
             </div>
 
@@ -3853,15 +3055,11 @@ export default function IndicadoresExecutivosV2Page() {
                     </th>
 
                     <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
-                      Média
+                      Mediana atual
                     </th>
 
                     <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
-                      Mediana
-                    </th>
-
-                    <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
-                      P90
+                      Mediana anterior
                     </th>
 
                     <th className="px-4 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
@@ -3876,21 +3074,15 @@ export default function IndicadoresExecutivosV2Page() {
                       Receb. → Funcional
                     </td>
 
-                    <td className="px-3 py-3 text-right text-[10px] font-semibold text-slate-600">
-                      {fmtHoras(
-                        recebFuncionalMedia
-                      )}
-                    </td>
-
                     <td className="px-3 py-3 text-right text-[10px] font-black text-slate-900">
                       {fmtHoras(
                         recebFuncionalMediana
                       )}
                     </td>
 
-                    <td className="px-3 py-3 text-right text-[10px] font-semibold text-slate-600">
+                    <td className="px-3 py-3 text-right text-[10px] font-semibold text-slate-500">
                       {fmtHoras(
-                        recebFuncionalP90
+                        recebFuncionalAnterior
                       )}
                     </td>
 
@@ -3906,21 +3098,15 @@ export default function IndicadoresExecutivosV2Page() {
                       Funcional → Cosmética
                     </td>
 
-                    <td className="px-3 py-3 text-right text-[10px] font-semibold text-slate-600">
-                      {fmtHoras(
-                        funcionalCosmeticaMedia
-                      )}
-                    </td>
-
                     <td className="px-3 py-3 text-right text-[10px] font-black text-slate-900">
                       {fmtHoras(
                         funcionalCosmeticaMediana
                       )}
                     </td>
 
-                    <td className="px-3 py-3 text-right text-[10px] font-semibold text-slate-600">
+                    <td className="px-3 py-3 text-right text-[10px] font-semibold text-slate-500">
                       {fmtHoras(
-                        funcionalCosmeticaP90
+                        funcionalCosmeticaAnterior
                       )}
                     </td>
 
@@ -3936,22 +3122,14 @@ export default function IndicadoresExecutivosV2Page() {
                       Cosmética → WMS
                     </td>
 
-                    <td className="px-3 py-3 text-right text-[10px] font-semibold text-slate-600">
-                      {fmtHoras(
-                        cosmeticaWmsMedia
-                      )}
-                    </td>
-
                     <td className="px-3 py-3 text-right text-[10px] font-black text-slate-900">
                       {fmtHoras(
                         cosmeticaWmsMediana
                       )}
                     </td>
 
-                    <td className="px-3 py-3 text-right text-[10px] font-semibold text-slate-600">
-                      {fmtHoras(
-                        cosmeticaWmsP90
-                      )}
+                    <td className="px-3 py-3 text-right text-[10px] font-semibold text-slate-500">
+                      —
                     </td>
 
                     <td className="px-4 py-3 text-right text-[10px] font-black text-slate-700">
@@ -4074,11 +3252,6 @@ export default function IndicadoresExecutivosV2Page() {
         )}
       </Section>
 
-
-      {/* ===================================================
-          3. QUALIDADE
-      =================================================== */}
-
       <Section
         index="03"
         title={`Qualidade do Inbound — ${fmtMesLongo(
@@ -4147,9 +3320,7 @@ export default function IndicadoresExecutivosV2Page() {
               >
                 <CartesianGrid
                   strokeDasharray="3 3"
-                  vertical={
-                    false
-                  }
+                  vertical={false}
                   stroke="#E2E8F0"
                 />
 
@@ -4162,15 +3333,9 @@ export default function IndicadoresExecutivosV2Page() {
                     fill:
                       "#64748B",
                   }}
-                  axisLine={
-                    false
-                  }
-                  tickLine={
-                    false
-                  }
-                  interval={
-                    0
-                  }
+                  axisLine={false}
+                  tickLine={false}
+                  interval={0}
                 />
 
                 <YAxis
@@ -4181,12 +3346,8 @@ export default function IndicadoresExecutivosV2Page() {
                     fill:
                       "#94A3B8",
                   }}
-                  axisLine={
-                    false
-                  }
-                  tickLine={
-                    false
-                  }
+                  axisLine={false}
+                  tickLine={false}
                 />
 
                 <Tooltip
@@ -4194,26 +3355,24 @@ export default function IndicadoresExecutivosV2Page() {
                     value,
                     name,
                     props
-                  ) => {
-                    if (
-                      name ===
-                      "Aparelhos"
-                    ) {
-                      return [
-                        `${fmtNumero(
-                          value
-                        )} · ${fmtPercentual(
-                          props?.payload?.percentual
-                        )}`,
-                        "Aparelhos",
-                      ];
-                    }
-
-                    return [
-                      value,
-                      name,
-                    ];
-                  }}
+                  ) =>
+                    name ===
+                    "Aparelhos"
+                      ? [
+                          `${fmtNumero(
+                            value
+                          )} · ${fmtPercentual(
+                            props
+                              ?.payload
+                              ?.percentual
+                          )}`,
+                          "Aparelhos",
+                        ]
+                      : [
+                          value,
+                          name,
+                        ]
+                  }
                 />
 
                 <Bar
@@ -4259,17 +3418,12 @@ export default function IndicadoresExecutivosV2Page() {
         </div>
       </Section>
 
-
-      {/* ===================================================
-          4. B2B
-      =================================================== */}
-
       <Section
         index="04"
         title={`Performance B2B — ${fmtMesLongo(
           mesSelecionado
         )}`}
-        subtitle={`Entrada de pedidos, itens, faturamento e tempos entre etapas. Comparativos: ${textoComparacao}.`}
+        subtitle={`Entrada de pedidos, itens, faturamento e medianas entre etapas. Comparativos: ${textoComparacao}.`}
       >
         <MetricStrip
           items={[
@@ -4284,7 +3438,8 @@ export default function IndicadoresExecutivosV2Page() {
 
               detail:
                 `${fmtVariacao(
-                  b2bResumo.variacaoPedidos
+                  b2bResumo
+                    .variacaoPedidos
                 )} · ${textoComparacao}`,
             },
 
@@ -4294,12 +3449,14 @@ export default function IndicadoresExecutivosV2Page() {
 
               value:
                 fmtNumero(
-                  b2bResumo.itensRecebidos
+                  b2bResumo
+                    .itensRecebidos
                 ),
 
               detail:
                 `${fmtVariacao(
-                  b2bResumo.variacaoItensRecebidos
+                  b2bResumo
+                    .variacaoItensRecebidos
                 )} · ${textoComparacao}`,
             },
 
@@ -4309,12 +3466,14 @@ export default function IndicadoresExecutivosV2Page() {
 
               value:
                 fmtNumero(
-                  b2bResumo.itensFaturados
+                  b2bResumo
+                    .itensFaturados
                 ),
 
               detail:
                 `${fmtVariacao(
-                  b2bResumo.variacaoItensFaturados
+                  b2bResumo
+                    .variacaoItensFaturados
                 )} · ${textoComparacao}`,
 
               tone:
@@ -4332,7 +3491,8 @@ export default function IndicadoresExecutivosV2Page() {
 
               detail:
                 `${fmtVariacao(
-                  b2bResumo.variacaoNotas
+                  b2bResumo
+                    .variacaoNotas
                 )} · ${textoComparacao}`,
             },
 
@@ -4347,15 +3507,14 @@ export default function IndicadoresExecutivosV2Page() {
 
               detail:
                 `${fmtVariacao(
-                  b2bResumo.variacaoErros
+                  b2bResumo
+                    .variacaoErros
                 )} · ${textoComparacao}`,
 
               tone:
                 Number(
-                  b2bResumo.erros ||
-                    0
-                ) >
-                0
+                  b2bResumo.erros || 0
+                ) > 0
                   ? "danger"
                   : "good",
             },
@@ -4375,9 +3534,7 @@ export default function IndicadoresExecutivosV2Page() {
               >
                 <CartesianGrid
                   strokeDasharray="3 3"
-                  vertical={
-                    false
-                  }
+                  vertical={false}
                   stroke="#E2E8F0"
                 />
 
@@ -4390,12 +3547,8 @@ export default function IndicadoresExecutivosV2Page() {
                     fill:
                       "#94A3B8",
                   }}
-                  axisLine={
-                    false
-                  }
-                  tickLine={
-                    false
-                  }
+                  axisLine={false}
+                  tickLine={false}
                 />
 
                 <YAxis
@@ -4406,12 +3559,8 @@ export default function IndicadoresExecutivosV2Page() {
                     fill:
                       "#94A3B8",
                   }}
-                  axisLine={
-                    false
-                  }
-                  tickLine={
-                    false
-                  }
+                  axisLine={false}
+                  tickLine={false}
                 />
 
                 <Tooltip
@@ -4444,12 +3593,8 @@ export default function IndicadoresExecutivosV2Page() {
                   dataKey="itens_faturados"
                   name="Itens faturados"
                   stroke="#059669"
-                  strokeWidth={
-                    2.5
-                  }
-                  dot={
-                    false
-                  }
+                  strokeWidth={2.5}
+                  dot={false}
                   connectNulls
                 />
 
@@ -4458,12 +3603,8 @@ export default function IndicadoresExecutivosV2Page() {
                   dataKey="erros_nf"
                   name="Erros NF"
                   stroke="#E11D48"
-                  strokeWidth={
-                    1.8
-                  }
-                  dot={
-                    false
-                  }
+                  strokeWidth={1.8}
+                  dot={false}
                   connectNulls
                 />
               </ComposedChart>
@@ -4478,7 +3619,7 @@ export default function IndicadoresExecutivosV2Page() {
         <div className="border-t border-slate-100">
           <div className="px-5 py-4">
             <div className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-500">
-              Tempo entre etapas
+              Mediana entre etapas
             </div>
 
             <div className="mt-1 text-[10px] text-slate-400">
@@ -4487,7 +3628,7 @@ export default function IndicadoresExecutivosV2Page() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[850px]">
+            <table className="w-full min-w-[760px]">
               <thead>
                 <tr className="bg-slate-50">
                   <th className="px-5 py-3 text-left text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
@@ -4495,15 +3636,11 @@ export default function IndicadoresExecutivosV2Page() {
                   </th>
 
                   <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
-                    Média
+                    Mediana atual
                   </th>
 
                   <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
-                    Mediana
-                  </th>
-
-                  <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
-                    P90
+                    Mediana anterior
                   </th>
 
                   <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
@@ -4518,9 +3655,7 @@ export default function IndicadoresExecutivosV2Page() {
 
               <tbody className="divide-y divide-slate-100">
                 {etapasB2B.map(
-                  (
-                    etapa
-                  ) => (
+                  (etapa) => (
                     <tr
                       key={
                         etapa.etapa
@@ -4530,21 +3665,16 @@ export default function IndicadoresExecutivosV2Page() {
                         {etapa.etapa}
                       </td>
 
-                      <td className="px-3 py-3 text-right text-xs font-semibold text-slate-600">
-                        {fmtDuracao(
-                          etapa.media_min
-                        )}
-                      </td>
-
                       <td className="px-3 py-3 text-right text-xs font-black text-slate-800">
                         {fmtDuracao(
                           etapa.mediana_min
                         )}
                       </td>
 
-                      <td className="px-3 py-3 text-right text-xs font-semibold text-slate-600">
+                      <td className="px-3 py-3 text-right text-xs font-semibold text-slate-500">
                         {fmtDuracao(
-                          etapa.p90_min
+                          etapa
+                            .mediana_anterior_min
                         )}
                       </td>
 
@@ -4557,7 +3687,8 @@ export default function IndicadoresExecutivosV2Page() {
                       <td className="px-5 py-3 text-right text-xs">
                         <VariacaoTexto
                           value={
-                            etapa.variacao_mediana_pct
+                            etapa
+                              .variacao_mediana_pct
                           }
                           inverso
                         />
@@ -4570,11 +3701,6 @@ export default function IndicadoresExecutivosV2Page() {
           </div>
         </div>
       </Section>
-
-
-      {/* ===================================================
-          5. B2C
-      =================================================== */}
 
       <Section
         index="05"
@@ -4665,7 +3791,7 @@ export default function IndicadoresExecutivosV2Page() {
         />
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1350px]">
+          <table className="w-full min-w-[1180px]">
             <thead>
               <tr className="bg-slate-50">
                 <th className="px-5 py-3 text-left text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
@@ -4708,21 +3834,15 @@ export default function IndicadoresExecutivosV2Page() {
                   Mediana anterior
                 </th>
 
-                <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
-                  Δ mediana
-                </th>
-
                 <th className="px-5 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
-                  P90
+                  Δ mediana
                 </th>
               </tr>
             </thead>
 
             <tbody className="divide-y divide-slate-100">
               {canaisMes.map(
-                (
-                  row
-                ) => (
+                (row) => (
                   <tr
                     key={
                       row.marketplace
@@ -4775,19 +3895,15 @@ export default function IndicadoresExecutivosV2Page() {
                         Number(
                           row.pct_ate_24h ||
                             0
-                        ) >=
-                        90
+                        ) >= 90
                           ? "text-emerald-700"
                           : Number(
                                 row.pct_ate_24h ||
                                   0
-                              ) >=
-                              80
+                              ) >= 80
                             ? "text-amber-700"
                             : "text-rose-700",
-                      ].join(
-                        " "
-                      )}
+                      ].join(" ")}
                     >
                       {fmtPercentual(
                         row.pct_ate_24h
@@ -4806,19 +3922,14 @@ export default function IndicadoresExecutivosV2Page() {
                       )}
                     </td>
 
-                    <td className="px-3 py-3 text-right text-xs">
+                    <td className="px-5 py-3 text-right text-xs">
                       <VariacaoTexto
                         value={
-                          row.variacao_mediana_pct
+                          row
+                            .variacao_mediana_pct
                         }
                         inverso
                       />
-                    </td>
-
-                    <td className="px-5 py-3 text-right text-xs font-black text-slate-700">
-                      {fmtHoras(
-                        row.p90_h
-                      )}
                     </td>
                   </tr>
                 )
@@ -4851,9 +3962,7 @@ export default function IndicadoresExecutivosV2Page() {
                 >
                   <CartesianGrid
                     strokeDasharray="3 3"
-                    vertical={
-                      false
-                    }
+                    vertical={false}
                     stroke="#E2E8F0"
                   />
 
@@ -4866,12 +3975,8 @@ export default function IndicadoresExecutivosV2Page() {
                       fill:
                         "#64748B",
                     }}
-                    axisLine={
-                      false
-                    }
-                    tickLine={
-                      false
-                    }
+                    axisLine={false}
+                    tickLine={false}
                   />
 
                   <YAxis
@@ -4882,12 +3987,8 @@ export default function IndicadoresExecutivosV2Page() {
                       fill:
                         "#94A3B8",
                     }}
-                    axisLine={
-                      false
-                    }
-                    tickLine={
-                      false
-                    }
+                    axisLine={false}
+                    tickLine={false}
                   />
 
                   <Tooltip
@@ -4936,9 +4037,7 @@ export default function IndicadoresExecutivosV2Page() {
                   >
                     <CartesianGrid
                       strokeDasharray="3 3"
-                      vertical={
-                        false
-                      }
+                      vertical={false}
                       stroke="#E2E8F0"
                     />
 
@@ -4951,12 +4050,8 @@ export default function IndicadoresExecutivosV2Page() {
                         fill:
                           "#94A3B8",
                       }}
-                      axisLine={
-                        false
-                      }
-                      tickLine={
-                        false
-                      }
+                      axisLine={false}
+                      tickLine={false}
                     />
 
                     <YAxis
@@ -4967,12 +4062,8 @@ export default function IndicadoresExecutivosV2Page() {
                         fill:
                           "#94A3B8",
                       }}
-                      axisLine={
-                        false
-                      }
-                      tickLine={
-                        false
-                      }
+                      axisLine={false}
+                      tickLine={false}
                     />
 
                     <Tooltip
@@ -4986,9 +4077,7 @@ export default function IndicadoresExecutivosV2Page() {
                       dataKey="volumes"
                       name="Volumes bipados"
                       stroke="#6D28D9"
-                      strokeWidth={
-                        2.5
-                      }
+                      strokeWidth={2.5}
                       dot={{
                         r:
                           2.5,
@@ -5007,15 +4096,343 @@ export default function IndicadoresExecutivosV2Page() {
         </div>
       </Section>
 
-
-      {/* ===================================================
-          6. TEMPOS OPERACIONAIS
-      =================================================== */}
-
       <Section
         index="06"
+        title="Auditoria do FIFO"
+        subtitle="Acuracidade calculada somente sobre eventos auditáveis. Toda nova alocação passa a ser registrada obrigatoriamente no banco; a cobertura auditável do período ainda carrega lacunas históricas anteriores à trava."
+        action={
+          <div className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[10px] font-black text-emerald-700">
+            <ShieldCheck className="h-3.5 w-3.5" />
+
+            Registro obrigatório ativo
+          </div>
+        }
+      >
+        <MetricStrip
+          items={[
+            {
+              label:
+                "Acuracidade FIFO",
+
+              value:
+                fmtPercentual(
+                  fifoAcuracidadeAtual
+                ),
+
+              detail:
+                `${fmtPercentual(
+                  fifoAcuracidadeAnterior
+                )} anterior · ${fmtPontosPercentuais(
+                  fifoVariacaoAcuracidade
+                )}`,
+
+              tone:
+                fifoAcuracidadeAtual !=
+                  null &&
+                fifoAcuracidadeAtual >=
+                  99
+                  ? "good"
+                  : "warning",
+            },
+
+            {
+              label:
+                "Alocações",
+
+              value:
+                fmtNumero(
+                  fifo.alocacoes_atual
+                ),
+
+              detail:
+                `${fmtNumero(
+                  fifo.alocacoes_anterior
+                )} no mesmo período anterior`,
+            },
+
+            {
+              label:
+                "Auditáveis",
+
+              value:
+                `${fmtNumero(
+                  fifo.auditaveis_atual
+                )} / ${fmtNumero(
+                  fifo.alocacoes_atual
+                )}`,
+
+              detail:
+                `${fmtPercentual(
+                  fifoCoberturaAtual
+                )} cobertura histórica auditável`,
+
+              tone:
+                "violet",
+            },
+
+            {
+              label:
+                "Desvios reais",
+
+              value:
+                fmtNumero(
+                  fifo.desvios_reais_atual
+                ),
+
+              detail:
+                `${fmtNumero(
+                  fifo.desvios_reais_anterior
+                )} no período anterior`,
+
+              tone:
+                Number(
+                  fifo.desvios_reais_atual ||
+                    0
+                ) === 0
+                  ? "good"
+                  : "danger",
+            },
+
+            {
+              label:
+                "Posição 2",
+
+              value:
+                fmtNumero(
+                  fifo.posicao_2_atual
+                ),
+
+              detail:
+                `${fmtNumero(
+                  fifo.posicao_2_anterior
+                )} no período anterior`,
+
+              tone:
+                Number(
+                  fifo.posicao_2_atual ||
+                    0
+                ) === 0
+                  ? "good"
+                  : "warning",
+            },
+
+            {
+              label:
+                "Posição 3+",
+
+              value:
+                fmtNumero(
+                  fifo.posicao_3_mais_atual
+                ),
+
+              detail:
+                `${fmtNumero(
+                  fifo.posicao_3_mais_anterior
+                )} no período anterior`,
+
+              tone:
+                Number(
+                  fifo.posicao_3_mais_atual ||
+                    0
+                ) === 0
+                  ? "good"
+                  : "danger",
+            },
+          ]}
+        />
+
+        <div className="grid gap-6 p-5 xl:grid-cols-[1.1fr_0.9fr]">
+          <div>
+            <div className="mb-3">
+              <div className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-500">
+                Posição escolhida no FIFO
+              </div>
+
+              <div className="mt-1 text-[10px] text-slate-400">
+                Comparação do período atual com o mesmo intervalo do mês anterior.
+              </div>
+            </div>
+
+            <div className="h-[290px]">
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+              >
+                <BarChart
+                  data={
+                    fifoDistribuicao
+                  }
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={false}
+                    stroke="#E2E8F0"
+                  />
+
+                  <XAxis
+                    dataKey="posicao"
+                    tick={{
+                      fontSize:
+                        9,
+
+                      fill:
+                        "#64748B",
+                    }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+
+                  <YAxis
+                    tick={{
+                      fontSize:
+                        9,
+
+                      fill:
+                        "#94A3B8",
+                    }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+
+                  <Tooltip
+                    content={
+                      <NumeroTooltip />
+                    }
+                  />
+
+                  <Legend
+                    wrapperStyle={{
+                      fontSize:
+                        "10px",
+                    }}
+                  />
+
+                  <Bar
+                    dataKey="atual"
+                    name="Período atual"
+                    fill="#059669"
+                    radius={[
+                      4,
+                      4,
+                      0,
+                      0,
+                    ]}
+                  />
+
+                  <Bar
+                    dataKey="anterior"
+                    name="Período anterior"
+                    fill="#CBD5E1"
+                    radius={[
+                      4,
+                      4,
+                      0,
+                      0,
+                    ]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div>
+            <div className="mb-3">
+              <div className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-500">
+                Leitura de conformidade
+              </div>
+
+              <div className="mt-1 text-[10px] text-slate-400">
+                Separação entre qualidade do FIFO e cobertura histórica auditável.
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                <div className="text-[9px] font-black uppercase tracking-[0.1em] text-emerald-700">
+                  Acuracidade técnica
+                </div>
+
+                <div className="mt-2 text-2xl font-black text-emerald-800">
+                  {fmtPercentual(
+                    fifoAcuracidadeAtual
+                  )}
+                </div>
+
+                <div className="mt-1 text-[10px] leading-4 text-emerald-700">
+                  {fmtNumero(
+                    fifo.aderentes_tecnicos_atual
+                  )}{" "}
+                  aderentes entre{" "}
+                  {fmtNumero(
+                    fifo.auditaveis_atual
+                  )}{" "}
+                  eventos auditáveis. Empates de mesma Data SubInv permanecem aderentes.
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <div className="text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">
+                  Cobertura histórica auditável
+                </div>
+
+                <div className="mt-2 flex items-end justify-between gap-3">
+                  <div className="text-2xl font-black text-slate-900">
+                    {fmtPercentual(
+                      fifoCoberturaAtual
+                    )}
+                  </div>
+
+                  <div
+                    className={
+                      fifoVariacaoCobertura !=
+                        null &&
+                      fifoVariacaoCobertura <
+                        0
+                        ? "text-xs font-black text-rose-700"
+                        : "text-xs font-black text-emerald-700"
+                    }
+                  >
+                    {fmtPontosPercentuais(
+                      fifoVariacaoCobertura
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-1 text-[10px] leading-4 text-slate-400">
+                  {fmtNumero(
+                    fifo.nao_auditaveis_atual
+                  )}{" "}
+                  registros antigos sem snapshot FIFO original. Novas alocações são gravadas obrigatoriamente com snapshot.
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-violet-200 bg-violet-50 p-4">
+                <div className="text-[9px] font-black uppercase tracking-[0.1em] text-violet-700">
+                  Empates técnicos
+                </div>
+
+                <div className="mt-2 text-xl font-black text-violet-800">
+                  {fmtNumero(
+                    fifo.empates_atual
+                  )}
+                </div>
+
+                <div className="mt-1 text-[10px] leading-4 text-violet-700">
+                  {fmtNumero(
+                    fifo.empates_anterior
+                  )}{" "}
+                  no mesmo período anterior. Um empate de Data SubInv não é tratado como quebra de FIFO.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Section>
+
+      <Section
+        index="07"
         title="Tempos Operacionais B2C & B2B"
-        subtitle="Tempos construídos diretamente sobre as etapas efetivas do processo, sem separar Picking e Separação artificialmente."
+        subtitle="Leitura exclusivamente por mediana nas etapas efetivas do processo, sem separar Picking e Separação artificialmente."
         action={
           <div className="flex flex-wrap gap-2">
             <ToggleButton
@@ -5056,12 +4473,14 @@ export default function IndicadoresExecutivosV2Page() {
 
               value:
                 fmtNumero(
-                  resumoTempos?.pedidos_atual
+                  resumoTempos
+                    ?.pedidos_atual
                 ),
 
               detail:
                 `${fmtVariacao(
-                  resumoTempos?.variacao_pedidos_pct
+                  resumoTempos
+                    ?.variacao_pedidos_pct
                 )} · ${textoComparacao}`,
             },
 
@@ -5071,12 +4490,14 @@ export default function IndicadoresExecutivosV2Page() {
 
               value:
                 fmtNumero(
-                  resumoTempos?.itens_atual
+                  resumoTempos
+                    ?.itens_atual
                 ),
 
               detail:
                 `${fmtVariacao(
-                  resumoTempos?.variacao_itens_pct
+                  resumoTempos
+                    ?.variacao_itens_pct
                 )} · ${textoComparacao}`,
             },
 
@@ -5086,56 +4507,46 @@ export default function IndicadoresExecutivosV2Page() {
 
               value:
                 fmtPercentual(
-                  resumoTempos?.pct_concluidos_atual
+                  resumoTempos
+                    ?.pct_concluidos_atual
                 ),
 
               detail:
-                `${
-                  resumoTempos?.variacao_conclusao_pp !=
-                  null
-                    ? `${fmtNumero(
-                        resumoTempos.variacao_conclusao_pp,
-                        1
-                      )} p.p.`
-                    : "—"
-                }`,
+                resumoTempos
+                  ?.variacao_conclusao_pp !=
+                null
+                  ? `${fmtNumero(
+                      resumoTempos
+                        .variacao_conclusao_pp,
+                      1
+                    )} p.p.`
+                  : "—",
             },
 
             {
               label:
-                "Lead time",
+                "Mediana do lead time",
 
               value:
                 fmtDuracao(
-                  resumoTempos?.mediana_leadtime_atual_min
+                  resumoTempos
+                    ?.mediana_leadtime_atual_min
                 ),
 
               detail:
                 `${fmtVariacao(
-                  resumoTempos?.variacao_mediana_leadtime_pct
+                  resumoTempos
+                    ?.variacao_mediana_leadtime_pct
                 )} · ${textoComparacao}`,
 
               tone:
                 Number(
-                  resumoTempos?.variacao_mediana_leadtime_pct ||
+                  resumoTempos
+                    ?.variacao_mediana_leadtime_pct ||
                     0
-                ) >
-                0
+                ) > 0
                   ? "danger"
                   : "good",
-            },
-
-            {
-              label:
-                "P90",
-
-              value:
-                fmtDuracao(
-                  resumoTempos?.p90_leadtime_atual_min
-                ),
-
-              detail:
-                "cauda operacional",
             },
 
             {
@@ -5144,7 +4555,8 @@ export default function IndicadoresExecutivosV2Page() {
 
               value:
                 fmtNumero(
-                  resumoTempos?.amostra_leadtime_atual
+                  resumoTempos
+                    ?.amostra_leadtime_atual
                 ),
 
               detail:
@@ -5154,7 +4566,7 @@ export default function IndicadoresExecutivosV2Page() {
         />
 
         <div className="overflow-x-auto border-b border-slate-100">
-          <table className="w-full min-w-[1000px]">
+          <table className="w-full min-w-[850px]">
             <thead>
               <tr className="bg-slate-50">
                 <th className="px-5 py-3 text-left text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
@@ -5162,19 +4574,11 @@ export default function IndicadoresExecutivosV2Page() {
                 </th>
 
                 <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
-                  Média
-                </th>
-
-                <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
-                  Mediana
+                  Mediana atual
                 </th>
 
                 <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
                   Mediana anterior
-                </th>
-
-                <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
-                  P90
                 </th>
 
                 <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
@@ -5189,9 +4593,7 @@ export default function IndicadoresExecutivosV2Page() {
 
             <tbody className="divide-y divide-slate-100">
               {etapasAtuais.map(
-                (
-                  etapa
-                ) => {
+                (etapa) => {
                   const definicao =
                     normalizarTexto(
                       etapa.etapa
@@ -5218,12 +4620,6 @@ export default function IndicadoresExecutivosV2Page() {
                         )}
                       </td>
 
-                      <td className="px-3 py-3 text-right text-xs font-semibold text-slate-600">
-                        {fmtDuracao(
-                          etapa.media_min
-                        )}
-                      </td>
-
                       <td className="px-3 py-3 text-right text-xs font-black text-slate-800">
                         {fmtDuracao(
                           etapa.mediana_min
@@ -5232,13 +4628,8 @@ export default function IndicadoresExecutivosV2Page() {
 
                       <td className="px-3 py-3 text-right text-xs font-semibold text-slate-500">
                         {fmtDuracao(
-                          etapa.mediana_anterior_min
-                        )}
-                      </td>
-
-                      <td className="px-3 py-3 text-right text-xs font-semibold text-slate-600">
-                        {fmtDuracao(
-                          etapa.p90_min
+                          etapa
+                            .mediana_anterior_min
                         )}
                       </td>
 
@@ -5251,7 +4642,8 @@ export default function IndicadoresExecutivosV2Page() {
                       <td className="px-5 py-3 text-right text-xs">
                         <VariacaoTexto
                           value={
-                            etapa.variacao_mediana_pct
+                            etapa
+                              .variacao_mediana_pct
                           }
                           inverso
                         />
@@ -5267,7 +4659,7 @@ export default function IndicadoresExecutivosV2Page() {
         <div className="p-5">
           <div className="mb-3">
             <div className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-500">
-              Evolução semanal do lead time ponta a ponta
+              Evolução semanal da mediana ponta a ponta
             </div>
 
             <div className="mt-1 text-[10px] text-slate-400">
@@ -5287,9 +4679,7 @@ export default function IndicadoresExecutivosV2Page() {
               >
                 <CartesianGrid
                   strokeDasharray="3 3"
-                  vertical={
-                    false
-                  }
+                  vertical={false}
                   stroke="#E2E8F0"
                 />
 
@@ -5302,12 +4692,8 @@ export default function IndicadoresExecutivosV2Page() {
                     fill:
                       "#94A3B8",
                   }}
-                  axisLine={
-                    false
-                  }
-                  tickLine={
-                    false
-                  }
+                  axisLine={false}
+                  tickLine={false}
                 />
 
                 <YAxis
@@ -5318,12 +4704,8 @@ export default function IndicadoresExecutivosV2Page() {
                     fill:
                       "#94A3B8",
                   }}
-                  axisLine={
-                    false
-                  }
-                  tickLine={
-                    false
-                  }
+                  axisLine={false}
+                  tickLine={false}
                   tickFormatter={(
                     value
                   ) =>
@@ -5331,9 +4713,7 @@ export default function IndicadoresExecutivosV2Page() {
                       value
                     )
                   }
-                  width={
-                    65
-                  }
+                  width={65}
                 />
 
                 <Tooltip
@@ -5353,9 +4733,7 @@ export default function IndicadoresExecutivosV2Page() {
                   type="monotone"
                   dataKey="B2C"
                   stroke="#6D28D9"
-                  strokeWidth={
-                    2.5
-                  }
+                  strokeWidth={2.5}
                   dot={{
                     r:
                       3,
@@ -5367,9 +4745,7 @@ export default function IndicadoresExecutivosV2Page() {
                   type="monotone"
                   dataKey="B2B"
                   stroke="#0F172A"
-                  strokeWidth={
-                    2.5
-                  }
+                  strokeWidth={2.5}
                   dot={{
                     r:
                       3,
@@ -5382,13 +4758,8 @@ export default function IndicadoresExecutivosV2Page() {
         </div>
       </Section>
 
-
-      {/* ===================================================
-          7. ERROS & RETRABALHOS
-      =================================================== */}
-
       <Section
-        index="07"
+        index="08"
         title={`Erros & Retrabalhos — ${fmtMesLongo(
           mesSelecionado
         )}`}
@@ -5409,8 +4780,7 @@ export default function IndicadoresExecutivosV2Page() {
                 "somatório das categorias",
 
               tone:
-                totalErros >
-                0
+                totalErros > 0
                   ? "warning"
                   : "good",
             },
@@ -5442,9 +4812,7 @@ export default function IndicadoresExecutivosV2Page() {
             >
               <CartesianGrid
                 strokeDasharray="3 3"
-                vertical={
-                  false
-                }
+                vertical={false}
                 stroke="#E2E8F0"
               />
 
@@ -5457,15 +4825,9 @@ export default function IndicadoresExecutivosV2Page() {
                   fill:
                     "#64748B",
                 }}
-                axisLine={
-                  false
-                }
-                tickLine={
-                  false
-                }
-                interval={
-                  0
-                }
+                axisLine={false}
+                tickLine={false}
+                interval={0}
               />
 
               <YAxis
@@ -5476,12 +4838,8 @@ export default function IndicadoresExecutivosV2Page() {
                   fill:
                     "#94A3B8",
                 }}
-                axisLine={
-                  false
-                }
-                tickLine={
-                  false
-                }
+                axisLine={false}
+                tickLine={false}
               />
 
               <Tooltip
@@ -5507,96 +4865,75 @@ export default function IndicadoresExecutivosV2Page() {
 
         <div className="border-t border-slate-100 bg-slate-50/60 px-5 py-4">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-            <div className="rounded-xl border border-slate-200 bg-white p-3">
-              <div className="text-[9px] font-black uppercase text-slate-400">
-                Falha integração
-              </div>
+            {[
+              [
+                "Falha integração",
+                errosMes
+                  .falhas_integracao,
+                "Falha registrada na integração do AnyMarket.",
+              ],
 
-              <div className="mt-1 text-lg font-black text-slate-900">
-                {fmtNumero(
-                  errosMes.falhas_integracao
-                )}
-              </div>
+              [
+                "Antes embalagem",
+                errosMes
+                  .cancelados_marketplace,
+                "Cancelado antes de concluir embalagem.",
+              ],
 
-              <div className="mt-1 text-[9px] leading-4 text-slate-400">
-                Falha registrada na integração do AnyMarket.
-              </div>
-            </div>
+              [
+                "Pós embalagem",
+                errosMes
+                  .cancelados_pos_embalagem,
+                "Cancelado após embalagem e antes do faturamento.",
+              ],
 
-            <div className="rounded-xl border border-slate-200 bg-white p-3">
-              <div className="text-[9px] font-black uppercase text-slate-400">
-                Antes embalagem
-              </div>
+              [
+                "Pós faturamento",
+                errosMes
+                  .cancelados_pos_faturamento,
+                "Cancelado depois de já existir faturamento.",
+              ],
 
-              <div className="mt-1 text-lg font-black text-slate-900">
-                {fmtNumero(
-                  errosMes.cancelados_marketplace
-                )}
-              </div>
+              [
+                "Erro NF B2B",
+                errosMes
+                  .erros_nf_b2b,
+                "NF B2B com status ou motivo de erro.",
+              ],
+            ].map(
+              ([
+                titulo,
+                valor,
+                detalhe,
+              ]) => (
+                <div
+                  key={
+                    titulo
+                  }
+                  className="rounded-xl border border-slate-200 bg-white p-3"
+                >
+                  <div className="text-[9px] font-black uppercase text-slate-400">
+                    {titulo}
+                  </div>
 
-              <div className="mt-1 text-[9px] leading-4 text-slate-400">
-                Cancelado antes de concluir embalagem.
-              </div>
-            </div>
+                  <div className="mt-1 text-lg font-black text-slate-900">
+                    {fmtNumero(
+                      valor
+                    )}
+                  </div>
 
-            <div className="rounded-xl border border-slate-200 bg-white p-3">
-              <div className="text-[9px] font-black uppercase text-slate-400">
-                Pós embalagem
-              </div>
-
-              <div className="mt-1 text-lg font-black text-slate-900">
-                {fmtNumero(
-                  errosMes.cancelados_pos_embalagem
-                )}
-              </div>
-
-              <div className="mt-1 text-[9px] leading-4 text-slate-400">
-                Cancelado após embalagem e antes do faturamento.
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-slate-200 bg-white p-3">
-              <div className="text-[9px] font-black uppercase text-slate-400">
-                Pós faturamento
-              </div>
-
-              <div className="mt-1 text-lg font-black text-slate-900">
-                {fmtNumero(
-                  errosMes.cancelados_pos_faturamento
-                )}
-              </div>
-
-              <div className="mt-1 text-[9px] leading-4 text-slate-400">
-                Cancelado depois de já existir faturamento.
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-slate-200 bg-white p-3">
-              <div className="text-[9px] font-black uppercase text-slate-400">
-                Erro NF B2B
-              </div>
-
-              <div className="mt-1 text-lg font-black text-slate-900">
-                {fmtNumero(
-                  errosMes.erros_nf_b2b
-                )}
-              </div>
-
-              <div className="mt-1 text-[9px] leading-4 text-slate-400">
-                NF B2B com status ou motivo de erro.
-              </div>
-            </div>
+                  <div className="mt-1 text-[9px] leading-4 text-slate-400">
+                    {detalhe}
+                  </div>
+                </div>
+              )
+            )}
           </div>
         </div>
       </Section>
 
-
-      {/* ===================================================
-          8. STOCK INTELLIGENCE
-      =================================================== */}
-
       <Section
-        index="08"
+        index="09"
         title="Stock Intelligence"
         subtitle="Estoque atual, envelhecimento e investigação por faixa de aging, SKU, grade e IMEI."
         action={
@@ -5657,7 +4994,8 @@ export default function IndicadoresExecutivosV2Page() {
 
               value:
                 fmtNumero(
-                  estoqueQualidade.imei_invalido
+                  estoqueQualidade
+                    .imei_invalido
                 ),
 
               detail:
@@ -5673,7 +5011,8 @@ export default function IndicadoresExecutivosV2Page() {
 
               value:
                 fmtNumero(
-                  estoqueQualidade.sem_triagem
+                  estoqueQualidade
+                    .sem_triagem
                 ),
 
               detail:
@@ -5689,7 +5028,8 @@ export default function IndicadoresExecutivosV2Page() {
 
               value:
                 fmtNumero(
-                  estoqueQualidade.integros
+                  estoqueQualidade
+                    .integros
                 ),
 
               detail:
@@ -5731,9 +5071,7 @@ export default function IndicadoresExecutivosV2Page() {
                 >
                   <CartesianGrid
                     strokeDasharray="3 3"
-                    vertical={
-                      false
-                    }
+                    vertical={false}
                     stroke="#E2E8F0"
                   />
 
@@ -5746,15 +5084,9 @@ export default function IndicadoresExecutivosV2Page() {
                       fill:
                         "#64748B",
                     }}
-                    axisLine={
-                      false
-                    }
-                    tickLine={
-                      false
-                    }
-                    interval={
-                      0
-                    }
+                    axisLine={false}
+                    tickLine={false}
+                    interval={0}
                   />
 
                   <YAxis
@@ -5765,12 +5097,8 @@ export default function IndicadoresExecutivosV2Page() {
                       fill:
                         "#94A3B8",
                     }}
-                    axisLine={
-                      false
-                    }
-                    tickLine={
-                      false
-                    }
+                    axisLine={false}
+                    tickLine={false}
                   />
 
                   <Tooltip
@@ -5795,11 +5123,11 @@ export default function IndicadoresExecutivosV2Page() {
                     ) => {
                       const faixa =
                         payload?.faixa ||
-                        payload?.payload?.faixa;
+                        payload
+                          ?.payload
+                          ?.faixa;
 
-                      if (
-                        faixa
-                      ) {
+                      if (faixa) {
                         abrirAgingEstoque(
                           faixa
                         );
@@ -5833,12 +5161,10 @@ export default function IndicadoresExecutivosV2Page() {
                   height="100%"
                 >
                   <BarChart
-                    data={
-                      estoquePosicao.slice(
-                        0,
-                        12
-                      )
-                    }
+                    data={estoquePosicao.slice(
+                      0,
+                      12
+                    )}
                     layout="vertical"
                     margin={{
                       left:
@@ -5850,9 +5176,7 @@ export default function IndicadoresExecutivosV2Page() {
                   >
                     <CartesianGrid
                       strokeDasharray="3 3"
-                      horizontal={
-                        false
-                      }
+                      horizontal={false}
                       stroke="#E2E8F0"
                     />
 
@@ -5865,20 +5189,14 @@ export default function IndicadoresExecutivosV2Page() {
                         fill:
                           "#94A3B8",
                       }}
-                      axisLine={
-                        false
-                      }
-                      tickLine={
-                        false
-                      }
+                      axisLine={false}
+                      tickLine={false}
                     />
 
                     <YAxis
                       type="category"
                       dataKey="subinventario"
-                      width={
-                        120
-                      }
+                      width={120}
                       tick={{
                         fontSize:
                           9,
@@ -5886,12 +5204,8 @@ export default function IndicadoresExecutivosV2Page() {
                         fill:
                           "#64748B",
                       }}
-                      axisLine={
-                        false
-                      }
-                      tickLine={
-                        false
-                      }
+                      axisLine={false}
+                      tickLine={false}
                     />
 
                     <Tooltip
@@ -5955,11 +5269,6 @@ export default function IndicadoresExecutivosV2Page() {
         </div>
       </Section>
 
-
-      {/* ===================================================
-          CRITÉRIOS
-      =================================================== */}
-
       <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
         <div className="flex items-start gap-3">
           <Activity className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
@@ -5974,18 +5283,22 @@ export default function IndicadoresExecutivosV2Page() {
               do mês anterior. Em Recebimento → Funcional, sábados e
               domingos são retirados do tempo transcorrido, enquanto casos
               abaixo de 1h permanecem na amostra. O Lead Time do Warehouse
-              utiliza Recebimento → Funcional, Funcional → Cosmética e
-              Cosmética → Alocação WMS. A última etapa cruza a triagem pelo
-              Voucher com a confirmação física do Liquida System. Como o
-              WMS passou a registrar a alocação a partir de 15/08, agosto
-              ainda não é utilizado como benchmark homogêneo dessa etapa.
-              No B2C, a visão operacional considera Entrada do Pedido →
-              Separação → Faturamento; no B2B, Entrada do Pedido →
-              Separação → Embalagem → Faturamento. Aguardando Definição é
-              tratado como etapa excepcional independente. Coletas efetivas
-              representam romaneios fechados com bipagem e a expedição
-              representa as bipagens físicas realizadas na estação de
-              romaneios.
+              utiliza apenas medianas nas transições Recebimento → Funcional,
+              Funcional → Cosmética e Cosmética → Alocação WMS. A última
+              etapa cruza a triagem pelo Voucher com a confirmação física do
+              Liquida System. Como o WMS passou a registrar a alocação a
+              partir de 15/08, agosto ainda não é utilizado como benchmark
+              homogêneo dessa etapa. No B2C, a visão operacional considera
+              Entrada do Pedido → Separação → Faturamento; no B2B, Entrada
+              do Pedido → Separação → Embalagem → Faturamento. Aguardando
+              Definição é tratado como etapa excepcional independente.
+              Coletas efetivas representam romaneios fechados com bipagem e
+              a expedição representa as bipagens físicas realizadas na
+              estação de romaneios. A auditoria FIFO considera aderente a
+              posição 1 ou empate de Data SubInv na menor data; posições
+              posteriores com data mais nova são desvios reais. Toda nova
+              alocação B2C passa a ser registrada obrigatoriamente no banco
+              com snapshot da fila disponível naquele instante.
             </div>
           </div>
         </div>
