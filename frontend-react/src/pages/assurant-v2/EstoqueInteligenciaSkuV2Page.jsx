@@ -2,16 +2,19 @@ import React, { useEffect, useMemo, useState } from "react";
 
 import {
   ArrowLeft,
+  ArrowUpRight,
   BarChart3,
   CalendarDays,
   CheckCircle2,
   CircleDollarSign,
+  ExternalLink,
   Gauge,
   Layers3,
   Loader2,
   PackageSearch,
   RefreshCw,
   ShoppingCart,
+  Store,
   Target,
   TrendingUp,
   Warehouse,
@@ -33,6 +36,7 @@ import {
 
 import { useNavigate, useSearchParams } from "react-router-dom";
 
+import { supabase } from "../../lib/supabase";
 import { fetchPricingInteligenciaSku } from "../../services/assurantIndicadoresService.js";
 
 function formatarNumero(valor, casas = 0) {
@@ -65,6 +69,20 @@ function formatarData(valor) {
   const data = new Date(valor);
   if (Number.isNaN(data.getTime())) return "Sem histórico";
   return data.toLocaleDateString("pt-BR");
+}
+
+function formatarDataHora(valor) {
+  if (!valor) return "—";
+  const data = new Date(valor);
+  if (Number.isNaN(data.getTime())) return "—";
+
+  return data.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function formatarMes(valor) {
@@ -118,13 +136,27 @@ function classeAcao(acao) {
   return "border-slate-200 bg-slate-50 text-slate-700";
 }
 
+function classeDisponibilidade(disponibilidade) {
+  const valor = normalizarTexto(disponibilidade);
+
+  if (valor === "DISPONIVEL") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+
+  if (valor === "INDISPONIVEL") {
+    return "border-slate-200 bg-slate-100 text-slate-500";
+  }
+
+  return "border-amber-200 bg-amber-50 text-amber-700";
+}
+
 function origemLabel(origem, tipo) {
   const valor = normalizarTexto(origem);
 
   if (valor === "GRADE") return `${tipo} da própria grade`;
   if (valor === "PRODUTO") return `${tipo} recuperado do produto`;
   if (valor === "SEM GIRO") return "Sem histórico de giro";
-  if (valor === "SEM PRECO") return "Sem referência de preço";
+  if (valor === "SEM PRECO" || valor === "SEM REFERENCIA") return "Sem referência de preço";
 
   return valor ? valor.replaceAll("_", " ") : `Sem ${tipo.toLowerCase()}`;
 }
@@ -141,6 +173,32 @@ function valorCobertura(resumo) {
 
   if (Number(resumo.estoque_atual || 0) > 0) return "Sem giro";
   return "—";
+}
+
+function precoBenchmark(item) {
+  if (item?.preco_concorrente_avista != null) {
+    return Number(item.preco_concorrente_avista);
+  }
+
+  if (item?.preco_concorrente_cheio != null) {
+    return Number(item.preco_concorrente_cheio);
+  }
+
+  return null;
+}
+
+function mediana(valores) {
+  const lista = valores
+    .map(Number)
+    .filter((valor) => Number.isFinite(valor))
+    .sort((a, b) => a - b);
+
+  if (!lista.length) return null;
+
+  const meio = Math.floor(lista.length / 2);
+
+  if (lista.length % 2) return lista[meio];
+  return (lista[meio - 1] + lista[meio]) / 2;
 }
 
 function MetricCard({ label, value, detail, tone = "default" }) {
@@ -232,7 +290,10 @@ export default function EstoqueInteligenciaSkuV2Page() {
 
   const [marketplace, setMarketplace] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadingBenchmark, setLoadingBenchmark] = useState(true);
   const [erro, setErro] = useState("");
+  const [erroBenchmark, setErroBenchmark] = useState("");
+  const [benchmark, setBenchmark] = useState([]);
   const [dados, setDados] = useState({
     resumo: null,
     grades: [],
@@ -240,6 +301,49 @@ export default function EstoqueInteligenciaSkuV2Page() {
     curvaMensal: [],
     historicoPrecos: [],
   });
+
+  async function carregarBenchmark() {
+    if (!sku) {
+      setBenchmark([]);
+      setLoadingBenchmark(false);
+      return;
+    }
+
+    try {
+      setLoadingBenchmark(true);
+      setErroBenchmark("");
+
+      let query = supabase
+        .from("vw_assurant_pricing_benchmark_grade")
+        .select("*")
+        .eq("sku_base", sku);
+
+      if (grade) {
+        query = query.eq("grade", normalizarTexto(grade));
+      }
+
+      query = query
+        .order("concorrente", { ascending: true })
+        .order("preco_concorrente_avista", {
+          ascending: true,
+          nullsFirst: false,
+        });
+
+      const { data, error } = await query;
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      setBenchmark(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error(error);
+      setBenchmark([]);
+      setErroBenchmark(error?.message || "Não foi possível carregar a concorrência.");
+    } finally {
+      setLoadingBenchmark(false);
+    }
+  }
 
   async function carregar() {
     if (!sku) {
@@ -252,11 +356,14 @@ export default function EstoqueInteligenciaSkuV2Page() {
       setLoading(true);
       setErro("");
 
-      const resposta = await fetchPricingInteligenciaSku({
-        skuBase: sku,
-        grade: grade || undefined,
-        marketplace,
-      });
+      const [resposta] = await Promise.all([
+        fetchPricingInteligenciaSku({
+          skuBase: sku,
+          grade: grade || undefined,
+          marketplace,
+        }),
+        carregarBenchmark(),
+      ]);
 
       setDados(
         resposta || {
@@ -283,7 +390,6 @@ export default function EstoqueInteligenciaSkuV2Page() {
   const grades = Array.isArray(dados.grades) ? dados.grades : [];
   const canais = Array.isArray(dados.canais) ? dados.canais : [];
   const curvaMensal = Array.isArray(dados.curvaMensal) ? dados.curvaMensal : [];
-  const historicoPrecos = Array.isArray(dados.historicoPrecos) ? dados.historicoPrecos : [];
 
   const modeloComercial =
     resumo.modelo_comercial ||
@@ -339,6 +445,42 @@ export default function EstoqueInteligenciaSkuV2Page() {
     [resumo]
   );
 
+  const benchmarkDisponivel = useMemo(
+    () =>
+      benchmark.filter(
+        (item) =>
+          normalizarTexto(item.disponibilidade) === "DISPONIVEL" &&
+          precoBenchmark(item) != null
+      ),
+    [benchmark]
+  );
+
+  const concorrentesUnicos = useMemo(
+    () => new Set(benchmark.map((item) => item.concorrente).filter(Boolean)).size,
+    [benchmark]
+  );
+
+  const menorMercado = useMemo(() => {
+    if (!benchmarkDisponivel.length) return null;
+
+    return benchmarkDisponivel.reduce((menor, item) => {
+      if (!menor) return item;
+      return precoBenchmark(item) < precoBenchmark(menor) ? item : menor;
+    }, null);
+  }, [benchmarkDisponivel]);
+
+  const medianaMercado = useMemo(
+    () => mediana(benchmarkDisponivel.map(precoBenchmark)),
+    [benchmarkDisponivel]
+  );
+
+  const nossoPreco = resumo.preco_recomendado != null ? Number(resumo.preco_recomendado) : null;
+  const precoMenorMercado = precoBenchmark(menorMercado);
+  const gapVsMenor =
+    nossoPreco != null && precoMenorMercado != null && precoMenorMercado > 0
+      ? ((nossoPreco / precoMenorMercado) - 1) * 100
+      : null;
+
   const agingCritico = Number(resumo.aging_medio_dias || 0) > 90;
   const coberturaCritica = Number(resumo.cobertura_dias || 0) > 60;
   const liquidezBaixa =
@@ -369,8 +511,14 @@ export default function EstoqueInteligenciaSkuV2Page() {
       partes.push("sem referência histórica suficiente para recomendação de preço");
     }
 
+    if (menorMercado) {
+      partes.push(
+        `menor concorrente disponível em ${formatarMoeda(precoMenorMercado)} (${menorMercado.concorrente})`
+      );
+    }
+
     return `${partes.join(", ")}. Ação recomendada: ${resumo.acao_recomendada || "MONITORAR"}.`;
-  }, [possuiResumo, resumo]);
+  }, [possuiResumo, resumo, menorMercado, precoMenorMercado]);
 
   function selecionarGrade(novaGrade) {
     const params = new URLSearchParams(searchParams);
@@ -390,7 +538,7 @@ export default function EstoqueInteligenciaSkuV2Page() {
             Consolidando Stock Intelligence...
           </div>
           <div className="mt-1 text-xs text-slate-400">
-            Produto, estoque, giro, aging e preço.
+            Produto, estoque, giro, aging, preço e concorrência.
           </div>
         </div>
       </div>
@@ -611,6 +759,181 @@ export default function EstoqueInteligenciaSkuV2Page() {
             </div>
           </div>
         )}
+
+        <div className="mt-6">
+          <Section
+            icon={Store}
+            eyebrow="Mercado"
+            title="Benchmark de concorrência"
+            description="Preço observado em Trocafy, Trocafone e Outlet do Celular para o mesmo produto e grade equivalente. O link abre exatamente o anúncio utilizado na coleta."
+            action={
+              <div className="flex items-center gap-2">
+                {loadingBenchmark && <Loader2 size={14} className="animate-spin text-violet-700" />}
+                <span className="text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
+                  coleta diária
+                </span>
+              </div>
+            }
+          >
+            {erroBenchmark && (
+              <div className="border-b border-amber-100 bg-amber-50 px-5 py-3 text-[10px] font-semibold text-amber-700">
+                Concorrência indisponível: {erroBenchmark}
+              </div>
+            )}
+
+            <div className="grid border-b border-slate-100 sm:grid-cols-2 xl:grid-cols-4">
+              <MetricCard
+                label="Concorrentes encontrados"
+                value={formatarNumero(concorrentesUnicos)}
+                detail={`${formatarNumero(benchmark.length)} anúncios equivalentes`}
+              />
+              <MetricCard
+                label="Menor disponível"
+                value={precoMenorMercado == null ? "Sem oferta" : formatarMoeda(precoMenorMercado)}
+                detail={menorMercado ? `${menorMercado.concorrente} · ${menorMercado.canal}` : "nenhum anúncio disponível"}
+                tone="good"
+              />
+              <MetricCard
+                label="Mediana disponível"
+                value={medianaMercado == null ? "Sem oferta" : formatarMoeda(medianaMercado)}
+                detail={`${formatarNumero(benchmarkDisponivel.length)} ofertas disponíveis`}
+              />
+              <MetricCard
+                label="Gap nosso × menor"
+                value={gapVsMenor == null ? "—" : `${gapVsMenor > 0 ? "+" : ""}${formatarNumero(gapVsMenor, 1)}%`}
+                detail={
+                  gapVsMenor == null
+                    ? "sem base disponível"
+                    : gapVsMenor > 0
+                      ? "nosso preço acima do menor"
+                      : "nosso preço abaixo do menor"
+                }
+                tone={gapVsMenor != null && gapVsMenor > 0 ? "warning" : "good"}
+              />
+            </div>
+
+            {loadingBenchmark ? (
+              <div className="flex min-h-[220px] items-center justify-center">
+                <Loader2 className="h-6 w-6 animate-spin text-violet-700" />
+              </div>
+            ) : benchmark.length ? (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[1120px]">
+                  <thead>
+                    <tr className="bg-slate-50">
+                      <th className="px-5 py-3 text-left text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">Concorrente</th>
+                      <th className="px-3 py-3 text-left text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">Canal</th>
+                      <th className="px-3 py-3 text-left text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">Condição origem</th>
+                      <th className="px-3 py-3 text-left text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">Grade equivalente</th>
+                      <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">Preço cheio</th>
+                      <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">À vista</th>
+                      <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">Gap</th>
+                      <th className="px-3 py-3 text-left text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">Status</th>
+                      <th className="px-3 py-3 text-left text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">Coleta</th>
+                      <th className="px-5 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">Anúncio</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {benchmark.map((item, index) => {
+                      const disponivel = normalizarTexto(item.disponibilidade) === "DISPONIVEL";
+                      const gap = item.gap_recomendado_vs_concorrente_pct != null
+                        ? Number(item.gap_recomendado_vs_concorrente_pct)
+                        : null;
+
+                      return (
+                        <tr
+                          key={`${item.concorrente}-${item.canal}-${item.condicao_origem}-${index}`}
+                          className={disponivel ? "bg-white hover:bg-slate-50/70" : "bg-slate-50/40 opacity-70"}
+                        >
+                          <td className="px-5 py-4 text-xs font-black text-slate-900">
+                            {item.concorrente || "—"}
+                          </td>
+                          <td className="px-3 py-4 text-xs font-semibold text-slate-600">
+                            {item.canal || "—"}
+                          </td>
+                          <td className="px-3 py-4 text-xs font-semibold text-slate-700">
+                            {item.condicao_origem || "—"}
+                          </td>
+                          <td className="px-3 py-4">
+                            <span className={`rounded-lg border px-2 py-1 text-[9px] font-black ${classeGrade(item.grade)}`}>
+                              {item.grade || "—"}
+                            </span>
+                          </td>
+                          <td className="px-3 py-4 text-right text-xs font-semibold text-slate-600">
+                            {item.preco_concorrente_cheio == null
+                              ? "—"
+                              : formatarMoeda(item.preco_concorrente_cheio)}
+                          </td>
+                          <td className="px-3 py-4 text-right text-xs font-black text-slate-900">
+                            {item.preco_concorrente_avista == null
+                              ? "—"
+                              : formatarMoeda(item.preco_concorrente_avista)}
+                          </td>
+                          <td className="px-3 py-4 text-right">
+                            {gap == null ? (
+                              <span className="text-xs text-slate-400">—</span>
+                            ) : (
+                              <span className={`text-xs font-black ${gap > 0 ? "text-rose-700" : "text-emerald-700"}`}>
+                                {gap > 0 ? "+" : ""}{formatarNumero(gap, 1)}%
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-3 py-4">
+                            <span className={`rounded-full border px-2.5 py-1 text-[9px] font-black uppercase ${classeDisponibilidade(item.disponibilidade)}`}>
+                              {item.disponibilidade || "SEM STATUS"}
+                            </span>
+                          </td>
+                          <td className="px-3 py-4 text-[10px] font-semibold text-slate-500">
+                            {formatarDataHora(item.coletado_em)}
+                          </td>
+                          <td className="px-5 py-4 text-right">
+                            {item.url_anuncio ? (
+                              <a
+                                href={item.url_anuncio}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[10px] font-black text-violet-700 transition hover:border-violet-200 hover:bg-violet-50"
+                              >
+                                Abrir anúncio
+                                <ExternalLink size={12} />
+                              </a>
+                            ) : (
+                              <span className="text-[10px] text-slate-300">Sem link</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <EmptyState
+                title="Ainda não temos anúncio concorrente para este recorte"
+                description="A coleta está ativa. Quando houver correspondência por produto e grade equivalente, o benchmark aparecerá aqui automaticamente."
+              />
+            )}
+
+            {benchmark.length > 0 && (
+              <div className="flex flex-col gap-2 border-t border-slate-100 bg-slate-50/60 px-5 py-3 text-[9px] leading-4 text-slate-500 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  O menor e a mediana consideram somente anúncios marcados como disponíveis. Anúncios indisponíveis permanecem visíveis como referência histórica, mas não entram no benchmark executivo.
+                </div>
+                {menorMercado?.url_anuncio && (
+                  <a
+                    href={menorMercado.url_anuncio}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex shrink-0 items-center gap-1 font-black text-emerald-700"
+                  >
+                    Ver menor oferta
+                    <ArrowUpRight size={12} />
+                  </a>
+                )}
+              </div>
+            )}
+          </Section>
+        </div>
 
         <div className="mt-6 grid gap-6 2xl:grid-cols-[1.35fr_0.65fr]">
           <Section
@@ -938,7 +1261,7 @@ export default function EstoqueInteligenciaSkuV2Page() {
                 Critério da inteligência
               </div>
               <p className="mt-1 max-w-6xl text-[10px] leading-5 text-slate-500">
-                O produto é identificado por Marca, Modelo, Capacidade e Cor. A grade permanece como dimensão de condição cosmética. Quando uma grade não possui massa histórica suficiente, o sistema pode recuperar giro e referência de preço do mesmo produto, identificando explicitamente a origem. Quando nem o produto possui histórico adequado, a tela apresenta “Sem giro”, “Sem histórico” ou “Sem referência” em vez de null.
+                O produto é identificado por Marca, Modelo, Capacidade e Cor. A grade permanece como dimensão de condição cosmética. O benchmark de mercado considera Trocafy, Trocafone e Outlet do Celular, mantém a condição original do anúncio e a respectiva grade equivalente. Somente ofertas disponíveis entram no menor preço e mediana de mercado; anúncios indisponíveis permanecem visíveis para referência e histórico.
               </p>
             </div>
           </div>
