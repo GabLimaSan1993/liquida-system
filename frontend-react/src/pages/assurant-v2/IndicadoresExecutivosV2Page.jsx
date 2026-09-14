@@ -7,32 +7,19 @@ import {
 import {
   Activity,
   AlertTriangle,
-  ArrowDownRight,
   ArrowRight,
-  ArrowUpRight,
   BarChart3,
-  Boxes,
-  CheckCircle2,
   Clock3,
-  Database,
-  FileWarning,
-  Gauge,
-  Layers3,
-  PackageCheck,
   RefreshCw,
-  Target,
-  Timer,
-  TrendingDown,
-  TrendingUp,
-  Truck,
   Warehouse,
-  Wrench,
 } from "lucide-react";
 
 import {
+  Area,
   Bar,
   BarChart,
   CartesianGrid,
+  ComposedChart,
   Legend,
   Line,
   LineChart,
@@ -49,6 +36,26 @@ import {
 import {
   fetchIndicadoresExecutivos,
 } from "../../services/assurantIndicadoresService.js";
+
+
+/* =========================================================
+   CONSTANTES
+========================================================= */
+
+const ORDEM_AGING = [
+  "Até 30 dias",
+  "31 a 60 dias",
+  "61 a 90 dias",
+  "91 a 180 dias",
+  "Mais de 180 dias",
+];
+
+const FAIXAS_B2C = [
+  "Até 12h",
+  "12 a 24h",
+  "24 a 48h",
+  "Mais de 48h",
+];
 
 
 /* =========================================================
@@ -127,7 +134,8 @@ function fmtVariacao(
     );
 
   return `${
-    numero > 0
+    numero >
+    0
       ? "+"
       : ""
   }${fmtNumero(
@@ -158,7 +166,8 @@ function calcularVariacao(
     !Number.isFinite(
       b
     ) ||
-    b === 0
+    b ===
+      0
   ) {
     return null;
   }
@@ -169,7 +178,8 @@ function calcularVariacao(
       b
     ) /
     b
-  ) * 100;
+  ) *
+    100;
 }
 
 
@@ -210,7 +220,7 @@ function fmtDuracao(
         60
     );
 
-  const resto =
+  const minutosRestantes =
     total %
     60;
 
@@ -218,8 +228,8 @@ function fmtDuracao(
     horas <
     24
   ) {
-    return resto
-      ? `${horas}h ${resto}m`
+    return minutosRestantes
+      ? `${horas}h ${minutosRestantes}m`
       : `${horas}h`;
   }
 
@@ -309,7 +319,7 @@ function fmtCobertura(
     qtdValidos
   )} de ${fmtNumero(
     qtdTotal
-  )} • ${fmtNumero(
+  )} · ${fmtNumero(
     percentual,
     1
   )}%`;
@@ -478,10 +488,6 @@ function normalizarTexto(
 }
 
 
-/* =========================================================
-   NORMALIZAÇÃO DE AGING
-========================================================= */
-
 function normalizarFaixaAging(
   value
 ) {
@@ -548,252 +554,38 @@ function normalizarFaixaAging(
 }
 
 
-const ORDEM_AGING = [
-  "Até 30 dias",
-  "31 a 60 dias",
-  "61 a 90 dias",
-  "91 a 180 dias",
-  "Mais de 180 dias",
-];
-
-
 /* =========================================================
    COMPONENTES VISUAIS
 ========================================================= */
 
-function VariacaoBadge({
-  value,
-  inverso = false,
-  sufixo = "%",
-  neutro = false,
-}) {
-  if (
-    value == null ||
-    Number.isNaN(
-      Number(
-        value
-      )
-    )
-  ) {
-    return (
-      <span className="text-[10px] font-semibold text-slate-400">
-        Sem comparativo
-      </span>
-    );
-  }
-
-  const numero =
-    Number(
-      value
-    );
-
-  const positivo =
-    numero >
-    0;
-
-  const bom =
-    inverso
-      ? numero < 0
-      : numero > 0;
-
-  const semVariacao =
-    numero ===
-    0;
-
-  const Icon =
-    positivo
-      ? ArrowUpRight
-      : numero < 0
-        ? ArrowDownRight
-        : Activity;
-
-  let classes =
-    "bg-slate-100 text-slate-600";
-
-  if (
-    !neutro
-  ) {
-    if (
-      semVariacao
-    ) {
-      classes =
-        "bg-slate-100 text-slate-500";
-    } else if (
-      bom
-    ) {
-      classes =
-        "bg-emerald-50 text-emerald-700";
-    } else {
-      classes =
-        "bg-rose-50 text-rose-700";
-    }
-  }
-
-  return (
-    <span
-      className={`
-        inline-flex items-center gap-1
-        rounded-full px-2 py-1
-        text-[10px] font-black
-        ${classes}
-      `}
-    >
-      <Icon className="h-3 w-3" />
-
-      {numero > 0
-        ? "+"
-        : ""}
-
-      {fmtNumero(
-        numero,
-        1
-      )}
-
-      {sufixo}
-    </span>
-  );
-}
-
-
-function KpiCard({
-  title,
-  value,
-  subtitle,
-  variation,
-  icon: Icon,
-  inverso = false,
-  neutro = false,
-  suffix = "%",
-  accent = "violet",
-}) {
-  const accents = {
-    violet: {
-      icon:
-        "bg-violet-50 text-violet-700",
-
-      line:
-        "bg-violet-500",
-    },
-
-    blue: {
-      icon:
-        "bg-blue-50 text-blue-700",
-
-      line:
-        "bg-blue-500",
-    },
-
-    emerald: {
-      icon:
-        "bg-emerald-50 text-emerald-700",
-
-      line:
-        "bg-emerald-500",
-    },
-
-    amber: {
-      icon:
-        "bg-amber-50 text-amber-700",
-
-      line:
-        "bg-amber-500",
-    },
-
-    rose: {
-      icon:
-        "bg-rose-50 text-rose-700",
-
-      line:
-        "bg-rose-500",
-    },
-
-    slate: {
-      icon:
-        "bg-slate-100 text-slate-700",
-
-      line:
-        "bg-slate-500",
-    },
-  };
-
-  const cfg =
-    accents[
-      accent
-    ] ||
-    accents.violet;
-
-  return (
-    <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div
-        className={`absolute bottom-0 left-0 h-[3px] w-full ${cfg.line}`}
-      />
-
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">
-            {title}
-          </div>
-
-          <div className="mt-2 text-[26px] font-black tracking-tight text-slate-900">
-            {value}
-          </div>
-
-          <div className="mt-1 min-h-[30px] text-[10px] font-medium leading-4 text-slate-400">
-            {subtitle}
-          </div>
-        </div>
-
-        <div
-          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${cfg.icon}`}
-        >
-          <Icon className="h-[18px] w-[18px]" />
-        </div>
-      </div>
-
-      <div className="mt-3 border-t border-slate-100 pt-3">
-        <VariacaoBadge
-          value={
-            variation
-          }
-          inverso={
-            inverso
-          }
-          neutro={
-            neutro
-          }
-          sufixo={
-            suffix
-          }
-        />
-
-        <span className="ml-2 text-[9px] text-slate-400">
-          vs. período anterior
-        </span>
-      </div>
-    </div>
-  );
-}
-
-
-function SectionCard({
+function Section({
+  index,
   title,
   subtitle,
-  children,
   action,
+  children,
 }) {
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
-        <div>
-          <h2 className="text-sm font-black text-slate-800">
-            {title}
-          </h2>
-
-          {subtitle && (
-            <p className="mt-1 text-[10px] leading-4 text-slate-400">
-              {subtitle}
-            </p>
+      <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex items-start gap-3">
+          {index && (
+            <div className="mt-0.5 flex h-7 min-w-7 items-center justify-center rounded-lg bg-slate-950 px-2 text-[10px] font-black text-white">
+              {index}
+            </div>
           )}
+
+          <div>
+            <h2 className="text-sm font-black text-slate-900">
+              {title}
+            </h2>
+
+            {subtitle && (
+              <p className="mt-1 max-w-4xl text-[10px] leading-4 text-slate-400">
+                {subtitle}
+              </p>
+            )}
+          </div>
         </div>
 
         {action}
@@ -801,6 +593,68 @@ function SectionCard({
 
       {children}
     </section>
+  );
+}
+
+
+function MetricStrip({
+  items,
+}) {
+  return (
+    <div
+      className="grid border-b border-slate-100 bg-slate-50/40"
+      style={{
+        gridTemplateColumns:
+          `repeat(${Math.max(
+            1,
+            items.length
+          )}, minmax(0, 1fr))`,
+      }}
+    >
+      {items.map(
+        (
+          item,
+          index
+        ) => (
+          <div
+            key={`${item.label}-${index}`}
+            className="min-w-0 border-r border-slate-100 px-4 py-4 last:border-r-0"
+          >
+            <div className="text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">
+              {item.label}
+            </div>
+
+            <div
+              className={[
+                "mt-1.5 truncate text-xl font-black tracking-tight",
+                item.tone ===
+                "danger"
+                  ? "text-rose-700"
+                  : item.tone ===
+                      "warning"
+                    ? "text-amber-700"
+                    : item.tone ===
+                        "good"
+                      ? "text-emerald-700"
+                      : item.tone ===
+                          "violet"
+                        ? "text-violet-800"
+                        : "text-slate-900",
+              ].join(
+                " "
+              )}
+            >
+              {item.value}
+            </div>
+
+            <div className="mt-1 truncate text-[9px] text-slate-400">
+              {item.detail ||
+                "—"}
+            </div>
+          </div>
+        )
+      )}
+    </div>
   );
 }
 
@@ -816,16 +670,14 @@ function PeriodButton({
       onClick={
         onClick
       }
-      className={`
-        rounded-lg px-3 py-1.5
-        text-[10px] font-black
-        transition
-        ${
-          active
-            ? "bg-white text-[#211136] shadow-sm"
-            : "text-slate-500 hover:text-slate-800"
-        }
-      `}
+      className={[
+        "rounded-lg px-3 py-1.5 text-[10px] font-black transition",
+        active
+          ? "bg-slate-950 text-white shadow-sm"
+          : "text-slate-500 hover:bg-white hover:text-slate-900",
+      ].join(
+        " "
+      )}
     >
       {children}
     </button>
@@ -833,7 +685,7 @@ function PeriodButton({
 }
 
 
-function CanalButton({
+function ToggleButton({
   active,
   onClick,
   children,
@@ -844,16 +696,14 @@ function CanalButton({
       onClick={
         onClick
       }
-      className={`
-        rounded-xl px-4 py-2
-        text-[11px] font-black
-        transition
-        ${
-          active
-            ? "bg-[#211136] text-white shadow-sm"
-            : "border border-slate-200 bg-white text-slate-500"
-        }
-      `}
+      className={[
+        "rounded-lg px-3 py-2 text-[10px] font-black transition",
+        active
+          ? "bg-slate-950 text-white"
+          : "border border-slate-200 bg-white text-slate-500 hover:bg-slate-50",
+      ].join(
+        " "
+      )}
     >
       {children}
     </button>
@@ -861,50 +711,28 @@ function CanalButton({
 }
 
 
-function StatusBadge({
+function EmptyState({
   children,
-  type = "neutral",
+  height = 260,
 }) {
-  const classes = {
-    neutral:
-      "bg-slate-100 text-slate-600",
-
-    good:
-      "bg-emerald-50 text-emerald-700",
-
-    warning:
-      "bg-amber-50 text-amber-700",
-
-    danger:
-      "bg-rose-50 text-rose-700",
-
-    violet:
-      "bg-violet-50 text-violet-700",
-  };
-
   return (
-    <span
-      className={`
-        inline-flex rounded-full
-        px-2 py-1 text-[9px] font-black
-        ${classes[type]}
-      `}
+    <div
+      className="flex items-center justify-center text-center text-xs font-medium text-slate-400"
+      style={{
+        minHeight:
+          height,
+      }}
     >
       {children}
-    </span>
+    </div>
   );
 }
 
 
-/* =========================================================
-   TOOLTIP
-========================================================= */
-
-function TempoTooltip({
+function NumeroTooltip({
   active,
   payload,
   label,
-  unidade = "min",
 }) {
   if (
     !active ||
@@ -926,21 +754,16 @@ function TempoTooltip({
           ) => (
             <div
               key={`${item.dataKey}-${item.name}`}
-              className="flex min-w-[160px] items-center justify-between gap-4 text-[10px]"
+              className="flex min-w-[170px] items-center justify-between gap-4 text-[10px]"
             >
               <span className="font-semibold text-slate-500">
                 {item.name}
               </span>
 
               <span className="font-black text-slate-800">
-                {unidade ===
-                "min"
-                  ? fmtDuracao(
-                      item.value
-                    )
-                  : fmtNumero(
-                      item.value
-                    )}
+                {fmtNumero(
+                  item.value
+                )}
               </span>
             </div>
           )
@@ -951,316 +774,101 @@ function TempoTooltip({
 }
 
 
-/* =========================================================
-   ETAPAS B2C / B2B
-========================================================= */
-
-function EtapaCard({
-  etapa,
-  totalBase,
+function TempoTooltip({
+  active,
+  payload,
+  label,
 }) {
-  const variacao =
-    Number(
-      etapa
-        ?.variacao_mediana_pct
-    );
+  if (
+    !active ||
+    !payload?.length
+  ) {
+    return null;
+  }
 
-  const cobertura =
-    totalBase >
-    0
-      ? (
-          Number(
-            etapa.amostra ||
-              0
-          ) /
-          Number(
-            totalBase
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
+      <div className="mb-2 text-[10px] font-black text-slate-700">
+        {label}
+      </div>
+
+      <div className="space-y-1">
+        {payload.map(
+          (
+            item
+          ) => (
+            <div
+              key={`${item.dataKey}-${item.name}`}
+              className="flex min-w-[180px] items-center justify-between gap-4 text-[10px]"
+            >
+              <span className="font-semibold text-slate-500">
+                {item.name}
+              </span>
+
+              <span className="font-black text-slate-800">
+                {fmtDuracao(
+                  item.value
+                )}
+              </span>
+            </div>
           )
-        ) *
-        100
-      : null;
+        )}
+      </div>
+    </div>
+  );
+}
 
-  const baixaCobertura =
-    cobertura != null &&
-    cobertura <
-      20;
 
-  const melhorou =
-    Number.isFinite(
-      variacao
+function VariacaoTexto({
+  value,
+  inverso = false,
+}) {
+  if (
+    value == null ||
+    Number.isNaN(
+      Number(
+        value
+      )
     )
-      ? variacao <
-        0
-      : null;
+  ) {
+    return (
+      <span className="text-slate-400">
+        —
+      </span>
+    );
+  }
 
-  return (
-    <div
-      className={`
-        rounded-xl border p-4
-        ${
-          baixaCobertura
-            ? "border-amber-200 bg-amber-50/40"
-            : "border-slate-200 bg-white"
-        }
-      `}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-[10px] font-black text-slate-700">
-            {etapa.etapa}
-          </div>
-
-          <div className="mt-2 text-2xl font-black text-slate-900">
-            {fmtDuracao(
-              etapa.mediana_min
-            )}
-          </div>
-
-          <div className="mt-1 text-[9px] uppercase tracking-wider text-slate-400">
-            Mediana
-          </div>
-        </div>
-
-        <div
-          className={`
-            flex h-9 w-9
-            items-center justify-center
-            rounded-xl
-            ${
-              melhorou ===
-              true
-                ? "bg-emerald-50 text-emerald-700"
-                : melhorou ===
-                    false
-                  ? "bg-rose-50 text-rose-700"
-                  : "bg-slate-100 text-slate-500"
-            }
-          `}
-        >
-          {melhorou ===
-          true ? (
-            <TrendingDown className="h-4 w-4" />
-          ) : melhorou ===
-            false ? (
-            <TrendingUp className="h-4 w-4" />
-          ) : (
-            <Timer className="h-4 w-4" />
-          )}
-        </div>
-      </div>
-
-      {baixaCobertura && (
-        <div className="mt-3">
-          <StatusBadge type="warning">
-            BAIXA COBERTURA HISTÓRICA
-          </StatusBadge>
-        </div>
-      )}
-
-      <div className="mt-4 grid grid-cols-2 gap-2">
-        <div className="rounded-lg bg-slate-50 px-3 py-2">
-          <div className="text-[8px] font-black uppercase text-slate-400">
-            P90
-          </div>
-
-          <div className="mt-1 text-xs font-black text-slate-700">
-            {fmtDuracao(
-              etapa.p90_min
-            )}
-          </div>
-        </div>
-
-        <div className="rounded-lg bg-slate-50 px-3 py-2">
-          <div className="text-[8px] font-black uppercase text-slate-400">
-            Registros válidos
-          </div>
-
-          <div className="mt-1 text-xs font-black text-slate-700">
-            {fmtNumero(
-              etapa.amostra
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3">
-        <span className="text-[9px] text-slate-400">
-          Cobertura
-        </span>
-
-        <span className="text-[10px] font-black text-slate-700">
-          {cobertura !=
-          null
-            ? fmtPercentual(
-                cobertura
-              )
-            : "—"}
-        </span>
-      </div>
-
-      <div className="mt-2 flex items-center justify-between">
-        <span className="text-[9px] text-slate-400">
-          Variação
-        </span>
-
-        <VariacaoBadge
-          value={
-            etapa
-              .variacao_mediana_pct
-          }
-          inverso
-        />
-      </div>
-    </div>
-  );
-}
-
-
-/* =========================================================
-   BARRA HORIZONTAL
-========================================================= */
-
-function BarraLinha({
-  label,
-  value,
-  max,
-  detalhe,
-}) {
-  const percentual =
-    max >
-    0
-      ? Math.min(
-          100,
-          (
-            Number(
-              value ||
-                0
-            ) /
-            max
-          ) *
-            100
-        )
-      : 0;
-
-  return (
-    <div>
-      <div className="mb-1.5 flex items-center justify-between gap-4">
-        <div className="truncate text-[10px] font-bold text-slate-600">
-          {label}
-        </div>
-
-        <div className="shrink-0 text-[10px] font-black text-slate-800">
-          {fmtNumero(
-            value
-          )}
-
-          {detalhe && (
-            <span className="ml-1 font-medium text-slate-400">
-              {detalhe}
-            </span>
-          )}
-        </div>
-      </div>
-
-      <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
-        <div
-          className="h-full rounded-full bg-[#4C1D95]"
-          style={{
-            width:
-              `${percentual}%`,
-          }}
-        />
-      </div>
-    </div>
-  );
-}
-
-
-/* =========================================================
-   LINHA DE AGING CLICÁVEL
-========================================================= */
-
-function AgingLinha({
-  label,
-  value,
-  max,
-  onClick,
-}) {
-  const faixa =
-    normalizarFaixaAging(
-      label
+  const numero =
+    Number(
+      value
     );
 
-  const percentual =
-    max >
+  const bom =
+    numero ===
     0
-      ? Math.min(
-          100,
-          (
-            Number(
-              value ||
-                0
-            ) /
-            max
-          ) *
-            100
-        )
-      : 0;
+      ? null
+      : inverso
+        ? numero <
+          0
+        : numero >
+          0;
 
   return (
-    <button
-      type="button"
-      onClick={() =>
-        onClick(
-          faixa
-        )
+    <span
+      className={
+        bom ===
+        true
+          ? "font-black text-emerald-700"
+          : bom ===
+              false
+            ? "font-black text-rose-700"
+            : "font-black text-slate-500"
       }
-      className="
-        group
-        w-full
-        rounded-xl
-        border
-        border-transparent
-        px-3
-        py-2.5
-        text-left
-        transition
-        hover:border-violet-100
-        hover:bg-violet-50/50
-      "
     >
-      <div className="mb-2 flex items-center justify-between gap-4">
-        <div className="min-w-0">
-          <div className="truncate text-[10px] font-black text-slate-700 transition group-hover:text-violet-800">
-            {faixa}
-          </div>
-
-          <div className="mt-0.5 text-[9px] font-medium text-slate-400">
-            Abrir composição por SKU, grade e IMEI
-          </div>
-        </div>
-
-        <div className="flex shrink-0 items-center gap-2">
-          <span className="text-[11px] font-black text-slate-900">
-            {fmtNumero(
-              value
-            )}
-          </span>
-
-          <ArrowRight className="h-3.5 w-3.5 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-violet-700" />
-        </div>
-      </div>
-
-      <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
-        <div
-          className="h-full rounded-full bg-[#4C1D95] transition-all group-hover:bg-violet-700"
-          style={{
-            width:
-              `${percentual}%`,
-          }}
-        />
-      </div>
-    </button>
+      {fmtVariacao(
+        numero
+      )}
+    </span>
   );
 }
 
@@ -1436,7 +1044,7 @@ export default function IndicadoresExecutivosV2Page() {
 
 
   /* =======================================================
-     MESES DISPONÍVEIS
+     MESES
   ======================================================= */
 
   const mesesDisponiveis =
@@ -1445,7 +1053,7 @@ export default function IndicadoresExecutivosV2Page() {
         const meses =
           new Set();
 
-        const fontes = [
+        [
           dados.operacaoMensal,
           dados.kpisMensais,
           dados.gradesMensais,
@@ -1453,9 +1061,7 @@ export default function IndicadoresExecutivosV2Page() {
           dados.b2cCanaisMensal,
           dados.ocorrenciasMensais,
           dados.errosProcessoMensais,
-        ];
-
-        fontes.forEach(
+        ].forEach(
           (
             fonte
           ) => {
@@ -1532,17 +1138,25 @@ export default function IndicadoresExecutivosV2Page() {
         ]
       : null;
 
+  const prefixoMes =
+    String(
+      mesSelecionado ||
+        ""
+    ).slice(
+      0,
+      7
+    );
+
 
   /* =======================================================
-     COMPARATIVO EXECUTIVO B2C / B2B
+     COMPARATIVO EXECUTIVO
   ======================================================= */
 
   const comparativos =
     useMemo(
       () =>
         (
-          dados
-            .comparativoAtual ||
+          dados.comparativoAtual ||
           []
         ).filter(
           (
@@ -1556,7 +1170,6 @@ export default function IndicadoresExecutivosV2Page() {
         granularidade,
       ]
     );
-
 
   const atualB2C =
     comparativos.find(
@@ -1586,7 +1199,7 @@ export default function IndicadoresExecutivosV2Page() {
 
 
   /* =======================================================
-     WAREHOUSE MENSAL
+     WAREHOUSE
   ======================================================= */
 
   const operacaoMes =
@@ -1607,7 +1220,6 @@ export default function IndicadoresExecutivosV2Page() {
     ) ||
     {};
 
-
   const operacaoMesAnterior =
     (
       dados.operacaoMensal ||
@@ -1626,51 +1238,46 @@ export default function IndicadoresExecutivosV2Page() {
     ) ||
     {};
 
-
   const operacaoDiariaMes =
-    (
-      dados.operacaoDiaria ||
-      []
-    )
-      .filter(
+    useMemo(
+      () =>
         (
-          row
-        ) =>
-          String(
-            row.dia
-          ).slice(
-            0,
-            7
-          ) ===
-          String(
-            mesSelecionado
-          ).slice(
-            0,
-            7
+          dados.operacaoDiaria ||
+          []
+        )
+          .filter(
+            (
+              row
+            ) =>
+              String(
+                row.dia
+              ).slice(
+                0,
+                7
+              ) ===
+              prefixoMes
           )
-      )
-      .map(
-        (
-          row
-        ) => ({
-          ...row,
+          .map(
+            (
+              row
+            ) => ({
+              ...row,
 
-          label:
-            fmtDataCurta(
-              row.dia
-            ),
-        })
-      );
-
-
-  /* =======================================================
-     LEAD TIME WAREHOUSE
-  ======================================================= */
+              label:
+                fmtDataCurta(
+                  row.dia
+                ),
+            })
+          ),
+      [
+        dados.operacaoDiaria,
+        prefixoMes,
+      ]
+    );
 
   const leadtimeWarehouse =
     (
-      dados
-        .leadtimeTriagemMensal ||
+      dados.leadtimeTriagemMensal ||
       []
     ).find(
       (
@@ -1686,6 +1293,64 @@ export default function IndicadoresExecutivosV2Page() {
     ) ||
     {};
 
+  const leadtimeEtapas =
+    [
+      {
+        etapa:
+          "Recebimento → Funcional",
+
+        horas:
+          Number(
+            leadtimeWarehouse.receb_funcional_h ||
+              0
+          ),
+      },
+
+      {
+        etapa:
+          "Funcional → Cosmética",
+
+        horas:
+          Number(
+            leadtimeWarehouse.funcional_cosmetica_h ||
+              0
+          ),
+      },
+
+      {
+        etapa:
+          "Funcional → Laudo",
+
+        horas:
+          Number(
+            leadtimeWarehouse.funcional_laudo_h ||
+              0
+          ),
+      },
+
+      {
+        etapa:
+          "Cosmética → Oracle",
+
+        horas:
+          Number(
+            leadtimeWarehouse.cosmetica_oracle_h ||
+              0
+          ),
+      },
+
+      {
+        etapa:
+          "Ponta a ponta",
+
+        horas:
+          Number(
+            leadtimeWarehouse.ponta_a_ponta_h ||
+              0
+          ),
+      },
+    ];
+
 
   /* =======================================================
      FILAS
@@ -1696,8 +1361,7 @@ export default function IndicadoresExecutivosV2Page() {
       () =>
         [
           ...(
-            dados
-              .filasAtuais ||
+            dados.filasAtuais ||
             []
           ),
         ].sort(
@@ -1720,57 +1384,48 @@ export default function IndicadoresExecutivosV2Page() {
     );
 
 
-  const maxFila =
-    Math.max(
-      1,
-      ...filasOrdenadas.map(
-        (
-          item
-        ) =>
-          Number(
-            item.aparelhos ||
-              0
-          )
-      )
-    );
-
-
   /* =======================================================
-     GRADES / QUALIDADE
+     QUALIDADE / GRADES
   ======================================================= */
 
   const gradesMes =
-    (
-      dados.gradesMensais ||
-      []
-    )
-      .filter(
+    useMemo(
+      () =>
         (
-          row
-        ) =>
-          String(
-            row.mes
-          ).slice(
-            0,
-            10
-          ) ===
-          mesSelecionado
-      )
-      .sort(
-        (
-          a,
-          b
-        ) =>
-          Number(
-            b.aparelhos ||
-              0
-          ) -
-          Number(
-            a.aparelhos ||
-              0
+          dados.gradesMensais ||
+          []
+        )
+          .filter(
+            (
+              row
+            ) =>
+              String(
+                row.mes
+              ).slice(
+                0,
+                10
+              ) ===
+              mesSelecionado
           )
-      );
-
+          .sort(
+            (
+              a,
+              b
+            ) =>
+              Number(
+                b.aparelhos ||
+                  0
+              ) -
+              Number(
+                a.aparelhos ||
+                  0
+              )
+          ),
+      [
+        dados.gradesMensais,
+        mesSelecionado,
+      ]
+    );
 
   const totalGrades =
     gradesMes.reduce(
@@ -1785,7 +1440,6 @@ export default function IndicadoresExecutivosV2Page() {
         ),
       0
     );
-
 
   const naoAlocaveis =
     gradesMes.reduce(
@@ -1819,7 +1473,6 @@ export default function IndicadoresExecutivosV2Page() {
       0
     );
 
-
   const pctNaoAlocavel =
     totalGrades >
     0
@@ -1831,29 +1484,13 @@ export default function IndicadoresExecutivosV2Page() {
       : null;
 
 
-  const maxGrade =
-    Math.max(
-      1,
-      ...gradesMes.map(
-        (
-          row
-        ) =>
-          Number(
-            row.aparelhos ||
-              0
-          )
-      )
-    );
-
-
   /* =======================================================
      B2B
   ======================================================= */
 
   const b2bMes =
     (
-      dados
-        .b2bOperacaoMensal ||
+      dados.b2bOperacaoMensal ||
       []
     ).find(
       (
@@ -1869,11 +1506,9 @@ export default function IndicadoresExecutivosV2Page() {
     ) ||
     {};
 
-
   const b2bMesAnterior =
     (
-      dados
-        .b2bOperacaoMensal ||
+      dados.b2bOperacaoMensal ||
       []
     ).find(
       (
@@ -1889,49 +1524,90 @@ export default function IndicadoresExecutivosV2Page() {
     ) ||
     {};
 
+  const b2bDiarioMes =
+    useMemo(
+      () =>
+        (
+          dados.b2bOperacaoDiaria ||
+          []
+        )
+          .filter(
+            (
+              row
+            ) =>
+              String(
+                row.dia
+              ).slice(
+                0,
+                7
+              ) ===
+              prefixoMes
+          )
+          .map(
+            (
+              row
+            ) => ({
+              ...row,
+
+              label:
+                fmtDataCurta(
+                  row.dia
+                ),
+            })
+          ),
+      [
+        dados.b2bOperacaoDiaria,
+        prefixoMes,
+      ]
+    );
+
 
   /* =======================================================
      B2C
   ======================================================= */
 
   const canaisMes =
-    (
-      dados
-        .b2cCanaisMensal ||
-      []
-    )
-      .filter(
+    useMemo(
+      () =>
         (
-          row
-        ) =>
-          String(
-            row.mes
-          ).slice(
-            0,
-            10
-          ) ===
-          mesSelecionado
-      )
-      .sort(
-        (
-          a,
-          b
-        ) =>
-          Number(
-            b.pagos ||
-              0
-          ) -
-          Number(
-            a.pagos ||
-              0
+          dados.b2cCanaisMensal ||
+          []
+        )
+          .filter(
+            (
+              row
+            ) =>
+              String(
+                row.mes
+              ).slice(
+                0,
+                10
+              ) ===
+              mesSelecionado
           )
-      );
-
+          .sort(
+            (
+              a,
+              b
+            ) =>
+              Number(
+                b.pagos ||
+                  0
+              ) -
+              Number(
+                a.pagos ||
+                  0
+              )
+          ),
+      [
+        dados.b2cCanaisMensal,
+        mesSelecionado,
+      ]
+    );
 
   const faixasMes =
     (
-      dados
-        .b2cCanaisFaixasMensal ||
+      dados.b2cCanaisFaixasMensal ||
       []
     ).filter(
       (
@@ -1946,29 +1622,77 @@ export default function IndicadoresExecutivosV2Page() {
         mesSelecionado
     );
 
-
-  const expedicaoMes =
-    (
-      dados.expedicaoDiaria ||
-      []
-    ).filter(
+  const faixasB2CChart =
+    FAIXAS_B2C.map(
       (
-        row
-      ) =>
-        String(
-          row.dia
-        ).slice(
-          0,
-          7
-        ) ===
-        String(
-          mesSelecionado
-        ).slice(
-          0,
-          7
-        )
+        faixa
+      ) => ({
+        faixa,
+
+        pedidos:
+          faixasMes
+            .filter(
+              (
+                row
+              ) =>
+                normalizarTexto(
+                  row.faixa
+                ) ===
+                normalizarTexto(
+                  faixa
+                )
+            )
+            .reduce(
+              (
+                total,
+                row
+              ) =>
+                total +
+                Number(
+                  row.pedidos ||
+                    0
+                ),
+              0
+            ),
+      })
     );
 
+  const expedicaoMes =
+    useMemo(
+      () =>
+        (
+          dados.expedicaoDiaria ||
+          []
+        )
+          .filter(
+            (
+              row
+            ) =>
+              String(
+                row.dia
+              ).slice(
+                0,
+                7
+              ) ===
+              prefixoMes
+          )
+          .map(
+            (
+              row
+            ) => ({
+              ...row,
+
+              label:
+                fmtDataCurta(
+                  row.dia
+                ),
+            })
+          ),
+      [
+        dados.expedicaoDiaria,
+        prefixoMes,
+      ]
+    );
 
   const expedidosMes =
     expedicaoMes.reduce(
@@ -1983,7 +1707,6 @@ export default function IndicadoresExecutivosV2Page() {
         ),
       0
     );
-
 
   const diasExpedicao =
     new Set(
@@ -2000,7 +1723,6 @@ export default function IndicadoresExecutivosV2Page() {
       )
     ).size;
 
-
   const mediaExpedicao =
     diasExpedicao >
     0
@@ -2014,38 +1736,43 @@ export default function IndicadoresExecutivosV2Page() {
   ======================================================= */
 
   const ocorrenciasMes =
-    (
-      dados
-        .ocorrenciasMensais ||
-      []
-    )
-      .filter(
+    useMemo(
+      () =>
         (
-          row
-        ) =>
-          String(
-            row.mes
-          ).slice(
-            0,
-            10
-          ) ===
-          mesSelecionado
-      )
-      .sort(
-        (
-          a,
-          b
-        ) =>
-          Number(
-            b.ocorrencias ||
-              0
-          ) -
-          Number(
-            a.ocorrencias ||
-              0
+          dados.ocorrenciasMensais ||
+          []
+        )
+          .filter(
+            (
+              row
+            ) =>
+              String(
+                row.mes
+              ).slice(
+                0,
+                10
+              ) ===
+              mesSelecionado
           )
-      );
-
+          .sort(
+            (
+              a,
+              b
+            ) =>
+              Number(
+                b.ocorrencias ||
+                  0
+              ) -
+              Number(
+                a.ocorrencias ||
+                  0
+              )
+          ),
+      [
+        dados.ocorrenciasMensais,
+        mesSelecionado,
+      ]
+    );
 
   const totalOcorrencias =
     ocorrenciasMes.reduce(
@@ -2062,29 +1789,13 @@ export default function IndicadoresExecutivosV2Page() {
     );
 
 
-  const maxOcorrencia =
-    Math.max(
-      1,
-      ...ocorrenciasMes.map(
-        (
-          row
-        ) =>
-          Number(
-            row.ocorrencias ||
-              0
-          )
-      )
-    );
-
-
   /* =======================================================
      ERROS
   ======================================================= */
 
   const errosMes =
     (
-      dados
-        .errosProcessoMensais ||
+      dados.errosProcessoMensais ||
       []
     ).find(
       (
@@ -2100,24 +1811,79 @@ export default function IndicadoresExecutivosV2Page() {
     ) ||
     {};
 
+  const errosChart =
+    [
+      {
+        categoria:
+          "Integração",
+
+        valor:
+          Number(
+            errosMes.falhas_integracao ||
+              0
+          ),
+      },
+
+      {
+        categoria:
+          "Cancelado marketplace",
+
+        valor:
+          Number(
+            errosMes.cancelados_marketplace ||
+              0
+          ),
+      },
+
+      {
+        categoria:
+          "Pós embalagem",
+
+        valor:
+          Number(
+            errosMes.cancelados_pos_embalagem ||
+              0
+          ),
+      },
+
+      {
+        categoria:
+          "Pós faturamento",
+
+        valor:
+          Number(
+            errosMes.cancelados_pos_faturamento ||
+              0
+          ),
+      },
+
+      {
+        categoria:
+          "Erro NF B2B",
+
+        valor:
+          Number(
+            errosMes.erros_nf_b2b ||
+              0
+          ),
+      },
+    ];
+
 
   /* =======================================================
      ESTOQUE
   ======================================================= */
 
   const estoqueQualidade =
-    dados
-      .estoqueQualidadeAtual ||
+    dados.estoqueQualidadeAtual ||
     {};
-
 
   const estoquePosicao =
     useMemo(
       () =>
         [
           ...(
-            dados
-              .estoquePosicaoAtual ||
+            dados.estoquePosicaoAtual ||
             []
           ),
         ].sort(
@@ -2135,27 +1901,10 @@ export default function IndicadoresExecutivosV2Page() {
             )
         ),
       [
-        dados
-          .estoquePosicaoAtual,
+        dados.estoquePosicaoAtual,
       ]
     );
 
-
-  /*
-   * Aqui normalizamos a nomenclatura antiga da VIEW.
-   *
-   * Ex.:
-   * 0. Até 30 dias
-   * 1. 31 a 60 dias
-   *
-   * passa a:
-   *
-   * Até 30 dias
-   * 31 a 60 dias
-   *
-   * Isso garante que o Cockpit envie exatamente o texto que
-   * a rota EstoqueAgingDetalheV2Page espera.
-   */
   const estoqueAging =
     useMemo(
       () => {
@@ -2163,8 +1912,7 @@ export default function IndicadoresExecutivosV2Page() {
           new Map();
 
         (
-          dados
-            .estoqueAgingAtual ||
+          dados.estoqueAgingAtual ||
           []
         ).forEach(
           (
@@ -2181,178 +1929,79 @@ export default function IndicadoresExecutivosV2Page() {
               return;
             }
 
-            const atualFaixa =
-              agrupado.get(
-                faixa
-              ) || {
-                ...row,
-
-                faixa,
-
-                aparelhos:
-                  0,
-              };
-
-            atualFaixa.aparelhos =
-              Number(
-                atualFaixa.aparelhos ||
-                  0
-              ) +
-              Number(
-                row.aparelhos ||
-                  0
-              );
-
             agrupado.set(
               faixa,
-              atualFaixa
+              (
+                agrupado.get(
+                  faixa
+                ) ||
+                0
+              ) +
+                Number(
+                  row.aparelhos ||
+                    0
+                )
             );
           }
         );
 
-        return Array.from(
-          agrupado.values()
-        ).sort(
+        return ORDEM_AGING.map(
           (
-            a,
-            b
-          ) => {
-            const indiceA =
-              ORDEM_AGING.indexOf(
-                a.faixa
-              );
+            faixa
+          ) => ({
+            faixa,
 
-            const indiceB =
-              ORDEM_AGING.indexOf(
-                b.faixa
-              );
-
-            return (
-              (
-                indiceA ===
-                -1
-                  ? 999
-                  : indiceA
-              ) -
-              (
-                indiceB ===
-                -1
-                  ? 999
-                  : indiceB
-              )
-            );
-          }
+            aparelhos:
+              agrupado.get(
+                faixa
+              ) ||
+              0,
+          })
         );
       },
       [
-        dados
-          .estoqueAgingAtual,
+        dados.estoqueAgingAtual,
       ]
     );
 
-
-  const maxEstoque =
-    Math.max(
-      1,
-      ...estoquePosicao.map(
-        (
-          row
-        ) =>
-          Number(
-            row.aparelhos ||
-              0
-          )
-      )
+  const totalEstoque =
+    Number(
+      estoqueQualidade.total_estoque ||
+        0
     );
 
-
-  const maxAging =
-    Math.max(
-      1,
-      ...estoqueAging.map(
-        (
-          row
-        ) =>
-          Number(
-            row.aparelhos ||
-              0
-          )
-      )
+  const mais90 =
+    Number(
+      estoqueQualidade.mais_90_dias ||
+        0
     );
-
 
   const pctMais90 =
-    Number(
-      estoqueQualidade
-        .total_estoque ||
-        0
-    ) >
+    totalEstoque >
     0
       ? (
-          Number(
-            estoqueQualidade
-              .mais_90_dias ||
-              0
-          ) /
-          Number(
-            estoqueQualidade
-              .total_estoque
-          )
+          mais90 /
+          totalEstoque
         ) *
         100
       : null;
-
 
   const pctIntegro =
-    Number(
-      estoqueQualidade
-        .total_estoque ||
-        0
-    ) >
+    totalEstoque >
     0
       ? (
           Number(
-            estoqueQualidade
-              .integros ||
+            estoqueQualidade.integros ||
               0
           ) /
-          Number(
-            estoqueQualidade
-              .total_estoque
-          )
+          totalEstoque
         ) *
         100
       : null;
 
 
   /* =======================================================
-     NAVEGAÇÃO STOCK INTELLIGENCE
-  ======================================================= */
-
-  function abrirAgingEstoque(
-    faixa
-  ) {
-    const faixaNormalizada =
-      normalizarFaixaAging(
-        faixa
-      );
-
-    if (
-      !faixaNormalizada
-    ) {
-      return;
-    }
-
-    navigate(
-      `/v2/assurant/indicadores/estoque/aging?faixa=${encodeURIComponent(
-        faixaNormalizada
-      )}`
-    );
-  }
-
-
-  /* =======================================================
-     ETAPAS B2C / B2B
+     TEMPOS B2C / B2B
   ======================================================= */
 
   const etapasFonte =
@@ -2361,13 +2010,11 @@ export default function IndicadoresExecutivosV2Page() {
       ? dados.etapasSemanais
       : dados.etapasMensais;
 
-
   const kpisFonte =
     visualizacaoEtapa ===
     "semanal"
       ? dados.kpisSemanais
       : dados.kpisMensais;
-
 
   const periodoEtapaAtual =
     useMemo(
@@ -2393,17 +2040,14 @@ export default function IndicadoresExecutivosV2Page() {
             .sort()
             .reverse();
 
-        return (
-          periodos[0] ||
-          null
-        );
+        return periodos[0] ||
+          null;
       },
       [
         etapasFonte,
         canal,
       ]
     );
-
 
   const etapasAtuais =
     (
@@ -2418,7 +2062,6 @@ export default function IndicadoresExecutivosV2Page() {
         item.periodo_inicio ===
           periodoEtapaAtual
     );
-
 
   const kpiPeriodoEtapa =
     (
@@ -2435,38 +2078,44 @@ export default function IndicadoresExecutivosV2Page() {
     ) ||
     {};
 
-
   const totalBaseEtapa =
     Number(
-      kpiPeriodoEtapa
-        .itens ||
+      kpiPeriodoEtapa.itens ||
         0
     );
 
+  function coberturaEtapa(
+    etapa
+  ) {
+    if (
+      !totalBaseEtapa
+    ) {
+      return null;
+    }
 
-  const etapaBaixaCobertura =
-    (
-      etapa
-    ) => {
-      if (
-        !totalBaseEtapa
-      ) {
-        return false;
-      }
+    return (
+      Number(
+        etapa.amostra ||
+          0
+      ) /
+      totalBaseEtapa
+    ) *
+      100;
+  }
 
-      return (
-        (
-          Number(
-            etapa.amostra ||
-              0
-          ) /
-          totalBaseEtapa
-        ) *
-        100
-      ) <
+  function etapaBaixaCobertura(
+    etapa
+  ) {
+    const cobertura =
+      coberturaEtapa(
+        etapa
+      );
+
+    return cobertura !=
+      null &&
+      cobertura <
         20;
-    };
-
+  }
 
   const gargalos =
     etapasAtuais
@@ -2474,12 +2123,10 @@ export default function IndicadoresExecutivosV2Page() {
         (
           item
         ) =>
-          item
-            .variacao_mediana_pct !=
+          item.variacao_mediana_pct !=
             null &&
           Number(
-            item
-              .variacao_mediana_pct
+            item.variacao_mediana_pct
           ) >
             0 &&
           !etapaBaixaCobertura(
@@ -2492,12 +2139,10 @@ export default function IndicadoresExecutivosV2Page() {
           b
         ) =>
           Number(
-            b
-              .variacao_mediana_pct
+            b.variacao_mediana_pct
           ) -
           Number(
-            a
-              .variacao_mediana_pct
+            a.variacao_mediana_pct
           )
       )
       .slice(
@@ -2505,16 +2150,10 @@ export default function IndicadoresExecutivosV2Page() {
         5
       );
 
-
   const sinaisBaixaCobertura =
     etapasAtuais.filter(
       etapaBaixaCobertura
     );
-
-
-  /* =======================================================
-     EVOLUÇÃO LEAD TIME B2C / B2B
-  ======================================================= */
 
   const evolucaoSemanal =
     useMemo(
@@ -2594,7 +2233,33 @@ export default function IndicadoresExecutivosV2Page() {
 
 
   /* =======================================================
-     LOADING
+     NAVEGAÇÃO
+  ======================================================= */
+
+  function abrirAgingEstoque(
+    faixa
+  ) {
+    const faixaNormalizada =
+      normalizarFaixaAging(
+        faixa
+      );
+
+    if (
+      !faixaNormalizada
+    ) {
+      return;
+    }
+
+    navigate(
+      `/v2/assurant/indicadores/estoque/aging?faixa=${encodeURIComponent(
+        faixaNormalizada
+      )}`
+    );
+  }
+
+
+  /* =======================================================
+     LOADING / ERROR
   ======================================================= */
 
   if (
@@ -2603,7 +2268,7 @@ export default function IndicadoresExecutivosV2Page() {
     return (
       <div className="flex min-h-[520px] items-center justify-center">
         <div className="text-center">
-          <RefreshCw className="mx-auto h-6 w-6 animate-spin text-[#4C1D95]" />
+          <RefreshCw className="mx-auto h-6 w-6 animate-spin text-violet-700" />
 
           <div className="mt-3 text-sm font-bold text-slate-700">
             Consolidando operação...
@@ -2616,11 +2281,6 @@ export default function IndicadoresExecutivosV2Page() {
       </div>
     );
   }
-
-
-  /* =======================================================
-     ERRO
-  ======================================================= */
 
   if (
     error
@@ -2663,40 +2323,30 @@ export default function IndicadoresExecutivosV2Page() {
     <div className="space-y-6 pb-10">
 
       {/* ===================================================
-          HEADER
+          CABEÇALHO EXECUTIVO
       =================================================== */}
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col justify-between gap-5 xl:flex-row xl:items-center">
+      <header className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-col justify-between gap-5 px-5 py-5 xl:flex-row xl:items-center">
           <div>
             <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#211136] text-white">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-950 text-white">
                 <BarChart3 className="h-5 w-5" />
               </div>
 
               <div>
-                <h1 className="text-xl font-black tracking-tight text-slate-900">
+                <div className="text-[9px] font-black uppercase tracking-[0.15em] text-slate-400">
+                  Assurant Warehouse
+                </div>
+
+                <h1 className="mt-0.5 text-xl font-black tracking-tight text-slate-950">
                   Cockpit Operacional
                 </h1>
 
                 <p className="mt-0.5 text-xs text-slate-400">
-                  Liquida Preço · Assurant Warehouse
+                  Operação, qualidade, SLA, exceções e estoque em uma leitura contínua.
                 </p>
               </div>
-            </div>
-
-            <div className="mt-3 flex flex-wrap gap-2">
-              <StatusBadge type="violet">
-                Base analítica · Ago/2026 → Set/2026
-              </StatusBadge>
-
-              <StatusBadge type="good">
-                100% dos registros disponíveis
-              </StatusBadge>
-
-              <StatusBadge>
-                Sem amostragem · Sem projeção
-              </StatusBadge>
             </div>
           </div>
 
@@ -2741,142 +2391,249 @@ export default function IndicadoresExecutivosV2Page() {
             </button>
           </div>
         </div>
-      </div>
+
+        <MetricStrip
+          items={[
+            {
+              label:
+                "Recebidos",
+
+              value:
+                fmtNumero(
+                  operacaoMes.recebidos
+                ),
+
+              detail:
+                `${fmtVariacao(
+                  calcularVariacao(
+                    operacaoMes.recebidos,
+                    operacaoMesAnterior.recebidos
+                  )
+                )} vs mês anterior`,
+
+              tone:
+                "violet",
+            },
+
+            {
+              label:
+                "Funcional",
+
+              value:
+                fmtNumero(
+                  operacaoMes.funcional
+                ),
+
+              detail:
+                `${fmtNumero(
+                  operacaoMes.deficit_recebimento_funcional
+                )} de déficit`,
+            },
+
+            {
+              label:
+                "B2C expedido",
+
+              value:
+                fmtNumero(
+                  expedidosMes
+                ),
+
+              detail:
+                `${fmtNumero(
+                  mediaExpedicao,
+                  1
+                )} pedidos/dia`,
+
+              tone:
+                "good",
+            },
+
+            {
+              label:
+                "B2B faturado",
+
+              value:
+                fmtNumero(
+                  b2bMes.itens_faturados
+                ),
+
+              detail:
+                `${fmtNumero(
+                  b2bMes.itens_recebidos
+                )} itens recebidos`,
+            },
+
+            {
+              label:
+                "Estoque",
+
+              value:
+                fmtNumero(
+                  totalEstoque
+                ),
+
+              detail:
+                `${fmtPercentual(
+                  pctMais90
+                )} acima de 90 dias`,
+
+              tone:
+                pctMais90 !=
+                  null &&
+                pctMais90 >
+                  15
+                  ? "danger"
+                  : "warning",
+            },
+
+            {
+              label:
+                "Lead time ponta a ponta",
+
+              value:
+                fmtHoras(
+                  leadtimeWarehouse.ponta_a_ponta_h
+                ),
+
+              detail:
+                `${fmtNumero(
+                  leadtimeWarehouse.aparelhos
+                )} registros válidos`,
+            },
+          ]}
+        />
+      </header>
 
 
       {/* ===================================================
-          1. WAREHOUSE
+          1. RECEBIMENTO E PRODUÇÃO
       =================================================== */}
 
-      <SectionCard
-        title={`1. Recebimento & Produção — ${fmtMesLongo(
+      <Section
+        index="01"
+        title={`Recebimento & Produção — ${fmtMesLongo(
           mesSelecionado
         )}`}
-        subtitle="Fluxo operacional desde entrada física até Oracle"
+        subtitle="Curva diária do fluxo físico, permitindo enxergar descompasso entre entrada, triagens, laudos e Oracle."
       >
-        <div className="grid gap-4 p-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-          <KpiCard
-            title="Recebidos"
-            value={fmtNumero(
-              operacaoMes.recebidos
-            )}
-            subtitle="Vouchers recebidos"
-            variation={calcularVariacao(
-              operacaoMes.recebidos,
-              operacaoMesAnterior.recebidos
-            )}
-            neutro
-            icon={
-              Truck
-            }
-            accent="violet"
-          />
+        <MetricStrip
+          items={[
+            {
+              label:
+                "Recebidos",
 
-          <KpiCard
-            title="Triagem Funcional"
-            value={fmtNumero(
-              operacaoMes.funcional
-            )}
-            subtitle="Aparelhos processados"
-            variation={calcularVariacao(
-              operacaoMes.funcional,
-              operacaoMesAnterior.funcional
-            )}
-            neutro
-            icon={
-              Wrench
-            }
-            accent="blue"
-          />
+              value:
+                fmtNumero(
+                  operacaoMes.recebidos
+                ),
 
-          <KpiCard
-            title="Triagem Cosmética"
-            value={fmtNumero(
-              operacaoMes.cosmetica
-            )}
-            subtitle="Classificações cosméticas"
-            variation={calcularVariacao(
-              operacaoMes.cosmetica,
-              operacaoMesAnterior.cosmetica
-            )}
-            neutro
-            icon={
-              Layers3
-            }
-            accent="emerald"
-          />
+              detail:
+                `${fmtVariacao(
+                  calcularVariacao(
+                    operacaoMes.recebidos,
+                    operacaoMesAnterior.recebidos
+                  )
+                )} vs anterior`,
+            },
 
-          <KpiCard
-            title="Laudos"
-            value={fmtNumero(
-              operacaoMes.laudos
-            )}
-            subtitle="Laudos gerados"
-            variation={calcularVariacao(
-              operacaoMes.laudos,
-              operacaoMesAnterior.laudos
-            )}
-            neutro
-            icon={
-              FileWarning
-            }
-            accent="amber"
-          />
+            {
+              label:
+                "Funcional",
 
-          <KpiCard
-            title="Entrada Oracle"
-            value={fmtNumero(
-              operacaoMes.oracle
-            )}
-            subtitle="Entradas registradas"
-            variation={calcularVariacao(
-              operacaoMes.oracle,
-              operacaoMesAnterior.oracle
-            )}
-            neutro
-            icon={
-              Database
-            }
-            accent="slate"
-          />
+              value:
+                fmtNumero(
+                  operacaoMes.funcional
+                ),
 
-          <KpiCard
-            title="Déficit Entrada → Funcional"
-            value={fmtNumero(
-              operacaoMes
-                .deficit_recebimento_funcional
-            )}
-            subtitle={`Pico diário: ${fmtNumero(
-              operacaoMes
-                .maior_entrada_dia
-            )}`}
-            variation={
-              null
-            }
-            icon={
-              AlertTriangle
-            }
-            accent="rose"
-          />
-        </div>
+              detail:
+                `${fmtVariacao(
+                  calcularVariacao(
+                    operacaoMes.funcional,
+                    operacaoMesAnterior.funcional
+                  )
+                )} vs anterior`,
+            },
 
-        <div className="border-t border-slate-100 p-5">
-          <div className="mb-4">
-            <div className="text-xs font-black text-slate-700">
-              Produção diária
-            </div>
+            {
+              label:
+                "Cosmética",
 
-            <div className="mt-1 text-[10px] text-slate-400">
-              Recebimento, funcional e cosmética
-            </div>
-          </div>
+              value:
+                fmtNumero(
+                  operacaoMes.cosmetica
+                ),
 
-          <div className="h-[290px]">
+              detail:
+                `${fmtVariacao(
+                  calcularVariacao(
+                    operacaoMes.cosmetica,
+                    operacaoMesAnterior.cosmetica
+                  )
+                )} vs anterior`,
+            },
+
+            {
+              label:
+                "Laudos",
+
+              value:
+                fmtNumero(
+                  operacaoMes.laudos
+                ),
+
+              detail:
+                `${fmtVariacao(
+                  calcularVariacao(
+                    operacaoMes.laudos,
+                    operacaoMesAnterior.laudos
+                  )
+                )} vs anterior`,
+            },
+
+            {
+              label:
+                "Oracle",
+
+              value:
+                fmtNumero(
+                  operacaoMes.oracle
+                ),
+
+              detail:
+                `${fmtVariacao(
+                  calcularVariacao(
+                    operacaoMes.oracle,
+                    operacaoMesAnterior.oracle
+                  )
+                )} vs anterior`,
+            },
+
+            {
+              label:
+                "Pico de entrada",
+
+              value:
+                fmtNumero(
+                  operacaoMes.maior_entrada_dia
+                ),
+
+              detail:
+                "maior entrada diária",
+
+              tone:
+                "warning",
+            },
+          ]}
+        />
+
+        <div className="h-[340px] p-5">
+          {operacaoDiariaMes.length ? (
             <ResponsiveContainer
               width="100%"
               height="100%"
             >
-              <BarChart
+              <ComposedChart
                 data={
                   operacaoDiariaMes
                 }
@@ -2924,7 +2681,7 @@ export default function IndicadoresExecutivosV2Page() {
 
                 <Tooltip
                   content={
-                    <TempoTooltip unidade="numero" />
+                    <NumeroTooltip />
                   }
                 />
 
@@ -2935,197 +2692,345 @@ export default function IndicadoresExecutivosV2Page() {
                   }}
                 />
 
-                <Bar
+                <Area
+                  type="monotone"
                   dataKey="recebidos"
                   name="Recebidos"
-                  fill="#6D28D9"
-                  radius={[
-                    3,
-                    3,
-                    0,
-                    0,
-                  ]}
+                  fill="#EDE9FE"
+                  stroke="#6D28D9"
+                  strokeWidth={
+                    2
+                  }
                 />
 
-                <Bar
+                <Line
+                  type="monotone"
                   dataKey="funcional"
                   name="Funcional"
-                  fill="#475569"
-                  radius={[
-                    3,
-                    3,
-                    0,
-                    0,
-                  ]}
+                  stroke="#0F172A"
+                  strokeWidth={
+                    2.4
+                  }
+                  dot={
+                    false
+                  }
+                  connectNulls
                 />
 
-                <Bar
+                <Line
+                  type="monotone"
                   dataKey="cosmetica"
                   name="Cosmética"
-                  fill="#94A3B8"
-                  radius={[
-                    3,
-                    3,
-                    0,
-                    0,
-                  ]}
+                  stroke="#0284C7"
+                  strokeWidth={
+                    2
+                  }
+                  dot={
+                    false
+                  }
+                  connectNulls
                 />
-              </BarChart>
+
+                <Line
+                  type="monotone"
+                  dataKey="laudos"
+                  name="Laudos"
+                  stroke="#F59E0B"
+                  strokeWidth={
+                    1.8
+                  }
+                  dot={
+                    false
+                  }
+                  connectNulls
+                />
+
+                <Line
+                  type="monotone"
+                  dataKey="oracle"
+                  name="Oracle"
+                  stroke="#059669"
+                  strokeWidth={
+                    2
+                  }
+                  dot={
+                    false
+                  }
+                  connectNulls
+                />
+              </ComposedChart>
             </ResponsiveContainer>
-          </div>
+          ) : (
+            <EmptyState>
+              Sem produção diária disponível para este mês.
+            </EmptyState>
+          )}
         </div>
-      </SectionCard>
+      </Section>
 
 
       {/* ===================================================
           2. LEAD TIME WAREHOUSE
       =================================================== */}
 
-      <SectionCard
-        title="2. Lead Time do Warehouse"
-        subtitle="Medianas das etapas de triagem e entrada Oracle"
+      <Section
+        index="02"
+        title="Lead Time do Warehouse"
+        subtitle="Comparação das medianas de cada transição do fluxo operacional."
       >
-        <div className="grid gap-4 p-5 md:grid-cols-2 xl:grid-cols-5">
-          <KpiCard
-            title="Recebimento → Funcional"
-            value={fmtHoras(
-              leadtimeWarehouse
-                .receb_funcional_h
-            )}
-            subtitle="Mediana"
-            icon={
-              Clock3
-            }
-            accent="violet"
-          />
+        <div className="grid gap-5 p-5 xl:grid-cols-[1.45fr_0.55fr]">
+          <div className="h-[310px]">
+            <ResponsiveContainer
+              width="100%"
+              height="100%"
+            >
+              <BarChart
+                data={
+                  leadtimeEtapas
+                }
+                layout="vertical"
+                margin={{
+                  left:
+                    35,
 
-          <KpiCard
-            title="Funcional → Cosmética"
-            value={fmtHoras(
-              leadtimeWarehouse
-                .funcional_cosmetica_h
-            )}
-            subtitle="Mediana"
-            icon={
-              Clock3
-            }
-            accent="blue"
-          />
+                  right:
+                    20,
+                }}
+              >
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  horizontal={
+                    false
+                  }
+                  stroke="#E2E8F0"
+                />
 
-          <KpiCard
-            title="Funcional → Laudo"
-            value={fmtHoras(
-              leadtimeWarehouse
-                .funcional_laudo_h
-            )}
-            subtitle="Mediana"
-            icon={
-              Clock3
-            }
-            accent="amber"
-          />
+                <XAxis
+                  type="number"
+                  tick={{
+                    fontSize:
+                      9,
 
-          <KpiCard
-            title="Cosmética → Oracle"
-            value={fmtHoras(
-              leadtimeWarehouse
-                .cosmetica_oracle_h
-            )}
-            subtitle="Mediana"
-            icon={
-              Clock3
-            }
-            accent="emerald"
-          />
+                    fill:
+                      "#94A3B8",
+                  }}
+                  axisLine={
+                    false
+                  }
+                  tickLine={
+                    false
+                  }
+                  tickFormatter={(
+                    value
+                  ) =>
+                    `${fmtNumero(
+                      value,
+                      1
+                    )}h`
+                  }
+                />
 
-          <KpiCard
-            title="Ponta a ponta"
-            value={fmtHoras(
-              leadtimeWarehouse
-                .ponta_a_ponta_h
-            )}
-            subtitle={`Registros válidos: ${fmtNumero(
-              leadtimeWarehouse
-                .aparelhos
-            )}`}
-            icon={
-              Gauge
-            }
-            accent="rose"
-          />
-        </div>
+                <YAxis
+                  type="category"
+                  dataKey="etapa"
+                  width={
+                    150
+                  }
+                  tick={{
+                    fontSize:
+                      10,
 
-        {Number(
-          leadtimeWarehouse
-            .excluidos_tempo_zero ||
-            0
-        ) >
-          0 && (
-          <div className="border-t border-amber-100 bg-amber-50 px-5 py-3 text-[10px] text-amber-800">
-            <strong>
-              Transparência:
-            </strong>{" "}
+                    fill:
+                      "#64748B",
+                  }}
+                  axisLine={
+                    false
+                  }
+                  tickLine={
+                    false
+                  }
+                />
 
-            {fmtNumero(
-              leadtimeWarehouse
-                .excluidos_tempo_zero
-            )}{" "}
+                <Tooltip
+                  formatter={(
+                    value
+                  ) => [
+                    fmtHoras(
+                      value
+                    ),
+                    "Mediana",
+                  ]}
+                />
 
-            registros de Recebimento → Funcional com intervalo
-            inferior a 1h foram identificados separadamente para
-            não distorcer a mediana operacional.
+                <Bar
+                  dataKey="horas"
+                  name="Mediana"
+                  fill="#475569"
+                  radius={[
+                    0,
+                    5,
+                    5,
+                    0,
+                  ]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
-        )}
-      </SectionCard>
+
+          <div className="flex flex-col justify-between rounded-xl border border-slate-200 bg-slate-50 p-5">
+            <div>
+              <div className="text-[9px] font-black uppercase tracking-[0.12em] text-slate-400">
+                Tempo ponta a ponta
+              </div>
+
+              <div className="mt-2 text-4xl font-black tracking-tight text-slate-950">
+                {fmtHoras(
+                  leadtimeWarehouse.ponta_a_ponta_h
+                )}
+              </div>
+
+              <div className="mt-2 text-xs leading-5 text-slate-500">
+                Mediana calculada sobre{" "}
+                <strong className="text-slate-700">
+                  {fmtNumero(
+                    leadtimeWarehouse.aparelhos
+                  )}
+                </strong>{" "}
+                registros válidos.
+              </div>
+            </div>
+
+            {Number(
+              leadtimeWarehouse.excluidos_tempo_zero ||
+                0
+            ) >
+              0 && (
+              <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-[10px] leading-4 text-amber-800">
+                {fmtNumero(
+                  leadtimeWarehouse.excluidos_tempo_zero
+                )}{" "}
+                registros inferiores a 1h foram segregados para não distorcer o tempo Recebimento → Funcional.
+              </div>
+            )}
+          </div>
+        </div>
+      </Section>
 
 
       {/* ===================================================
           3. FILAS
       =================================================== */}
 
-      <SectionCard
-        title="3. Filas Operacionais"
-        subtitle="Posição atual da operação por status"
+      <Section
+        index="03"
+        title="Filas Operacionais"
+        subtitle="Concentração do backlog atual por estágio da operação."
       >
-        <div className="grid gap-5 p-5 xl:grid-cols-2">
-          <div className="space-y-4">
-            {filasOrdenadas
-              .slice(
-                0,
-                10
-              )
-              .map(
-                (
-                  item
-                ) => (
-                  <BarraLinha
-                    key={
-                      item.etapa
+        <div className="grid gap-5 p-5 xl:grid-cols-[1.45fr_0.55fr]">
+          <div className="h-[330px]">
+            {filasOrdenadas.length ? (
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+              >
+                <BarChart
+                  data={
+                    filasOrdenadas.slice(
+                      0,
+                      12
+                    )
+                  }
+                  layout="vertical"
+                  margin={{
+                    left:
+                      30,
+
+                    right:
+                      20,
+                  }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    horizontal={
+                      false
                     }
-                    label={
-                      item.etapa
+                    stroke="#E2E8F0"
+                  />
+
+                  <XAxis
+                    type="number"
+                    tick={{
+                      fontSize:
+                        9,
+
+                      fill:
+                        "#94A3B8",
+                    }}
+                    axisLine={
+                      false
                     }
-                    value={
-                      item.aparelhos
-                    }
-                    max={
-                      maxFila
+                    tickLine={
+                      false
                     }
                   />
-                )
-              )}
+
+                  <YAxis
+                    type="category"
+                    dataKey="etapa"
+                    width={
+                      155
+                    }
+                    tick={{
+                      fontSize:
+                        9,
+
+                      fill:
+                        "#64748B",
+                    }}
+                    axisLine={
+                      false
+                    }
+                    tickLine={
+                      false
+                    }
+                  />
+
+                  <Tooltip
+                    content={
+                      <NumeroTooltip />
+                    }
+                  />
+
+                  <Bar
+                    dataKey="aparelhos"
+                    name="Aparelhos"
+                    fill="#0F172A"
+                    radius={[
+                      0,
+                      5,
+                      5,
+                      0,
+                    ]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <EmptyState>
+                Nenhuma fila operacional retornada.
+              </EmptyState>
+            )}
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <div className="text-xs font-black text-slate-700">
-              Leitura operacional
+            <div className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
+              Maiores concentrações
             </div>
 
-            <div className="mt-4 space-y-3">
+            <div className="mt-3 divide-y divide-slate-200">
               {filasOrdenadas
                 .slice(
                   0,
-                  5
+                  6
                 )
                 .map(
                   (
@@ -3133,16 +3038,16 @@ export default function IndicadoresExecutivosV2Page() {
                     index
                   ) => (
                     <div
-                      key={`fila-${item.etapa}`}
-                      className="flex items-center justify-between rounded-lg bg-white px-3 py-2"
+                      key={`${item.etapa}-${index}`}
+                      className="flex items-center justify-between gap-4 py-3"
                     >
-                      <div className="flex items-center gap-2">
-                        <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-violet-50 text-[9px] font-black text-violet-700">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white text-[9px] font-black text-slate-500">
                           {index +
                             1}
-                        </div>
+                        </span>
 
-                        <span className="text-[10px] font-bold text-slate-600">
+                        <span className="truncate text-[10px] font-semibold text-slate-600">
                           {item.etapa}
                         </span>
                       </div>
@@ -3158,311 +3063,478 @@ export default function IndicadoresExecutivosV2Page() {
             </div>
           </div>
         </div>
-      </SectionCard>
+      </Section>
 
 
       {/* ===================================================
-          4. QUALIDADE INBOUND
+          4. QUALIDADE
       =================================================== */}
 
-      <SectionCard
-        title="4. Qualidade do Inbound"
-        subtitle={`Distribuição cosmética • ${fmtMesLongo(
+      <Section
+        index="04"
+        title={`Qualidade do Inbound — ${fmtMesLongo(
           mesSelecionado
         )}`}
+        subtitle="Distribuição das classificações cosméticas e exposição das grades de menor qualidade."
       >
-        <div className="grid gap-5 p-5 xl:grid-cols-[1.6fr_1fr]">
-          <div className="space-y-4">
-            {gradesMes.map(
-              (
-                item
-              ) => (
-                <BarraLinha
-                  key={
-                    item.grade
+        <MetricStrip
+          items={[
+            {
+              label:
+                "Total classificado",
+
+              value:
+                fmtNumero(
+                  totalGrades
+                ),
+
+              detail:
+                "aparelhos com grade",
+            },
+
+            {
+              label:
+                "Quebrado + Regular",
+
+              value:
+                fmtNumero(
+                  naoAlocaveis
+                ),
+
+              detail:
+                fmtPercentual(
+                  pctNaoAlocavel
+                ),
+
+              tone:
+                "danger",
+            },
+          ]}
+        />
+
+        <div className="h-[330px] p-5">
+          {gradesMes.length ? (
+            <ResponsiveContainer
+              width="100%"
+              height="100%"
+            >
+              <BarChart
+                data={
+                  gradesMes
+                }
+              >
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  vertical={
+                    false
                   }
-                  label={
-                    item.grade
+                  stroke="#E2E8F0"
+                />
+
+                <XAxis
+                  dataKey="grade"
+                  tick={{
+                    fontSize:
+                      9,
+
+                    fill:
+                      "#64748B",
+                  }}
+                  axisLine={
+                    false
                   }
-                  value={
-                    item.aparelhos
+                  tickLine={
+                    false
                   }
-                  max={
-                    maxGrade
-                  }
-                  detalhe={
-                    totalGrades >
+                  interval={
                     0
-                      ? `• ${fmtPercentual(
-                          (
-                            Number(
-                              item.aparelhos
-                            ) /
-                            totalGrades
-                          ) *
-                            100
-                        )}`
-                      : ""
                   }
                 />
-              )
-            )}
-          </div>
 
-          <div className="space-y-3">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <div className="text-[9px] font-black uppercase text-slate-400">
-                Total classificado
-              </div>
+                <YAxis
+                  tick={{
+                    fontSize:
+                      9,
 
-              <div className="mt-2 text-3xl font-black text-slate-900">
-                {fmtNumero(
-                  totalGrades
-                )}
-              </div>
-            </div>
+                    fill:
+                      "#94A3B8",
+                  }}
+                  axisLine={
+                    false
+                  }
+                  tickLine={
+                    false
+                  }
+                />
 
-            <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
-              <div className="text-[9px] font-black uppercase text-rose-500">
-                Quebrado + Regular
-              </div>
+                <Tooltip
+                  content={
+                    <NumeroTooltip />
+                  }
+                />
 
-              <div className="mt-2 text-3xl font-black text-rose-800">
-                {fmtPercentual(
-                  pctNaoAlocavel
-                )}
-              </div>
-
-              <div className="mt-1 text-[10px] text-rose-600">
-                {fmtNumero(
-                  naoAlocaveis
-                )}{" "}
-
-                aparelhos classificados
-              </div>
-            </div>
-          </div>
+                <Bar
+                  dataKey="aparelhos"
+                  name="Aparelhos"
+                  fill="#475569"
+                  radius={[
+                    5,
+                    5,
+                    0,
+                    0,
+                  ]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <EmptyState>
+              Sem classificação cosmética disponível.
+            </EmptyState>
+          )}
         </div>
-      </SectionCard>
+      </Section>
 
 
       {/* ===================================================
           5. B2B
       =================================================== */}
 
-      <SectionCard
-        title={`5. Performance B2B — ${fmtMesLongo(
+      <Section
+        index="05"
+        title={`Performance B2B — ${fmtMesLongo(
           mesSelecionado
         )}`}
-        subtitle="Entrada de pedidos, separação e faturamento"
+        subtitle="Recebimento de demanda, volume de itens, faturamento e erros de nota ao longo do mês."
       >
-        <div className="grid gap-4 p-5 sm:grid-cols-2 xl:grid-cols-5">
-          <KpiCard
-            title="Pedidos recebidos"
-            value={fmtNumero(
-              b2bMes
-                .pedidos_recebidos
-            )}
-            subtitle="Pedidos B2B"
-            variation={calcularVariacao(
-              b2bMes
-                .pedidos_recebidos,
+        <MetricStrip
+          items={[
+            {
+              label:
+                "Pedidos",
 
-              b2bMesAnterior
-                .pedidos_recebidos
-            )}
-            neutro
-            icon={
-              PackageCheck
-            }
-            accent="violet"
-          />
+              value:
+                fmtNumero(
+                  b2bMes.pedidos_recebidos
+                ),
 
-          <KpiCard
-            title="Itens recebidos"
-            value={fmtNumero(
-              b2bMes
-                .itens_recebidos
-            )}
-            subtitle="Volume contratado"
-            variation={calcularVariacao(
-              b2bMes
-                .itens_recebidos,
+              detail:
+                `${fmtVariacao(
+                  calcularVariacao(
+                    b2bMes.pedidos_recebidos,
+                    b2bMesAnterior.pedidos_recebidos
+                  )
+                )} vs anterior`,
+            },
 
-              b2bMesAnterior
-                .itens_recebidos
-            )}
-            neutro
-            icon={
-              Boxes
-            }
-            accent="blue"
-          />
+            {
+              label:
+                "Itens recebidos",
 
-          <KpiCard
-            title="Itens faturados"
-            value={fmtNumero(
-              b2bMes
-                .itens_faturados
-            )}
-            subtitle="Itens com faturamento"
-            variation={calcularVariacao(
-              b2bMes
-                .itens_faturados,
+              value:
+                fmtNumero(
+                  b2bMes.itens_recebidos
+                ),
 
-              b2bMesAnterior
-                .itens_faturados
-            )}
-            neutro
-            icon={
-              CheckCircle2
-            }
-            accent="emerald"
-          />
+              detail:
+                `${fmtVariacao(
+                  calcularVariacao(
+                    b2bMes.itens_recebidos,
+                    b2bMesAnterior.itens_recebidos
+                  )
+                )} vs anterior`,
+            },
 
-          <KpiCard
-            title="Notas emitidas"
-            value={fmtNumero(
-              b2bMes
-                .notas_emitidas
-            )}
-            subtitle="NFs B2B"
-            variation={calcularVariacao(
-              b2bMes
-                .notas_emitidas,
+            {
+              label:
+                "Itens faturados",
 
-              b2bMesAnterior
-                .notas_emitidas
-            )}
-            neutro
-            icon={
-              Database
-            }
-            accent="slate"
-          />
+              value:
+                fmtNumero(
+                  b2bMes.itens_faturados
+                ),
 
-          <KpiCard
-            title="Erros de NF"
-            value={fmtNumero(
-              b2bMes
-                .erros_nf
-            )}
-            subtitle="Itens sinalizados"
-            variation={calcularVariacao(
-              b2bMes
-                .erros_nf,
+              detail:
+                `${fmtVariacao(
+                  calcularVariacao(
+                    b2bMes.itens_faturados,
+                    b2bMesAnterior.itens_faturados
+                  )
+                )} vs anterior`,
 
-              b2bMesAnterior
-                .erros_nf
-            )}
-            inverso
-            icon={
-              AlertTriangle
-            }
-            accent="rose"
-          />
+              tone:
+                "good",
+            },
+
+            {
+              label:
+                "Notas emitidas",
+
+              value:
+                fmtNumero(
+                  b2bMes.notas_emitidas
+                ),
+
+              detail:
+                `${fmtVariacao(
+                  calcularVariacao(
+                    b2bMes.notas_emitidas,
+                    b2bMesAnterior.notas_emitidas
+                  )
+                )} vs anterior`,
+            },
+
+            {
+              label:
+                "Erros NF",
+
+              value:
+                fmtNumero(
+                  b2bMes.erros_nf
+                ),
+
+              detail:
+                `${fmtVariacao(
+                  calcularVariacao(
+                    b2bMes.erros_nf,
+                    b2bMesAnterior.erros_nf
+                  )
+                )} vs anterior`,
+
+              tone:
+                Number(
+                  b2bMes.erros_nf ||
+                    0
+                ) >
+                0
+                  ? "danger"
+                  : "good",
+            },
+          ]}
+        />
+
+        <div className="h-[330px] p-5">
+          {b2bDiarioMes.length ? (
+            <ResponsiveContainer
+              width="100%"
+              height="100%"
+            >
+              <ComposedChart
+                data={
+                  b2bDiarioMes
+                }
+              >
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  vertical={
+                    false
+                  }
+                  stroke="#E2E8F0"
+                />
+
+                <XAxis
+                  dataKey="label"
+                  tick={{
+                    fontSize:
+                      9,
+
+                    fill:
+                      "#94A3B8",
+                  }}
+                  axisLine={
+                    false
+                  }
+                  tickLine={
+                    false
+                  }
+                />
+
+                <YAxis
+                  tick={{
+                    fontSize:
+                      9,
+
+                    fill:
+                      "#94A3B8",
+                  }}
+                  axisLine={
+                    false
+                  }
+                  tickLine={
+                    false
+                  }
+                />
+
+                <Tooltip
+                  content={
+                    <NumeroTooltip />
+                  }
+                />
+
+                <Legend
+                  wrapperStyle={{
+                    fontSize:
+                      "10px",
+                  }}
+                />
+
+                <Bar
+                  dataKey="itens_recebidos"
+                  name="Itens recebidos"
+                  fill="#DDD6FE"
+                  radius={[
+                    4,
+                    4,
+                    0,
+                    0,
+                  ]}
+                />
+
+                <Line
+                  type="monotone"
+                  dataKey="itens_faturados"
+                  name="Itens faturados"
+                  stroke="#059669"
+                  strokeWidth={
+                    2.5
+                  }
+                  dot={
+                    false
+                  }
+                  connectNulls
+                />
+
+                <Line
+                  type="monotone"
+                  dataKey="erros_nf"
+                  name="Erros NF"
+                  stroke="#E11D48"
+                  strokeWidth={
+                    1.8
+                  }
+                  dot={
+                    false
+                  }
+                  connectNulls
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          ) : (
+            <EmptyState>
+              Sem histórico diário B2B para este mês.
+            </EmptyState>
+          )}
         </div>
-      </SectionCard>
+      </Section>
 
 
       {/* ===================================================
-          6. B2C CANAIS
+          6. B2C
       =================================================== */}
 
-      <SectionCard
-        title={`6. Performance B2C por Canal — ${fmtMesLongo(
+      <Section
+        index="06"
+        title={`Performance B2C por Canal — ${fmtMesLongo(
           mesSelecionado
         )}`}
-        subtitle="Pagamento, processamento, cancelamentos e tempo de ciclo"
+        subtitle="Pagamento, processamento, cancelamento, SLA e expedição por canal."
       >
-        <div className="grid gap-4 border-b border-slate-100 p-5 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <div className="text-[9px] font-black uppercase text-slate-400">
-              Expedidos
-            </div>
+        <MetricStrip
+          items={[
+            {
+              label:
+                "Expedidos",
 
-            <div className="mt-2 text-3xl font-black text-slate-900">
-              {fmtNumero(
-                expedidosMes
-              )}
-            </div>
-          </div>
+              value:
+                fmtNumero(
+                  expedidosMes
+                ),
 
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <div className="text-[9px] font-black uppercase text-slate-400">
-              Dias com expedição
-            </div>
+              detail:
+                "pedidos no mês",
 
-            <div className="mt-2 text-3xl font-black text-slate-900">
-              {fmtNumero(
-                diasExpedicao
-              )}
-            </div>
-          </div>
+              tone:
+                "good",
+            },
 
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <div className="text-[9px] font-black uppercase text-slate-400">
-              Média / dia expedido
-            </div>
+            {
+              label:
+                "Dias com expedição",
 
-            <div className="mt-2 text-3xl font-black text-slate-900">
-              {fmtNumero(
-                mediaExpedicao,
-                1
-              )}
-            </div>
-          </div>
+              value:
+                fmtNumero(
+                  diasExpedicao
+                ),
 
-          <div className="rounded-xl border border-violet-200 bg-violet-50 p-4">
-            <div className="text-[9px] font-black uppercase text-violet-500">
-              Canais ativos
-            </div>
+              detail:
+                "dias produtivos",
+            },
 
-            <div className="mt-2 text-3xl font-black text-violet-800">
-              {fmtNumero(
-                canaisMes.length
-              )}
-            </div>
-          </div>
-        </div>
+            {
+              label:
+                "Média / dia",
+
+              value:
+                fmtNumero(
+                  mediaExpedicao,
+                  1
+                ),
+
+              detail:
+                "pedidos por dia",
+            },
+
+            {
+              label:
+                "Canais ativos",
+
+              value:
+                fmtNumero(
+                  canaisMes.length
+                ),
+
+              detail:
+                "marketplaces",
+            },
+          ]}
+        />
 
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1050px]">
             <thead>
               <tr className="bg-slate-50">
-                <th className="px-5 py-3 text-left text-[9px] font-black uppercase text-slate-400">
+                <th className="px-5 py-3 text-left text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
                   Marketplace
                 </th>
 
-                <th className="px-3 py-3 text-right text-[9px] font-black uppercase text-slate-400">
+                <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
                   Pagos
                 </th>
 
-                <th className="px-3 py-3 text-right text-[9px] font-black uppercase text-slate-400">
+                <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
                   Embalados
                 </th>
 
-                <th className="px-3 py-3 text-right text-[9px] font-black uppercase text-slate-400">
+                <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
                   Cancelados
                 </th>
 
-                <th className="px-3 py-3 text-right text-[9px] font-black uppercase text-slate-400">
+                <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
                   Ciclos válidos
                 </th>
 
-                <th className="px-3 py-3 text-right text-[9px] font-black uppercase text-slate-400">
+                <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
                   ≤ 24h
                 </th>
 
-                <th className="px-3 py-3 text-right text-[9px] font-black uppercase text-slate-400">
-                  SLA ≤24h
+                <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
+                  SLA
                 </th>
 
-                <th className="px-3 py-3 text-right text-[9px] font-black uppercase text-slate-400">
+                <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
                   Mediana
                 </th>
 
-                <th className="px-5 py-3 text-right text-[9px] font-black uppercase text-slate-400">
+                <th className="px-5 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
                   P90
                 </th>
               </tr>
@@ -3477,64 +3549,65 @@ export default function IndicadoresExecutivosV2Page() {
                     key={
                       row.marketplace
                     }
-                    className="hover:bg-slate-50"
+                    className="transition hover:bg-slate-50/70"
                   >
                     <td className="px-5 py-3 text-xs font-black text-slate-700">
                       {row.marketplace}
                     </td>
 
-                    <td className="px-3 py-3 text-right text-xs font-bold text-slate-600">
+                    <td className="px-3 py-3 text-right text-xs font-semibold text-slate-600">
                       {fmtNumero(
                         row.pagos
                       )}
                     </td>
 
-                    <td className="px-3 py-3 text-right text-xs font-bold text-slate-600">
+                    <td className="px-3 py-3 text-right text-xs font-semibold text-slate-600">
                       {fmtNumero(
                         row.embalados
                       )}
                     </td>
 
-                    <td className="px-3 py-3 text-right text-xs font-bold text-slate-600">
+                    <td className="px-3 py-3 text-right text-xs font-semibold text-slate-600">
                       {fmtNumero(
                         row.cancelados
                       )}
                     </td>
 
-                    <td className="px-3 py-3 text-right text-xs font-bold text-slate-600">
+                    <td className="px-3 py-3 text-right text-xs font-semibold text-slate-600">
                       {fmtNumero(
                         row.ciclos_validos
                       )}
                     </td>
 
-                    <td className="px-3 py-3 text-right text-xs font-bold text-slate-600">
+                    <td className="px-3 py-3 text-right text-xs font-semibold text-slate-600">
                       {fmtNumero(
                         row.ate_24h
                       )}
                     </td>
 
-                    <td className="px-3 py-3 text-right">
-                      <StatusBadge
-                        type={
-                          Number(
-                            row.pct_ate_24h ||
-                              0
-                          ) >=
-                          90
-                            ? "good"
-                            : Number(
-                                  row.pct_ate_24h ||
-                                    0
-                                ) >=
-                                80
-                              ? "warning"
-                              : "danger"
-                        }
-                      >
-                        {fmtPercentual(
-                          row.pct_ate_24h
-                        )}
-                      </StatusBadge>
+                    <td
+                      className={[
+                        "px-3 py-3 text-right text-xs font-black",
+                        Number(
+                          row.pct_ate_24h ||
+                            0
+                        ) >=
+                        90
+                          ? "text-emerald-700"
+                          : Number(
+                                row.pct_ate_24h ||
+                                  0
+                              ) >=
+                              80
+                            ? "text-amber-700"
+                            : "text-rose-700",
+                      ].join(
+                        " "
+                      )}
+                    >
+                      {fmtPercentual(
+                        row.pct_ate_24h
+                      )}
                     </td>
 
                     <td className="px-3 py-3 text-right text-xs font-black text-slate-700">
@@ -3555,88 +3628,198 @@ export default function IndicadoresExecutivosV2Page() {
           </table>
         </div>
 
-        <div className="border-t border-slate-100 p-5">
-          <div className="mb-4">
-            <div className="text-xs font-black text-slate-700">
-              Distribuição dos tempos de ciclo
+        <div className="grid gap-6 border-t border-slate-100 p-5 xl:grid-cols-2">
+          <div>
+            <div className="mb-3">
+              <div className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-500">
+                Distribuição dos ciclos
+              </div>
+
+              <div className="mt-1 text-[10px] text-slate-400">
+                Faixas reais de tempo de processamento.
+              </div>
             </div>
 
-            <div className="mt-1 text-[10px] text-slate-400">
-              Todos os ciclos com timestamps válidos
+            <div className="h-[270px]">
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+              >
+                <BarChart
+                  data={
+                    faixasB2CChart
+                  }
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={
+                      false
+                    }
+                    stroke="#E2E8F0"
+                  />
+
+                  <XAxis
+                    dataKey="faixa"
+                    tick={{
+                      fontSize:
+                        9,
+
+                      fill:
+                        "#64748B",
+                    }}
+                    axisLine={
+                      false
+                    }
+                    tickLine={
+                      false
+                    }
+                  />
+
+                  <YAxis
+                    tick={{
+                      fontSize:
+                        9,
+
+                      fill:
+                        "#94A3B8",
+                    }}
+                    axisLine={
+                      false
+                    }
+                    tickLine={
+                      false
+                    }
+                  />
+
+                  <Tooltip
+                    content={
+                      <NumeroTooltip />
+                    }
+                  />
+
+                  <Bar
+                    dataKey="pedidos"
+                    name="Pedidos"
+                    fill="#475569"
+                    radius={[
+                      5,
+                      5,
+                      0,
+                      0,
+                    ]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            {[
-              "Até 12h",
-              "12 a 24h",
-              "24 a 48h",
-              "Mais de 48h",
-            ].map(
-              (
-                faixa
-              ) => {
-                const total =
-                  faixasMes
-                    .filter(
-                      (
-                        row
-                      ) =>
-                        normalizarTexto(
-                          row.faixa
-                        ) ===
-                        normalizarTexto(
-                          faixa
-                        )
-                    )
-                    .reduce(
-                      (
-                        soma,
-                        row
-                      ) =>
-                        soma +
-                        Number(
-                          row.pedidos ||
-                            0
-                        ),
-                      0
-                    );
+          <div>
+            <div className="mb-3">
+              <div className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-500">
+                Expedição diária
+              </div>
 
-                return (
-                  <div
-                    key={
-                      faixa
+              <div className="mt-1 text-[10px] text-slate-400">
+                Distribuição diária dos pedidos expedidos.
+              </div>
+            </div>
+
+            <div className="h-[270px]">
+              {expedicaoMes.length ? (
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                >
+                  <LineChart
+                    data={
+                      expedicaoMes
                     }
-                    className="rounded-xl border border-slate-200 bg-slate-50 p-4"
                   >
-                    <div className="text-[9px] font-black uppercase text-slate-400">
-                      {faixa}
-                    </div>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      vertical={
+                        false
+                      }
+                      stroke="#E2E8F0"
+                    />
 
-                    <div className="mt-2 text-2xl font-black text-slate-900">
-                      {fmtNumero(
-                        total
-                      )}
-                    </div>
-                  </div>
-                );
-              }
-            )}
+                    <XAxis
+                      dataKey="label"
+                      tick={{
+                        fontSize:
+                          9,
+
+                        fill:
+                          "#94A3B8",
+                      }}
+                      axisLine={
+                        false
+                      }
+                      tickLine={
+                        false
+                      }
+                    />
+
+                    <YAxis
+                      tick={{
+                        fontSize:
+                          9,
+
+                        fill:
+                          "#94A3B8",
+                      }}
+                      axisLine={
+                        false
+                      }
+                      tickLine={
+                        false
+                      }
+                    />
+
+                    <Tooltip
+                      content={
+                        <NumeroTooltip />
+                      }
+                    />
+
+                    <Line
+                      type="monotone"
+                      dataKey="pedidos"
+                      name="Expedidos"
+                      stroke="#6D28D9"
+                      strokeWidth={
+                        2.5
+                      }
+                      dot={{
+                        r:
+                          2.5,
+                      }}
+                      connectNulls
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <EmptyState>
+                  Sem expedição diária para este mês.
+                </EmptyState>
+              )}
+            </div>
           </div>
         </div>
-      </SectionCard>
+      </Section>
 
 
       {/* ===================================================
           7. TEMPOS B2C / B2B
       =================================================== */}
 
-      <SectionCard
-        title="7. Tempos Operacionais B2C & B2B"
-        subtitle="Tempos reais por etapa, cobertura histórica e evolução"
+      <Section
+        index="07"
+        title="Tempos Operacionais B2C & B2B"
+        subtitle="Mediana, P90, cobertura, evolução histórica e gargalos por etapa."
         action={
-          <div className="flex gap-2">
-            <CanalButton
+          <div className="flex flex-wrap gap-2">
+            <ToggleButton
               active={
                 canal ===
                 "B2C"
@@ -3648,9 +3831,9 @@ export default function IndicadoresExecutivosV2Page() {
               }
             >
               B2C
-            </CanalButton>
+            </ToggleButton>
 
-            <CanalButton
+            <ToggleButton
               active={
                 canal ===
                 "B2B"
@@ -3662,135 +3845,12 @@ export default function IndicadoresExecutivosV2Page() {
               }
             >
               B2B
-            </CanalButton>
+            </ToggleButton>
           </div>
         }
       >
-        <div className="border-b border-slate-100 p-5">
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-            <KpiCard
-              title="Pedidos"
-              value={fmtNumero(
-                atual
-                  ?.pedidos_atual
-              )}
-              subtitle={`Anterior: ${fmtNumero(
-                atual
-                  ?.pedidos_anterior
-              )}`}
-              variation={
-                atual
-                  ?.variacao_pedidos_pct
-              }
-              neutro
-              icon={
-                PackageCheck
-              }
-              accent="violet"
-            />
-
-            <KpiCard
-              title="Itens"
-              value={fmtNumero(
-                atual
-                  ?.itens_atual
-              )}
-              subtitle={`Anterior: ${fmtNumero(
-                atual
-                  ?.itens_anterior
-              )}`}
-              variation={
-                atual
-                  ?.variacao_itens_pct
-              }
-              neutro
-              icon={
-                Boxes
-              }
-              accent="blue"
-            />
-
-            <KpiCard
-              title="Conclusão"
-              value={fmtPercentual(
-                atual
-                  ?.pct_concluidos_atual
-              )}
-              subtitle={`Anterior: ${fmtPercentual(
-                atual
-                  ?.pct_concluidos_anterior
-              )}`}
-              variation={
-                atual
-                  ?.variacao_conclusao_pp
-              }
-              suffix=" p.p."
-              icon={
-                CheckCircle2
-              }
-              accent="emerald"
-            />
-
-            <KpiCard
-              title="Lead time"
-              value={fmtDuracao(
-                atual
-                  ?.mediana_leadtime_atual_min
-              )}
-              subtitle="Mediana ponta a ponta"
-              variation={
-                atual
-                  ?.variacao_mediana_leadtime_pct
-              }
-              inverso
-              icon={
-                Clock3
-              }
-              accent="amber"
-            />
-
-            <KpiCard
-              title="P90"
-              value={fmtDuracao(
-                atual
-                  ?.p90_leadtime_atual_min
-              )}
-              subtitle="90% dos ciclos válidos"
-              variation={calcularVariacao(
-                atual
-                  ?.p90_leadtime_atual_min,
-
-                atual
-                  ?.p90_leadtime_anterior_min
-              )}
-              inverso
-              icon={
-                Target
-              }
-              accent="rose"
-            />
-
-            <KpiCard
-              title="Registros válidos"
-              value={fmtCobertura(
-                atual
-                  ?.amostra_leadtime_atual,
-
-                atual
-                  ?.pedidos_atual
-              )}
-              subtitle="Ciclos ponta a ponta calculáveis"
-              variation={
-                null
-              }
-              icon={
-                Activity
-              }
-              accent="slate"
-            />
-          </div>
-
-          <div className="mt-4 flex rounded-xl bg-slate-100 p-1">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-3">
+          <div className="flex rounded-xl bg-slate-100 p-1">
             <PeriodButton
               active={
                 granularidade ===
@@ -3819,115 +3879,268 @@ export default function IndicadoresExecutivosV2Page() {
               Semana atual
             </PeriodButton>
           </div>
-        </div>
 
-        <div className="grid gap-5 border-b border-slate-100 p-5 xl:grid-cols-[1.1fr_1.9fr]">
-          <div>
-            <div className="mb-3 flex rounded-xl bg-slate-100 p-1">
-              <PeriodButton
-                active={
-                  visualizacaoEtapa ===
+          <div className="flex rounded-xl bg-slate-100 p-1">
+            <PeriodButton
+              active={
+                visualizacaoEtapa ===
+                "semanal"
+              }
+              onClick={() =>
+                setVisualizacaoEtapa(
                   "semanal"
-                }
-                onClick={() =>
-                  setVisualizacaoEtapa(
-                    "semanal"
-                  )
-                }
-              >
-                Etapas semanais
-              </PeriodButton>
+                )
+              }
+            >
+              Etapas semanais
+            </PeriodButton>
 
-              <PeriodButton
-                active={
-                  visualizacaoEtapa ===
+            <PeriodButton
+              active={
+                visualizacaoEtapa ===
+                "mensal"
+              }
+              onClick={() =>
+                setVisualizacaoEtapa(
                   "mensal"
-                }
-                onClick={() =>
-                  setVisualizacaoEtapa(
-                    "mensal"
-                  )
-                }
-              >
-                Etapas mensais
-              </PeriodButton>
-            </div>
-
-            <div className="text-[10px] text-slate-400">
-              Base da cobertura:{" "}
-
-              <strong className="text-slate-600">
-                {fmtNumero(
-                  totalBaseEtapa
-                )}{" "}
-
-                itens
-              </strong>
-            </div>
-
-            {sinaisBaixaCobertura.length >
-              0 && (
-              <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
-                <div className="text-[9px] font-black uppercase text-amber-700">
-                  Atenção à cobertura histórica
-                </div>
-
-                <div className="mt-2 space-y-1">
-                  {sinaisBaixaCobertura.map(
-                    (
-                      item
-                    ) => (
-                      <div
-                        key={`baixa-${item.etapa}`}
-                        className="text-[10px] text-amber-800"
-                      >
-                        • {item.etapa}:{" "}
-
-                        {fmtNumero(
-                          item.amostra
-                        )}{" "}
-
-                        registros
-                      </div>
-                    )
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {etapasAtuais.map(
-              (
-                etapa
-              ) => (
-                <EtapaCard
-                  key={`${etapa.canal}-${etapa.etapa}`}
-                  etapa={
-                    etapa
-                  }
-                  totalBase={
-                    totalBaseEtapa
-                  }
-                />
-              )
-            )}
+                )
+              }
+            >
+              Etapas mensais
+            </PeriodButton>
           </div>
         </div>
 
-        <div className="grid gap-5 p-5 xl:grid-cols-[1.5fr_1fr]">
+        <MetricStrip
+          items={[
+            {
+              label:
+                "Pedidos",
+
+              value:
+                fmtNumero(
+                  atual?.pedidos_atual
+                ),
+
+              detail:
+                `${fmtVariacao(
+                  atual?.variacao_pedidos_pct
+                )} vs anterior`,
+            },
+
+            {
+              label:
+                "Itens",
+
+              value:
+                fmtNumero(
+                  atual?.itens_atual
+                ),
+
+              detail:
+                `${fmtVariacao(
+                  atual?.variacao_itens_pct
+                )} vs anterior`,
+            },
+
+            {
+              label:
+                "Conclusão",
+
+              value:
+                fmtPercentual(
+                  atual?.pct_concluidos_atual
+                ),
+
+              detail:
+                `${
+                  atual?.variacao_conclusao_pp !=
+                  null
+                    ? `${fmtNumero(
+                        atual.variacao_conclusao_pp,
+                        1
+                      )} p.p.`
+                    : "—"
+                }`,
+
+              tone:
+                "good",
+            },
+
+            {
+              label:
+                "Lead time",
+
+              value:
+                fmtDuracao(
+                  atual?.mediana_leadtime_atual_min
+                ),
+
+              detail:
+                `${fmtVariacao(
+                  atual?.variacao_mediana_leadtime_pct
+                )} vs anterior`,
+
+              tone:
+                Number(
+                  atual?.variacao_mediana_leadtime_pct ||
+                    0
+                ) >
+                0
+                  ? "danger"
+                  : "good",
+            },
+
+            {
+              label:
+                "P90",
+
+              value:
+                fmtDuracao(
+                  atual?.p90_leadtime_atual_min
+                ),
+
+              detail:
+                `${fmtVariacao(
+                  calcularVariacao(
+                    atual?.p90_leadtime_atual_min,
+                    atual?.p90_leadtime_anterior_min
+                  )
+                )} vs anterior`,
+            },
+
+            {
+              label:
+                "Cobertura",
+
+              value:
+                fmtCobertura(
+                  atual?.amostra_leadtime_atual,
+                  atual?.pedidos_atual
+                ),
+
+              detail:
+                "ciclos calculáveis",
+            },
+          ]}
+        />
+
+        <div className="overflow-x-auto border-b border-slate-100">
+          <table className="w-full min-w-[900px]">
+            <thead>
+              <tr className="bg-slate-50">
+                <th className="px-5 py-3 text-left text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
+                  Etapa
+                </th>
+
+                <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
+                  Mediana
+                </th>
+
+                <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
+                  P90
+                </th>
+
+                <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
+                  Registros
+                </th>
+
+                <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
+                  Cobertura
+                </th>
+
+                <th className="px-5 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
+                  Variação
+                </th>
+              </tr>
+            </thead>
+
+            <tbody className="divide-y divide-slate-100">
+              {etapasAtuais.map(
+                (
+                  etapa
+                ) => {
+                  const cobertura =
+                    coberturaEtapa(
+                      etapa
+                    );
+
+                  return (
+                    <tr
+                      key={`${etapa.canal}-${etapa.etapa}`}
+                      className={
+                        etapaBaixaCobertura(
+                          etapa
+                        )
+                          ? "bg-amber-50/40"
+                          : ""
+                      }
+                    >
+                      <td className="px-5 py-3 text-xs font-black text-slate-700">
+                        {etapa.etapa}
+
+                        {etapaBaixaCobertura(
+                          etapa
+                        ) && (
+                          <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[8px] font-black uppercase text-amber-700">
+                            baixa cobertura
+                          </span>
+                        )}
+                      </td>
+
+                      <td className="px-3 py-3 text-right text-xs font-black text-slate-700">
+                        {fmtDuracao(
+                          etapa.mediana_min
+                        )}
+                      </td>
+
+                      <td className="px-3 py-3 text-right text-xs font-semibold text-slate-600">
+                        {fmtDuracao(
+                          etapa.p90_min
+                        )}
+                      </td>
+
+                      <td className="px-3 py-3 text-right text-xs font-semibold text-slate-600">
+                        {fmtNumero(
+                          etapa.amostra
+                        )}
+                      </td>
+
+                      <td className="px-3 py-3 text-right text-xs font-semibold text-slate-600">
+                        {fmtPercentual(
+                          cobertura
+                        )}
+                      </td>
+
+                      <td className="px-5 py-3 text-right text-xs">
+                        <VariacaoTexto
+                          value={
+                            etapa.variacao_mediana_pct
+                          }
+                          inverso
+                        />
+                      </td>
+                    </tr>
+                  );
+                }
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="grid gap-6 p-5 xl:grid-cols-[1.5fr_0.5fr]">
           <div>
-            <div className="mb-4">
-              <div className="text-xs font-black text-slate-700">
+            <div className="mb-3">
+              <div className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-500">
                 Evolução semanal do lead time
               </div>
 
               <div className="mt-1 text-[10px] text-slate-400">
-                Mediana ponta a ponta
+                Mediana ponta a ponta B2C × B2B.
               </div>
             </div>
 
-            <div className="h-[280px]">
+            <div className="h-[300px]">
               <ResponsiveContainer
                 width="100%"
                 height="100%"
@@ -3976,6 +4189,16 @@ export default function IndicadoresExecutivosV2Page() {
                     tickLine={
                       false
                     }
+                    tickFormatter={(
+                      value
+                    ) =>
+                      fmtDuracao(
+                        value
+                      )
+                    }
+                    width={
+                      65
+                    }
                   />
 
                   <Tooltip
@@ -4008,7 +4231,7 @@ export default function IndicadoresExecutivosV2Page() {
                   <Line
                     type="monotone"
                     dataKey="B2B"
-                    stroke="#475569"
+                    stroke="#0F172A"
                     strokeWidth={
                       2.5
                     }
@@ -4023,430 +4246,648 @@ export default function IndicadoresExecutivosV2Page() {
             </div>
           </div>
 
-          <div>
-            <div className="mb-4 text-xs font-black text-slate-700">
-              Gargalos com cobertura representativa
-            </div>
+          <div className="space-y-4">
+            <div>
+              <div className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-500">
+                Gargalos
+              </div>
 
-            {gargalos.length >
-            0 ? (
-              <div className="space-y-2">
-                {gargalos.map(
-                  (
-                    item,
-                    index
-                  ) => (
-                    <div
-                      key={`gargalo-${item.etapa}`}
-                      className="rounded-xl border border-rose-100 bg-rose-50/50 p-3"
-                    >
-                      <div className="flex items-center justify-between gap-4">
-                        <div>
-                          <div className="text-[10px] font-black text-slate-700">
-                            {index +
-                              1}
-                            .{" "}
-                            {item.etapa}
-                          </div>
+              <div className="mt-2 divide-y divide-slate-100 rounded-xl border border-slate-200 bg-slate-50 px-3">
+                {gargalos.length ? (
+                  gargalos.map(
+                    (
+                      item,
+                      index
+                    ) => (
+                      <div
+                        key={`${item.etapa}-${index}`}
+                        className="py-3"
+                      >
+                        <div className="text-[10px] font-black text-slate-700">
+                          {index +
+                            1}
+                          .{" "}
+                          {item.etapa}
+                        </div>
 
-                          <div className="mt-1 text-[9px] text-slate-400">
+                        <div className="mt-1 flex items-center justify-between gap-2">
+                          <span className="text-[9px] text-slate-400">
                             {fmtDuracao(
                               item.mediana_min
                             )}
-                          </div>
-                        </div>
+                          </span>
 
-                        <div className="text-xs font-black text-rose-700">
-                          {fmtVariacao(
-                            item
-                              .variacao_mediana_pct
-                          )}
+                          <span className="text-[10px] font-black text-rose-700">
+                            {fmtVariacao(
+                              item.variacao_mediana_pct
+                            )}
+                          </span>
                         </div>
                       </div>
-                    </div>
+                    )
                   )
+                ) : (
+                  <div className="py-5 text-[10px] font-semibold text-emerald-700">
+                    Sem deterioração relevante com cobertura suficiente.
+                  </div>
                 )}
               </div>
-            ) : (
-              <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-[10px] font-bold text-emerald-700">
-                Nenhuma deterioração relevante com cobertura suficiente.
+            </div>
+
+            {sinaisBaixaCobertura.length >
+              0 && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                <div className="text-[9px] font-black uppercase tracking-[0.1em] text-amber-700">
+                  Cobertura insuficiente
+                </div>
+
+                <div className="mt-2 space-y-1.5">
+                  {sinaisBaixaCobertura.map(
+                    (
+                      item
+                    ) => (
+                      <div
+                        key={item.etapa}
+                        className="text-[10px] text-amber-800"
+                      >
+                        {item.etapa} ·{" "}
+                        {fmtNumero(
+                          item.amostra
+                        )}{" "}
+                        registros
+                      </div>
+                    )
+                  )}
+                </div>
               </div>
             )}
           </div>
         </div>
-      </SectionCard>
+      </Section>
 
 
       {/* ===================================================
           8. OCORRÊNCIAS
       =================================================== */}
 
-      <SectionCard
-        title={`8. Venda sem Estoque & Ocorrências — ${fmtMesLongo(
+      <Section
+        index="08"
+        title={`Venda sem Estoque & Ocorrências — ${fmtMesLongo(
           mesSelecionado
         )}`}
-        subtitle="Problemas identificados durante alocação e atendimento dos pedidos"
+        subtitle="Concentração dos problemas identificados durante alocação e atendimento dos pedidos."
       >
-        <div className="grid gap-5 p-5 xl:grid-cols-[1.5fr_1fr]">
-          <div className="space-y-4">
-            {ocorrenciasMes.map(
-              (
-                item
-              ) => (
-                <BarraLinha
-                  key={
-                    item.categoria
+        <MetricStrip
+          items={[
+            {
+              label:
+                "Total de ocorrências",
+
+              value:
+                fmtNumero(
+                  totalOcorrencias
+                ),
+
+              detail:
+                "eventos identificados",
+
+              tone:
+                totalOcorrencias >
+                0
+                  ? "warning"
+                  : "good",
+            },
+          ]}
+        />
+
+        <div className="h-[330px] p-5">
+          {ocorrenciasMes.length ? (
+            <ResponsiveContainer
+              width="100%"
+              height="100%"
+            >
+              <BarChart
+                data={
+                  ocorrenciasMes.slice(
+                    0,
+                    12
+                  )
+                }
+                layout="vertical"
+                margin={{
+                  left:
+                    35,
+
+                  right:
+                    20,
+                }}
+              >
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  horizontal={
+                    false
                   }
-                  label={
-                    item.categoria
+                  stroke="#E2E8F0"
+                />
+
+                <XAxis
+                  type="number"
+                  tick={{
+                    fontSize:
+                      9,
+
+                    fill:
+                      "#94A3B8",
+                  }}
+                  axisLine={
+                    false
                   }
-                  value={
-                    item.ocorrencias
-                  }
-                  max={
-                    maxOcorrencia
+                  tickLine={
+                    false
                   }
                 />
-              )
-            )}
-          </div>
 
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
-            <div className="text-[9px] font-black uppercase tracking-wider text-amber-600">
-              Total de ocorrências
-            </div>
+                <YAxis
+                  type="category"
+                  dataKey="categoria"
+                  width={
+                    190
+                  }
+                  tick={{
+                    fontSize:
+                      9,
 
-            <div className="mt-2 text-4xl font-black text-amber-900">
-              {fmtNumero(
-                totalOcorrencias
-              )}
-            </div>
+                    fill:
+                      "#64748B",
+                  }}
+                  axisLine={
+                    false
+                  }
+                  tickLine={
+                    false
+                  }
+                />
 
-            <div className="mt-2 text-[10px] leading-5 text-amber-800">
-              Inclui ausência de estoque em lista, ausência física,
-              divergências e ocorrências ainda não classificadas.
-            </div>
-          </div>
+                <Tooltip
+                  content={
+                    <NumeroTooltip />
+                  }
+                />
+
+                <Bar
+                  dataKey="ocorrencias"
+                  name="Ocorrências"
+                  fill="#F59E0B"
+                  radius={[
+                    0,
+                    5,
+                    5,
+                    0,
+                  ]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <EmptyState>
+              Nenhuma ocorrência registrada no período.
+            </EmptyState>
+          )}
         </div>
-      </SectionCard>
+      </Section>
 
 
       {/* ===================================================
           9. ERROS
       =================================================== */}
 
-      <SectionCard
-        title={`9. Erros & Retrabalho — ${fmtMesLongo(
+      <Section
+        index="09"
+        title={`Erros & Retrabalho — ${fmtMesLongo(
           mesSelecionado
         )}`}
-        subtitle="Eventos sistêmicos e operacionais que geram exceção ou retrabalho"
+        subtitle="Eventos sistêmicos e operacionais capazes de gerar exceção, cancelamento ou retrabalho."
       >
-        <div className="grid gap-4 p-5 sm:grid-cols-2 xl:grid-cols-5">
-          <KpiCard
-            title="Falhas integração"
-            value={fmtNumero(
-              errosMes
-                .falhas_integracao
-            )}
-            subtitle="Falhas identificadas"
-            icon={
-              AlertTriangle
-            }
-            accent="rose"
-          />
+        <div className="h-[330px] p-5">
+          <ResponsiveContainer
+            width="100%"
+            height="100%"
+          >
+            <BarChart
+              data={
+                errosChart
+              }
+            >
+              <CartesianGrid
+                strokeDasharray="3 3"
+                vertical={
+                  false
+                }
+                stroke="#E2E8F0"
+              />
 
-          <KpiCard
-            title="Cancelados marketplace"
-            value={fmtNumero(
-              errosMes
-                .cancelados_marketplace
-            )}
-            subtitle="Pedidos cancelados"
-            icon={
-              FileWarning
-            }
-            accent="amber"
-          />
+              <XAxis
+                dataKey="categoria"
+                tick={{
+                  fontSize:
+                    9,
 
-          <KpiCard
-            title="Cancelados pós embalagem"
-            value={fmtNumero(
-              errosMes
-                .cancelados_pos_embalagem
-            )}
-            subtitle="Já processados fisicamente"
-            icon={
-              Boxes
-            }
-            accent="rose"
-          />
+                  fill:
+                    "#64748B",
+                }}
+                axisLine={
+                  false
+                }
+                tickLine={
+                  false
+                }
+                interval={
+                  0
+                }
+              />
 
-          <KpiCard
-            title="Cancelados pós faturamento"
-            value={fmtNumero(
-              errosMes
-                .cancelados_pos_faturamento
-            )}
-            subtitle="Com faturamento registrado"
-            icon={
-              Database
-            }
-            accent="rose"
-          />
+              <YAxis
+                tick={{
+                  fontSize:
+                    9,
 
-          <KpiCard
-            title="Erro NF B2B"
-            value={fmtNumero(
-              errosMes
-                .erros_nf_b2b
-            )}
-            subtitle="Itens com erro de NF"
-            icon={
-              AlertTriangle
-            }
-            accent="rose"
-          />
+                  fill:
+                    "#94A3B8",
+                }}
+                axisLine={
+                  false
+                }
+                tickLine={
+                  false
+                }
+              />
+
+              <Tooltip
+                content={
+                  <NumeroTooltip />
+                }
+              />
+
+              <Bar
+                dataKey="valor"
+                name="Eventos"
+                fill="#E11D48"
+                radius={[
+                  5,
+                  5,
+                  0,
+                  0,
+                ]}
+              />
+            </BarChart>
+          </ResponsiveContainer>
         </div>
-      </SectionCard>
+      </Section>
 
 
       {/* ===================================================
           10. STOCK INTELLIGENCE
       =================================================== */}
 
-      <SectionCard
-        title="10. Stock Intelligence"
-        subtitle="Estoque físico, envelhecimento e drill-down analítico por SKU, grade e IMEI"
+      <Section
+        index="10"
+        title="Stock Intelligence"
+        subtitle="Estoque atual, envelhecimento e investigação por faixa de aging, SKU, grade e IMEI."
         action={
-          <div className="flex items-center gap-2">
-            <span className="hidden rounded-full bg-violet-50 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-violet-700 sm:inline-flex">
-              Investigável
-            </span>
+          <button
+            type="button"
+            onClick={() =>
+              abrirAgingEstoque(
+                "Mais de 180 dias"
+              )
+            }
+            className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-3 py-2 text-[10px] font-black text-white transition hover:bg-slate-800"
+          >
+            Abrir Aging
 
-            <button
-              type="button"
-              onClick={() =>
-                abrirAgingEstoque(
-                  "Mais de 180 dias"
-                )
-              }
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[10px] font-black text-slate-600 transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-800"
-            >
-              Abrir Aging
-
-              <ArrowRight className="h-3.5 w-3.5" />
-            </button>
-          </div>
+            <ArrowRight className="h-3.5 w-3.5" />
+          </button>
         }
       >
-        <div className="grid gap-4 border-b border-slate-100 p-5 sm:grid-cols-2 xl:grid-cols-5">
-          <KpiCard
-            title="Estoque total"
-            value={fmtNumero(
-              estoqueQualidade
-                .total_estoque
-            )}
-            subtitle="Aparelhos na base de estoque"
-            icon={
-              Warehouse
-            }
-            accent="violet"
-          />
+        <MetricStrip
+          items={[
+            {
+              label:
+                "Estoque total",
 
-          <KpiCard
-            title="+90 dias"
-            value={fmtNumero(
-              estoqueQualidade
-                .mais_90_dias
-            )}
-            subtitle={fmtPercentual(
-              pctMais90
-            )}
-            icon={
-              Clock3
-            }
-            accent="amber"
-          />
+              value:
+                fmtNumero(
+                  totalEstoque
+                ),
 
-          <KpiCard
-            title="IMEI inválido"
-            value={fmtNumero(
-              estoqueQualidade
-                .imei_invalido
-            )}
-            subtitle="Registros para saneamento"
-            icon={
-              AlertTriangle
-            }
-            accent="rose"
-          />
+              detail:
+                "posição física atual",
 
-          <KpiCard
-            title="Sem triagem"
-            value={fmtNumero(
-              estoqueQualidade
-                .sem_triagem
-            )}
-            subtitle="Sem vínculo na triagem"
-            icon={
-              FileWarning
-            }
-            accent="amber"
-          />
+              tone:
+                "violet",
+            },
 
-          <KpiCard
-            title="Íntegros"
-            value={fmtNumero(
-              estoqueQualidade
-                .integros
-            )}
-            subtitle={fmtPercentual(
-              pctIntegro
-            )}
-            icon={
-              CheckCircle2
-            }
-            accent="emerald"
-          />
-        </div>
+            {
+              label:
+                "> 90 dias",
 
+              value:
+                fmtNumero(
+                  mais90
+                ),
 
-        <div className="grid gap-6 p-5 xl:grid-cols-[1.05fr_0.95fr]">
+              detail:
+                fmtPercentual(
+                  pctMais90
+                ),
 
-          {/* ================================================
-              SUBINVENTÁRIOS
-          ================================================ */}
+              tone:
+                "warning",
+            },
 
-          <div className="rounded-2xl border border-slate-200 bg-slate-50/40 p-4">
-            <div className="mb-4">
-              <div className="flex items-center gap-2">
-                <Warehouse className="h-4 w-4 text-slate-400" />
+            {
+              label:
+                "IMEI inválido",
 
-                <div className="text-xs font-black text-slate-700">
-                  Posição por subinventário
+              value:
+                fmtNumero(
+                  estoqueQualidade.imei_invalido
+                ),
+
+              detail:
+                "requer saneamento",
+
+              tone:
+                "danger",
+            },
+
+            {
+              label:
+                "Sem triagem",
+
+              value:
+                fmtNumero(
+                  estoqueQualidade.sem_triagem
+                ),
+
+              detail:
+                "sem vínculo de triagem",
+
+              tone:
+                "danger",
+            },
+
+            {
+              label:
+                "Íntegros",
+
+              value:
+                fmtNumero(
+                  estoqueQualidade.integros
+                ),
+
+              detail:
+                fmtPercentual(
+                  pctIntegro
+                ),
+
+              tone:
+                "good",
+            },
+          ]}
+        />
+
+        <div className="grid gap-6 p-5 xl:grid-cols-[1.1fr_0.9fr]">
+          <div>
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-500">
+                  Aging do estoque
+                </div>
+
+                <div className="mt-1 text-[10px] text-slate-400">
+                  Clique em uma barra para investigar a composição.
                 </div>
               </div>
 
-              <div className="mt-1 text-[10px] text-slate-400">
-                Quantidade atual de aparelhos
-              </div>
+              <Clock3 className="h-4 w-4 text-slate-300" />
             </div>
 
-            <div className="space-y-4">
-              {estoquePosicao
-                .slice(
-                  0,
-                  12
-                )
-                .map(
-                  (
-                    item
-                  ) => (
-                    <BarraLinha
-                      key={
-                        item.subinventario
-                      }
-                      label={
-                        item.subinventario
-                      }
-                      value={
-                        item.aparelhos
-                      }
-                      max={
-                        maxEstoque
-                      }
-                    />
-                  )
-                )}
-            </div>
-          </div>
-
-
-          {/* ================================================
-              AGING CLICÁVEL
-          ================================================ */}
-
-          <div className="overflow-hidden rounded-2xl border border-violet-100 bg-white shadow-sm">
-            <div className="border-b border-violet-100 bg-gradient-to-r from-violet-50/80 to-white px-4 py-4">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <Clock3 className="h-4 w-4 text-violet-700" />
-
-                    <div className="text-xs font-black text-slate-800">
-                      Aging do estoque
-                    </div>
-                  </div>
-
-                  <div className="mt-1 max-w-xl text-[10px] leading-4 text-slate-400">
-                    Clique em uma faixa para abrir a composição física
-                    do estoque e avançar para SKU, grade, IMEI e
-                    inteligência comercial.
-                  </div>
-                </div>
-
-                <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-violet-300" />
-              </div>
-            </div>
-
-            <div className="space-y-1 p-2">
-              {estoqueAging.map(
-                (
-                  item
-                ) => (
-                  <AgingLinha
-                    key={
-                      item.faixa
+            <div className="h-[320px]">
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+              >
+                <BarChart
+                  data={
+                    estoqueAging
+                  }
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={
+                      false
                     }
-                    label={
-                      item.faixa
+                    stroke="#E2E8F0"
+                  />
+
+                  <XAxis
+                    dataKey="faixa"
+                    tick={{
+                      fontSize:
+                        9,
+
+                      fill:
+                        "#64748B",
+                    }}
+                    axisLine={
+                      false
                     }
-                    value={
-                      item.aparelhos
+                    tickLine={
+                      false
                     }
-                    max={
-                      maxAging
-                    }
-                    onClick={
-                      abrirAgingEstoque
+                    interval={
+                      0
                     }
                   />
-                )
-              )}
 
-              {!estoqueAging.length && (
-                <div className="rounded-xl border border-dashed border-slate-200 px-4 py-8 text-center">
-                  <div className="text-xs font-black text-slate-500">
-                    Aging indisponível
-                  </div>
+                  <YAxis
+                    tick={{
+                      fontSize:
+                        9,
 
-                  <div className="mt-1 text-[10px] text-slate-400">
-                    A base atual não retornou faixas de aging.
-                  </div>
+                      fill:
+                        "#94A3B8",
+                    }}
+                    axisLine={
+                      false
+                    }
+                    tickLine={
+                      false
+                    }
+                  />
+
+                  <Tooltip
+                    content={
+                      <NumeroTooltip />
+                    }
+                  />
+
+                  <Bar
+                    dataKey="aparelhos"
+                    name="Aparelhos"
+                    fill="#6D28D9"
+                    radius={[
+                      5,
+                      5,
+                      0,
+                      0,
+                    ]}
+                    cursor="pointer"
+                    onClick={(
+                      payload
+                    ) => {
+                      const faixa =
+                        payload?.faixa ||
+                        payload?.payload?.faixa;
+
+                      if (
+                        faixa
+                      ) {
+                        abrirAgingEstoque(
+                          faixa
+                        );
+                      }
+                    }}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div>
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-500">
+                  Subinventários
                 </div>
+
+                <div className="mt-1 text-[10px] text-slate-400">
+                  Maiores concentrações da posição atual.
+                </div>
+              </div>
+
+              <Warehouse className="h-4 w-4 text-slate-300" />
+            </div>
+
+            <div className="h-[320px]">
+              {estoquePosicao.length ? (
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                >
+                  <BarChart
+                    data={
+                      estoquePosicao.slice(
+                        0,
+                        12
+                      )
+                    }
+                    layout="vertical"
+                    margin={{
+                      left:
+                        25,
+
+                      right:
+                        15,
+                    }}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      horizontal={
+                        false
+                      }
+                      stroke="#E2E8F0"
+                    />
+
+                    <XAxis
+                      type="number"
+                      tick={{
+                        fontSize:
+                          9,
+
+                        fill:
+                          "#94A3B8",
+                      }}
+                      axisLine={
+                        false
+                      }
+                      tickLine={
+                        false
+                      }
+                    />
+
+                    <YAxis
+                      type="category"
+                      dataKey="subinventario"
+                      width={
+                        120
+                      }
+                      tick={{
+                        fontSize:
+                          9,
+
+                        fill:
+                          "#64748B",
+                      }}
+                      axisLine={
+                        false
+                      }
+                      tickLine={
+                        false
+                      }
+                    />
+
+                    <Tooltip
+                      content={
+                        <NumeroTooltip />
+                      }
+                    />
+
+                    <Bar
+                      dataKey="aparelhos"
+                      name="Aparelhos"
+                      fill="#475569"
+                      radius={[
+                        0,
+                        5,
+                        5,
+                        0,
+                      ]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <EmptyState>
+                  Sem posição por subinventário.
+                </EmptyState>
               )}
             </div>
           </div>
         </div>
 
-
-        {/* ================================================
-            FLUXO ANALÍTICO
-        ================================================ */}
-
-        <div className="border-t border-slate-100 bg-slate-50/60 px-5 py-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="border-t border-slate-100 bg-slate-50/70 px-5 py-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <div className="text-[9px] font-black uppercase tracking-[0.12em] text-slate-400">
-                Fluxo analítico
+                Fluxo de investigação
               </div>
 
-              <div className="mt-1 text-[10px] text-slate-400">
-                O número deixa de ser apenas informativo e passa a ser investigável.
+              <div className="mt-1 text-[10px] text-slate-500">
+                Cockpit → Aging → SKU / Grade → Vendas reais → Giro → Cobertura → Score → Recomendação de preço
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 text-[10px] font-black text-slate-600">
+            <div className="flex items-center gap-2 text-[9px] font-black text-slate-500">
               <span className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5">
                 Cockpit
               </span>
@@ -4460,44 +4901,35 @@ export default function IndicadoresExecutivosV2Page() {
               <ArrowRight className="h-3 w-3 text-slate-300" />
 
               <span className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5">
-                SKU
-              </span>
-
-              <ArrowRight className="h-3 w-3 text-slate-300" />
-
-              <span className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5">
-                Preço / Giro / Score / Recomendação
+                SKU Intelligence
               </span>
             </div>
           </div>
         </div>
-      </SectionCard>
+      </Section>
 
 
       {/* ===================================================
-          RODAPÉ / QUALIDADE DO DADO
+          CRITÉRIOS
       =================================================== */}
 
-      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+      <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
         <div className="flex items-start gap-3">
-          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+          <Activity className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
 
           <div>
-            <div className="text-xs font-black text-amber-900">
-              Critérios de leitura dos indicadores
+            <div className="text-[9px] font-black uppercase tracking-[0.12em] text-slate-500">
+              Critérios de leitura
             </div>
 
-            <div className="mt-2 max-w-6xl text-[10px] leading-5 text-amber-800">
-              Todos os volumes utilizam 100% dos registros disponíveis
-              de agosto e setembro. Tempos de processo são calculados
-              somente quando os timestamps necessários existem e
-              respeitam a cronologia válida. Etapas com cobertura
-              histórica inferior a 20% são destacadas e não entram
-              automaticamente no ranking de principais gargalos.
-              A etiquetagem B2C ainda não possui timestamp exclusivo,
-              portanto o intervalo Embalagem → Faturamento contempla
-              esse período. Indicadores de estoque representam a posição
-              atual e não uma fotografia histórica do mês selecionado.
+            <div className="mt-1 max-w-6xl text-[10px] leading-5 text-slate-500">
+              Todos os volumes utilizam os registros disponíveis no período analítico.
+              Tempos de processo são calculados somente quando os timestamps necessários
+              existem e respeitam a cronologia válida. Etapas com cobertura histórica
+              inferior a 20% são sinalizadas e não entram automaticamente no ranking de
+              gargalos. A etiquetagem B2C ainda não possui timestamp exclusivo, portanto
+              o intervalo Embalagem → Faturamento contempla esse período. O estoque
+              representa a posição física atual e não uma fotografia histórica do mês.
             </div>
           </div>
         </div>

@@ -20,12 +20,16 @@ import {
   Search,
   Smartphone,
   TrendingDown,
+  Warehouse,
 } from "lucide-react";
 
 import {
   Bar,
   BarChart,
   CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -59,17 +63,28 @@ const PAGE_SIZE = 50;
 
 
 /* =========================================================
-   HELPERS
+   FORMATADORES
 ========================================================= */
 
 function formatarNumero(
   valor
 ) {
+  if (
+    valor == null ||
+    Number.isNaN(
+      Number(
+        valor
+      )
+    )
+  ) {
+    return "—";
+  }
+
   return new Intl.NumberFormat(
     "pt-BR"
   ).format(
     Number(
-      valor || 0
+      valor
     )
   );
 }
@@ -107,6 +122,28 @@ function formatarDecimal(
 }
 
 
+function formatarPercentual(
+  valor,
+  casas = 1
+) {
+  if (
+    valor == null ||
+    Number.isNaN(
+      Number(
+        valor
+      )
+    )
+  ) {
+    return "—";
+  }
+
+  return `${formatarDecimal(
+    valor,
+    casas
+  )}%`;
+}
+
+
 function formatarData(
   data
 ) {
@@ -139,12 +176,17 @@ function normalizarTexto(
   texto
 ) {
   return String(
-    texto || ""
+    texto ||
+      ""
   )
     .trim()
     .toUpperCase();
 }
 
+
+/* =========================================================
+   HELPERS VISUAIS
+========================================================= */
 
 function badgeGrade(
   grade
@@ -213,28 +255,29 @@ function classeAging(
 ) {
   const valor =
     Number(
-      dias || 0
+      dias ||
+        0
     );
 
   if (
     valor >
     180
   ) {
-    return "text-rose-600";
+    return "text-rose-700";
   }
 
   if (
     valor >
     90
   ) {
-    return "text-orange-600";
+    return "text-orange-700";
   }
 
   if (
     valor >
     60
   ) {
-    return "text-amber-600";
+    return "text-amber-700";
   }
 
   return "text-slate-700";
@@ -253,7 +296,8 @@ function construirEndereco(
   const partes = [];
 
   if (
-    item?.rua != null
+    item?.rua !=
+    null
   ) {
     partes.push(
       `R${item.rua}`
@@ -261,7 +305,8 @@ function construirEndereco(
   }
 
   if (
-    item?.bloco != null
+    item?.bloco !=
+    null
   ) {
     partes.push(
       `B${item.bloco}`
@@ -269,7 +314,8 @@ function construirEndereco(
   }
 
   if (
-    item?.andar != null
+    item?.andar !=
+    null
   ) {
     partes.push(
       `A${item.andar}`
@@ -281,7 +327,8 @@ function construirEndereco(
   ) {
     partes.push(
       `${item.coluna}${String(
-        item?.linha || ""
+        item?.linha ||
+          ""
       ).padStart(
         2,
         "0"
@@ -292,47 +339,122 @@ function construirEndereco(
   return (
     partes.join(
       " · "
-    ) || "—"
+    ) ||
+    "—"
   );
 }
 
 
 /* =========================================================
-   COMPONENTES VISUAIS
+   COMPONENTES
 ========================================================= */
 
-function CardResumo({
-  icon: Icon,
-  titulo,
-  valor,
-  descricao,
+function MetricStrip({
+  items,
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="flex items-start justify-between gap-4">
+    <div
+      className="
+        grid
+        overflow-hidden
+        rounded-2xl
+        border
+        border-slate-200
+        bg-white
+        shadow-sm
+        sm:grid-cols-2
+        xl:grid-cols-4
+      "
+    >
+      {items.map(
+        (
+          item,
+          index
+        ) => (
+          <div
+            key={`${item.label}-${index}`}
+            className="
+              min-w-0
+              border-b
+              border-slate-100
+              px-5
+              py-4
+              last:border-b-0
+              sm:border-r
+              xl:border-b-0
+            "
+          >
+            <div className="text-[9px] font-black uppercase tracking-[0.12em] text-slate-400">
+              {item.label}
+            </div>
+
+            <div
+              className={[
+                "mt-2 text-2xl font-black tracking-tight",
+                item.tone ===
+                "danger"
+                  ? "text-rose-700"
+                  : item.tone ===
+                      "warning"
+                    ? "text-amber-700"
+                    : item.tone ===
+                        "good"
+                      ? "text-emerald-700"
+                      : item.tone ===
+                          "violet"
+                        ? "text-violet-800"
+                        : "text-slate-950",
+              ].join(
+                " "
+              )}
+            >
+              {item.value}
+            </div>
+
+            <div className="mt-1 text-[10px] leading-4 text-slate-400">
+              {item.description ||
+                "—"}
+            </div>
+          </div>
+        )
+      )}
+    </div>
+  );
+}
+
+
+function SectionHeader({
+  icon: Icon,
+  title,
+  description,
+  action,
+}) {
+  return (
+    <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex items-start gap-3">
+        {Icon && (
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+            <Icon
+              size={17}
+              strokeWidth={1.8}
+            />
+          </div>
+        )}
+
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
-            {titulo}
-          </p>
+          <h2 className="text-sm font-black text-slate-900">
+            {title}
+          </h2>
 
-          <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-900">
-            {valor}
-          </p>
-
-          {descricao && (
-            <p className="mt-2 text-xs leading-5 text-slate-500">
-              {descricao}
+          {description && (
+            <p className="mt-1 max-w-3xl text-[10px] leading-4 text-slate-400">
+              {description}
             </p>
           )}
         </div>
-
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
-          <Icon
-            size={19}
-            strokeWidth={1.8}
-          />
-        </div>
       </div>
+
+      {action}
     </div>
   );
 }
@@ -341,21 +463,82 @@ function CardResumo({
 function EmptyState({
   titulo,
   descricao,
+  compact = false,
 }) {
   return (
-    <div className="flex min-h-[260px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-8 text-center">
+    <div
+      className={[
+        "flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 px-8 text-center",
+        compact
+          ? "min-h-[180px]"
+          : "min-h-[280px]",
+      ].join(
+        " "
+      )}
+    >
       <PackageSearch
-        size={34}
+        size={32}
         className="text-slate-300"
       />
 
-      <h3 className="mt-4 text-base font-semibold text-slate-700">
+      <h3 className="mt-4 text-sm font-black text-slate-700">
         {titulo}
       </h3>
 
-      <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
+      <p className="mt-2 max-w-md text-xs leading-5 text-slate-500">
         {descricao}
       </p>
+    </div>
+  );
+}
+
+
+function GraficoTooltip({
+  active,
+  payload,
+  label,
+}) {
+  if (
+    !active ||
+    !payload?.length
+  ) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
+      <div className="mb-2 text-[10px] font-black text-slate-700">
+        {label}
+      </div>
+
+      <div className="space-y-1">
+        {payload.map(
+          (
+            item
+          ) => (
+            <div
+              key={`${item.dataKey}-${item.name}`}
+              className="flex min-w-[170px] items-center justify-between gap-4 text-[10px]"
+            >
+              <span className="font-semibold text-slate-500">
+                {item.name}
+              </span>
+
+              <span className="font-black text-slate-800">
+                {item.dataKey ===
+                "aging"
+                  ? `${formatarDecimal(
+                      item.value,
+                      1
+                    )} dias`
+                  : formatarNumero(
+                      item.value
+                    )}
+              </span>
+            </div>
+          )
+        )}
+      </div>
     </div>
   );
 }
@@ -416,58 +599,126 @@ export default function EstoqueAgingDetalheV2Page() {
     loadingResumo,
     setLoadingResumo,
   ] =
-    useState(true);
+    useState(
+      true
+    );
 
   const [
     loadingDetalhes,
     setLoadingDetalhes,
   ] =
-    useState(true);
+    useState(
+      true
+    );
 
   const [
     erro,
     setErro,
   ] =
-    useState("");
+    useState(
+      ""
+    );
 
   const [
     buscaDigitada,
     setBuscaDigitada,
   ] =
-    useState("");
+    useState(
+      ""
+    );
 
   const [
     buscaAplicada,
     setBuscaAplicada,
   ] =
-    useState("");
+    useState(
+      ""
+    );
 
   const [
     grade,
     setGrade,
   ] =
-    useState("");
+    useState(
+      ""
+    );
 
   const [
     skuSelecionado,
     setSkuSelecionado,
   ] =
-    useState("");
+    useState(
+      ""
+    );
 
   const [
     pagina,
     setPagina,
   ] =
-    useState(1);
+    useState(
+      1
+    );
 
 
   /* =========================================================
-     CARREGA RESUMO DOS SKUs
+     SINCRONIZA FAIXA DA URL
   ========================================================= */
 
   useEffect(
     () => {
-      let ativo = true;
+      const faixaUrl =
+        searchParams.get(
+          "faixa"
+        );
+
+      if (
+        faixaUrl &&
+        FAIXAS_AGING.includes(
+          faixaUrl
+        ) &&
+        faixaUrl !==
+          faixa
+      ) {
+        setFaixa(
+          faixaUrl
+        );
+
+        setPagina(
+          1
+        );
+
+        setGrade(
+          ""
+        );
+
+        setSkuSelecionado(
+          ""
+        );
+
+        setBuscaDigitada(
+          ""
+        );
+
+        setBuscaAplicada(
+          ""
+        );
+      }
+    },
+    [
+      searchParams,
+      faixa,
+    ]
+  );
+
+
+  /* =========================================================
+     RESUMO DE SKU
+  ========================================================= */
+
+  useEffect(
+    () => {
+      let ativo =
+        true;
 
       async function carregarResumo() {
         try {
@@ -475,33 +726,49 @@ export default function EstoqueAgingDetalheV2Page() {
             true
           );
 
-          setErro("");
+          setErro(
+            ""
+          );
 
           const data =
             await fetchEstoqueAgingResumoSku({
               faixa,
+
               limite:
                 null,
             });
 
-          if (!ativo) {
+          if (
+            !ativo
+          ) {
             return;
           }
 
           setResumoSkus(
-            data || []
+            data ||
+              []
           );
-        } catch (error) {
-          if (!ativo) {
+        } catch (
+          error
+        ) {
+          if (
+            !ativo
+          ) {
             return;
           }
+
+          console.error(
+            error
+          );
 
           setErro(
             error?.message ||
               "Não foi possível carregar o resumo de estoque."
           );
         } finally {
-          if (ativo) {
+          if (
+            ativo
+          ) {
             setLoadingResumo(
               false
             );
@@ -512,7 +779,8 @@ export default function EstoqueAgingDetalheV2Page() {
       carregarResumo();
 
       return () => {
-        ativo = false;
+        ativo =
+          false;
       };
     },
     [
@@ -522,12 +790,13 @@ export default function EstoqueAgingDetalheV2Page() {
 
 
   /* =========================================================
-     CARREGA APARELHOS
+     DETALHES PAGINADOS
   ========================================================= */
 
   useEffect(
     () => {
-      let ativo = true;
+      let ativo =
+        true;
 
       async function carregarDetalhes() {
         try {
@@ -535,7 +804,9 @@ export default function EstoqueAgingDetalheV2Page() {
             true
           );
 
-          setErro("");
+          setErro(
+            ""
+          );
 
           const data =
             await fetchEstoqueAgingDetalhe({
@@ -555,24 +826,36 @@ export default function EstoqueAgingDetalheV2Page() {
                 PAGE_SIZE,
             });
 
-          if (!ativo) {
+          if (
+            !ativo
+          ) {
             return;
           }
 
           setDetalhes(
             data
           );
-        } catch (error) {
-          if (!ativo) {
+        } catch (
+          error
+        ) {
+          if (
+            !ativo
+          ) {
             return;
           }
+
+          console.error(
+            error
+          );
 
           setErro(
             error?.message ||
               "Não foi possível carregar os aparelhos."
           );
         } finally {
-          if (ativo) {
+          if (
+            ativo
+          ) {
             setLoadingDetalhes(
               false
             );
@@ -583,7 +866,8 @@ export default function EstoqueAgingDetalheV2Page() {
       carregarDetalhes();
 
       return () => {
-        ativo = false;
+        ativo =
+          false;
       };
     },
     [
@@ -597,7 +881,7 @@ export default function EstoqueAgingDetalheV2Page() {
 
 
   /* =========================================================
-     DADOS DERIVADOS
+     TOTAL DA FAIXA
   ========================================================= */
 
   const totalAparelhosResumo =
@@ -620,6 +904,10 @@ export default function EstoqueAgingDetalheV2Page() {
       ]
     );
 
+
+  /* =========================================================
+     AGING MÉDIO PONDERADO
+  ========================================================= */
 
   const agingMedioFaixa =
     useMemo(
@@ -661,6 +949,10 @@ export default function EstoqueAgingDetalheV2Page() {
     );
 
 
+  /* =========================================================
+     GRADES DISPONÍVEIS
+  ========================================================= */
+
   const gradesDisponiveis =
     useMemo(
       () =>
@@ -684,10 +976,16 @@ export default function EstoqueAgingDetalheV2Page() {
     );
 
 
+  /* =========================================================
+     RESUMO FILTRADO
+  ========================================================= */
+
   const resumoFiltrado =
     useMemo(
       () => {
-        if (!grade) {
+        if (
+          !grade
+        ) {
           return resumoSkus;
         }
 
@@ -710,7 +1008,11 @@ export default function EstoqueAgingDetalheV2Page() {
     );
 
 
-  const rankingGrafico =
+  /* =========================================================
+     RANKING
+  ========================================================= */
+
+  const rankingCompleto =
     useMemo(
       () =>
         resumoFiltrado
@@ -728,7 +1030,17 @@ export default function EstoqueAgingDetalheV2Page() {
                 a.aparelhos ||
                   0
               )
-          )
+          ),
+      [
+        resumoFiltrado,
+      ]
+    );
+
+
+  const rankingGrafico =
+    useMemo(
+      () =>
+        rankingCompleto
           .slice(
             0,
             12
@@ -745,6 +1057,9 @@ export default function EstoqueAgingDetalheV2Page() {
               sku:
                 item.sku,
 
+              grade:
+                item.grade,
+
               aparelhos:
                 Number(
                   item.aparelhos ||
@@ -759,24 +1074,115 @@ export default function EstoqueAgingDetalheV2Page() {
             })
           ),
       [
-        resumoFiltrado,
+        rankingCompleto,
       ]
     );
 
 
+  /* =========================================================
+     TOP 10
+  ========================================================= */
+
+  const concentracaoTop10 =
+    useMemo(
+      () => {
+        if (
+          !totalAparelhosResumo
+        ) {
+          return 0;
+        }
+
+        const top10 =
+          resumoSkus
+            .slice()
+            .sort(
+              (
+                a,
+                b
+              ) =>
+                Number(
+                  b.aparelhos ||
+                    0
+                ) -
+                Number(
+                  a.aparelhos ||
+                    0
+                )
+            )
+            .slice(
+              0,
+              10
+            )
+            .reduce(
+              (
+                total,
+                item
+              ) =>
+                total +
+                Number(
+                  item.aparelhos ||
+                    0
+                ),
+              0
+            );
+
+        return (
+          top10 /
+          totalAparelhosResumo
+        ) *
+          100;
+      },
+      [
+        resumoSkus,
+        totalAparelhosResumo,
+      ]
+    );
+
+
+  /* =========================================================
+     SKU SELECIONADO
+  ========================================================= */
+
   const skuSelecionadoResumo =
     useMemo(
-      () =>
-        resumoSkus.find(
-          (
-            item
-          ) =>
-            item.sku ===
-            skuSelecionado
-        ) || null,
+      () => {
+        if (
+          !skuSelecionado
+        ) {
+          return null;
+        }
+
+        return (
+          resumoSkus.find(
+            (
+              item
+            ) =>
+              item.sku ===
+                skuSelecionado &&
+              (
+                !grade ||
+                normalizarTexto(
+                  item.grade
+                ) ===
+                  normalizarTexto(
+                    grade
+                  )
+              )
+          ) ||
+          resumoSkus.find(
+            (
+              item
+            ) =>
+              item.sku ===
+              skuSelecionado
+          ) ||
+          null
+        );
+      },
       [
         resumoSkus,
         skuSelecionado,
+        grade,
       ]
     );
 
@@ -860,6 +1266,12 @@ export default function EstoqueAgingDetalheV2Page() {
   function selecionarSku(
     sku
   ) {
+    if (
+      !sku
+    ) {
+      return;
+    }
+
     setSkuSelecionado(
       (
         atual
@@ -882,7 +1294,9 @@ export default function EstoqueAgingDetalheV2Page() {
     const sku =
       item?.sku;
 
-    if (!sku) {
+    if (
+      !sku
+    ) {
       return;
     }
 
@@ -909,19 +1323,53 @@ export default function EstoqueAgingDetalheV2Page() {
   }
 
 
+  /*
+   * Antes esse clique apontava para:
+   *
+   * /v2/assurant/indicadores/estoque/imei/:imei
+   *
+   * Essa rota não existe no App atual e resultava em tela branca.
+   *
+   * Agora o aparelho abre dentro da própria Inteligência Comercial
+   * do SKU. Enviamos também o IMEI como contexto.
+   */
   function abrirInteligenciaImei(
     item
   ) {
     if (
-      !item?.imei
+      !item?.sku
     ) {
       return;
     }
 
-    navigate(
-      `/v2/assurant/indicadores/estoque/imei/${encodeURIComponent(
+    const params =
+      new URLSearchParams();
+
+    params.set(
+      "sku",
+      item.sku
+    );
+
+    if (
+      item?.grade
+    ) {
+      params.set(
+        "grade",
+        item.grade
+      );
+    }
+
+    if (
+      item?.imei
+    ) {
+      params.set(
+        "imei",
         item.imei
-      )}`
+      );
+    }
+
+    navigate(
+      `/v2/assurant/indicadores/estoque/inteligencia?${params.toString()}`
     );
   }
 
@@ -933,694 +1381,867 @@ export default function EstoqueAgingDetalheV2Page() {
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="mx-auto w-full max-w-[1700px] px-5 py-6 lg:px-8">
-        {/* =====================================================
-            CABEÇALHO
-        ===================================================== */}
 
-        <div className="mb-6 flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-          <div>
-            <button
-              type="button"
-              onClick={() =>
-                navigate(
-                  "/v2/assurant/indicadores"
-                )
-              }
-              className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-slate-500 transition hover:text-slate-900"
-            >
-              <ArrowLeft
-                size={16}
-              />
+        {/* ===================================================
+            HEADER
+        =================================================== */}
 
-              Voltar ao Cockpit
-            </button>
-
-            <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-sm">
-                <Clock3
-                  size={21}
+        <div className="mb-6 rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex flex-col gap-5 px-5 py-5 xl:flex-row xl:items-center xl:justify-between">
+            <div>
+              <button
+                type="button"
+                onClick={() =>
+                  navigate(
+                    "/v2/assurant/indicadores"
+                  )
+                }
+                className="mb-4 inline-flex items-center gap-2 text-xs font-bold text-slate-400 transition hover:text-slate-900"
+              >
+                <ArrowLeft
+                  size={15}
                 />
-              </div>
 
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                  Stock Intelligence
-                </p>
+                Voltar ao Cockpit
+              </button>
 
-                <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">
-                  Aging de Estoque
-                </h1>
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-950 text-white">
+                  <Warehouse
+                    size={20}
+                  />
+                </div>
+
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-[0.16em] text-slate-400">
+                    Stock Intelligence
+                  </p>
+
+                  <h1 className="mt-1 text-xl font-black tracking-tight text-slate-950">
+                    Aging de Estoque
+                  </h1>
+
+                  <p className="mt-1 text-xs text-slate-400">
+                    Concentração física, envelhecimento, SKU, grade e aparelho.
+                  </p>
+                </div>
               </div>
             </div>
 
-            <p className="mt-4 max-w-3xl text-sm leading-6 text-slate-500">
-              Drill-down completo do estoque físico por faixa de aging,
-              SKU, grade e aparelho. Selecione uma concentração para
-              investigar os itens responsáveis e avançar para a
-              inteligência comercial.
-            </p>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <div className="text-[9px] font-black uppercase tracking-[0.12em] text-slate-400">
+                Faixa em análise
+              </div>
+
+              <div className="mt-1 text-sm font-black text-slate-900">
+                {faixa}
+              </div>
+            </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
-              Faixa selecionada
-            </p>
 
-            <p className="mt-2 text-lg font-semibold text-slate-900">
-              {faixa}
-            </p>
-          </div>
-        </div>
+          {/* =================================================
+              FAIXAS
+          ================================================= */}
 
+          <div className="overflow-x-auto border-t border-slate-100 px-5 py-3">
+            <div className="flex min-w-max gap-2">
+              {FAIXAS_AGING.map(
+                (
+                  item
+                ) => {
+                  const ativo =
+                    item ===
+                    faixa;
 
-        {/* =====================================================
-            FAIXAS
-        ===================================================== */}
-
-        <div className="mb-6 overflow-x-auto">
-          <div className="flex min-w-max gap-2">
-            {FAIXAS_AGING.map(
-              (
-                item
-              ) => {
-                const ativo =
-                  item ===
-                  faixa;
-
-                return (
-                  <button
-                    key={
-                      item
-                    }
-                    type="button"
-                    onClick={() =>
-                      alterarFaixa(
+                  return (
+                    <button
+                      key={
                         item
-                      )
-                    }
-                    className={[
-                      "rounded-xl border px-4 py-2.5 text-sm font-medium transition",
-                      ativo
-                        ? "border-slate-900 bg-slate-900 text-white shadow-sm"
-                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-950",
-                    ].join(
-                      " "
-                    )}
-                  >
-                    {item}
-                  </button>
-                );
-              }
-            )}
+                      }
+                      type="button"
+                      onClick={() =>
+                        alterarFaixa(
+                          item
+                        )
+                      }
+                      className={[
+                        "rounded-lg border px-3 py-2 text-[10px] font-black transition",
+                        ativo
+                          ? "border-slate-950 bg-slate-950 text-white"
+                          : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-950",
+                      ].join(
+                        " "
+                      )}
+                    >
+                      {item}
+                    </button>
+                  );
+                }
+              )}
+            </div>
           </div>
         </div>
 
 
-        {/* =====================================================
+        {/* ===================================================
             ERRO
-        ===================================================== */}
+        =================================================== */}
 
         {erro && (
-          <div className="mb-6 rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-700">
+          <div className="mb-6 rounded-xl border border-rose-200 bg-rose-50 px-5 py-4 text-xs font-semibold text-rose-700">
             {erro}
           </div>
         )}
 
 
-        {/* =====================================================
-            RESUMO EXECUTIVO
-        ===================================================== */}
+        {/* ===================================================
+            RESUMO
+        =================================================== */}
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <CardResumo
-            icon={
-              Boxes
-            }
-            titulo="Aparelhos"
-            valor={
-              loadingResumo
-                ? "—"
-                : formatarNumero(
-                    totalAparelhosResumo
-                  )
-            }
-            descricao="Total físico identificado nesta faixa de aging."
-          />
+        <MetricStrip
+          items={[
+            {
+              label:
+                "Aparelhos",
 
-          <CardResumo
-            icon={
-              Layers3
-            }
-            titulo="SKUs / grades"
-            valor={
-              loadingResumo
-                ? "—"
-                : formatarNumero(
-                    resumoSkus.length
-                  )
-            }
-            descricao="Combinações de SKU e grade atualmente presentes."
-          />
+              value:
+                loadingResumo
+                  ? "—"
+                  : formatarNumero(
+                      totalAparelhosResumo
+                    ),
 
-          <CardResumo
-            icon={
-              Clock3
-            }
-            titulo="Aging médio"
-            valor={
-              loadingResumo
-                ? "—"
-                : agingMedioFaixa == null
+              description:
+                "posição física da faixa",
+
+              tone:
+                "violet",
+            },
+
+            {
+              label:
+                "SKU × Grade",
+
+              value:
+                loadingResumo
+                  ? "—"
+                  : formatarNumero(
+                      resumoSkus.length
+                    ),
+
+              description:
+                "combinações identificadas",
+            },
+
+            {
+              label:
+                "Aging médio",
+
+              value:
+                loadingResumo ||
+                agingMedioFaixa ==
+                  null
                   ? "—"
                   : `${formatarDecimal(
                       agingMedioFaixa,
                       1
-                    )} dias`
-            }
-            descricao="Média ponderada pela quantidade física."
-          />
+                    )} dias`,
 
-          <CardResumo
-            icon={
-              TrendingDown
-            }
-            titulo="Concentração Top 10"
-            valor={
-              loadingResumo
-                ? "—"
-                : `${formatarDecimal(
-                    totalAparelhosResumo
-                      ? (
-                          resumoSkus
-                            .slice()
-                            .sort(
-                              (
-                                a,
-                                b
-                              ) =>
-                                Number(
-                                  b.aparelhos ||
-                                    0
-                                ) -
-                                Number(
-                                  a.aparelhos ||
-                                    0
-                                )
-                            )
-                            .slice(
-                              0,
-                              10
-                            )
-                            .reduce(
-                              (
-                                soma,
-                                item
-                              ) =>
-                                soma +
-                                Number(
-                                  item.aparelhos ||
-                                    0
-                                ),
-                              0
-                            ) /
-                          totalAparelhosResumo
-                        ) *
-                        100
-                      : 0,
-                    1
-                  )}%`
-            }
-            descricao="Participação dos 10 maiores SKUs/grades da faixa."
-          />
-        </div>
+              description:
+                "média ponderada",
+
+              tone:
+                agingMedioFaixa >
+                180
+                  ? "danger"
+                  : agingMedioFaixa >
+                      90
+                    ? "warning"
+                    : undefined,
+            },
+
+            {
+              label:
+                "Concentração Top 10",
+
+              value:
+                loadingResumo
+                  ? "—"
+                  : formatarPercentual(
+                      concentracaoTop10
+                    ),
+
+              description:
+                "participação dos 10 maiores",
+
+              tone:
+                concentracaoTop10 >
+                60
+                  ? "warning"
+                  : undefined,
+            },
+          ]}
+        />
 
 
-        {/* =====================================================
-            GRÁFICO + RANKING
-        ===================================================== */}
+        {/* ===================================================
+            CONCENTRAÇÃO + AGING POR SKU
+        =================================================== */}
 
-        <div className="mt-6 grid gap-6 2xl:grid-cols-[1.5fr_1fr]">
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="mb-5 flex items-start justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <BarChart3
-                    size={18}
-                    className="text-slate-500"
-                  />
+        <div className="mt-6 grid gap-6 2xl:grid-cols-[1.35fr_0.65fr]">
 
-                  <h2 className="text-base font-semibold text-slate-900">
-                    Concentração de estoque
-                  </h2>
-                </div>
+          {/* CONCENTRAÇÃO */}
 
-                <p className="mt-1 text-sm text-slate-500">
-                  Maiores concentrações de aparelhos dentro da faixa selecionada.
-                </p>
-              </div>
-            </div>
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <SectionHeader
+              icon={
+                BarChart3
+              }
+              title="Concentração do estoque"
+              description="Principais SKUs da faixa. Clique em uma barra para filtrar a composição física."
+            />
 
-            {loadingResumo ? (
-              <div className="flex h-[360px] items-center justify-center">
-                <Loader2
-                  size={26}
-                  className="animate-spin text-slate-400"
-                />
-              </div>
-            ) : rankingGrafico.length ? (
-              <div className="h-[360px]">
-                <ResponsiveContainer
-                  width="100%"
-                  height="100%"
-                >
-                  <BarChart
-                    data={
-                      rankingGrafico
-                    }
-                    layout="vertical"
-                    margin={{
-                      top: 0,
-                      right: 24,
-                      left: 10,
-                      bottom: 0,
-                    }}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      horizontal={false}
-                      stroke="#e2e8f0"
-                    />
-
-                    <XAxis
-                      type="number"
-                      tick={{
-                        fontSize: 11,
-                        fill: "#64748b",
-                      }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-
-                    <YAxis
-                      type="category"
-                      dataKey="sku"
-                      width={115}
-                      tick={{
-                        fontSize: 10,
-                        fill: "#64748b",
-                      }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-
-                    <Tooltip
-                      cursor={{
-                        fill: "#f8fafc",
-                      }}
-                      formatter={(
-                        value
-                      ) => [
-                        formatarNumero(
-                          value
-                        ),
-                        "Aparelhos",
-                      ]}
-                    />
-
-                    <Bar
-                      dataKey="aparelhos"
-                      fill="#0f172a"
-                      radius={[
-                        0,
-                        6,
-                        6,
-                        0,
-                      ]}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <EmptyState
-                titulo="Nenhum SKU encontrado"
-                descricao="Não há itens disponíveis nesta faixa para os filtros atuais."
-              />
-            )}
-          </section>
-
-
-          <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-100 px-5 py-4">
-              <h2 className="text-base font-semibold text-slate-900">
-                SKUs com maior concentração
-              </h2>
-
-              <p className="mt-1 text-sm text-slate-500">
-                Clique em um SKU para filtrar os aparelhos.
-              </p>
-            </div>
-
-            <div className="max-h-[405px] overflow-y-auto">
+            <div className="p-5">
               {loadingResumo ? (
-                <div className="flex min-h-[260px] items-center justify-center">
+                <div className="flex h-[360px] items-center justify-center">
                   <Loader2
-                    size={24}
+                    size={25}
                     className="animate-spin text-slate-400"
                   />
                 </div>
-              ) : resumoFiltrado.length ? (
-                resumoFiltrado
-                  .slice()
-                  .sort(
-                    (
-                      a,
-                      b
-                    ) =>
-                      Number(
-                        b.aparelhos ||
-                          0
-                      ) -
-                      Number(
-                        a.aparelhos ||
-                          0
-                      )
-                  )
-                  .slice(
-                    0,
-                    40
-                  )
-                  .map(
-                    (
-                      item,
-                      index
-                    ) => {
-                      const ativo =
-                        skuSelecionado ===
-                        item.sku;
+              ) : rankingGrafico.length ? (
+                <div className="h-[390px]">
+                  <ResponsiveContainer
+                    width="100%"
+                    height="100%"
+                  >
+                    <BarChart
+                      data={
+                        rankingGrafico
+                      }
+                      layout="vertical"
+                      margin={{
+                        top:
+                          0,
 
-                      return (
-                        <button
-                          key={`${item.sku}-${item.grade}-${index}`}
-                          type="button"
-                          onClick={() =>
+                        right:
+                          25,
+
+                        left:
+                          10,
+
+                        bottom:
+                          0,
+                      }}
+                    >
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        horizontal={
+                          false
+                        }
+                        stroke="#E2E8F0"
+                      />
+
+                      <XAxis
+                        type="number"
+                        tick={{
+                          fontSize:
+                            9,
+
+                          fill:
+                            "#94A3B8",
+                        }}
+                        axisLine={
+                          false
+                        }
+                        tickLine={
+                          false
+                        }
+                      />
+
+                      <YAxis
+                        type="category"
+                        dataKey="sku"
+                        width={
+                          115
+                        }
+                        tick={{
+                          fontSize:
+                            9,
+
+                          fill:
+                            "#64748B",
+                        }}
+                        axisLine={
+                          false
+                        }
+                        tickLine={
+                          false
+                        }
+                      />
+
+                      <Tooltip
+                        content={
+                          <GraficoTooltip />
+                        }
+                      />
+
+                      <Bar
+                        dataKey="aparelhos"
+                        name="Aparelhos"
+                        fill="#0F172A"
+                        radius={[
+                          0,
+                          5,
+                          5,
+                          0,
+                        ]}
+                        cursor="pointer"
+                        onClick={(
+                          payload
+                        ) => {
+                          const sku =
+                            payload?.sku ||
+                            payload?.payload?.sku;
+
+                          if (
+                            sku
+                          ) {
                             selecionarSku(
-                              item.sku
-                            )
+                              sku
+                            );
                           }
-                          className={[
-                            "flex w-full items-center justify-between gap-4 border-b border-slate-100 px-5 py-3.5 text-left transition last:border-b-0",
-                            ativo
-                              ? "bg-slate-900 text-white"
-                              : "bg-white hover:bg-slate-50",
-                          ].join(
-                            " "
-                          )}
-                        >
-                          <div className="min-w-0">
-                            <p
-                              className={[
-                                "truncate text-sm font-semibold",
-                                ativo
-                                  ? "text-white"
-                                  : "text-slate-800",
-                              ].join(
-                                " "
-                              )}
-                            >
-                              {item.modelo ||
-                                item.sku}
-                            </p>
+                        }}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <EmptyState
+                  titulo="Nenhum SKU encontrado"
+                  descricao="Não existem itens para a faixa e filtros selecionados."
+                />
+              )}
+            </div>
+          </section>
 
-                            <div className="mt-1 flex flex-wrap items-center gap-2">
+
+          {/* AGING DOS PRINCIPAIS */}
+
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <SectionHeader
+              icon={
+                Clock3
+              }
+              title="Aging dos principais SKUs"
+              description="Envelhecimento médio dos maiores estoques da faixa."
+            />
+
+            <div className="p-5">
+              {loadingResumo ? (
+                <div className="flex h-[360px] items-center justify-center">
+                  <Loader2
+                    size={25}
+                    className="animate-spin text-slate-400"
+                  />
+                </div>
+              ) : rankingGrafico.length ? (
+                <div className="h-[390px]">
+                  <ResponsiveContainer
+                    width="100%"
+                    height="100%"
+                  >
+                    <LineChart
+                      data={
+                        rankingGrafico
+                      }
+                      margin={{
+                        top:
+                          15,
+
+                        right:
+                          15,
+
+                        left:
+                          0,
+
+                        bottom:
+                          45,
+                      }}
+                    >
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        vertical={
+                          false
+                        }
+                        stroke="#E2E8F0"
+                      />
+
+                      <XAxis
+                        dataKey="sku"
+                        angle={
+                          -35
+                        }
+                        textAnchor="end"
+                        interval={
+                          0
+                        }
+                        height={
+                          70
+                        }
+                        tick={{
+                          fontSize:
+                            8,
+
+                          fill:
+                            "#64748B",
+                        }}
+                        axisLine={
+                          false
+                        }
+                        tickLine={
+                          false
+                        }
+                      />
+
+                      <YAxis
+                        tick={{
+                          fontSize:
+                            9,
+
+                          fill:
+                            "#94A3B8",
+                        }}
+                        axisLine={
+                          false
+                        }
+                        tickLine={
+                          false
+                        }
+                        tickFormatter={(
+                          value
+                        ) =>
+                          `${formatarNumero(
+                            value
+                          )}d`
+                        }
+                      />
+
+                      <Tooltip
+                        content={
+                          <GraficoTooltip />
+                        }
+                      />
+
+                      <Legend
+                        wrapperStyle={{
+                          fontSize:
+                            "10px",
+                        }}
+                      />
+
+                      <Line
+                        type="monotone"
+                        dataKey="aging"
+                        name="Aging médio"
+                        stroke="#6D28D9"
+                        strokeWidth={
+                          2.5
+                        }
+                        dot={{
+                          r:
+                            3,
+                        }}
+                        activeDot={{
+                          r:
+                            5,
+                        }}
+                        connectNulls
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <EmptyState
+                  titulo="Sem aging disponível"
+                  descricao="Não há informação suficiente para construir esta leitura."
+                />
+              )}
+            </div>
+          </section>
+        </div>
+
+
+        {/* ===================================================
+            RANKING COMPLETO
+        =================================================== */}
+
+        <section className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <SectionHeader
+            icon={
+              TrendingDown
+            }
+            title="Ranking de concentração"
+            description="Maiores posições físicas da faixa por SKU e grade. Selecione um SKU para abrir sua composição."
+          />
+
+          {loadingResumo ? (
+            <div className="flex min-h-[250px] items-center justify-center">
+              <Loader2
+                size={24}
+                className="animate-spin text-slate-400"
+              />
+            </div>
+          ) : rankingCompleto.length ? (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[850px]">
+                <thead>
+                  <tr className="bg-slate-50">
+                    <th className="px-5 py-3 text-left text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">
+                      #
+                    </th>
+
+                    <th className="px-3 py-3 text-left text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">
+                      SKU
+                    </th>
+
+                    <th className="px-3 py-3 text-left text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">
+                      Modelo
+                    </th>
+
+                    <th className="px-3 py-3 text-left text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">
+                      Grade
+                    </th>
+
+                    <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">
+                      Aparelhos
+                    </th>
+
+                    <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">
+                      Aging médio
+                    </th>
+
+                    <th className="px-5 py-3 text-right text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">
+                      Ação
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-slate-100">
+                  {rankingCompleto
+                    .slice(
+                      0,
+                      40
+                    )
+                    .map(
+                      (
+                        item,
+                        index
+                      ) => {
+                        const ativo =
+                          skuSelecionado ===
+                          item.sku;
+
+                        return (
+                          <tr
+                            key={`${item.sku}-${item.grade}-${index}`}
+                            className={[
+                              "transition",
+                              ativo
+                                ? "bg-violet-50/70"
+                                : "hover:bg-slate-50",
+                            ].join(
+                              " "
+                            )}
+                          >
+                            <td className="px-5 py-3 text-xs font-black text-slate-400">
+                              {index +
+                                1}
+                            </td>
+
+                            <td className="px-3 py-3">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  selecionarSku(
+                                    item.sku
+                                  )
+                                }
+                                className="font-mono text-xs font-black text-slate-800 hover:text-violet-800"
+                              >
+                                {item.sku ||
+                                  "—"}
+                              </button>
+                            </td>
+
+                            <td className="max-w-[420px] px-3 py-3">
+                              <div className="truncate text-xs font-semibold text-slate-700">
+                                {item.modelo ||
+                                  "—"}
+                              </div>
+                            </td>
+
+                            <td className="px-3 py-3">
                               <span
                                 className={[
-                                  "text-xs",
-                                  ativo
-                                    ? "text-slate-300"
-                                    : "text-slate-400",
+                                  "inline-flex rounded-lg border px-2 py-1 text-[10px] font-black",
+                                  badgeGrade(
+                                    item.grade
+                                  ),
                                 ].join(
                                   " "
                                 )}
                               >
-                                {item.sku}
+                                {item.grade ||
+                                  "SEM GRADE"}
                               </span>
+                            </td>
 
-                              {item.grade && (
-                                <span
-                                  className={[
-                                    "rounded-md border px-1.5 py-0.5 text-[10px] font-semibold",
-                                    ativo
-                                      ? "border-white/20 bg-white/10 text-white"
-                                      : badgeGrade(
-                                          item.grade
-                                        ),
-                                  ].join(
-                                    " "
-                                  )}
-                                >
-                                  {item.grade}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="shrink-0 text-right">
-                            <p
-                              className={[
-                                "text-sm font-semibold",
-                                ativo
-                                  ? "text-white"
-                                  : "text-slate-900",
-                              ].join(
-                                " "
-                              )}
-                            >
+                            <td className="px-3 py-3 text-right text-xs font-black text-slate-900">
                               {formatarNumero(
                                 item.aparelhos
                               )}
-                            </p>
+                            </td>
 
-                            <p
-                              className={[
-                                "mt-0.5 text-[11px]",
-                                ativo
-                                  ? "text-slate-300"
-                                  : "text-slate-400",
-                              ].join(
-                                " "
-                              )}
-                            >
+                            <td className="px-3 py-3 text-right text-xs font-black text-slate-700">
                               {formatarDecimal(
                                 item.aging_medio_dias,
-                                0
+                                1
                               )}{" "}
                               dias
-                            </p>
-                          </div>
-                        </button>
-                      );
-                    }
-                  )
-              ) : (
-                <div className="p-5">
-                  <EmptyState
-                    titulo="Sem concentração"
-                    descricao="Nenhum SKU foi encontrado para esta combinação de filtros."
-                  />
-                </div>
-              )}
+                            </td>
+
+                            <td className="px-5 py-3 text-right">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  abrirInteligenciaSku(
+                                    item
+                                  )
+                                }
+                                className="inline-flex items-center gap-1.5 text-[10px] font-black text-violet-700 transition hover:text-violet-950"
+                              >
+                                Inteligência
+
+                                <ArrowRight
+                                  size={13}
+                                />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      }
+                    )}
+                </tbody>
+              </table>
             </div>
-          </section>
-        </div>
-
-
-        {/* =====================================================
-            FILTROS
-        ===================================================== */}
-
-        <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="mb-4 flex items-center gap-2">
-            <Filter
-              size={17}
-              className="text-slate-500"
-            />
-
-            <h2 className="text-sm font-semibold text-slate-800">
-              Filtros do estoque
-            </h2>
-          </div>
-
-          <div className="grid gap-3 lg:grid-cols-[1.7fr_0.8fr_auto]">
-            <form
-              onSubmit={
-                aplicarBusca
-              }
-              className="relative"
-            >
-              <Search
-                size={17}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+          ) : (
+            <div className="p-5">
+              <EmptyState
+                titulo="Nenhuma concentração encontrada"
+                descricao="Nenhum SKU foi encontrado para a combinação selecionada."
+                compact
               />
-
-              <input
-                value={
-                  buscaDigitada
-                }
-                onChange={(
-                  event
-                ) =>
-                  setBuscaDigitada(
-                    event.target.value
-                  )
-                }
-                placeholder="Buscar por IMEI, SKU, modelo, marca, voucher ou subinventário..."
-                className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-4 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-slate-400"
-              />
-            </form>
-
-            <select
-              value={
-                grade
-              }
-              onChange={(
-                event
-              ) => {
-                setGrade(
-                  event.target.value
-                );
-
-                setSkuSelecionado(
-                  ""
-                );
-
-                setPagina(
-                  1
-                );
-              }}
-              className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-slate-400"
-            >
-              <option value="">
-                Todas as grades
-              </option>
-
-              {gradesDisponiveis.map(
-                (
-                  item
-                ) => (
-                  <option
-                    key={
-                      item
-                    }
-                    value={
-                      item
-                    }
-                  >
-                    {item}
-                  </option>
-                )
-              )}
-            </select>
-
-            <button
-              type="button"
-              onClick={
-                limparFiltros
-              }
-              className="h-11 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-950"
-            >
-              Limpar filtros
-            </button>
-          </div>
-
-          {skuSelecionadoResumo && (
-            <div className="mt-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
-                  SKU selecionado
-                </p>
-
-                <p className="mt-1 text-sm font-semibold text-slate-800">
-                  {skuSelecionadoResumo.modelo ||
-                    skuSelecionadoResumo.sku}
-                </p>
-
-                <p className="mt-0.5 text-xs text-slate-500">
-                  {skuSelecionadoResumo.sku} ·{" "}
-                  {skuSelecionadoResumo.grade ||
-                    "Sem grade"}{" "}
-                  ·{" "}
-                  {formatarNumero(
-                    skuSelecionadoResumo.aparelhos
-                  )}{" "}
-                  aparelhos
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() =>
-                  abrirInteligenciaSku(
-                    skuSelecionadoResumo
-                  )
-                }
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 text-sm font-medium text-white transition hover:bg-slate-800"
-              >
-                Inteligência comercial
-
-                <ArrowRight
-                  size={16}
-                />
-              </button>
             </div>
           )}
         </section>
 
 
-        {/* =====================================================
-            TABELA DE APARELHOS
-        ===================================================== */}
+        {/* ===================================================
+            FILTROS
+        =================================================== */}
 
         <section className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="flex items-center gap-2">
-                <Smartphone
-                  size={17}
-                  className="text-slate-500"
-                />
+          <SectionHeader
+            icon={
+              Filter
+            }
+            title="Investigação física"
+            description="Filtre o detalhe por IMEI, produto, voucher, subinventário, grade ou SKU."
+          />
 
-                <h2 className="text-base font-semibold text-slate-900">
-                  Aparelhos
-                </h2>
-              </div>
+          <div className="p-5">
+            <div className="grid gap-3 xl:grid-cols-[1fr_260px_auto]">
+              <form
+                onSubmit={
+                  aplicarBusca
+                }
+                className="flex min-w-0 gap-2"
+              >
+                <div className="relative min-w-0 flex-1">
+                  <Search
+                    size={16}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
 
-              <p className="mt-1 text-sm text-slate-500">
-                {loadingDetalhes
-                  ? "Carregando estoque..."
-                  : `${formatarNumero(
-                      detalhes.total
-                    )} aparelhos encontrados`}
-              </p>
+                  <input
+                    value={
+                      buscaDigitada
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setBuscaDigitada(
+                        event.target.value
+                      )
+                    }
+                    placeholder="IMEI, SKU, modelo, marca, voucher ou subinventário..."
+                    className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-4 text-xs font-medium text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-slate-400"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="h-11 rounded-xl bg-slate-950 px-4 text-xs font-black text-white transition hover:bg-slate-800"
+                >
+                  Buscar
+                </button>
+              </form>
+
+              <select
+                value={
+                  grade
+                }
+                onChange={(
+                  event
+                ) => {
+                  setGrade(
+                    event.target.value
+                  );
+
+                  setSkuSelecionado(
+                    ""
+                  );
+
+                  setPagina(
+                    1
+                  );
+                }}
+                className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 outline-none focus:border-slate-400"
+              >
+                <option value="">
+                  Todas as grades
+                </option>
+
+                {gradesDisponiveis.map(
+                  (
+                    item
+                  ) => (
+                    <option
+                      key={
+                        item
+                      }
+                      value={
+                        item
+                      }
+                    >
+                      {item}
+                    </option>
+                  )
+                )}
+              </select>
+
+              <button
+                type="button"
+                onClick={
+                  limparFiltros
+                }
+                className="h-11 rounded-xl border border-slate-200 bg-white px-4 text-xs font-black text-slate-600 transition hover:bg-slate-50 hover:text-slate-950"
+              >
+                Limpar filtros
+              </button>
             </div>
 
-            {(buscaAplicada ||
-              grade ||
-              skuSelecionado) && (
-              <span className="inline-flex w-fit rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-500">
-                Filtros ativos
-              </span>
+
+            {/* ===============================================
+                SKU SELECIONADO
+            =============================================== */}
+
+            {skuSelecionadoResumo && (
+              <div className="mt-4 flex flex-col gap-3 rounded-xl border border-violet-200 bg-violet-50/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <div className="text-[9px] font-black uppercase tracking-[0.12em] text-violet-500">
+                    SKU selecionado
+                  </div>
+
+                  <div className="mt-1 truncate text-sm font-black text-slate-900">
+                    {skuSelecionadoResumo.modelo ||
+                      skuSelecionadoResumo.sku}
+                  </div>
+
+                  <div className="mt-1 text-[10px] font-semibold text-slate-500">
+                    {skuSelecionadoResumo.sku} ·{" "}
+                    {skuSelecionadoResumo.grade ||
+                      "Sem grade"}{" "}
+                    ·{" "}
+                    {formatarNumero(
+                      skuSelecionadoResumo.aparelhos
+                    )}{" "}
+                    aparelhos
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    abrirInteligenciaSku(
+                      skuSelecionadoResumo
+                    )
+                  }
+                  className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-xs font-black text-white transition hover:bg-slate-800"
+                >
+                  Inteligência comercial
+
+                  <ArrowRight
+                    size={15}
+                  />
+                </button>
+              </div>
             )}
           </div>
+        </section>
+
+
+        {/* ===================================================
+            TABELA DE APARELHOS
+        =================================================== */}
+
+        <section className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <SectionHeader
+            icon={
+              Smartphone
+            }
+            title="Composição física"
+            description={
+              loadingDetalhes
+                ? "Consultando estoque..."
+                : `${formatarNumero(
+                    detalhes.total
+                  )} aparelhos encontrados nos filtros atuais.`
+            }
+            action={
+              (
+                buscaAplicada ||
+                grade ||
+                skuSelecionado
+              ) && (
+                <span className="inline-flex w-fit rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-[9px] font-black uppercase tracking-[0.08em] text-violet-700">
+                  Filtros ativos
+                </span>
+              )
+            }
+          />
 
           {loadingDetalhes ? (
-            <div className="flex min-h-[360px] items-center justify-center">
+            <div className="flex min-h-[380px] items-center justify-center">
               <div className="text-center">
                 <Loader2
                   size={28}
                   className="mx-auto animate-spin text-slate-400"
                 />
 
-                <p className="mt-3 text-sm text-slate-500">
+                <p className="mt-3 text-xs font-semibold text-slate-500">
                   Consultando estoque físico...
                 </p>
               </div>
@@ -1628,48 +2249,48 @@ export default function EstoqueAgingDetalheV2Page() {
           ) : detalhes.itens.length ? (
             <>
               <div className="overflow-x-auto">
-                <table className="min-w-[1250px] w-full">
+                <table className="w-full min-w-[1300px]">
                   <thead>
-                    <tr className="border-b border-slate-100 bg-slate-50/80">
-                      <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400">
+                    <tr className="border-b border-slate-100 bg-slate-50">
+                      <th className="px-5 py-3 text-left text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">
                         IMEI
                       </th>
 
-                      <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400">
+                      <th className="px-4 py-3 text-left text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">
                         Produto
                       </th>
 
-                      <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400">
+                      <th className="px-4 py-3 text-left text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">
                         Grade
                       </th>
 
-                      <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400">
+                      <th className="px-4 py-3 text-left text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">
                         Aging
                       </th>
 
-                      <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400">
-                        Entrada estoque
+                      <th className="px-4 py-3 text-left text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">
+                        Entrada
                       </th>
 
-                      <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400">
+                      <th className="px-4 py-3 text-left text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">
                         Subinventário
                       </th>
 
-                      <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400">
+                      <th className="px-4 py-3 text-left text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">
                         WMS
                       </th>
 
-                      <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400">
+                      <th className="px-4 py-3 text-left text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">
                         Voucher
                       </th>
 
-                      <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400">
+                      <th className="px-5 py-3 text-right text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">
                         Ação
                       </th>
                     </tr>
                   </thead>
 
-                  <tbody>
+                  <tbody className="divide-y divide-slate-100">
                     {detalhes.itens.map(
                       (
                         item,
@@ -1677,7 +2298,7 @@ export default function EstoqueAgingDetalheV2Page() {
                       ) => (
                         <tr
                           key={`${item.imei}-${index}`}
-                          className="border-b border-slate-100 transition last:border-b-0 hover:bg-slate-50/70"
+                          className="transition hover:bg-slate-50/70"
                         >
                           <td className="px-5 py-4">
                             <button
@@ -1687,7 +2308,7 @@ export default function EstoqueAgingDetalheV2Page() {
                                   item
                                 )
                               }
-                              className="font-mono text-xs font-semibold text-slate-800 hover:text-slate-950 hover:underline"
+                              className="font-mono text-xs font-black text-slate-800 transition hover:text-violet-800 hover:underline"
                             >
                               {item.imei ||
                                 "—"}
@@ -1695,14 +2316,14 @@ export default function EstoqueAgingDetalheV2Page() {
                           </td>
 
                           <td className="px-4 py-4">
-                            <div className="max-w-[360px]">
-                              <p className="truncate text-sm font-semibold text-slate-800">
+                            <div className="max-w-[390px]">
+                              <div className="truncate text-xs font-black text-slate-800">
                                 {item.modelo ||
                                   item.descricao ||
                                   "Produto sem descrição"}
-                              </p>
+                              </div>
 
-                              <p className="mt-1 text-xs text-slate-400">
+                              <div className="mt-1 text-[10px] font-medium text-slate-400">
                                 {item.sku ||
                                   "SKU não informado"}
 
@@ -1713,14 +2334,14 @@ export default function EstoqueAgingDetalheV2Page() {
                                 {item.cor
                                   ? ` · ${item.cor}`
                                   : ""}
-                              </p>
+                              </div>
                             </div>
                           </td>
 
                           <td className="px-4 py-4">
                             <span
                               className={[
-                                "inline-flex rounded-lg border px-2 py-1 text-[11px] font-semibold",
+                                "inline-flex rounded-lg border px-2 py-1 text-[10px] font-black",
                                 badgeGrade(
                                   item.grade
                                 ),
@@ -1734,9 +2355,9 @@ export default function EstoqueAgingDetalheV2Page() {
                           </td>
 
                           <td className="px-4 py-4">
-                            <p
+                            <div
                               className={[
-                                "text-sm font-semibold",
+                                "text-xs font-black",
                                 classeAging(
                                   item.dias_estoque
                                 ),
@@ -1748,31 +2369,30 @@ export default function EstoqueAgingDetalheV2Page() {
                                 item.dias_estoque
                               )}{" "}
                               dias
-                            </p>
+                            </div>
 
-                            <p className="mt-1 text-[11px] text-slate-400">
-                              {item.faixa_aging}
-                            </p>
+                            <div className="mt-1 text-[9px] font-medium text-slate-400">
+                              {item.faixa_aging ||
+                                faixa}
+                            </div>
                           </td>
 
-                          <td className="px-4 py-4 text-sm text-slate-600">
+                          <td className="px-4 py-4 text-xs font-semibold text-slate-600">
                             {formatarData(
                               item.data_subinv
                             )}
                           </td>
 
-                          <td className="px-4 py-4">
-                            <p className="text-sm font-medium text-slate-700">
-                              {item.local_subinv ||
-                                "—"}
-                            </p>
+                          <td className="px-4 py-4 text-xs font-bold text-slate-700">
+                            {item.local_subinv ||
+                              "—"}
                           </td>
 
                           <td className="px-4 py-4">
-                            <div className="flex items-center gap-2 text-sm text-slate-600">
+                            <div className="flex items-center gap-2 text-xs font-semibold text-slate-600">
                               <MapPin
-                                size={14}
-                                className="text-slate-400"
+                                size={13}
+                                className="shrink-0 text-slate-400"
                               />
 
                               {construirEndereco(
@@ -1782,13 +2402,13 @@ export default function EstoqueAgingDetalheV2Page() {
                           </td>
 
                           <td className="px-4 py-4">
-                            <p className="max-w-[160px] truncate text-xs text-slate-500">
+                            <div className="max-w-[170px] truncate text-[10px] font-medium text-slate-500">
                               {item.voucher ||
                                 "—"}
-                            </p>
+                            </div>
                           </td>
 
-                          <td className="px-4 py-4 text-right">
+                          <td className="px-5 py-4 text-right">
                             <button
                               type="button"
                               onClick={() =>
@@ -1796,12 +2416,12 @@ export default function EstoqueAgingDetalheV2Page() {
                                   item
                                 )
                               }
-                              className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                              className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-[10px] font-black text-slate-700 transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-800"
                             >
                               Analisar
 
                               <ArrowRight
-                                size={14}
+                                size={13}
                               />
                             </button>
                           </td>
@@ -1813,21 +2433,26 @@ export default function EstoqueAgingDetalheV2Page() {
               </div>
 
 
-              {/* =================================================
+              {/* =============================================
                   PAGINAÇÃO
-              ================================================= */}
+              ============================================= */}
 
               <div className="flex flex-col gap-3 border-t border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-xs text-slate-500">
+                <div className="text-[10px] font-medium text-slate-500">
                   Página{" "}
-                  <span className="font-semibold text-slate-700">
+                  <strong className="text-slate-800">
                     {detalhes.pagina}
-                  </span>{" "}
+                  </strong>{" "}
                   de{" "}
-                  <span className="font-semibold text-slate-700">
+                  <strong className="text-slate-800">
                     {detalhes.totalPaginas}
-                  </span>
-                </p>
+                  </strong>{" "}
+                  ·{" "}
+                  {formatarNumero(
+                    detalhes.total
+                  )}{" "}
+                  aparelhos
+                </div>
 
                 <div className="flex items-center gap-2">
                   <button
@@ -1848,10 +2473,10 @@ export default function EstoqueAgingDetalheV2Page() {
                           )
                       )
                     }
-                    className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-[10px] font-black text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     <ChevronLeft
-                      size={15}
+                      size={14}
                     />
 
                     Anterior
@@ -1875,12 +2500,12 @@ export default function EstoqueAgingDetalheV2Page() {
                           )
                       )
                     }
-                    className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-[10px] font-black text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Próxima
 
                     <ChevronRight
-                      size={15}
+                      size={14}
                     />
                   </button>
                 </div>
@@ -1890,37 +2515,38 @@ export default function EstoqueAgingDetalheV2Page() {
             <div className="p-6">
               <EmptyState
                 titulo="Nenhum aparelho encontrado"
-                descricao="Tente remover algum filtro ou selecionar outra faixa de aging."
+                descricao="Remova algum filtro ou selecione outra faixa de aging."
               />
             </div>
           )}
         </section>
 
 
-        {/* =====================================================
-            RODAPÉ ANALÍTICO
-        ===================================================== */}
+        {/* ===================================================
+            METODOLOGIA
+        =================================================== */}
 
         <div className="mt-6 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
           <div className="flex items-start gap-3">
-            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
               <Boxes
-                size={16}
+                size={15}
               />
             </div>
 
             <div>
-              <p className="text-sm font-semibold text-slate-800">
-                Leitura do estoque
-              </p>
+              <div className="text-[9px] font-black uppercase tracking-[0.12em] text-slate-500">
+                Critério da análise
+              </div>
 
-              <p className="mt-1 text-xs leading-5 text-slate-500">
-                O aging considera a data de entrada disponível no
-                subinventário atual. As quantidades apresentadas são
-                registros físicos atuais, não projeções. A inteligência
-                de preço será construída a partir do histórico real de
-                faturamento e das vendas posteriores registradas pelo
-                sistema.
+              <p className="mt-1 max-w-6xl text-[10px] leading-5 text-slate-500">
+                O aging representa a diferença entre a posição atual e a
+                data de entrada disponível no subinventário. Os volumes
+                representam registros físicos atuais e não projeções.
+                A partir do SKU ou de um IMEI, a investigação segue para a
+                Inteligência Comercial, onde serão analisados histórico de
+                preços realizados, saída, giro, cobertura, liquidez e
+                recomendação de preço.
               </p>
             </div>
           </div>

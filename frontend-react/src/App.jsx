@@ -1,5 +1,12 @@
-import { Navigate, Route, Routes } from "react-router-dom";
-import { useAuth } from "./AuthContext.jsx";
+import {
+  Navigate,
+  Route,
+  Routes,
+} from "react-router-dom";
+
+import {
+  useAuth,
+} from "./AuthContext.jsx";
 
 import MainLayout from "./layout/MainLayout.jsx";
 import AssurantWorkspaceLayout from "./layout/AssurantWorkspaceLayout.jsx";
@@ -66,6 +73,7 @@ import UploadsV2Page from "./pages/assurant-v2/UploadsV2Page.jsx";
 import UsuariosV2Page from "./pages/assurant-v2/UsuariosV2Page.jsx";
 import IndicadoresExecutivosV2Page from "./pages/assurant-v2/IndicadoresExecutivosV2Page.jsx";
 import EstoqueAgingDetalheV2Page from "./pages/assurant-v2/EstoqueAgingDetalheV2Page.jsx";
+import EstoqueInteligenciaSkuV2Page from "./pages/assurant-v2/EstoqueInteligenciaSkuV2Page.jsx";
 
 import LinhaBrancaHomePage from "./pages/linha-branca-v2/LinhaBrancaHomePage.jsx";
 import RefrigeracaoV2Page from "./pages/linha-branca-v2/RefrigeracaoV2Page.jsx";
@@ -88,14 +96,20 @@ import LavadorasWorkspaceLayout from "./layout/LavadorasWorkspaceLayout.jsx";
 import ClimatizacaoWorkspaceLayout from "./layout/ClimatizacaoWorkspaceLayout.jsx";
 
 
-function ProtectedRoute({ tela, children }) {
+function ProtectedRoute({
+  tela,
+  children,
+}) {
   const {
     user,
     loading,
     hasAccess,
-  } = useAuth();
+  } =
+    useAuth();
 
-  if (loading) {
+  if (
+    loading
+  ) {
     return (
       <div className="min-h-screen flex items-center justify-center text-purple-700 font-bold">
         Carregando...
@@ -103,7 +117,9 @@ function ProtectedRoute({ tela, children }) {
     );
   }
 
-  if (!user) {
+  if (
+    !user
+  ) {
     return (
       <Navigate
         to="/login"
@@ -114,7 +130,9 @@ function ProtectedRoute({ tela, children }) {
 
   if (
     tela &&
-    !hasAccess(tela)
+    !hasAccess(
+      tela
+    )
   ) {
     return (
       <Navigate
@@ -132,9 +150,12 @@ function DefaultRedirect() {
   const {
     profile,
     loading,
-  } = useAuth();
+  } =
+    useAuth();
 
-  if (loading) {
+  if (
+    loading
+  ) {
     return (
       <div className="min-h-screen flex items-center justify-center text-[#43284F] font-bold">
         Carregando...
@@ -142,7 +163,9 @@ function DefaultRedirect() {
     );
   }
 
-  if (!profile) {
+  if (
+    !profile
+  ) {
     return (
       <Navigate
         to="/login"
@@ -185,15 +208,19 @@ export default function App() {
   const {
     user,
     loading,
-  } = useAuth();
+  } =
+    useAuth();
 
-  if (loading) {
+  if (
+    loading
+  ) {
     return (
       <div className="min-h-screen flex items-center justify-center text-purple-700 font-bold">
         Carregando...
       </div>
     );
   }
+
 
   return (
     <Routes>
@@ -562,6 +589,15 @@ export default function App() {
           element={
             <ProtectedRoute tela="/v2/assurant/indicadores">
               <EstoqueAgingDetalheV2Page />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="indicadores/estoque/inteligencia"
+          element={
+            <ProtectedRoute tela="/v2/assurant/indicadores">
+              <EstoqueInteligenciaSkuV2Page />
             </ProtectedRoute>
           }
         />
