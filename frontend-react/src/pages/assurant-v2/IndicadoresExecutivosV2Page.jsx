@@ -1004,9 +1004,6 @@ export default function IndicadoresExecutivosV2Page() {
       expedicaoDiaria:
         [],
 
-      ocorrenciasMensais:
-        [],
-
       errosProcessoMensais:
         [],
 
@@ -1100,7 +1097,6 @@ export default function IndicadoresExecutivosV2Page() {
           dados.gradesMensais,
           dados.b2bOperacaoMensal,
           dados.b2cCanaisMensal,
-          dados.ocorrenciasMensais,
           dados.errosProcessoMensais,
         ].forEach(
           (
@@ -1373,7 +1369,7 @@ export default function IndicadoresExecutivosV2Page() {
 
 
   /* =======================================================
-     LEAD TIME WAREHOUSE — NOVA LÓGICA
+     LEAD TIME WAREHOUSE
   ======================================================= */
 
   const leadtimeWarehouse =
@@ -2837,64 +2833,6 @@ export default function IndicadoresExecutivosV2Page() {
         total +
         Number(
           row.coletas ||
-            0
-        ),
-      0
-    );
-
-
-  /* =======================================================
-     OCORRÊNCIAS
-  ======================================================= */
-
-  const ocorrenciasMes =
-    useMemo(
-      () =>
-        (
-          dados.ocorrenciasMensais ||
-          []
-        )
-          .filter(
-            (
-              row
-            ) =>
-              String(
-                row.mes
-              ).slice(
-                0,
-                10
-              ) ===
-              mesSelecionado
-          )
-          .sort(
-            (
-              a,
-              b
-            ) =>
-              Number(
-                b.ocorrencias ||
-                  0
-              ) -
-              Number(
-                a.ocorrencias ||
-                  0
-              )
-          ),
-      [
-        dados.ocorrenciasMensais,
-        mesSelecionado,
-      ]
-    );
-
-  const totalOcorrencias =
-    ocorrenciasMes.reduce(
-      (
-        total,
-        row
-      ) =>
-        total +
-        Number(
-          row.ocorrencias ||
             0
         ),
       0
@@ -5446,141 +5384,11 @@ export default function IndicadoresExecutivosV2Page() {
 
 
       {/* ===================================================
-          7. OCORRÊNCIAS
+          7. ERROS & RETRABALHOS
       =================================================== */}
 
       <Section
         index="07"
-        title={`Ocorrências de Estoque & Alocação B2C — ${fmtMesLongo(
-          mesSelecionado
-        )}`}
-        subtitle="Ocorrências identificadas na tentativa de localizar, alocar ou definir o produto do pedido."
-      >
-        <MetricStrip
-          items={[
-            {
-              label:
-                "Total de ocorrências",
-
-              value:
-                fmtNumero(
-                  totalOcorrencias
-                ),
-
-              detail:
-                "eventos identificados",
-
-              tone:
-                totalOcorrencias >
-                0
-                  ? "warning"
-                  : "good",
-            },
-          ]}
-        />
-
-        <div className="h-[330px] p-5">
-          {ocorrenciasMes.length ? (
-            <ResponsiveContainer
-              width="100%"
-              height="100%"
-            >
-              <BarChart
-                data={
-                  ocorrenciasMes.slice(
-                    0,
-                    12
-                  )
-                }
-                layout="vertical"
-                margin={{
-                  left:
-                    35,
-
-                  right:
-                    20,
-                }}
-              >
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  horizontal={
-                    false
-                  }
-                  stroke="#E2E8F0"
-                />
-
-                <XAxis
-                  type="number"
-                  tick={{
-                    fontSize:
-                      9,
-
-                    fill:
-                      "#94A3B8",
-                  }}
-                  axisLine={
-                    false
-                  }
-                  tickLine={
-                    false
-                  }
-                />
-
-                <YAxis
-                  type="category"
-                  dataKey="categoria"
-                  width={
-                    190
-                  }
-                  tick={{
-                    fontSize:
-                      9,
-
-                    fill:
-                      "#64748B",
-                  }}
-                  axisLine={
-                    false
-                  }
-                  tickLine={
-                    false
-                  }
-                />
-
-                <Tooltip
-                  content={
-                    <NumeroTooltip />
-                  }
-                />
-
-                <Bar
-                  dataKey="ocorrencias"
-                  name="Ocorrências"
-                  fill="#F59E0B"
-                  radius={[
-                    0,
-                    5,
-                    5,
-                    0,
-                  ]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <EmptyState>
-              Nenhuma ocorrência registrada no período.
-            </EmptyState>
-          )}
-        </div>
-      </Section>
-
-
-      {/* ===================================================
-          8. ERROS
-      =================================================== */}
-
-      <Section
-        index="08"
         title={`Erros & Retrabalhos — ${fmtMesLongo(
           mesSelecionado
         )}`}
@@ -5784,11 +5592,11 @@ export default function IndicadoresExecutivosV2Page() {
 
 
       {/* ===================================================
-          9. STOCK INTELLIGENCE
+          8. STOCK INTELLIGENCE
       =================================================== */}
 
       <Section
-        index="09"
+        index="08"
         title="Stock Intelligence"
         subtitle="Estoque atual, envelhecimento e investigação por faixa de aging, SKU, grade e IMEI."
         action={
