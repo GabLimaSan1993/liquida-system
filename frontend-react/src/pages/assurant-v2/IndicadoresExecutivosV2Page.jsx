@@ -287,46 +287,6 @@ function fmtHoras(
 }
 
 
-function fmtCobertura(
-  validos,
-  total
-) {
-  const qtdValidos =
-    Number(
-      validos ||
-        0
-    );
-
-  const qtdTotal =
-    Number(
-      total ||
-        0
-    );
-
-  if (
-    !qtdTotal
-  ) {
-    return "—";
-  }
-
-  const percentual =
-    (
-      qtdValidos /
-      qtdTotal
-    ) *
-    100;
-
-  return `${fmtNumero(
-    qtdValidos
-  )} de ${fmtNumero(
-    qtdTotal
-  )} · ${fmtNumero(
-    percentual,
-    1
-  )}%`;
-}
-
-
 function fmtDataCurta(
   value
 ) {
@@ -621,7 +581,7 @@ function Section({
             </h2>
 
             {subtitle && (
-              <p className="mt-1 max-w-4xl text-[10px] leading-4 text-slate-400">
+              <p className="mt-1 max-w-5xl text-[10px] leading-4 text-slate-400">
                 {subtitle}
               </p>
             )}
@@ -802,6 +762,51 @@ function NumeroTooltip({
 
               <span className="font-black text-slate-800">
                 {fmtNumero(
+                  item.value
+                )}
+              </span>
+            </div>
+          )
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+function TempoTooltipHoras({
+  active,
+  payload,
+  label,
+}) {
+  if (
+    !active ||
+    !payload?.length
+  ) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
+      <div className="mb-2 text-[10px] font-black text-slate-700">
+        {label}
+      </div>
+
+      <div className="space-y-1">
+        {payload.map(
+          (
+            item
+          ) => (
+            <div
+              key={`${item.dataKey}-${item.name}`}
+              className="flex min-w-[190px] items-center justify-between gap-4 text-[10px]"
+            >
+              <span className="font-semibold text-slate-500">
+                {item.name}
+              </span>
+
+              <span className="font-black text-slate-800">
+                {fmtHoras(
                   item.value
                 )}
               </span>
@@ -1368,7 +1373,7 @@ export default function IndicadoresExecutivosV2Page() {
 
 
   /* =======================================================
-     LEAD TIME WAREHOUSE
+     LEAD TIME WAREHOUSE — NOVA LÓGICA
   ======================================================= */
 
   const leadtimeWarehouse =
@@ -1389,11 +1394,213 @@ export default function IndicadoresExecutivosV2Page() {
     ) ||
     {};
 
-  const prioridadesMenor1h =
+  const leadtimeWarehouseAnterior =
+    (
+      dados.leadtimeTriagemMensal ||
+      []
+    ).find(
+      (
+        row
+      ) =>
+        String(
+          row.mes
+        ).slice(
+          0,
+          10
+        ) ===
+        mesAnterior
+    ) ||
+    {};
+
+  const leadtimeTemComparativoEspecial =
+    leadtimeWarehouse.receb_funcional_mediana_atual_h !=
+      null;
+
+  const recebFuncionalMediana =
+    leadtimeTemComparativoEspecial
+      ? Number(
+          leadtimeWarehouse.receb_funcional_mediana_atual_h
+        )
+      : Number(
+          leadtimeWarehouse.receb_funcional_h ||
+            0
+        );
+
+  const recebFuncionalAnterior =
+    leadtimeTemComparativoEspecial
+      ? Number(
+          leadtimeWarehouse.receb_funcional_mediana_anterior_h
+        )
+      : (
+          leadtimeWarehouseAnterior.receb_funcional_h !=
+          null
+            ? Number(
+                leadtimeWarehouseAnterior.receb_funcional_h
+              )
+            : null
+        );
+
+  const recebFuncionalVariacao =
+    leadtimeTemComparativoEspecial
+      ? Number(
+          leadtimeWarehouse.receb_funcional_variacao_mediana_pct
+        )
+      : calcularVariacao(
+          recebFuncionalMediana,
+          recebFuncionalAnterior
+        );
+
+  const recebFuncionalMedia =
+    leadtimeWarehouse.receb_funcional_media_atual_h !=
+      null
+      ? Number(
+          leadtimeWarehouse.receb_funcional_media_atual_h
+        )
+      : null;
+
+  const recebFuncionalP90 =
+    leadtimeWarehouse.receb_funcional_p90_atual_h !=
+      null
+      ? Number(
+          leadtimeWarehouse.receb_funcional_p90_atual_h
+        )
+      : null;
+
+  const recebFuncionalAmostra =
     Number(
-      leadtimeWarehouse.excluidos_tempo_zero ||
+      leadtimeWarehouse.receb_funcional_amostra_atual ??
+        leadtimeWarehouse.aparelhos ??
         0
     );
+
+  const prioridadesMenor1h =
+    Number(
+      leadtimeWarehouse.receb_funcional_prioridades_menor_1h ??
+        leadtimeWarehouse.excluidos_tempo_zero ??
+        0
+    );
+
+  const timestampsSimultaneos =
+    Number(
+      leadtimeWarehouse.receb_funcional_timestamps_simultaneos ||
+        0
+    );
+
+
+  const funcionalCosmeticaMediana =
+    leadtimeTemComparativoEspecial
+      ? Number(
+          leadtimeWarehouse.funcional_cosmetica_mediana_atual_h
+        )
+      : Number(
+          leadtimeWarehouse.funcional_cosmetica_h ||
+            0
+        );
+
+  const funcionalCosmeticaAnterior =
+    leadtimeTemComparativoEspecial
+      ? Number(
+          leadtimeWarehouse.funcional_cosmetica_mediana_anterior_h
+        )
+      : (
+          leadtimeWarehouseAnterior.funcional_cosmetica_h !=
+          null
+            ? Number(
+                leadtimeWarehouseAnterior.funcional_cosmetica_h
+              )
+            : null
+        );
+
+  const funcionalCosmeticaVariacao =
+    leadtimeTemComparativoEspecial
+      ? Number(
+          leadtimeWarehouse.funcional_cosmetica_variacao_mediana_pct
+        )
+      : calcularVariacao(
+          funcionalCosmeticaMediana,
+          funcionalCosmeticaAnterior
+        );
+
+  const funcionalCosmeticaMedia =
+    leadtimeWarehouse.funcional_cosmetica_media_atual_h !=
+      null
+      ? Number(
+          leadtimeWarehouse.funcional_cosmetica_media_atual_h
+        )
+      : null;
+
+  const funcionalCosmeticaP90 =
+    leadtimeWarehouse.funcional_cosmetica_p90_atual_h !=
+      null
+      ? Number(
+          leadtimeWarehouse.funcional_cosmetica_p90_atual_h
+        )
+      : null;
+
+  const funcionalCosmeticaAmostra =
+    Number(
+      leadtimeWarehouse.funcional_cosmetica_amostra_atual ||
+        0
+    );
+
+
+  const cosmeticaWmsMediana =
+    leadtimeWarehouse.cosmetica_wms_mediana_h !=
+      null
+      ? Number(
+          leadtimeWarehouse.cosmetica_wms_mediana_h
+        )
+      : null;
+
+  const cosmeticaWmsMedia =
+    leadtimeWarehouse.cosmetica_wms_media_h !=
+      null
+      ? Number(
+          leadtimeWarehouse.cosmetica_wms_media_h
+        )
+      : null;
+
+  const cosmeticaWmsP90 =
+    leadtimeWarehouse.cosmetica_wms_p90_h !=
+      null
+      ? Number(
+          leadtimeWarehouse.cosmetica_wms_p90_h
+        )
+      : null;
+
+  const cosmeticaWmsAmostra =
+    Number(
+      leadtimeWarehouse.cosmetica_wms_amostra ||
+        0
+    );
+
+  const cosmeticaWmsAte48 =
+    Number(
+      leadtimeWarehouse.cosmetica_wms_ate_48h ||
+        0
+    );
+
+  const cosmeticaWmsPctAte48 =
+    leadtimeWarehouse.cosmetica_wms_pct_ate_48h !=
+      null
+      ? Number(
+          leadtimeWarehouse.cosmetica_wms_pct_ate_48h
+        )
+      : null;
+
+  const cosmeticaWmsPendentes =
+    Number(
+      leadtimeWarehouse.cosmetica_wms_pendentes ||
+        0
+    );
+
+  const baselineWmsInicio =
+    leadtimeWarehouse.baseline_wms_inicio ||
+    "2026-08-15";
+
+  const corteLeadtime =
+    leadtimeWarehouse.corte_operacional ||
+    null;
 
   const leadtimeEtapas =
     [
@@ -1402,10 +1609,13 @@ export default function IndicadoresExecutivosV2Page() {
           "Recebimento → Funcional",
 
         horas:
-          Number(
-            leadtimeWarehouse.receb_funcional_h ||
-              0
-          ),
+          recebFuncionalMediana,
+
+        anterior:
+          recebFuncionalAnterior,
+
+        variacao:
+          recebFuncionalVariacao,
       },
 
       {
@@ -1413,45 +1623,40 @@ export default function IndicadoresExecutivosV2Page() {
           "Funcional → Cosmética",
 
         horas:
-          Number(
-            leadtimeWarehouse.funcional_cosmetica_h ||
-              0
-          ),
+          funcionalCosmeticaMediana,
+
+        anterior:
+          funcionalCosmeticaAnterior,
+
+        variacao:
+          funcionalCosmeticaVariacao,
       },
 
       {
         etapa:
-          "Funcional → Laudo",
+          "Cosmética → Alocação WMS",
 
         horas:
-          Number(
-            leadtimeWarehouse.funcional_laudo_h ||
-              0
-          ),
+          cosmeticaWmsMediana,
+
+        anterior:
+          null,
+
+        variacao:
+          null,
       },
-
-      {
-        etapa:
-          "Cosmética → Oracle",
-
-        horas:
+    ].filter(
+      (
+        item
+      ) =>
+        item.horas !=
+          null &&
+        Number.isFinite(
           Number(
-            leadtimeWarehouse.cosmetica_oracle_h ||
-              0
-          ),
-      },
-
-      {
-        etapa:
-          "Ponta a ponta",
-
-        horas:
-          Number(
-            leadtimeWarehouse.ponta_a_ponta_h ||
-              0
-          ),
-      },
-    ];
+            item.horas
+          )
+        )
+    );
 
 
   /* =======================================================
@@ -3172,17 +3377,25 @@ export default function IndicadoresExecutivosV2Page() {
 
             {
               label:
-                "Lead time ponta a ponta",
+                "Receb. → Funcional",
 
               value:
                 fmtHoras(
-                  leadtimeWarehouse.ponta_a_ponta_h
+                  recebFuncionalMediana
                 ),
 
               detail:
-                `${fmtNumero(
-                  leadtimeWarehouse.aparelhos
-                )} registros válidos`,
+                `${fmtVariacao(
+                  recebFuncionalVariacao
+                )} na mediana`,
+
+              tone:
+                recebFuncionalVariacao !=
+                  null &&
+                recebFuncionalVariacao <
+                  0
+                  ? "good"
+                  : undefined,
             },
           ]}
         />
@@ -3444,143 +3657,483 @@ export default function IndicadoresExecutivosV2Page() {
       <Section
         index="02"
         title="Lead Time do Warehouse"
-        subtitle="Medianas de cada transição do fluxo. Prioridades processadas abaixo de 1h permanecem dentro do cálculo."
+        subtitle={`Medianas das transições operacionais. Recebimento → Funcional desconsidera sábados e domingos. Prioridades abaixo de 1h permanecem no cálculo.${
+          corteLeadtime
+            ? ` Corte operacional da base: ${fmtDataCurta(
+                corteLeadtime
+              )}.`
+            : ""
+        }`}
       >
-        <div className="grid gap-5 p-5 xl:grid-cols-[1.45fr_0.55fr]">
-          <div className="h-[310px]">
-            <ResponsiveContainer
-              width="100%"
-              height="100%"
-            >
-              <BarChart
-                data={
-                  leadtimeEtapas
-                }
-                layout="vertical"
-                margin={{
-                  left:
-                    35,
+        <MetricStrip
+          items={[
+            {
+              label:
+                "Recebimento → Funcional",
 
-                  right:
-                    20,
-                }}
-              >
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  horizontal={
-                    false
-                  }
-                  stroke="#E2E8F0"
-                />
+              value:
+                fmtHoras(
+                  recebFuncionalMediana
+                ),
 
-                <XAxis
-                  type="number"
-                  tick={{
-                    fontSize:
-                      9,
+              detail:
+                recebFuncionalAnterior !=
+                null
+                  ? `${fmtHoras(
+                      recebFuncionalAnterior
+                    )} anterior · ${fmtVariacao(
+                      recebFuncionalVariacao
+                    )}`
+                  : "mediana",
 
-                    fill:
-                      "#94A3B8",
-                  }}
-                  axisLine={
-                    false
-                  }
-                  tickLine={
-                    false
-                  }
-                  tickFormatter={(
-                    value
-                  ) =>
-                    `${fmtNumero(
-                      value,
-                      1
-                    )}h`
-                  }
-                />
+              tone:
+                recebFuncionalVariacao !=
+                  null &&
+                recebFuncionalVariacao <
+                  0
+                  ? "good"
+                  : undefined,
+            },
 
-                <YAxis
-                  type="category"
-                  dataKey="etapa"
-                  width={
-                    150
-                  }
-                  tick={{
-                    fontSize:
-                      10,
+            {
+              label:
+                "Funcional → Cosmética",
 
-                    fill:
-                      "#64748B",
-                  }}
-                  axisLine={
-                    false
-                  }
-                  tickLine={
-                    false
-                  }
-                />
+              value:
+                fmtHoras(
+                  funcionalCosmeticaMediana
+                ),
 
-                <Tooltip
-                  formatter={(
-                    value
-                  ) => [
-                    fmtHoras(
-                      value
-                    ),
-                    "Mediana",
-                  ]}
-                />
+              detail:
+                funcionalCosmeticaAnterior !=
+                null
+                  ? `${fmtHoras(
+                      funcionalCosmeticaAnterior
+                    )} anterior · ${fmtVariacao(
+                      funcionalCosmeticaVariacao
+                    )}`
+                  : "mediana",
 
-                <Bar
-                  dataKey="horas"
-                  name="Mediana"
-                  fill="#475569"
-                  radius={[
-                    0,
-                    5,
-                    5,
-                    0,
-                  ]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+              tone:
+                funcionalCosmeticaVariacao !=
+                  null &&
+                funcionalCosmeticaVariacao <
+                  0
+                  ? "good"
+                  : undefined,
+            },
 
-          <div className="flex flex-col justify-between rounded-xl border border-slate-200 bg-slate-50 p-5">
-            <div>
-              <div className="text-[9px] font-black uppercase tracking-[0.12em] text-slate-400">
-                Tempo ponta a ponta
+            {
+              label:
+                "Cosmética → Alocação WMS",
+
+              value:
+                fmtHoras(
+                  cosmeticaWmsMediana
+                ),
+
+              detail:
+                cosmeticaWmsPctAte48 !=
+                null
+                  ? `${fmtPercentual(
+                      cosmeticaWmsPctAte48
+                    )} em até 48h`
+                  : "baseline WMS",
+
+              tone:
+                "violet",
+            },
+
+            {
+              label:
+                "Prioridades < 1h",
+
+              value:
+                fmtNumero(
+                  prioridadesMenor1h
+                ),
+
+              detail:
+                `${fmtNumero(
+                  timestampsSimultaneos
+                )} timestamps simultâneos`,
+            },
+          ]}
+        />
+
+        <div className="grid gap-6 p-5 xl:grid-cols-[1fr_1fr]">
+          <div>
+            <div className="mb-3">
+              <div className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-500">
+                Mediana por etapa
               </div>
 
-              <div className="mt-2 text-4xl font-black tracking-tight text-slate-950">
-                {fmtHoras(
-                  leadtimeWarehouse.ponta_a_ponta_h
-                )}
-              </div>
-
-              <div className="mt-2 text-xs leading-5 text-slate-500">
-                Mediana calculada sobre{" "}
-                <strong className="text-slate-700">
-                  {fmtNumero(
-                    leadtimeWarehouse.aparelhos
-                  )}
-                </strong>{" "}
-                registros válidos.
+              <div className="mt-1 text-[10px] text-slate-400">
+                Tempo típico de passagem entre as principais etapas do Warehouse.
               </div>
             </div>
 
-            {prioridadesMenor1h >
-              0 && (
-              <div className="mt-5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-3 text-[10px] leading-4 text-violet-800">
+            <div className="h-[310px]">
+              {leadtimeEtapas.length ? (
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                >
+                  <BarChart
+                    data={
+                      leadtimeEtapas
+                    }
+                    layout="vertical"
+                    margin={{
+                      left:
+                        40,
+
+                      right:
+                        35,
+                    }}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      horizontal={
+                        false
+                      }
+                      stroke="#E2E8F0"
+                    />
+
+                    <XAxis
+                      type="number"
+                      tick={{
+                        fontSize:
+                          9,
+
+                        fill:
+                          "#94A3B8",
+                      }}
+                      axisLine={
+                        false
+                      }
+                      tickLine={
+                        false
+                      }
+                      tickFormatter={(
+                        value
+                      ) =>
+                        `${fmtNumero(
+                          value,
+                          0
+                        )}h`
+                      }
+                    />
+
+                    <YAxis
+                      type="category"
+                      dataKey="etapa"
+                      width={
+                        175
+                      }
+                      tick={{
+                        fontSize:
+                          10,
+
+                        fill:
+                          "#64748B",
+                      }}
+                      axisLine={
+                        false
+                      }
+                      tickLine={
+                        false
+                      }
+                    />
+
+                    <Tooltip
+                      content={
+                        <TempoTooltipHoras />
+                      }
+                    />
+
+                    <Bar
+                      dataKey="horas"
+                      name="Mediana"
+                      fill="#475569"
+                      radius={[
+                        0,
+                        5,
+                        5,
+                        0,
+                      ]}
+                    >
+                      <LabelList
+                        dataKey="horas"
+                        position="right"
+                        formatter={(
+                          value
+                        ) =>
+                          fmtHoras(
+                            value
+                          )
+                        }
+                        style={{
+                          fill:
+                            "#475569",
+
+                          fontSize:
+                            10,
+
+                          fontWeight:
+                            800,
+                        }}
+                      />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <EmptyState>
+                  Sem dados de Lead Time disponíveis.
+                </EmptyState>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <div className="mb-3">
+              <div className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-500">
+                Comparativo operacional
+              </div>
+
+              <div className="mt-1 text-[10px] text-slate-400">
+                Média, mediana, P90 e cobertura da amostra.
+              </div>
+            </div>
+
+            <div className="overflow-hidden rounded-xl border border-slate-200">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-slate-50">
+                    <th className="px-4 py-3 text-left text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
+                      Etapa
+                    </th>
+
+                    <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
+                      Média
+                    </th>
+
+                    <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
+                      Mediana
+                    </th>
+
+                    <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
+                      P90
+                    </th>
+
+                    <th className="px-4 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
+                      N
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-slate-100">
+                  <tr>
+                    <td className="px-4 py-3 text-[10px] font-black text-slate-700">
+                      Receb. → Funcional
+                    </td>
+
+                    <td className="px-3 py-3 text-right text-[10px] font-semibold text-slate-600">
+                      {fmtHoras(
+                        recebFuncionalMedia
+                      )}
+                    </td>
+
+                    <td className="px-3 py-3 text-right text-[10px] font-black text-slate-900">
+                      {fmtHoras(
+                        recebFuncionalMediana
+                      )}
+                    </td>
+
+                    <td className="px-3 py-3 text-right text-[10px] font-semibold text-slate-600">
+                      {fmtHoras(
+                        recebFuncionalP90
+                      )}
+                    </td>
+
+                    <td className="px-4 py-3 text-right text-[10px] font-black text-slate-700">
+                      {fmtNumero(
+                        recebFuncionalAmostra
+                      )}
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td className="px-4 py-3 text-[10px] font-black text-slate-700">
+                      Funcional → Cosmética
+                    </td>
+
+                    <td className="px-3 py-3 text-right text-[10px] font-semibold text-slate-600">
+                      {fmtHoras(
+                        funcionalCosmeticaMedia
+                      )}
+                    </td>
+
+                    <td className="px-3 py-3 text-right text-[10px] font-black text-slate-900">
+                      {fmtHoras(
+                        funcionalCosmeticaMediana
+                      )}
+                    </td>
+
+                    <td className="px-3 py-3 text-right text-[10px] font-semibold text-slate-600">
+                      {fmtHoras(
+                        funcionalCosmeticaP90
+                      )}
+                    </td>
+
+                    <td className="px-4 py-3 text-right text-[10px] font-black text-slate-700">
+                      {fmtNumero(
+                        funcionalCosmeticaAmostra
+                      )}
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td className="px-4 py-3 text-[10px] font-black text-slate-700">
+                      Cosmética → WMS
+                    </td>
+
+                    <td className="px-3 py-3 text-right text-[10px] font-semibold text-slate-600">
+                      {fmtHoras(
+                        cosmeticaWmsMedia
+                      )}
+                    </td>
+
+                    <td className="px-3 py-3 text-right text-[10px] font-black text-slate-900">
+                      {fmtHoras(
+                        cosmeticaWmsMediana
+                      )}
+                    </td>
+
+                    <td className="px-3 py-3 text-right text-[10px] font-semibold text-slate-600">
+                      {fmtHoras(
+                        cosmeticaWmsP90
+                      )}
+                    </td>
+
+                    <td className="px-4 py-3 text-right text-[10px] font-black text-slate-700">
+                      {fmtNumero(
+                        cosmeticaWmsAmostra
+                      )}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-4 border-t border-slate-100 bg-slate-50/60 p-5 md:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">
+              R → F · variação mediana
+            </div>
+
+            <div className="mt-2 text-xl font-black text-emerald-700">
+              {fmtVariacao(
+                recebFuncionalVariacao
+              )}
+            </div>
+
+            <div className="mt-1 text-[9px] leading-4 text-slate-400">
+              {fmtHoras(
+                recebFuncionalAnterior
+              )}{" "}
+              no mesmo período anterior.
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">
+              F → C · variação mediana
+            </div>
+
+            <div className="mt-2 text-xl font-black text-emerald-700">
+              {fmtVariacao(
+                funcionalCosmeticaVariacao
+              )}
+            </div>
+
+            <div className="mt-1 text-[9px] leading-4 text-slate-400">
+              {fmtHoras(
+                funcionalCosmeticaAnterior
+              )}{" "}
+              no mesmo período anterior.
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">
+              Cosmética → WMS ≤ 48h
+            </div>
+
+            <div className="mt-2 text-xl font-black text-violet-800">
+              {fmtPercentual(
+                cosmeticaWmsPctAte48
+              )}
+            </div>
+
+            <div className="mt-1 text-[9px] leading-4 text-slate-400">
+              {fmtNumero(
+                cosmeticaWmsAte48
+              )}{" "}
+              aparelhos da amostra.
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">
+              Aguardando WMS
+            </div>
+
+            <div className="mt-2 text-xl font-black text-amber-700">
+              {fmtNumero(
+                cosmeticaWmsPendentes
+              )}
+            </div>
+
+            <div className="mt-1 text-[9px] leading-4 text-slate-400">
+              Cosméticas do período ainda sem confirmação de alocação.
+            </div>
+          </div>
+        </div>
+
+        {ehMesCorrente && (
+          <div className="border-t border-slate-100 px-5 py-4">
+            <div className="grid gap-3 lg:grid-cols-2">
+              <div className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-[10px] leading-4 text-violet-800">
                 <strong>
                   {fmtNumero(
                     prioridadesMenor1h
-                  )} prioridades
+                  )} casos abaixo de 1h
                 </strong>{" "}
-                foram processadas em menos de 1h no Recebimento → Funcional e estão incluídas normalmente nos tempos.
+                permanecem normalmente no cálculo de Recebimento → Funcional.
+                Desses,{" "}
+                <strong>
+                  {fmtNumero(
+                    timestampsSimultaneos
+                  )}
+                </strong>{" "}
+                possuem timestamp simultâneo.
               </div>
-            )}
+
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[10px] leading-4 text-amber-800">
+                <strong>
+                  Cosmética → Alocação WMS ainda não possui comparação histórica homogênea.
+                </strong>{" "}
+                O baseline do WMS começou em{" "}
+                {fmtDataCurta(
+                  baselineWmsInicio
+                )}; portanto agosto contém implantação e absorção de backlog.
+              </div>
+            </div>
           </div>
-        </div>
+        )}
       </Section>
 
 
@@ -5609,15 +6162,22 @@ export default function IndicadoresExecutivosV2Page() {
             </div>
 
             <div className="mt-1 max-w-6xl text-[10px] leading-5 text-slate-500">
-              O mês corrente é comparado com exatamente o mesmo intervalo
-              de dias do mês anterior. Prioridades do Warehouse com ciclo
-              inferior a 1h permanecem dentro da mediana. No B2C, a visão
-              operacional considera Entrada do Pedido → Separação →
-              Faturamento; no B2B, Entrada do Pedido → Separação →
-              Embalagem → Faturamento. Aguardando Definição é tratado como
-              etapa excepcional independente. Coletas efetivas representam
-              romaneios fechados com bipagem e a expedição representa as
-              bipagens físicas realizadas na estação de romaneios.
+              O mês corrente é comparado com o mesmo intervalo disponível
+              do mês anterior. Em Recebimento → Funcional, sábados e
+              domingos são retirados do tempo transcorrido, enquanto casos
+              abaixo de 1h permanecem na amostra. O Lead Time do Warehouse
+              utiliza Recebimento → Funcional, Funcional → Cosmética e
+              Cosmética → Alocação WMS. A última etapa cruza a triagem pelo
+              Voucher com a confirmação física do Liquida System. Como o
+              WMS passou a registrar a alocação a partir de 15/08, agosto
+              ainda não é utilizado como benchmark homogêneo dessa etapa.
+              No B2C, a visão operacional considera Entrada do Pedido →
+              Separação → Faturamento; no B2B, Entrada do Pedido →
+              Separação → Embalagem → Faturamento. Aguardando Definição é
+              tratado como etapa excepcional independente. Coletas efetivas
+              representam romaneios fechados com bipagem e a expedição
+              representa as bipagens físicas realizadas na estação de
+              romaneios.
             </div>
           </div>
         </div>
