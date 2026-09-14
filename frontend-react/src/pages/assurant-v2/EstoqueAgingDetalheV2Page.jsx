@@ -14,6 +14,7 @@ import {
   PackageSearch,
   Search,
   Smartphone,
+  Store,
   Tags,
   Warehouse,
 } from "lucide-react";
@@ -29,6 +30,8 @@ import {
 } from "recharts";
 
 import { useNavigate, useSearchParams } from "react-router-dom";
+
+import { supabase } from "../../lib/supabase";
 
 import {
   fetchEstoqueAgingDetalhe,
@@ -65,6 +68,17 @@ function formatarPercentual(valor, casas = 1) {
   return `${formatarDecimal(valor, casas)}%`;
 }
 
+function formatarMoeda(valor) {
+  if (valor == null || Number.isNaN(Number(valor))) return "—";
+
+  return Number(valor).toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 function formatarData(data) {
   if (!data) return "—";
 
@@ -76,6 +90,24 @@ function formatarData(data) {
 
 function normalizarTexto(texto) {
   return String(texto || "").trim().toUpperCase();
+}
+
+function normalizarSkuBase(sku) {
+  return String(sku || "")
+    .trim()
+    .replace(/-CC\d+$/i, "");
+}
+
+function precoConcorrente(item) {
+  if (item?.preco_concorrente_avista != null) {
+    return Number(item.preco_concorrente_avista);
+  }
+
+  if (item?.preco_concorrente_cheio != null) {
+    return Number(item.preco_concorrente_cheio);
+  }
+
+  return null;
 }
 
 function badgeGrade(grade) {
@@ -283,6 +315,7 @@ export default function EstoqueAgingDetalheV2Page() {
     FAIXAS_AGING.includes(faixaInicial) ? faixaInicial : "Mais de 180 dias"
   );
   const [resumoSkus, setResumoSkus] = useState([]);
+  const [benchmarkGrades, setBenchmarkGrades] = useState([]);
   const [detalhes, setDetalhes] = useState({
     itens: [],
     total: 0,
@@ -291,6 +324,7 @@ export default function EstoqueAgingDetalheV2Page() {
     totalPaginas: 1,
   });
   const [loadingResumo, setLoadingResumo] = useState(true);
+  const [loadingBenchmark, setLoadingBenchmark] = useState(false);
   const [loadingDetalhes, setLoadingDetalhes] = useState(true);
   const [erro, setErro] = useState("");
   const [grade, setGrade] = useState("");
@@ -329,6 +363,61 @@ export default function EstoqueAgingDetalheV2Page() {
 
     carregarResumo();
   }, [faixa]);
+
+  useEffect(() => {
+    let cancelado = false;
+
+    async function carregarBenchmarkGrades() {
+      const skus = Array.from(
+        new Set(
+          resumoSkus
+            .map((item) => normalizarSkuBase(item.sku))
+            .filter(Boolean)
+        )
+      );
+
+      if (!skus.length) {
+        setBenchmarkGrades([]);
+        return;
+      }
+
+      try {
+        setLoadingBenchmark(true);
+
+        const acumulado = [];
+        const tamanhoLote = 80;
+
+        for (let inicio = 0; inicio < skus.length; inicio += tamanhoLote) {
+          const lote = skus.slice(inicio, inicio + tamanhoLote);
+
+          const { data, error } = await supabase
+            .from("vw_assurant_pricing_benchmark_grade")
+            .select(
+              "sku_base,grade,concorrente,canal,disponibilidade,preco_concorrente_avista,preco_concorrente_cheio,coletado_em"
+            )
+            .in("sku_base", lote);
+
+          if (error) throw error;
+          acumulado.push(...(data || []));
+        }
+
+        if (!cancelado) {
+          setBenchmarkGrades(acumulado);
+        }
+      } catch (error) {
+        console.error("Benchmark do ranking:", error);
+        if (!cancelado) setBenchmarkGrades([]);
+      } finally {
+        if (!cancelado) setLoadingBenchmark(false);
+      }
+    }
+
+    carregarBenchmarkGrades();
+
+    return () => {
+      cancelado = true;
+    };
+  }, [resumoSkus]);
 
   const marcas = useMemo(() => {
     const mapa = new Map();
@@ -412,6 +501,76 @@ export default function EstoqueAgingDetalheV2Page() {
       }))
       .sort((a, b) => b.aparelhos - a.aparelhos);
   }, [resumoSkus, marcaSelecionada]);
+
+  const benchmarkPorSkuGrade = useMemo(() => {
+    const mapa = new Map();
+
+    benchmarkGrades.forEach((linha) => {
+      const sku = normalizarSkuBase(linha.sku_base);
+      const gradeBenchmark = normalizarTexto(linha.grade);
+
+      if (!sku || !gradeBenchmark) return;
+
+      const chave = `${sku}|${gradeBenchmark}`;
+
+      if (!mapa.has(chave)) {
+        mapa.set(chave, []);
+      }
+
+      mapa.get(chave).push(linha);
+    });
+
+    return mapa;
+  }, [benchmarkGrades]);
+
+  function obterBenchmarkGrade(item, gradeItem) {
+    const linhas = [];
+    const vistos = new Set();
+
+    (item?.skusLista || []).forEach((sku) => {
+      const chave = `${normalizarSkuBase(sku)}|${normalizarTexto(gradeItem)}`;
+
+      (benchmarkPorSkuGrade.get(chave) || []).forEach((linha) => {
+        const identidade = [
+          linha.concorrente,
+          linha.canal,
+          linha.disponibilidade,
+          linha.preco_concorrente_avista,
+          linha.preco_concorrente_cheio,
+        ].join("|");
+
+        if (!vistos.has(identidade)) {
+          vistos.add(identidade);
+          linhas.push(linha);
+        }
+      });
+    });
+
+    if (!linhas.length) return null;
+
+    const disponiveis = linhas.filter(
+      (linha) => normalizarTexto(linha.disponibilidade) === "DISPONIVEL"
+    );
+
+    const concorrentes = Array.from(
+      new Set(linhas.map((linha) => linha.concorrente).filter(Boolean))
+    );
+
+    const precosDisponiveis = disponiveis
+      .map(precoConcorrente)
+      .filter((valor) => valor != null && Number.isFinite(valor));
+
+    const menorPreco = precosDisponiveis.length
+      ? Math.min(...precosDisponiveis)
+      : null;
+
+    return {
+      total: linhas.length,
+      disponiveis: disponiveis.length,
+      concorrentes,
+      menorPreco,
+    };
+  }
 
   const produtoSelecionado = useMemo(
     () => modelos.find((item) => item.key === produtoSelecionadoKey) || null,
@@ -831,7 +990,15 @@ export default function EstoqueAgingDetalheV2Page() {
           <SectionHeader
             icon={BarChart3}
             title="Ranking por modelo"
-            description="A concentração deixa de ser lida por SKU e passa a ser apresentada por marca, modelo, capacidade e cor."
+            description="A concentração deixa de ser lida por SKU e passa a ser apresentada por marca, modelo, capacidade e cor. O ícone de loja na grade indica benchmark de concorrência; verde significa oferta disponível e cinza indica apenas referência sem oferta ativa."
+            action={
+              loadingBenchmark ? (
+                <div className="inline-flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
+                  <Loader2 size={12} className="animate-spin" />
+                  Mercado
+                </div>
+              ) : null
+            }
           />
 
           {loadingResumo ? (
@@ -870,16 +1037,46 @@ export default function EstoqueAgingDetalheV2Page() {
                       <td className="px-3 py-3 text-xs font-semibold text-slate-600">{item.capacidade}</td>
                       <td className="px-3 py-3 text-xs font-semibold text-slate-600">{item.cor}</td>
                       <td className="px-3 py-3">
-                        <div className="flex max-w-[310px] flex-wrap gap-1">
+                        <div className="flex max-w-[330px] flex-wrap gap-1">
                           {item.gradesLista.length ? (
-                            item.gradesLista.slice(0, 5).map((gradeItem) => (
-                              <span
-                                key={gradeItem}
-                                className={`rounded-md border px-2 py-1 text-[8px] font-black ${badgeGrade(gradeItem)}`}
-                              >
-                                {gradeItem}
-                              </span>
-                            ))
+                            item.gradesLista.slice(0, 5).map((gradeItem) => {
+                              const mercado = obterBenchmarkGrade(item, gradeItem);
+                              const ofertaAtiva = Number(mercado?.disponiveis || 0) > 0;
+
+                              const tooltipMercado = mercado
+                                ? ofertaAtiva
+                                  ? `Concorrência disponível · ${mercado.disponiveis} oferta(s) ativa(s) · ${mercado.concorrentes.join(", ")}${mercado.menorPreco != null ? ` · menor ${formatarMoeda(mercado.menorPreco)}` : ""}`
+                                  : `Benchmark encontrado · ${mercado.total} anúncio(s) · sem oferta ativa · ${mercado.concorrentes.join(", ")}`
+                                : undefined;
+
+                              return (
+                                <span
+                                  key={gradeItem}
+                                  title={tooltipMercado}
+                                  className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[8px] font-black ${badgeGrade(gradeItem)}`}
+                                >
+                                  {gradeItem}
+
+                                  {mercado && (
+                                    <span
+                                      className={[
+                                        "inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border bg-white/80",
+                                        ofertaAtiva
+                                          ? "border-emerald-300 text-emerald-700"
+                                          : "border-slate-300 text-slate-400",
+                                      ].join(" ")}
+                                      aria-label={
+                                        ofertaAtiva
+                                          ? "Concorrência com oferta disponível"
+                                          : "Concorrência sem oferta ativa"
+                                      }
+                                    >
+                                      <Store size={8} strokeWidth={2.4} />
+                                    </span>
+                                  )}
+                                </span>
+                              );
+                            })
                           ) : (
                             <span className="text-[10px] text-slate-400">Sem grade</span>
                           )}
@@ -1139,7 +1336,7 @@ export default function EstoqueAgingDetalheV2Page() {
                 Critério da análise
               </div>
               <p className="mt-1 max-w-6xl text-[10px] leading-5 text-slate-500">
-                O aging agora é lido em camadas: faixa → marca → modelo → capacidade → cor → grade → aparelho. O SKU permanece como chave técnica para rastreabilidade e acesso à inteligência comercial, mas deixa de ser a principal dimensão de concentração do estoque.
+                O aging agora é lido em camadas: faixa → marca → modelo → capacidade → cor → grade → aparelho. O SKU permanece como chave técnica para rastreabilidade e acesso à inteligência comercial, mas deixa de ser a principal dimensão de concentração do estoque. Nas tags de grade, o ícone de loja sinaliza quando já existe benchmark de concorrência para aquele SKU/grade.
               </p>
             </div>
           </div>
