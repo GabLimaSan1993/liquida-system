@@ -57,6 +57,13 @@ const NUMERIC_FIELDS = new Set([
   "variacao_mediana_pct",
   "variacao_p90_pct",
 
+  "amostra_atual",
+  "media_atual_min",
+  "media_anterior_min",
+  "mediana_atual_min",
+  "p90_atual_min",
+  "p90_anterior_min",
+
   /* Operação / Triagem */
   "recebidos",
   "funcional",
@@ -66,6 +73,26 @@ const NUMERIC_FIELDS = new Set([
   "eventos_triagem",
   "deficit_recebimento_funcional",
   "maior_entrada_dia",
+
+  "recebidos_atual",
+  "recebidos_anterior",
+  "variacao_recebidos_pct",
+
+  "funcional_atual",
+  "funcional_anterior",
+  "variacao_funcional_pct",
+
+  "cosmetica_atual",
+  "cosmetica_anterior",
+  "variacao_cosmetica_pct",
+
+  "laudos_atual",
+  "laudos_anterior",
+  "variacao_laudos_pct",
+
+  "oracle_atual",
+  "oracle_anterior",
+  "variacao_oracle_pct",
 
   /* Lead time Triagem */
   "aparelhos",
@@ -83,6 +110,25 @@ const NUMERIC_FIELDS = new Set([
   "notas_emitidas",
   "erros_nf",
 
+  "pedidos_recebidos_atual",
+  "pedidos_recebidos_anterior",
+
+  "itens_recebidos_atual",
+  "itens_recebidos_anterior",
+  "variacao_itens_recebidos_pct",
+
+  "itens_faturados_atual",
+  "itens_faturados_anterior",
+  "variacao_itens_faturados_pct",
+
+  "notas_emitidas_atual",
+  "notas_emitidas_anterior",
+  "variacao_notas_pct",
+
+  "erros_nf_atual",
+  "erros_nf_anterior",
+  "variacao_erros_nf_pct",
+
   /* B2C canais */
   "pagos",
   "embalados",
@@ -92,6 +138,28 @@ const NUMERIC_FIELDS = new Set([
   "pct_ate_24h",
   "mediana_h",
   "p90_h",
+
+  "pagos_atual",
+  "pagos_anterior",
+  "embalados_atual",
+  "embalados_anterior",
+  "cancelados_atual",
+  "cancelados_anterior",
+  "ciclos_validos_atual",
+  "ciclos_validos_anterior",
+  "ate_24h_atual",
+  "ate_24h_anterior",
+  "pct_ate_24h_atual",
+  "pct_ate_24h_anterior",
+  "mediana_h_atual",
+  "mediana_h_anterior",
+  "p90_h_atual",
+  "p90_h_anterior",
+
+  "coletas_efetivas",
+  "coletas_efetivas_atual",
+  "coletas_efetivas_anterior",
+  "volumes_bipados",
 
   /* Erros e ocorrências */
   "ocorrencias",
@@ -159,6 +227,8 @@ const NUMERIC_FIELDS = new Set([
 
   "ultimo_preco_saida",
 
+  "dias_desde_ultima_saida",
+
   "demanda_diaria_ponderada",
   "cobertura_dias",
 
@@ -208,8 +278,7 @@ function normalizarLinha(row) {
         return [key, value];
       }
 
-      const numero =
-        Number(value);
+      const numero = Number(value);
 
       return [
         key,
@@ -223,36 +292,23 @@ function normalizarLinha(row) {
 
 
 function normalizarLinhas(rows) {
-  return (
-    rows || []
-  ).map(
-    normalizarLinha
-  );
+  return (rows || []).map(normalizarLinha);
 }
 
 
-function normalizarSkuBase(
-  sku
-) {
+function normalizarSkuBase(sku) {
   if (!sku) {
     return "";
   }
 
   return String(sku)
     .trim()
-    .replace(
-      /-CC\d+$/i,
-      ""
-    );
+    .replace(/-CC\d+$/i, "");
 }
 
 
-function normalizarGrade(
-  grade
-) {
-  return String(
-    grade || ""
-  )
+function normalizarGrade(grade) {
+  return String(grade || "")
     .trim()
     .toUpperCase();
 }
@@ -309,20 +365,12 @@ async function consultarView(
     );
   }
 
-  return normalizarLinhas(
-    data
-  );
+  return normalizarLinhas(data);
 }
 
 
 /* =========================================================
    CONSULTA PAGINADA COMPLETA
-
-   IMPORTANTE:
-   não utiliza amostragem.
-
-   Continua buscando páginas até trazer 100% dos registros
-   elegíveis para o filtro solicitado.
 ========================================================= */
 
 async function consultarTodasPaginas(
@@ -382,7 +430,7 @@ async function consultarTodasPaginas(
 
 
 /* =========================================================
-   B2C / B2B — COMPARATIVOS EXECUTIVOS
+   COMPARATIVO EXECUTIVO B2C / B2B
 ========================================================= */
 
 export async function fetchComparativoPeriodoAtual() {
@@ -391,6 +439,63 @@ export async function fetchComparativoPeriodoAtual() {
   );
 }
 
+
+/* =========================================================
+   COMPARATIVO JUSTO — OPERAÇÃO CORRENTE
+   MÊS ATÉ HOJE X MESMO PERÍODO DO MÊS ANTERIOR
+========================================================= */
+
+export async function fetchOperacaoComparativoPeriodoAtual() {
+  return consultarView(
+    "vw_assurant_operacao_comparativo_periodo_atual"
+  );
+}
+
+
+/* =========================================================
+   COMPARATIVO JUSTO — B2B
+========================================================= */
+
+export async function fetchB2BComparativoPeriodoAtual() {
+  return consultarView(
+    "vw_assurant_b2b_comparativo_periodo_atual"
+  );
+}
+
+
+/* =========================================================
+   COMPARATIVO JUSTO — B2C POR CANAL
+========================================================= */
+
+export async function fetchB2CCanaisComparativoPeriodoAtual() {
+  return consultarView(
+    "vw_assurant_b2c_canal_comparativo_periodo_atual",
+    {
+      order: "marketplace",
+      ascending: true,
+    }
+  );
+}
+
+
+/* =========================================================
+   COMPARATIVO JUSTO — ETAPAS OPERACIONAIS
+========================================================= */
+
+export async function fetchEtapasComparativoPeriodoAtual() {
+  return consultarView(
+    "vw_assurant_etapas_comparativo_periodo_atual",
+    {
+      order: "canal",
+      ascending: true,
+    }
+  );
+}
+
+
+/* =========================================================
+   KPIS SEMANAIS / MENSAIS
+========================================================= */
 
 export async function fetchKpisSemanais() {
   return consultarView(
@@ -425,6 +530,22 @@ export async function fetchKpisMensais() {
   );
 }
 
+
+/* =========================================================
+   ETAPAS SEMANAIS / MENSAIS
+
+   A estrutura do banco agora considera:
+
+   B2C:
+   Entrada pedido → Separação
+   Separação → Faturamento
+   Aguardando definição → Saída
+
+   B2B:
+   Entrada pedido → Separação
+   Separação → Embalagem
+   Embalagem → Faturamento
+========================================================= */
 
 export async function fetchEtapasSemanais() {
   return consultarView(
@@ -500,6 +621,12 @@ export async function fetchOperacaoMensal() {
 
 /* =========================================================
    LEAD TIME TRIAGEM
+
+   IMPORTANTE:
+   casos inferiores a 1h permanecem na base.
+   O campo excluidos_tempo_zero foi mantido por compatibilidade
+   de schema, mas representa agora a quantidade de prioridades
+   com processamento inferior a 1h.
 ========================================================= */
 
 export async function fetchLeadtimeTriagemMensal() {
@@ -520,7 +647,10 @@ export async function fetchLeadtimeTriagemMensal() {
 
 
 /* =========================================================
-   FILAS ATUAIS
+   FILAS
+
+   Mantido exportado apenas para compatibilidade.
+   Não é mais carregado pelo Cockpit Executivo.
 ========================================================= */
 
 export async function fetchFilasAtuais() {
@@ -634,6 +764,34 @@ export async function fetchB2CCanaisFaixasMensal() {
 }
 
 
+/* =========================================================
+   COLETAS EFETIVAS B2C
+   1 ROMANEIO FECHADO COM BIPAGEM = 1 COLETA EFETIVA
+========================================================= */
+
+export async function fetchB2CColetasMensal() {
+  return consultarView(
+    "vw_assurant_b2c_coletas_mes",
+    {
+      campoPeriodo:
+        "mes",
+
+      order:
+        "mes",
+
+      ascending:
+        true,
+    }
+  );
+}
+
+
+/* =========================================================
+   EXPEDIÇÃO B2C
+
+   Agora utiliza bipagem física na estação de romaneios.
+========================================================= */
+
 export async function fetchExpedicaoDiaria() {
   return consultarView(
     "vw_ind_expedicao_dia",
@@ -652,7 +810,7 @@ export async function fetchExpedicaoDiaria() {
 
 
 /* =========================================================
-   OCORRÊNCIAS
+   OCORRÊNCIAS DE ESTOQUE / ALOCAÇÃO
 ========================================================= */
 
 export async function fetchOcorrenciasMensais() {
@@ -674,6 +832,8 @@ export async function fetchOcorrenciasMensais() {
 
 /* =========================================================
    ERROS E RETRABALHO
+
+   Categorias de cancelamento são mutuamente exclusivas.
 ========================================================= */
 
 export async function fetchErrosProcessoMensais() {
@@ -756,12 +916,8 @@ export async function fetchEstoqueQualidadeAtual() {
    ESTOQUE — DRILL-DOWN POR AGING
 ========================================================= */
 
-function limparBuscaFiltro(
-  value
-) {
-  return String(
-    value || ""
-  )
+function limparBuscaFiltro(value) {
+  return String(value || "")
     .replace(
       /[,()%]/g,
       " "
@@ -832,7 +988,8 @@ export async function fetchEstoqueAgingDetalhe({
     Math.max(
       1,
       Number(
-        pagina || 1
+        pagina ||
+          1
       )
     );
 
@@ -923,6 +1080,7 @@ export async function fetchEstoqueAgingDetalhe({
         {
           ascending:
             false,
+
           nullsFirst:
             false,
         }
@@ -952,7 +1110,8 @@ export async function fetchEstoqueAgingDetalhe({
 
     total:
       Number(
-        count || 0
+        count ||
+          0
       ),
 
     pagina:
@@ -966,9 +1125,10 @@ export async function fetchEstoqueAgingDetalhe({
         1,
         Math.ceil(
           Number(
-            count || 0
+            count ||
+              0
           ) /
-            pageSize
+          pageSize
         )
       ),
   };
@@ -1264,9 +1424,6 @@ export async function fetchPricingCurvaMensalSku({
 
 /* =========================================================
    PRICING INTELLIGENCE — HISTÓRICO COMPLETO DE PREÇOS
-
-   Sem amostragem.
-   Busca todas as páginas elegíveis.
 ========================================================= */
 
 export async function fetchPricingHistoricoPrecos({
@@ -1374,6 +1531,7 @@ export async function fetchPricingRankingEstoque({
         campo,
         {
           ascending,
+
           nullsFirst:
             false,
         }
@@ -1517,6 +1675,7 @@ export async function fetchInteligenciaEstoqueItem(
   return {
     item: {
       ...item,
+
       sku_base:
         skuBase,
     },
@@ -1533,6 +1692,11 @@ export async function fetchInteligenciaEstoqueItem(
 export async function fetchIndicadoresExecutivos() {
   const [
     comparativoAtual,
+    operacaoComparativoAtual,
+    b2bComparativoAtual,
+    b2cCanaisComparativoAtual,
+    etapasComparativoAtual,
+
     kpisSemanais,
     kpisMensais,
     etapasSemanais,
@@ -1541,7 +1705,6 @@ export async function fetchIndicadoresExecutivos() {
     operacaoDiaria,
     operacaoMensal,
     leadtimeTriagemMensal,
-    filasAtuais,
     gradesMensais,
 
     b2bOperacaoDiaria,
@@ -1549,6 +1712,7 @@ export async function fetchIndicadoresExecutivos() {
 
     b2cCanaisMensal,
     b2cCanaisFaixasMensal,
+    b2cColetasMensal,
     expedicaoDiaria,
 
     ocorrenciasMensais,
@@ -1560,6 +1724,11 @@ export async function fetchIndicadoresExecutivos() {
   ] =
     await Promise.all([
       fetchComparativoPeriodoAtual(),
+      fetchOperacaoComparativoPeriodoAtual(),
+      fetchB2BComparativoPeriodoAtual(),
+      fetchB2CCanaisComparativoPeriodoAtual(),
+      fetchEtapasComparativoPeriodoAtual(),
+
       fetchKpisSemanais(),
       fetchKpisMensais(),
       fetchEtapasSemanais(),
@@ -1568,7 +1737,6 @@ export async function fetchIndicadoresExecutivos() {
       fetchOperacaoDiaria(),
       fetchOperacaoMensal(),
       fetchLeadtimeTriagemMensal(),
-      fetchFilasAtuais(),
       fetchGradesMensais(),
 
       fetchB2BOperacaoDiaria(),
@@ -1576,6 +1744,7 @@ export async function fetchIndicadoresExecutivos() {
 
       fetchB2CCanaisMensal(),
       fetchB2CCanaisFaixasMensal(),
+      fetchB2CColetasMensal(),
       fetchExpedicaoDiaria(),
 
       fetchOcorrenciasMensais(),
@@ -1587,8 +1756,14 @@ export async function fetchIndicadoresExecutivos() {
     ]);
 
   return {
-    /* Executivo */
+    /* Comparativos justos do período corrente */
     comparativoAtual,
+    operacaoComparativoAtual,
+    b2bComparativoAtual,
+    b2cCanaisComparativoAtual,
+    etapasComparativoAtual,
+
+    /* Histórico temporal */
     kpisSemanais,
     kpisMensais,
     etapasSemanais,
@@ -1598,7 +1773,6 @@ export async function fetchIndicadoresExecutivos() {
     operacaoDiaria,
     operacaoMensal,
     leadtimeTriagemMensal,
-    filasAtuais,
     gradesMensais,
 
     /* B2B */
@@ -1608,9 +1782,10 @@ export async function fetchIndicadoresExecutivos() {
     /* B2C */
     b2cCanaisMensal,
     b2cCanaisFaixasMensal,
+    b2cColetasMensal,
     expedicaoDiaria,
 
-    /* Ocorrências */
+    /* Ocorrências / Retrabalho */
     ocorrenciasMensais,
     errosProcessoMensais,
 

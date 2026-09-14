@@ -20,6 +20,7 @@ import {
   BarChart,
   CartesianGrid,
   ComposedChart,
+  LabelList,
   Legend,
   Line,
   LineChart,
@@ -554,6 +555,45 @@ function normalizarFaixaAging(
 }
 
 
+function chaveMesAtual() {
+  const agora =
+    new Date();
+
+  return `${agora.getFullYear()}-${String(
+    agora.getMonth() +
+      1
+  ).padStart(
+    2,
+    "0"
+  )}-01`;
+}
+
+
+function rotuloComparacao(
+  mesSelecionado
+) {
+  if (
+    mesSelecionado !==
+    chaveMesAtual()
+  ) {
+    return "vs mês anterior";
+  }
+
+  const hoje =
+    new Date();
+
+  const dia =
+    String(
+      hoje.getDate()
+    ).padStart(
+      2,
+      "0"
+    );
+
+  return `01–${dia} vs mesmo período anterior`;
+}
+
+
 /* =========================================================
    COMPONENTES VISUAIS
 ========================================================= */
@@ -905,6 +945,18 @@ export default function IndicadoresExecutivosV2Page() {
       comparativoAtual:
         [],
 
+      operacaoComparativoAtual:
+        [],
+
+      b2bComparativoAtual:
+        [],
+
+      b2cCanaisComparativoAtual:
+        [],
+
+      etapasComparativoAtual:
+        [],
+
       kpisSemanais:
         [],
 
@@ -926,9 +978,6 @@ export default function IndicadoresExecutivosV2Page() {
       leadtimeTriagemMensal:
         [],
 
-      filasAtuais:
-        [],
-
       gradesMensais:
         [],
 
@@ -942,6 +991,9 @@ export default function IndicadoresExecutivosV2Page() {
         [],
 
       b2cCanaisFaixasMensal:
+        [],
+
+      b2cColetasMensal:
         [],
 
       expedicaoDiaria:
@@ -964,27 +1016,11 @@ export default function IndicadoresExecutivosV2Page() {
     });
 
   const [
-    granularidade,
-    setGranularidade,
-  ] =
-    useState(
-      "MTD"
-    );
-
-  const [
-    canal,
-    setCanal,
+    canalTempos,
+    setCanalTempos,
   ] =
     useState(
       "B2C"
-    );
-
-  const [
-    visualizacaoEtapa,
-    setVisualizacaoEtapa,
-  ] =
-    useState(
-      "semanal"
     );
 
   const [
@@ -1147,59 +1183,18 @@ export default function IndicadoresExecutivosV2Page() {
       7
     );
 
+  const ehMesCorrente =
+    mesSelecionado ===
+    chaveMesAtual();
 
-  /* =======================================================
-     COMPARATIVO EXECUTIVO
-  ======================================================= */
-
-  const comparativos =
-    useMemo(
-      () =>
-        (
-          dados.comparativoAtual ||
-          []
-        ).filter(
-          (
-            item
-          ) =>
-            item.granularidade ===
-            granularidade
-        ),
-      [
-        dados.comparativoAtual,
-        granularidade,
-      ]
+  const textoComparacao =
+    rotuloComparacao(
+      mesSelecionado
     );
 
-  const atualB2C =
-    comparativos.find(
-      (
-        item
-      ) =>
-        item.canal ===
-        "B2C"
-    ) ||
-    null;
-
-  const atualB2B =
-    comparativos.find(
-      (
-        item
-      ) =>
-        item.canal ===
-        "B2B"
-    ) ||
-    null;
-
-  const atual =
-    canal ===
-    "B2C"
-      ? atualB2C
-      : atualB2B;
-
 
   /* =======================================================
-     WAREHOUSE
+     RECEBIMENTO / PRODUÇÃO
   ======================================================= */
 
   const operacaoMes =
@@ -1238,6 +1233,102 @@ export default function IndicadoresExecutivosV2Page() {
     ) ||
     {};
 
+  const operacaoComparativo =
+    dados.operacaoComparativoAtual?.[0] ||
+    {};
+
+  const operacaoResumo =
+    ehMesCorrente
+      ? {
+          recebidos:
+            operacaoComparativo.recebidos_atual,
+
+          variacaoRecebidos:
+            operacaoComparativo.variacao_recebidos_pct,
+
+          funcional:
+            operacaoComparativo.funcional_atual,
+
+          variacaoFuncional:
+            operacaoComparativo.variacao_funcional_pct,
+
+          cosmetica:
+            operacaoComparativo.cosmetica_atual,
+
+          variacaoCosmetica:
+            operacaoComparativo.variacao_cosmetica_pct,
+
+          laudos:
+            operacaoComparativo.laudos_atual,
+
+          variacaoLaudos:
+            operacaoComparativo.variacao_laudos_pct,
+
+          oracle:
+            operacaoComparativo.oracle_atual,
+
+          variacaoOracle:
+            operacaoComparativo.variacao_oracle_pct,
+
+          maiorEntradaDia:
+            operacaoComparativo.maior_entrada_dia,
+
+          deficit:
+            operacaoComparativo.deficit_recebimento_funcional,
+        }
+      : {
+          recebidos:
+            operacaoMes.recebidos,
+
+          variacaoRecebidos:
+            calcularVariacao(
+              operacaoMes.recebidos,
+              operacaoMesAnterior.recebidos
+            ),
+
+          funcional:
+            operacaoMes.funcional,
+
+          variacaoFuncional:
+            calcularVariacao(
+              operacaoMes.funcional,
+              operacaoMesAnterior.funcional
+            ),
+
+          cosmetica:
+            operacaoMes.cosmetica,
+
+          variacaoCosmetica:
+            calcularVariacao(
+              operacaoMes.cosmetica,
+              operacaoMesAnterior.cosmetica
+            ),
+
+          laudos:
+            operacaoMes.laudos,
+
+          variacaoLaudos:
+            calcularVariacao(
+              operacaoMes.laudos,
+              operacaoMesAnterior.laudos
+            ),
+
+          oracle:
+            operacaoMes.oracle,
+
+          variacaoOracle:
+            calcularVariacao(
+              operacaoMes.oracle,
+              operacaoMesAnterior.oracle
+            ),
+
+          maiorEntradaDia:
+            operacaoMes.maior_entrada_dia,
+
+          deficit:
+            operacaoMes.deficit_recebimento_funcional,
+        };
+
   const operacaoDiariaMes =
     useMemo(
       () =>
@@ -1275,6 +1366,11 @@ export default function IndicadoresExecutivosV2Page() {
       ]
     );
 
+
+  /* =======================================================
+     LEAD TIME WAREHOUSE
+  ======================================================= */
+
   const leadtimeWarehouse =
     (
       dados.leadtimeTriagemMensal ||
@@ -1292,6 +1388,12 @@ export default function IndicadoresExecutivosV2Page() {
         mesSelecionado
     ) ||
     {};
+
+  const prioridadesMenor1h =
+    Number(
+      leadtimeWarehouse.excluidos_tempo_zero ||
+        0
+    );
 
   const leadtimeEtapas =
     [
@@ -1353,74 +1455,80 @@ export default function IndicadoresExecutivosV2Page() {
 
 
   /* =======================================================
-     FILAS
-  ======================================================= */
-
-  const filasOrdenadas =
-    useMemo(
-      () =>
-        [
-          ...(
-            dados.filasAtuais ||
-            []
-          ),
-        ].sort(
-          (
-            a,
-            b
-          ) =>
-            Number(
-              b.aparelhos ||
-                0
-            ) -
-            Number(
-              a.aparelhos ||
-                0
-            )
-        ),
-      [
-        dados.filasAtuais,
-      ]
-    );
-
-
-  /* =======================================================
-     QUALIDADE / GRADES
+     QUALIDADE
   ======================================================= */
 
   const gradesMes =
     useMemo(
-      () =>
-        (
-          dados.gradesMensais ||
-          []
-        )
-          .filter(
+      () => {
+        const linhas =
+          (
+            dados.gradesMensais ||
+            []
+          )
+            .filter(
+              (
+                row
+              ) =>
+                String(
+                  row.mes
+                ).slice(
+                  0,
+                  10
+                ) ===
+                mesSelecionado
+            );
+
+        const total =
+          linhas.reduce(
             (
+              soma,
               row
             ) =>
-              String(
-                row.mes
-              ).slice(
-                0,
-                10
-              ) ===
-              mesSelecionado
+              soma +
+              Number(
+                row.aparelhos ||
+                  0
+              ),
+            0
+          );
+
+        return linhas
+          .map(
+            (
+              row
+            ) => ({
+              ...row,
+
+              aparelhos:
+                Number(
+                  row.aparelhos ||
+                    0
+                ),
+
+              percentual:
+                total >
+                0
+                  ? (
+                      Number(
+                        row.aparelhos ||
+                          0
+                      ) /
+                      total
+                    ) *
+                    100
+                  : 0,
+            })
           )
           .sort(
             (
               a,
               b
             ) =>
-              Number(
-                b.aparelhos ||
-                  0
-              ) -
-              Number(
-                a.aparelhos ||
-                  0
-              )
-          ),
+              b.aparelhos -
+              a.aparelhos
+          );
+      },
       [
         dados.gradesMensais,
         mesSelecionado,
@@ -1524,6 +1632,120 @@ export default function IndicadoresExecutivosV2Page() {
     ) ||
     {};
 
+  const b2bComparativo =
+    dados.b2bComparativoAtual?.[0] ||
+    {};
+
+  const b2bResumo =
+    ehMesCorrente
+      ? {
+          pedidos:
+            b2bComparativo.pedidos_recebidos_atual,
+
+          pedidosAnterior:
+            b2bComparativo.pedidos_recebidos_anterior,
+
+          variacaoPedidos:
+            b2bComparativo.variacao_pedidos_pct,
+
+          itensRecebidos:
+            b2bComparativo.itens_recebidos_atual,
+
+          itensRecebidosAnterior:
+            b2bComparativo.itens_recebidos_anterior,
+
+          variacaoItensRecebidos:
+            b2bComparativo.variacao_itens_recebidos_pct,
+
+          itensFaturados:
+            b2bComparativo.itens_faturados_atual,
+
+          itensFaturadosAnterior:
+            b2bComparativo.itens_faturados_anterior,
+
+          variacaoItensFaturados:
+            b2bComparativo.variacao_itens_faturados_pct,
+
+          notas:
+            b2bComparativo.notas_emitidas_atual,
+
+          notasAnterior:
+            b2bComparativo.notas_emitidas_anterior,
+
+          variacaoNotas:
+            b2bComparativo.variacao_notas_pct,
+
+          erros:
+            b2bComparativo.erros_nf_atual,
+
+          errosAnterior:
+            b2bComparativo.erros_nf_anterior,
+
+          variacaoErros:
+            b2bComparativo.variacao_erros_nf_pct,
+        }
+      : {
+          pedidos:
+            b2bMes.pedidos_recebidos,
+
+          pedidosAnterior:
+            b2bMesAnterior.pedidos_recebidos,
+
+          variacaoPedidos:
+            calcularVariacao(
+              b2bMes.pedidos_recebidos,
+              b2bMesAnterior.pedidos_recebidos
+            ),
+
+          itensRecebidos:
+            b2bMes.itens_recebidos,
+
+          itensRecebidosAnterior:
+            b2bMesAnterior.itens_recebidos,
+
+          variacaoItensRecebidos:
+            calcularVariacao(
+              b2bMes.itens_recebidos,
+              b2bMesAnterior.itens_recebidos
+            ),
+
+          itensFaturados:
+            b2bMes.itens_faturados,
+
+          itensFaturadosAnterior:
+            b2bMesAnterior.itens_faturados,
+
+          variacaoItensFaturados:
+            calcularVariacao(
+              b2bMes.itens_faturados,
+              b2bMesAnterior.itens_faturados
+            ),
+
+          notas:
+            b2bMes.notas_emitidas,
+
+          notasAnterior:
+            b2bMesAnterior.notas_emitidas,
+
+          variacaoNotas:
+            calcularVariacao(
+              b2bMes.notas_emitidas,
+              b2bMesAnterior.notas_emitidas
+            ),
+
+          erros:
+            b2bMes.erros_nf,
+
+          errosAnterior:
+            b2bMesAnterior.erros_nf,
+
+          variacaoErros:
+            calcularVariacao(
+              b2bMes.erros_nf,
+              b2bMesAnterior.erros_nf
+            ),
+        };
+
   const b2bDiarioMes =
     useMemo(
       () =>
@@ -1563,45 +1785,639 @@ export default function IndicadoresExecutivosV2Page() {
 
 
   /* =======================================================
+     ETAPAS
+  ======================================================= */
+
+  function etapasCanal(
+    canal
+  ) {
+    if (
+      ehMesCorrente
+    ) {
+      return (
+        dados.etapasComparativoAtual ||
+        []
+      )
+        .filter(
+          (
+            item
+          ) =>
+            item.canal ===
+            canal
+        )
+        .map(
+          (
+            item
+          ) => ({
+            canal:
+              item.canal,
+
+            etapa:
+              item.etapa,
+
+            amostra:
+              item.amostra_atual,
+
+            amostraAnterior:
+              item.amostra_anterior,
+
+            media_min:
+              item.media_atual_min,
+
+            media_anterior_min:
+              item.media_anterior_min,
+
+            mediana_min:
+              item.mediana_atual_min,
+
+            mediana_anterior_min:
+              item.mediana_anterior_min,
+
+            p90_min:
+              item.p90_atual_min,
+
+            p90_anterior_min:
+              item.p90_anterior_min,
+
+            variacao_mediana_pct:
+              item.variacao_mediana_pct,
+          })
+        );
+    }
+
+    return (
+      dados.etapasMensais ||
+      []
+    )
+      .filter(
+        (
+          item
+        ) =>
+          item.canal ===
+            canal &&
+          String(
+            item.periodo_inicio
+          ).slice(
+            0,
+            10
+          ) ===
+            mesSelecionado
+      )
+      .map(
+        (
+          item
+        ) => ({
+          canal:
+            item.canal,
+
+          etapa:
+            item.etapa,
+
+          amostra:
+            item.amostra,
+
+          amostraAnterior:
+            item.amostra_anterior,
+
+          media_min:
+            item.media_min,
+
+          mediana_min:
+            item.mediana_min,
+
+          mediana_anterior_min:
+            item.mediana_anterior_min,
+
+          p90_min:
+            item.p90_min,
+
+          p90_anterior_min:
+            item.p90_anterior_min,
+
+          variacao_mediana_pct:
+            item.variacao_mediana_pct,
+        })
+      );
+  }
+
+  const etapasB2B =
+    etapasCanal(
+      "B2B"
+    );
+
+  const etapasB2C =
+    etapasCanal(
+      "B2C"
+    );
+
+  const etapasAtuais =
+    canalTempos ===
+    "B2C"
+      ? etapasB2C
+      : etapasB2B;
+
+
+  /* =======================================================
+     RESUMO DE TEMPOS POR CANAL
+  ======================================================= */
+
+  function resumoCanal(
+    canal
+  ) {
+    if (
+      ehMesCorrente
+    ) {
+      return (
+        (
+          dados.comparativoAtual ||
+          []
+        ).find(
+          (
+            item
+          ) =>
+            item.granularidade ===
+              "MTD" &&
+            item.canal ===
+              canal
+        ) ||
+        {}
+      );
+    }
+
+    const atual =
+      (
+        dados.kpisMensais ||
+        []
+      ).find(
+        (
+          item
+        ) =>
+          item.canal ===
+            canal &&
+          String(
+            item.periodo_inicio
+          ).slice(
+            0,
+            10
+          ) ===
+            mesSelecionado
+      ) ||
+      {};
+
+    const anterior =
+      (
+        dados.kpisMensais ||
+        []
+      ).find(
+        (
+          item
+        ) =>
+          item.canal ===
+            canal &&
+          String(
+            item.periodo_inicio
+          ).slice(
+            0,
+            10
+          ) ===
+            mesAnterior
+      ) ||
+      {};
+
+    return {
+      pedidos_atual:
+        atual.pedidos,
+
+      pedidos_anterior:
+        anterior.pedidos,
+
+      variacao_pedidos_pct:
+        calcularVariacao(
+          atual.pedidos,
+          anterior.pedidos
+        ),
+
+      itens_atual:
+        atual.itens,
+
+      itens_anterior:
+        anterior.itens,
+
+      variacao_itens_pct:
+        calcularVariacao(
+          atual.itens,
+          anterior.itens
+        ),
+
+      pct_concluidos_atual:
+        atual.pct_concluidos,
+
+      pct_concluidos_anterior:
+        anterior.pct_concluidos,
+
+      variacao_conclusao_pp:
+        atual.pct_concluidos !=
+          null &&
+        anterior.pct_concluidos !=
+          null
+          ? Number(
+              atual.pct_concluidos
+            ) -
+            Number(
+              anterior.pct_concluidos
+            )
+          : null,
+
+      mediana_leadtime_atual_min:
+        atual.mediana_leadtime_min,
+
+      mediana_leadtime_anterior_min:
+        anterior.mediana_leadtime_min,
+
+      variacao_mediana_leadtime_pct:
+        calcularVariacao(
+          atual.mediana_leadtime_min,
+          anterior.mediana_leadtime_min
+        ),
+
+      p90_leadtime_atual_min:
+        atual.p90_leadtime_min,
+
+      p90_leadtime_anterior_min:
+        anterior.p90_leadtime_min,
+
+      amostra_leadtime_atual:
+        atual.amostra_leadtime,
+
+      amostra_leadtime_anterior:
+        anterior.amostra_leadtime,
+    };
+  }
+
+  const resumoTempos =
+    resumoCanal(
+      canalTempos
+    );
+
+
+  /* =======================================================
+     EVOLUÇÃO SEMANAL
+  ======================================================= */
+
+  const evolucaoSemanal =
+    useMemo(
+      () => {
+        const mapa =
+          new Map();
+
+        (
+          dados.kpisSemanais ||
+          []
+        ).forEach(
+          (
+            item
+          ) => {
+            const chave =
+              item.periodo_inicio;
+
+            if (
+              !mapa.has(
+                chave
+              )
+            ) {
+              mapa.set(
+                chave,
+                {
+                  periodo_inicio:
+                    chave,
+
+                  semana:
+                    fmtDataCurta(
+                      chave
+                    ),
+
+                  B2C:
+                    null,
+
+                  B2B:
+                    null,
+                }
+              );
+            }
+
+            mapa.get(
+              chave
+            )[
+              item.canal
+            ] =
+              item.mediana_leadtime_min !=
+              null
+                ? Number(
+                    item.mediana_leadtime_min
+                  )
+                : null;
+          }
+        );
+
+        return Array.from(
+          mapa.values()
+        ).sort(
+          (
+            a,
+            b
+          ) =>
+            String(
+              a.periodo_inicio
+            ).localeCompare(
+              String(
+                b.periodo_inicio
+              )
+            )
+        );
+      },
+      [
+        dados.kpisSemanais,
+      ]
+    );
+
+
+  /* =======================================================
      B2C
   ======================================================= */
 
   const canaisMes =
     useMemo(
-      () =>
-        (
-          dados.b2cCanaisMensal ||
-          []
-        )
-          .filter(
+      () => {
+        if (
+          ehMesCorrente
+        ) {
+          return (
+            dados.b2cCanaisComparativoAtual ||
+            []
+          )
+            .map(
+              (
+                row
+              ) => ({
+                marketplace:
+                  row.marketplace,
+
+                pagos:
+                  Number(
+                    row.pagos_atual ||
+                      0
+                  ),
+
+                pagosAnterior:
+                  Number(
+                    row.pagos_anterior ||
+                      0
+                  ),
+
+                embalados:
+                  Number(
+                    row.embalados_atual ||
+                      0
+                  ),
+
+                cancelados:
+                  Number(
+                    row.cancelados_atual ||
+                      0
+                  ),
+
+                coletas:
+                  Number(
+                    row.coletas_efetivas_atual ||
+                      0
+                  ),
+
+                coletasAnterior:
+                  Number(
+                    row.coletas_efetivas_anterior ||
+                      0
+                  ),
+
+                ciclos_validos:
+                  Number(
+                    row.ciclos_validos_atual ||
+                      0
+                  ),
+
+                ate_24h:
+                  Number(
+                    row.ate_24h_atual ||
+                      0
+                  ),
+
+                pct_ate_24h:
+                  row.pct_ate_24h_atual,
+
+                pct_ate_24h_anterior:
+                  row.pct_ate_24h_anterior,
+
+                mediana_h:
+                  row.mediana_h_atual,
+
+                mediana_h_anterior:
+                  row.mediana_h_anterior,
+
+                variacao_mediana_pct:
+                  row.variacao_mediana_pct,
+
+                p90_h:
+                  row.p90_h_atual,
+              })
+            )
+            .sort(
+              (
+                a,
+                b
+              ) =>
+                b.pagos -
+                a.pagos
+            );
+        }
+
+        const linhas =
+          (
+            dados.b2cCanaisMensal ||
+            []
+          )
+            .filter(
+              (
+                row
+              ) =>
+                String(
+                  row.mes
+                ).slice(
+                  0,
+                  10
+                ) ===
+                mesSelecionado
+            );
+
+        return linhas
+          .map(
             (
               row
-            ) =>
-              String(
-                row.mes
-              ).slice(
-                0,
-                10
-              ) ===
-              mesSelecionado
+            ) => {
+              const anterior =
+                (
+                  dados.b2cCanaisMensal ||
+                  []
+                ).find(
+                  (
+                    item
+                  ) =>
+                    item.marketplace ===
+                      row.marketplace &&
+                    String(
+                      item.mes
+                    ).slice(
+                      0,
+                      10
+                    ) ===
+                      mesAnterior
+                ) ||
+                {};
+
+              const coleta =
+                (
+                  dados.b2cColetasMensal ||
+                  []
+                ).find(
+                  (
+                    item
+                  ) =>
+                    item.marketplace ===
+                      row.marketplace &&
+                    String(
+                      item.mes
+                    ).slice(
+                      0,
+                      10
+                    ) ===
+                      mesSelecionado
+                ) ||
+                {};
+
+              const coletaAnterior =
+                (
+                  dados.b2cColetasMensal ||
+                  []
+                ).find(
+                  (
+                    item
+                  ) =>
+                    item.marketplace ===
+                      row.marketplace &&
+                    String(
+                      item.mes
+                    ).slice(
+                      0,
+                      10
+                    ) ===
+                      mesAnterior
+                ) ||
+                {};
+
+              const pagos =
+                Number(
+                  row.pagos ||
+                    0
+                );
+
+              const cancelados =
+                Number(
+                  row.cancelados ||
+                    0
+                );
+
+              return {
+                marketplace:
+                  row.marketplace,
+
+                pagos,
+
+                pagosAnterior:
+                  Number(
+                    anterior.pagos ||
+                      0
+                  ),
+
+                embalados:
+                  Math.max(
+                    0,
+                    pagos -
+                      cancelados
+                  ),
+
+                cancelados,
+
+                coletas:
+                  Number(
+                    coleta.coletas_efetivas ||
+                      0
+                  ),
+
+                coletasAnterior:
+                  Number(
+                    coletaAnterior.coletas_efetivas ||
+                      0
+                  ),
+
+                ciclos_validos:
+                  Number(
+                    row.ciclos_validos ||
+                      0
+                  ),
+
+                ate_24h:
+                  Number(
+                    row.ate_24h ||
+                      0
+                  ),
+
+                pct_ate_24h:
+                  row.pct_ate_24h,
+
+                pct_ate_24h_anterior:
+                  anterior.pct_ate_24h,
+
+                mediana_h:
+                  row.mediana_h,
+
+                mediana_h_anterior:
+                  anterior.mediana_h,
+
+                variacao_mediana_pct:
+                  calcularVariacao(
+                    row.mediana_h,
+                    anterior.mediana_h
+                  ),
+
+                p90_h:
+                  row.p90_h,
+              };
+            }
           )
           .sort(
             (
               a,
               b
             ) =>
-              Number(
-                b.pagos ||
-                  0
-              ) -
-              Number(
-                a.pagos ||
-                  0
-              )
-          ),
+              b.pagos -
+              a.pagos
+          );
+      },
       [
+        dados.b2cCanaisComparativoAtual,
         dados.b2cCanaisMensal,
+        dados.b2cColetasMensal,
+        ehMesCorrente,
         mesSelecionado,
+        mesAnterior,
       ]
     );
 
@@ -1659,7 +2475,10 @@ export default function IndicadoresExecutivosV2Page() {
 
   const expedicaoMes =
     useMemo(
-      () =>
+      () => {
+        const mapa =
+          new Map();
+
         (
           dados.expedicaoDiaria ||
           []
@@ -1676,6 +2495,59 @@ export default function IndicadoresExecutivosV2Page() {
               ) ===
               prefixoMes
           )
+          .forEach(
+            (
+              row
+            ) => {
+              const chave =
+                String(
+                  row.dia
+                ).slice(
+                  0,
+                  10
+                );
+
+              const atual =
+                mapa.get(
+                  chave
+                ) ||
+                {
+                  dia:
+                    chave,
+
+                  volumes:
+                    0,
+                };
+
+              atual.volumes +=
+                Number(
+                  row.pedidos ||
+                    0
+                );
+
+              mapa.set(
+                chave,
+                atual
+              );
+            }
+          );
+
+        return Array.from(
+          mapa.values()
+        )
+          .sort(
+            (
+              a,
+              b
+            ) =>
+              String(
+                a.dia
+              ).localeCompare(
+                String(
+                  b.dia
+                )
+              )
+          )
           .map(
             (
               row
@@ -1687,14 +2559,15 @@ export default function IndicadoresExecutivosV2Page() {
                   row.dia
                 ),
             })
-          ),
+          );
+      },
       [
         dados.expedicaoDiaria,
         prefixoMes,
       ]
     );
 
-  const expedidosMes =
+  const volumesExpedidos =
     expedicaoMes.reduce(
       (
         total,
@@ -1702,33 +2575,67 @@ export default function IndicadoresExecutivosV2Page() {
       ) =>
         total +
         Number(
-          row.pedidos ||
+          row.volumes ||
             0
         ),
       0
     );
 
-  const diasExpedicao =
-    new Set(
-      expedicaoMes.map(
-        (
-          row
-        ) =>
-          String(
-            row.dia
-          ).slice(
-            0,
-            10
-          )
-      )
-    ).size;
+  const totalPagos =
+    canaisMes.reduce(
+      (
+        total,
+        row
+      ) =>
+        total +
+        Number(
+          row.pagos ||
+            0
+        ),
+      0
+    );
 
-  const mediaExpedicao =
-    diasExpedicao >
-    0
-      ? expedidosMes /
-        diasExpedicao
-      : 0;
+  const totalEmbalados =
+    canaisMes.reduce(
+      (
+        total,
+        row
+      ) =>
+        total +
+        Number(
+          row.embalados ||
+            0
+        ),
+      0
+    );
+
+  const totalCancelados =
+    canaisMes.reduce(
+      (
+        total,
+        row
+      ) =>
+        total +
+        Number(
+          row.cancelados ||
+            0
+        ),
+      0
+    );
+
+  const totalColetas =
+    canaisMes.reduce(
+      (
+        total,
+        row
+      ) =>
+        total +
+        Number(
+          row.coletas ||
+            0
+        ),
+      0
+    );
 
 
   /* =======================================================
@@ -1815,7 +2722,7 @@ export default function IndicadoresExecutivosV2Page() {
     [
       {
         categoria:
-          "Integração",
+          "Falha integração",
 
         valor:
           Number(
@@ -1826,7 +2733,7 @@ export default function IndicadoresExecutivosV2Page() {
 
       {
         categoria:
-          "Cancelado marketplace",
+          "Cancelado antes embalagem",
 
         valor:
           Number(
@@ -1837,7 +2744,7 @@ export default function IndicadoresExecutivosV2Page() {
 
       {
         categoria:
-          "Pós embalagem",
+          "Cancelado após embalagem",
 
         valor:
           Number(
@@ -1848,7 +2755,7 @@ export default function IndicadoresExecutivosV2Page() {
 
       {
         categoria:
-          "Pós faturamento",
+          "Cancelado após faturamento",
 
         valor:
           Number(
@@ -1868,6 +2775,20 @@ export default function IndicadoresExecutivosV2Page() {
           ),
       },
     ];
+
+  const totalErros =
+    errosChart.reduce(
+      (
+        total,
+        row
+      ) =>
+        total +
+        Number(
+          row.valor ||
+            0
+        ),
+      0
+    );
 
 
   /* =======================================================
@@ -1998,238 +2919,6 @@ export default function IndicadoresExecutivosV2Page() {
         ) *
         100
       : null;
-
-
-  /* =======================================================
-     TEMPOS B2C / B2B
-  ======================================================= */
-
-  const etapasFonte =
-    visualizacaoEtapa ===
-    "semanal"
-      ? dados.etapasSemanais
-      : dados.etapasMensais;
-
-  const kpisFonte =
-    visualizacaoEtapa ===
-    "semanal"
-      ? dados.kpisSemanais
-      : dados.kpisMensais;
-
-  const periodoEtapaAtual =
-    useMemo(
-      () => {
-        const periodos =
-          (
-            etapasFonte ||
-            []
-          )
-            .filter(
-              (
-                item
-              ) =>
-                item.canal ===
-                canal
-            )
-            .map(
-              (
-                item
-              ) =>
-                item.periodo_inicio
-            )
-            .sort()
-            .reverse();
-
-        return periodos[0] ||
-          null;
-      },
-      [
-        etapasFonte,
-        canal,
-      ]
-    );
-
-  const etapasAtuais =
-    (
-      etapasFonte ||
-      []
-    ).filter(
-      (
-        item
-      ) =>
-        item.canal ===
-          canal &&
-        item.periodo_inicio ===
-          periodoEtapaAtual
-    );
-
-  const kpiPeriodoEtapa =
-    (
-      kpisFonte ||
-      []
-    ).find(
-      (
-        item
-      ) =>
-        item.canal ===
-          canal &&
-        item.periodo_inicio ===
-          periodoEtapaAtual
-    ) ||
-    {};
-
-  const totalBaseEtapa =
-    Number(
-      kpiPeriodoEtapa.itens ||
-        0
-    );
-
-  function coberturaEtapa(
-    etapa
-  ) {
-    if (
-      !totalBaseEtapa
-    ) {
-      return null;
-    }
-
-    return (
-      Number(
-        etapa.amostra ||
-          0
-      ) /
-      totalBaseEtapa
-    ) *
-      100;
-  }
-
-  function etapaBaixaCobertura(
-    etapa
-  ) {
-    const cobertura =
-      coberturaEtapa(
-        etapa
-      );
-
-    return cobertura !=
-      null &&
-      cobertura <
-        20;
-  }
-
-  const gargalos =
-    etapasAtuais
-      .filter(
-        (
-          item
-        ) =>
-          item.variacao_mediana_pct !=
-            null &&
-          Number(
-            item.variacao_mediana_pct
-          ) >
-            0 &&
-          !etapaBaixaCobertura(
-            item
-          )
-      )
-      .sort(
-        (
-          a,
-          b
-        ) =>
-          Number(
-            b.variacao_mediana_pct
-          ) -
-          Number(
-            a.variacao_mediana_pct
-          )
-      )
-      .slice(
-        0,
-        5
-      );
-
-  const sinaisBaixaCobertura =
-    etapasAtuais.filter(
-      etapaBaixaCobertura
-    );
-
-  const evolucaoSemanal =
-    useMemo(
-      () => {
-        const mapa =
-          new Map();
-
-        (
-          dados.kpisSemanais ||
-          []
-        ).forEach(
-          (
-            item
-          ) => {
-            const chave =
-              item.periodo_inicio;
-
-            if (
-              !mapa.has(
-                chave
-              )
-            ) {
-              mapa.set(
-                chave,
-                {
-                  periodo_inicio:
-                    chave,
-
-                  semana:
-                    fmtDataCurta(
-                      chave
-                    ),
-
-                  B2C:
-                    null,
-
-                  B2B:
-                    null,
-                }
-              );
-            }
-
-            mapa.get(
-              chave
-            )[
-              item.canal
-            ] =
-              item.mediana_leadtime_min !=
-              null
-                ? Number(
-                    item.mediana_leadtime_min
-                  )
-                : null;
-          }
-        );
-
-        return Array.from(
-          mapa.values()
-        ).sort(
-          (
-            a,
-            b
-          ) =>
-            String(
-              a.periodo_inicio
-            ).localeCompare(
-              String(
-                b.periodo_inicio
-              )
-            )
-        );
-      },
-      [
-        dados.kpisSemanais,
-      ]
-    );
 
 
   /* =======================================================
@@ -2400,16 +3089,13 @@ export default function IndicadoresExecutivosV2Page() {
 
               value:
                 fmtNumero(
-                  operacaoMes.recebidos
+                  operacaoResumo.recebidos
                 ),
 
               detail:
                 `${fmtVariacao(
-                  calcularVariacao(
-                    operacaoMes.recebidos,
-                    operacaoMesAnterior.recebidos
-                  )
-                )} vs mês anterior`,
+                  operacaoResumo.variacaoRecebidos
+                )} · ${textoComparacao}`,
 
               tone:
                 "violet",
@@ -2421,29 +3107,26 @@ export default function IndicadoresExecutivosV2Page() {
 
               value:
                 fmtNumero(
-                  operacaoMes.funcional
+                  operacaoResumo.funcional
                 ),
 
               detail:
                 `${fmtNumero(
-                  operacaoMes.deficit_recebimento_funcional
+                  operacaoResumo.deficit
                 )} de déficit`,
             },
 
             {
               label:
-                "B2C expedido",
+                "B2C saída física",
 
               value:
                 fmtNumero(
-                  expedidosMes
+                  volumesExpedidos
                 ),
 
               detail:
-                `${fmtNumero(
-                  mediaExpedicao,
-                  1
-                )} pedidos/dia`,
+                "volumes bipados em romaneios",
 
               tone:
                 "good",
@@ -2455,12 +3138,12 @@ export default function IndicadoresExecutivosV2Page() {
 
               value:
                 fmtNumero(
-                  b2bMes.itens_faturados
+                  b2bResumo.itensFaturados
                 ),
 
               detail:
                 `${fmtNumero(
-                  b2bMes.itens_recebidos
+                  b2bResumo.itensRecebidos
                 )} itens recebidos`,
             },
 
@@ -2515,7 +3198,7 @@ export default function IndicadoresExecutivosV2Page() {
         title={`Recebimento & Produção — ${fmtMesLongo(
           mesSelecionado
         )}`}
-        subtitle="Curva diária do fluxo físico, permitindo enxergar descompasso entre entrada, triagens, laudos e Oracle."
+        subtitle={`Curva diária do fluxo físico. Comparativos: ${textoComparacao}.`}
       >
         <MetricStrip
           items={[
@@ -2525,16 +3208,13 @@ export default function IndicadoresExecutivosV2Page() {
 
               value:
                 fmtNumero(
-                  operacaoMes.recebidos
+                  operacaoResumo.recebidos
                 ),
 
               detail:
                 `${fmtVariacao(
-                  calcularVariacao(
-                    operacaoMes.recebidos,
-                    operacaoMesAnterior.recebidos
-                  )
-                )} vs anterior`,
+                  operacaoResumo.variacaoRecebidos
+                )} · ${textoComparacao}`,
             },
 
             {
@@ -2543,16 +3223,13 @@ export default function IndicadoresExecutivosV2Page() {
 
               value:
                 fmtNumero(
-                  operacaoMes.funcional
+                  operacaoResumo.funcional
                 ),
 
               detail:
                 `${fmtVariacao(
-                  calcularVariacao(
-                    operacaoMes.funcional,
-                    operacaoMesAnterior.funcional
-                  )
-                )} vs anterior`,
+                  operacaoResumo.variacaoFuncional
+                )} · ${textoComparacao}`,
             },
 
             {
@@ -2561,16 +3238,13 @@ export default function IndicadoresExecutivosV2Page() {
 
               value:
                 fmtNumero(
-                  operacaoMes.cosmetica
+                  operacaoResumo.cosmetica
                 ),
 
               detail:
                 `${fmtVariacao(
-                  calcularVariacao(
-                    operacaoMes.cosmetica,
-                    operacaoMesAnterior.cosmetica
-                  )
-                )} vs anterior`,
+                  operacaoResumo.variacaoCosmetica
+                )} · ${textoComparacao}`,
             },
 
             {
@@ -2579,16 +3253,13 @@ export default function IndicadoresExecutivosV2Page() {
 
               value:
                 fmtNumero(
-                  operacaoMes.laudos
+                  operacaoResumo.laudos
                 ),
 
               detail:
                 `${fmtVariacao(
-                  calcularVariacao(
-                    operacaoMes.laudos,
-                    operacaoMesAnterior.laudos
-                  )
-                )} vs anterior`,
+                  operacaoResumo.variacaoLaudos
+                )} · ${textoComparacao}`,
             },
 
             {
@@ -2597,16 +3268,13 @@ export default function IndicadoresExecutivosV2Page() {
 
               value:
                 fmtNumero(
-                  operacaoMes.oracle
+                  operacaoResumo.oracle
                 ),
 
               detail:
                 `${fmtVariacao(
-                  calcularVariacao(
-                    operacaoMes.oracle,
-                    operacaoMesAnterior.oracle
-                  )
-                )} vs anterior`,
+                  operacaoResumo.variacaoOracle
+                )} · ${textoComparacao}`,
             },
 
             {
@@ -2615,7 +3283,7 @@ export default function IndicadoresExecutivosV2Page() {
 
               value:
                 fmtNumero(
-                  operacaoMes.maior_entrada_dia
+                  operacaoResumo.maiorEntradaDia
                 ),
 
               detail:
@@ -2776,7 +3444,7 @@ export default function IndicadoresExecutivosV2Page() {
       <Section
         index="02"
         title="Lead Time do Warehouse"
-        subtitle="Comparação das medianas de cada transição do fluxo operacional."
+        subtitle="Medianas de cada transição do fluxo. Prioridades processadas abaixo de 1h permanecem dentro do cálculo."
       >
         <div className="grid gap-5 p-5 xl:grid-cols-[1.45fr_0.55fr]">
           <div className="h-[310px]">
@@ -2900,16 +3568,15 @@ export default function IndicadoresExecutivosV2Page() {
               </div>
             </div>
 
-            {Number(
-              leadtimeWarehouse.excluidos_tempo_zero ||
-                0
-            ) >
+            {prioridadesMenor1h >
               0 && (
-              <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-[10px] leading-4 text-amber-800">
-                {fmtNumero(
-                  leadtimeWarehouse.excluidos_tempo_zero
-                )}{" "}
-                registros inferiores a 1h foram segregados para não distorcer o tempo Recebimento → Funcional.
+              <div className="mt-5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-3 text-[10px] leading-4 text-violet-800">
+                <strong>
+                  {fmtNumero(
+                    prioridadesMenor1h
+                  )} prioridades
+                </strong>{" "}
+                foram processadas em menos de 1h no Recebimento → Funcional e estão incluídas normalmente nos tempos.
               </div>
             )}
           </div>
@@ -2918,164 +3585,15 @@ export default function IndicadoresExecutivosV2Page() {
 
 
       {/* ===================================================
-          3. FILAS
+          3. QUALIDADE
       =================================================== */}
 
       <Section
         index="03"
-        title="Filas Operacionais"
-        subtitle="Concentração do backlog atual por estágio da operação."
-      >
-        <div className="grid gap-5 p-5 xl:grid-cols-[1.45fr_0.55fr]">
-          <div className="h-[330px]">
-            {filasOrdenadas.length ? (
-              <ResponsiveContainer
-                width="100%"
-                height="100%"
-              >
-                <BarChart
-                  data={
-                    filasOrdenadas.slice(
-                      0,
-                      12
-                    )
-                  }
-                  layout="vertical"
-                  margin={{
-                    left:
-                      30,
-
-                    right:
-                      20,
-                  }}
-                >
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    horizontal={
-                      false
-                    }
-                    stroke="#E2E8F0"
-                  />
-
-                  <XAxis
-                    type="number"
-                    tick={{
-                      fontSize:
-                        9,
-
-                      fill:
-                        "#94A3B8",
-                    }}
-                    axisLine={
-                      false
-                    }
-                    tickLine={
-                      false
-                    }
-                  />
-
-                  <YAxis
-                    type="category"
-                    dataKey="etapa"
-                    width={
-                      155
-                    }
-                    tick={{
-                      fontSize:
-                        9,
-
-                      fill:
-                        "#64748B",
-                    }}
-                    axisLine={
-                      false
-                    }
-                    tickLine={
-                      false
-                    }
-                  />
-
-                  <Tooltip
-                    content={
-                      <NumeroTooltip />
-                    }
-                  />
-
-                  <Bar
-                    dataKey="aparelhos"
-                    name="Aparelhos"
-                    fill="#0F172A"
-                    radius={[
-                      0,
-                      5,
-                      5,
-                      0,
-                    ]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <EmptyState>
-                Nenhuma fila operacional retornada.
-              </EmptyState>
-            )}
-          </div>
-
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <div className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
-              Maiores concentrações
-            </div>
-
-            <div className="mt-3 divide-y divide-slate-200">
-              {filasOrdenadas
-                .slice(
-                  0,
-                  6
-                )
-                .map(
-                  (
-                    item,
-                    index
-                  ) => (
-                    <div
-                      key={`${item.etapa}-${index}`}
-                      className="flex items-center justify-between gap-4 py-3"
-                    >
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white text-[9px] font-black text-slate-500">
-                          {index +
-                            1}
-                        </span>
-
-                        <span className="truncate text-[10px] font-semibold text-slate-600">
-                          {item.etapa}
-                        </span>
-                      </div>
-
-                      <span className="text-xs font-black text-slate-900">
-                        {fmtNumero(
-                          item.aparelhos
-                        )}
-                      </span>
-                    </div>
-                  )
-                )}
-            </div>
-          </div>
-        </div>
-      </Section>
-
-
-      {/* ===================================================
-          4. QUALIDADE
-      =================================================== */}
-
-      <Section
-        index="04"
         title={`Qualidade do Inbound — ${fmtMesLongo(
           mesSelecionado
         )}`}
-        subtitle="Distribuição das classificações cosméticas e exposição das grades de menor qualidade."
+        subtitle="Distribuição das classificações cosméticas com participação percentual de cada grade."
       >
         <MetricStrip
           items={[
@@ -3112,7 +3630,7 @@ export default function IndicadoresExecutivosV2Page() {
           ]}
         />
 
-        <div className="h-[330px] p-5">
+        <div className="h-[350px] p-5">
           {gradesMes.length ? (
             <ResponsiveContainer
               width="100%"
@@ -3122,6 +3640,19 @@ export default function IndicadoresExecutivosV2Page() {
                 data={
                   gradesMes
                 }
+                margin={{
+                  top:
+                    30,
+
+                  right:
+                    15,
+
+                  left:
+                    0,
+
+                  bottom:
+                    0,
+                }}
               >
                 <CartesianGrid
                   strokeDasharray="3 3"
@@ -3168,9 +3699,30 @@ export default function IndicadoresExecutivosV2Page() {
                 />
 
                 <Tooltip
-                  content={
-                    <NumeroTooltip />
-                  }
+                  formatter={(
+                    value,
+                    name,
+                    props
+                  ) => {
+                    if (
+                      name ===
+                      "Aparelhos"
+                    ) {
+                      return [
+                        `${fmtNumero(
+                          value
+                        )} · ${fmtPercentual(
+                          props?.payload?.percentual
+                        )}`,
+                        "Aparelhos",
+                      ];
+                    }
+
+                    return [
+                      value,
+                      name,
+                    ];
+                  }}
                 />
 
                 <Bar
@@ -3183,7 +3735,29 @@ export default function IndicadoresExecutivosV2Page() {
                     0,
                     0,
                   ]}
-                />
+                >
+                  <LabelList
+                    dataKey="percentual"
+                    position="top"
+                    formatter={(
+                      value
+                    ) =>
+                      fmtPercentual(
+                        value
+                      )
+                    }
+                    style={{
+                      fill:
+                        "#475569",
+
+                      fontSize:
+                        10,
+
+                      fontWeight:
+                        800,
+                    }}
+                  />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -3196,15 +3770,15 @@ export default function IndicadoresExecutivosV2Page() {
 
 
       {/* ===================================================
-          5. B2B
+          4. B2B
       =================================================== */}
 
       <Section
-        index="05"
+        index="04"
         title={`Performance B2B — ${fmtMesLongo(
           mesSelecionado
         )}`}
-        subtitle="Recebimento de demanda, volume de itens, faturamento e erros de nota ao longo do mês."
+        subtitle={`Entrada de pedidos, itens, faturamento e tempos entre etapas. Comparativos: ${textoComparacao}.`}
       >
         <MetricStrip
           items={[
@@ -3214,16 +3788,13 @@ export default function IndicadoresExecutivosV2Page() {
 
               value:
                 fmtNumero(
-                  b2bMes.pedidos_recebidos
+                  b2bResumo.pedidos
                 ),
 
               detail:
                 `${fmtVariacao(
-                  calcularVariacao(
-                    b2bMes.pedidos_recebidos,
-                    b2bMesAnterior.pedidos_recebidos
-                  )
-                )} vs anterior`,
+                  b2bResumo.variacaoPedidos
+                )} · ${textoComparacao}`,
             },
 
             {
@@ -3232,16 +3803,13 @@ export default function IndicadoresExecutivosV2Page() {
 
               value:
                 fmtNumero(
-                  b2bMes.itens_recebidos
+                  b2bResumo.itensRecebidos
                 ),
 
               detail:
                 `${fmtVariacao(
-                  calcularVariacao(
-                    b2bMes.itens_recebidos,
-                    b2bMesAnterior.itens_recebidos
-                  )
-                )} vs anterior`,
+                  b2bResumo.variacaoItensRecebidos
+                )} · ${textoComparacao}`,
             },
 
             {
@@ -3250,16 +3818,13 @@ export default function IndicadoresExecutivosV2Page() {
 
               value:
                 fmtNumero(
-                  b2bMes.itens_faturados
+                  b2bResumo.itensFaturados
                 ),
 
               detail:
                 `${fmtVariacao(
-                  calcularVariacao(
-                    b2bMes.itens_faturados,
-                    b2bMesAnterior.itens_faturados
-                  )
-                )} vs anterior`,
+                  b2bResumo.variacaoItensFaturados
+                )} · ${textoComparacao}`,
 
               tone:
                 "good",
@@ -3271,16 +3836,13 @@ export default function IndicadoresExecutivosV2Page() {
 
               value:
                 fmtNumero(
-                  b2bMes.notas_emitidas
+                  b2bResumo.notas
                 ),
 
               detail:
                 `${fmtVariacao(
-                  calcularVariacao(
-                    b2bMes.notas_emitidas,
-                    b2bMesAnterior.notas_emitidas
-                  )
-                )} vs anterior`,
+                  b2bResumo.variacaoNotas
+                )} · ${textoComparacao}`,
             },
 
             {
@@ -3289,20 +3851,17 @@ export default function IndicadoresExecutivosV2Page() {
 
               value:
                 fmtNumero(
-                  b2bMes.erros_nf
+                  b2bResumo.erros
                 ),
 
               detail:
                 `${fmtVariacao(
-                  calcularVariacao(
-                    b2bMes.erros_nf,
-                    b2bMesAnterior.erros_nf
-                  )
-                )} vs anterior`,
+                  b2bResumo.variacaoErros
+                )} · ${textoComparacao}`,
 
               tone:
                 Number(
-                  b2bMes.erros_nf ||
+                  b2bResumo.erros ||
                     0
                 ) >
                 0
@@ -3312,7 +3871,7 @@ export default function IndicadoresExecutivosV2Page() {
           ]}
         />
 
-        <div className="h-[330px] p-5">
+        <div className="h-[320px] p-5">
           {b2bDiarioMes.length ? (
             <ResponsiveContainer
               width="100%"
@@ -3424,33 +3983,141 @@ export default function IndicadoresExecutivosV2Page() {
             </EmptyState>
           )}
         </div>
+
+        <div className="border-t border-slate-100">
+          <div className="px-5 py-4">
+            <div className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-500">
+              Tempo entre etapas
+            </div>
+
+            <div className="mt-1 text-[10px] text-slate-400">
+              Entrada pedido → Separação → Embalagem → Faturamento.
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[850px]">
+              <thead>
+                <tr className="bg-slate-50">
+                  <th className="px-5 py-3 text-left text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
+                    Etapa
+                  </th>
+
+                  <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
+                    Média
+                  </th>
+
+                  <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
+                    Mediana
+                  </th>
+
+                  <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
+                    P90
+                  </th>
+
+                  <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
+                    Registros
+                  </th>
+
+                  <th className="px-5 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
+                    Δ Mediana
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody className="divide-y divide-slate-100">
+                {etapasB2B.map(
+                  (
+                    etapa
+                  ) => (
+                    <tr
+                      key={
+                        etapa.etapa
+                      }
+                    >
+                      <td className="px-5 py-3 text-xs font-black text-slate-700">
+                        {etapa.etapa}
+                      </td>
+
+                      <td className="px-3 py-3 text-right text-xs font-semibold text-slate-600">
+                        {fmtDuracao(
+                          etapa.media_min
+                        )}
+                      </td>
+
+                      <td className="px-3 py-3 text-right text-xs font-black text-slate-800">
+                        {fmtDuracao(
+                          etapa.mediana_min
+                        )}
+                      </td>
+
+                      <td className="px-3 py-3 text-right text-xs font-semibold text-slate-600">
+                        {fmtDuracao(
+                          etapa.p90_min
+                        )}
+                      </td>
+
+                      <td className="px-3 py-3 text-right text-xs font-semibold text-slate-600">
+                        {fmtNumero(
+                          etapa.amostra
+                        )}
+                      </td>
+
+                      <td className="px-5 py-3 text-right text-xs">
+                        <VariacaoTexto
+                          value={
+                            etapa.variacao_mediana_pct
+                          }
+                          inverso
+                        />
+                      </td>
+                    </tr>
+                  )
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </Section>
 
 
       {/* ===================================================
-          6. B2C
+          5. B2C
       =================================================== */}
 
       <Section
-        index="06"
+        index="05"
         title={`Performance B2C por Canal — ${fmtMesLongo(
           mesSelecionado
         )}`}
-        subtitle="Pagamento, processamento, cancelamento, SLA e expedição por canal."
+        subtitle={`Embalados operacionais = pagos menos cancelados. Mediana comparada por ${textoComparacao}. Expedição física proveniente dos romaneios.`}
       >
         <MetricStrip
           items={[
             {
               label:
-                "Expedidos",
+                "Pagos",
 
               value:
                 fmtNumero(
-                  expedidosMes
+                  totalPagos
                 ),
 
               detail:
-                "pedidos no mês",
+                "pedidos pagos",
+            },
+
+            {
+              label:
+                "Embalados operacionais",
+
+              value:
+                fmtNumero(
+                  totalEmbalados
+                ),
+
+              detail:
+                "pagos menos cancelados",
 
               tone:
                 "good",
@@ -3458,48 +4125,56 @@ export default function IndicadoresExecutivosV2Page() {
 
             {
               label:
-                "Dias com expedição",
+                "Cancelados",
 
               value:
                 fmtNumero(
-                  diasExpedicao
+                  totalCancelados
                 ),
 
               detail:
-                "dias produtivos",
+                "cancelamentos do período",
+
+              tone:
+                totalCancelados >
+                0
+                  ? "warning"
+                  : "good",
             },
 
             {
               label:
-                "Média / dia",
+                "Coletas efetivas",
 
               value:
                 fmtNumero(
-                  mediaExpedicao,
-                  1
+                  totalColetas
                 ),
 
               detail:
-                "pedidos por dia",
+                "romaneios fechados com bipagem",
             },
 
             {
               label:
-                "Canais ativos",
+                "Volumes expedidos",
 
               value:
                 fmtNumero(
-                  canaisMes.length
+                  volumesExpedidos
                 ),
 
               detail:
-                "marketplaces",
+                "bipagens na estação de saída",
+
+              tone:
+                "violet",
             },
           ]}
         />
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1050px]">
+          <table className="w-full min-w-[1350px]">
             <thead>
               <tr className="bg-slate-50">
                 <th className="px-5 py-3 text-left text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
@@ -3519,6 +4194,10 @@ export default function IndicadoresExecutivosV2Page() {
                 </th>
 
                 <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
+                  Coletas efetivas
+                </th>
+
+                <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
                   Ciclos válidos
                 </th>
 
@@ -3531,7 +4210,15 @@ export default function IndicadoresExecutivosV2Page() {
                 </th>
 
                 <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
-                  Mediana
+                  Mediana atual
+                </th>
+
+                <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
+                  Mediana anterior
+                </th>
+
+                <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
+                  Δ mediana
                 </th>
 
                 <th className="px-5 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
@@ -3573,6 +4260,12 @@ export default function IndicadoresExecutivosV2Page() {
                       )}
                     </td>
 
+                    <td className="px-3 py-3 text-right text-xs font-black text-slate-700">
+                      {fmtNumero(
+                        row.coletas
+                      )}
+                    </td>
+
                     <td className="px-3 py-3 text-right text-xs font-semibold text-slate-600">
                       {fmtNumero(
                         row.ciclos_validos
@@ -3610,10 +4303,25 @@ export default function IndicadoresExecutivosV2Page() {
                       )}
                     </td>
 
-                    <td className="px-3 py-3 text-right text-xs font-black text-slate-700">
+                    <td className="px-3 py-3 text-right text-xs font-black text-slate-800">
                       {fmtHoras(
                         row.mediana_h
                       )}
+                    </td>
+
+                    <td className="px-3 py-3 text-right text-xs font-semibold text-slate-500">
+                      {fmtHoras(
+                        row.mediana_h_anterior
+                      )}
+                    </td>
+
+                    <td className="px-3 py-3 text-right text-xs">
+                      <VariacaoTexto
+                        value={
+                          row.variacao_mediana_pct
+                        }
+                        inverso
+                      />
                     </td>
 
                     <td className="px-5 py-3 text-right text-xs font-black text-slate-700">
@@ -3636,7 +4344,7 @@ export default function IndicadoresExecutivosV2Page() {
               </div>
 
               <div className="mt-1 text-[10px] text-slate-400">
-                Faixas reais de tempo de processamento.
+                Tempo Pago → Embalagem para ciclos que possuem os dois timestamps.
               </div>
             </div>
 
@@ -3716,11 +4424,11 @@ export default function IndicadoresExecutivosV2Page() {
           <div>
             <div className="mb-3">
               <div className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-500">
-                Expedição diária
+                Expedição física diária
               </div>
 
               <div className="mt-1 text-[10px] text-slate-400">
-                Distribuição diária dos pedidos expedidos.
+                Todos os volumes bipados na estação dos romaneios de saída B2C.
               </div>
             </div>
 
@@ -3784,8 +4492,8 @@ export default function IndicadoresExecutivosV2Page() {
 
                     <Line
                       type="monotone"
-                      dataKey="pedidos"
-                      name="Expedidos"
+                      dataKey="volumes"
+                      name="Volumes bipados"
                       stroke="#6D28D9"
                       strokeWidth={
                         2.5
@@ -3800,7 +4508,7 @@ export default function IndicadoresExecutivosV2Page() {
                 </ResponsiveContainer>
               ) : (
                 <EmptyState>
-                  Sem expedição diária para este mês.
+                  Sem bipagens de romaneio para este mês.
                 </EmptyState>
               )}
             </div>
@@ -3810,22 +4518,22 @@ export default function IndicadoresExecutivosV2Page() {
 
 
       {/* ===================================================
-          7. TEMPOS B2C / B2B
+          6. TEMPOS OPERACIONAIS
       =================================================== */}
 
       <Section
-        index="07"
+        index="06"
         title="Tempos Operacionais B2C & B2B"
-        subtitle="Mediana, P90, cobertura, evolução histórica e gargalos por etapa."
+        subtitle="Tempos construídos diretamente sobre as etapas efetivas do processo, sem separar Picking e Separação artificialmente."
         action={
           <div className="flex flex-wrap gap-2">
             <ToggleButton
               active={
-                canal ===
+                canalTempos ===
                 "B2C"
               }
               onClick={() =>
-                setCanal(
+                setCanalTempos(
                   "B2C"
                 )
               }
@@ -3835,11 +4543,11 @@ export default function IndicadoresExecutivosV2Page() {
 
             <ToggleButton
               active={
-                canal ===
+                canalTempos ===
                 "B2B"
               }
               onClick={() =>
-                setCanal(
+                setCanalTempos(
                   "B2B"
                 )
               }
@@ -3849,68 +4557,6 @@ export default function IndicadoresExecutivosV2Page() {
           </div>
         }
       >
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-3">
-          <div className="flex rounded-xl bg-slate-100 p-1">
-            <PeriodButton
-              active={
-                granularidade ===
-                "MTD"
-              }
-              onClick={() =>
-                setGranularidade(
-                  "MTD"
-                )
-              }
-            >
-              Mês atual
-            </PeriodButton>
-
-            <PeriodButton
-              active={
-                granularidade ===
-                "WTD"
-              }
-              onClick={() =>
-                setGranularidade(
-                  "WTD"
-                )
-              }
-            >
-              Semana atual
-            </PeriodButton>
-          </div>
-
-          <div className="flex rounded-xl bg-slate-100 p-1">
-            <PeriodButton
-              active={
-                visualizacaoEtapa ===
-                "semanal"
-              }
-              onClick={() =>
-                setVisualizacaoEtapa(
-                  "semanal"
-                )
-              }
-            >
-              Etapas semanais
-            </PeriodButton>
-
-            <PeriodButton
-              active={
-                visualizacaoEtapa ===
-                "mensal"
-              }
-              onClick={() =>
-                setVisualizacaoEtapa(
-                  "mensal"
-                )
-              }
-            >
-              Etapas mensais
-            </PeriodButton>
-          </div>
-        </div>
-
         <MetricStrip
           items={[
             {
@@ -3919,13 +4565,13 @@ export default function IndicadoresExecutivosV2Page() {
 
               value:
                 fmtNumero(
-                  atual?.pedidos_atual
+                  resumoTempos?.pedidos_atual
                 ),
 
               detail:
                 `${fmtVariacao(
-                  atual?.variacao_pedidos_pct
-                )} vs anterior`,
+                  resumoTempos?.variacao_pedidos_pct
+                )} · ${textoComparacao}`,
             },
 
             {
@@ -3934,13 +4580,13 @@ export default function IndicadoresExecutivosV2Page() {
 
               value:
                 fmtNumero(
-                  atual?.itens_atual
+                  resumoTempos?.itens_atual
                 ),
 
               detail:
                 `${fmtVariacao(
-                  atual?.variacao_itens_pct
-                )} vs anterior`,
+                  resumoTempos?.variacao_itens_pct
+                )} · ${textoComparacao}`,
             },
 
             {
@@ -3949,22 +4595,19 @@ export default function IndicadoresExecutivosV2Page() {
 
               value:
                 fmtPercentual(
-                  atual?.pct_concluidos_atual
+                  resumoTempos?.pct_concluidos_atual
                 ),
 
               detail:
                 `${
-                  atual?.variacao_conclusao_pp !=
+                  resumoTempos?.variacao_conclusao_pp !=
                   null
                     ? `${fmtNumero(
-                        atual.variacao_conclusao_pp,
+                        resumoTempos.variacao_conclusao_pp,
                         1
                       )} p.p.`
                     : "—"
                 }`,
-
-              tone:
-                "good",
             },
 
             {
@@ -3973,17 +4616,17 @@ export default function IndicadoresExecutivosV2Page() {
 
               value:
                 fmtDuracao(
-                  atual?.mediana_leadtime_atual_min
+                  resumoTempos?.mediana_leadtime_atual_min
                 ),
 
               detail:
                 `${fmtVariacao(
-                  atual?.variacao_mediana_leadtime_pct
-                )} vs anterior`,
+                  resumoTempos?.variacao_mediana_leadtime_pct
+                )} · ${textoComparacao}`,
 
               tone:
                 Number(
-                  atual?.variacao_mediana_leadtime_pct ||
+                  resumoTempos?.variacao_mediana_leadtime_pct ||
                     0
                 ) >
                 0
@@ -3997,36 +4640,30 @@ export default function IndicadoresExecutivosV2Page() {
 
               value:
                 fmtDuracao(
-                  atual?.p90_leadtime_atual_min
+                  resumoTempos?.p90_leadtime_atual_min
                 ),
 
               detail:
-                `${fmtVariacao(
-                  calcularVariacao(
-                    atual?.p90_leadtime_atual_min,
-                    atual?.p90_leadtime_anterior_min
-                  )
-                )} vs anterior`,
+                "cauda operacional",
             },
 
             {
               label:
-                "Cobertura",
+                "Amostra ponta a ponta",
 
               value:
-                fmtCobertura(
-                  atual?.amostra_leadtime_atual,
-                  atual?.pedidos_atual
+                fmtNumero(
+                  resumoTempos?.amostra_leadtime_atual
                 ),
 
               detail:
-                "ciclos calculáveis",
+                "pedidos com ciclo completo",
             },
           ]}
         />
 
         <div className="overflow-x-auto border-b border-slate-100">
-          <table className="w-full min-w-[900px]">
+          <table className="w-full min-w-[1000px]">
             <thead>
               <tr className="bg-slate-50">
                 <th className="px-5 py-3 text-left text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
@@ -4034,7 +4671,15 @@ export default function IndicadoresExecutivosV2Page() {
                 </th>
 
                 <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
+                  Média
+                </th>
+
+                <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
                   Mediana
+                </th>
+
+                <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
+                  Mediana anterior
                 </th>
 
                 <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
@@ -4043,10 +4688,6 @@ export default function IndicadoresExecutivosV2Page() {
 
                 <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
                   Registros
-                </th>
-
-                <th className="px-3 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
-                  Cobertura
                 </th>
 
                 <th className="px-5 py-3 text-right text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">
@@ -4060,37 +4701,47 @@ export default function IndicadoresExecutivosV2Page() {
                 (
                   etapa
                 ) => {
-                  const cobertura =
-                    coberturaEtapa(
-                      etapa
+                  const definicao =
+                    normalizarTexto(
+                      etapa.etapa
+                    ).includes(
+                      "AGUARDANDO DEFINICAO"
                     );
 
                   return (
                     <tr
-                      key={`${etapa.canal}-${etapa.etapa}`}
+                      key={`${canalTempos}-${etapa.etapa}`}
                       className={
-                        etapaBaixaCobertura(
-                          etapa
-                        )
-                          ? "bg-amber-50/40"
+                        definicao
+                          ? "bg-violet-50/40"
                           : ""
                       }
                     >
                       <td className="px-5 py-3 text-xs font-black text-slate-700">
                         {etapa.etapa}
 
-                        {etapaBaixaCobertura(
-                          etapa
-                        ) && (
-                          <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[8px] font-black uppercase text-amber-700">
-                            baixa cobertura
+                        {definicao && (
+                          <span className="ml-2 rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[8px] font-black uppercase text-violet-700">
+                            etapa excepcional
                           </span>
                         )}
                       </td>
 
-                      <td className="px-3 py-3 text-right text-xs font-black text-slate-700">
+                      <td className="px-3 py-3 text-right text-xs font-semibold text-slate-600">
+                        {fmtDuracao(
+                          etapa.media_min
+                        )}
+                      </td>
+
+                      <td className="px-3 py-3 text-right text-xs font-black text-slate-800">
                         {fmtDuracao(
                           etapa.mediana_min
+                        )}
+                      </td>
+
+                      <td className="px-3 py-3 text-right text-xs font-semibold text-slate-500">
+                        {fmtDuracao(
+                          etapa.mediana_anterior_min
                         )}
                       </td>
 
@@ -4100,15 +4751,9 @@ export default function IndicadoresExecutivosV2Page() {
                         )}
                       </td>
 
-                      <td className="px-3 py-3 text-right text-xs font-semibold text-slate-600">
+                      <td className="px-3 py-3 text-right text-xs font-black text-slate-700">
                         {fmtNumero(
                           etapa.amostra
-                        )}
-                      </td>
-
-                      <td className="px-3 py-3 text-right text-xs font-semibold text-slate-600">
-                        {fmtPercentual(
-                          cobertura
                         )}
                       </td>
 
@@ -4128,214 +4773,135 @@ export default function IndicadoresExecutivosV2Page() {
           </table>
         </div>
 
-        <div className="grid gap-6 p-5 xl:grid-cols-[1.5fr_0.5fr]">
-          <div>
-            <div className="mb-3">
-              <div className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-500">
-                Evolução semanal do lead time
-              </div>
-
-              <div className="mt-1 text-[10px] text-slate-400">
-                Mediana ponta a ponta B2C × B2B.
-              </div>
+        <div className="p-5">
+          <div className="mb-3">
+            <div className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-500">
+              Evolução semanal do lead time ponta a ponta
             </div>
 
-            <div className="h-[300px]">
-              <ResponsiveContainer
-                width="100%"
-                height="100%"
-              >
-                <LineChart
-                  data={
-                    evolucaoSemanal
-                  }
-                >
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    vertical={
-                      false
-                    }
-                    stroke="#E2E8F0"
-                  />
-
-                  <XAxis
-                    dataKey="semana"
-                    tick={{
-                      fontSize:
-                        9,
-
-                      fill:
-                        "#94A3B8",
-                    }}
-                    axisLine={
-                      false
-                    }
-                    tickLine={
-                      false
-                    }
-                  />
-
-                  <YAxis
-                    tick={{
-                      fontSize:
-                        9,
-
-                      fill:
-                        "#94A3B8",
-                    }}
-                    axisLine={
-                      false
-                    }
-                    tickLine={
-                      false
-                    }
-                    tickFormatter={(
-                      value
-                    ) =>
-                      fmtDuracao(
-                        value
-                      )
-                    }
-                    width={
-                      65
-                    }
-                  />
-
-                  <Tooltip
-                    content={
-                      <TempoTooltip />
-                    }
-                  />
-
-                  <Legend
-                    wrapperStyle={{
-                      fontSize:
-                        "10px",
-                    }}
-                  />
-
-                  <Line
-                    type="monotone"
-                    dataKey="B2C"
-                    stroke="#6D28D9"
-                    strokeWidth={
-                      2.5
-                    }
-                    dot={{
-                      r:
-                        3,
-                    }}
-                    connectNulls
-                  />
-
-                  <Line
-                    type="monotone"
-                    dataKey="B2B"
-                    stroke="#0F172A"
-                    strokeWidth={
-                      2.5
-                    }
-                    dot={{
-                      r:
-                        3,
-                    }}
-                    connectNulls
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+            <div className="mt-1 text-[10px] text-slate-400">
+              Comparativo de tendência entre B2C e B2B.
             </div>
           </div>
 
-          <div className="space-y-4">
-            <div>
-              <div className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-500">
-                Gargalos
-              </div>
+          <div className="h-[300px]">
+            <ResponsiveContainer
+              width="100%"
+              height="100%"
+            >
+              <LineChart
+                data={
+                  evolucaoSemanal
+                }
+              >
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  vertical={
+                    false
+                  }
+                  stroke="#E2E8F0"
+                />
 
-              <div className="mt-2 divide-y divide-slate-100 rounded-xl border border-slate-200 bg-slate-50 px-3">
-                {gargalos.length ? (
-                  gargalos.map(
-                    (
-                      item,
-                      index
-                    ) => (
-                      <div
-                        key={`${item.etapa}-${index}`}
-                        className="py-3"
-                      >
-                        <div className="text-[10px] font-black text-slate-700">
-                          {index +
-                            1}
-                          .{" "}
-                          {item.etapa}
-                        </div>
+                <XAxis
+                  dataKey="semana"
+                  tick={{
+                    fontSize:
+                      9,
 
-                        <div className="mt-1 flex items-center justify-between gap-2">
-                          <span className="text-[9px] text-slate-400">
-                            {fmtDuracao(
-                              item.mediana_min
-                            )}
-                          </span>
+                    fill:
+                      "#94A3B8",
+                  }}
+                  axisLine={
+                    false
+                  }
+                  tickLine={
+                    false
+                  }
+                />
 
-                          <span className="text-[10px] font-black text-rose-700">
-                            {fmtVariacao(
-                              item.variacao_mediana_pct
-                            )}
-                          </span>
-                        </div>
-                      </div>
+                <YAxis
+                  tick={{
+                    fontSize:
+                      9,
+
+                    fill:
+                      "#94A3B8",
+                  }}
+                  axisLine={
+                    false
+                  }
+                  tickLine={
+                    false
+                  }
+                  tickFormatter={(
+                    value
+                  ) =>
+                    fmtDuracao(
+                      value
                     )
-                  )
-                ) : (
-                  <div className="py-5 text-[10px] font-semibold text-emerald-700">
-                    Sem deterioração relevante com cobertura suficiente.
-                  </div>
-                )}
-              </div>
-            </div>
+                  }
+                  width={
+                    65
+                  }
+                />
 
-            {sinaisBaixaCobertura.length >
-              0 && (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-                <div className="text-[9px] font-black uppercase tracking-[0.1em] text-amber-700">
-                  Cobertura insuficiente
-                </div>
+                <Tooltip
+                  content={
+                    <TempoTooltip />
+                  }
+                />
 
-                <div className="mt-2 space-y-1.5">
-                  {sinaisBaixaCobertura.map(
-                    (
-                      item
-                    ) => (
-                      <div
-                        key={item.etapa}
-                        className="text-[10px] text-amber-800"
-                      >
-                        {item.etapa} ·{" "}
-                        {fmtNumero(
-                          item.amostra
-                        )}{" "}
-                        registros
-                      </div>
-                    )
-                  )}
-                </div>
-              </div>
-            )}
+                <Legend
+                  wrapperStyle={{
+                    fontSize:
+                      "10px",
+                  }}
+                />
+
+                <Line
+                  type="monotone"
+                  dataKey="B2C"
+                  stroke="#6D28D9"
+                  strokeWidth={
+                    2.5
+                  }
+                  dot={{
+                    r:
+                      3,
+                  }}
+                  connectNulls
+                />
+
+                <Line
+                  type="monotone"
+                  dataKey="B2B"
+                  stroke="#0F172A"
+                  strokeWidth={
+                    2.5
+                  }
+                  dot={{
+                    r:
+                      3,
+                  }}
+                  connectNulls
+                />
+              </LineChart>
+            </ResponsiveContainer>
           </div>
         </div>
       </Section>
 
 
       {/* ===================================================
-          8. OCORRÊNCIAS
+          7. OCORRÊNCIAS
       =================================================== */}
 
       <Section
-        index="08"
-        title={`Venda sem Estoque & Ocorrências — ${fmtMesLongo(
+        index="07"
+        title={`Ocorrências de Estoque & Alocação B2C — ${fmtMesLongo(
           mesSelecionado
         )}`}
-        subtitle="Concentração dos problemas identificados durante alocação e atendimento dos pedidos."
+        subtitle="Ocorrências identificadas na tentativa de localizar, alocar ou definir o produto do pedido."
       >
         <MetricStrip
           items={[
@@ -4457,16 +5023,39 @@ export default function IndicadoresExecutivosV2Page() {
 
 
       {/* ===================================================
-          9. ERROS
+          8. ERROS
       =================================================== */}
 
       <Section
-        index="09"
-        title={`Erros & Retrabalho — ${fmtMesLongo(
+        index="08"
+        title={`Erros & Retrabalhos — ${fmtMesLongo(
           mesSelecionado
         )}`}
-        subtitle="Eventos sistêmicos e operacionais capazes de gerar exceção, cancelamento ou retrabalho."
+        subtitle="Categorias exclusivas: cada cancelamento é contado somente no estágio mais avançado que atingiu."
       >
+        <MetricStrip
+          items={[
+            {
+              label:
+                "Eventos de erro / retrabalho",
+
+              value:
+                fmtNumero(
+                  totalErros
+                ),
+
+              detail:
+                "somatório das categorias",
+
+              tone:
+                totalErros >
+                0
+                  ? "warning"
+                  : "good",
+            },
+          ]}
+        />
+
         <div className="h-[330px] p-5">
           <ResponsiveContainer
             width="100%"
@@ -4476,6 +5065,19 @@ export default function IndicadoresExecutivosV2Page() {
               data={
                 errosChart
               }
+              margin={{
+                top:
+                  15,
+
+                right:
+                  15,
+
+                left:
+                  0,
+
+                bottom:
+                  20,
+              }}
             >
               <CartesianGrid
                 strokeDasharray="3 3"
@@ -4541,15 +5143,99 @@ export default function IndicadoresExecutivosV2Page() {
             </BarChart>
           </ResponsiveContainer>
         </div>
+
+        <div className="border-t border-slate-100 bg-slate-50/60 px-5 py-4">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            <div className="rounded-xl border border-slate-200 bg-white p-3">
+              <div className="text-[9px] font-black uppercase text-slate-400">
+                Falha integração
+              </div>
+
+              <div className="mt-1 text-lg font-black text-slate-900">
+                {fmtNumero(
+                  errosMes.falhas_integracao
+                )}
+              </div>
+
+              <div className="mt-1 text-[9px] leading-4 text-slate-400">
+                Falha registrada na integração do AnyMarket.
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-3">
+              <div className="text-[9px] font-black uppercase text-slate-400">
+                Antes embalagem
+              </div>
+
+              <div className="mt-1 text-lg font-black text-slate-900">
+                {fmtNumero(
+                  errosMes.cancelados_marketplace
+                )}
+              </div>
+
+              <div className="mt-1 text-[9px] leading-4 text-slate-400">
+                Cancelado antes de concluir embalagem.
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-3">
+              <div className="text-[9px] font-black uppercase text-slate-400">
+                Pós embalagem
+              </div>
+
+              <div className="mt-1 text-lg font-black text-slate-900">
+                {fmtNumero(
+                  errosMes.cancelados_pos_embalagem
+                )}
+              </div>
+
+              <div className="mt-1 text-[9px] leading-4 text-slate-400">
+                Cancelado após embalagem e antes do faturamento.
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-3">
+              <div className="text-[9px] font-black uppercase text-slate-400">
+                Pós faturamento
+              </div>
+
+              <div className="mt-1 text-lg font-black text-slate-900">
+                {fmtNumero(
+                  errosMes.cancelados_pos_faturamento
+                )}
+              </div>
+
+              <div className="mt-1 text-[9px] leading-4 text-slate-400">
+                Cancelado depois de já existir faturamento.
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-3">
+              <div className="text-[9px] font-black uppercase text-slate-400">
+                Erro NF B2B
+              </div>
+
+              <div className="mt-1 text-lg font-black text-slate-900">
+                {fmtNumero(
+                  errosMes.erros_nf_b2b
+                )}
+              </div>
+
+              <div className="mt-1 text-[9px] leading-4 text-slate-400">
+                NF B2B com status ou motivo de erro.
+              </div>
+            </div>
+          </div>
+        </div>
       </Section>
 
 
       {/* ===================================================
-          10. STOCK INTELLIGENCE
+          9. STOCK INTELLIGENCE
       =================================================== */}
 
       <Section
-        index="10"
+        index="09"
         title="Stock Intelligence"
         subtitle="Estoque atual, envelhecimento e investigação por faixa de aging, SKU, grade e IMEI."
         action={
@@ -4923,13 +5609,15 @@ export default function IndicadoresExecutivosV2Page() {
             </div>
 
             <div className="mt-1 max-w-6xl text-[10px] leading-5 text-slate-500">
-              Todos os volumes utilizam os registros disponíveis no período analítico.
-              Tempos de processo são calculados somente quando os timestamps necessários
-              existem e respeitam a cronologia válida. Etapas com cobertura histórica
-              inferior a 20% são sinalizadas e não entram automaticamente no ranking de
-              gargalos. A etiquetagem B2C ainda não possui timestamp exclusivo, portanto
-              o intervalo Embalagem → Faturamento contempla esse período. O estoque
-              representa a posição física atual e não uma fotografia histórica do mês.
+              O mês corrente é comparado com exatamente o mesmo intervalo
+              de dias do mês anterior. Prioridades do Warehouse com ciclo
+              inferior a 1h permanecem dentro da mediana. No B2C, a visão
+              operacional considera Entrada do Pedido → Separação →
+              Faturamento; no B2B, Entrada do Pedido → Separação →
+              Embalagem → Faturamento. Aguardando Definição é tratado como
+              etapa excepcional independente. Coletas efetivas representam
+              romaneios fechados com bipagem e a expedição representa as
+              bipagens físicas realizadas na estação de romaneios.
             </div>
           </div>
         </div>
