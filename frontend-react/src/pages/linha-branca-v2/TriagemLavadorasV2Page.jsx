@@ -14,6 +14,7 @@ import {
   Search,
   Settings2,
   TimerReset,
+  Trash2,
   WashingMachine,
   Wrench,
   X,
@@ -22,40 +23,29 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "../../AuthContext.jsx";
 import {
+  REPAROS_ELETRICOS_LAVADORAS,
+  REPAROS_ESTETICOS_LAVADORAS,
+  REPAROS_MECANICOS_LAVADORAS,
+} from "../../services/linhaBrancaService.js";
+import {
   DURACAO_CICLO_LAVADORA,
   POSICOES_BANCADA_LAVADORAS,
+  STATUS_RESERVA_POSICAO,
   buscarReferenciaProduto,
   calcularTempoExecutado,
   concluirCicloLavadora,
-  encaminharLavadoraParaBancada,
+  condenarLavadora,
   enviarCicloParaReparo,
+  enviarTriagemParaHigienizacao,
   fetchEventosCicloLavadora,
   fetchPainelTriagemLavadoras,
   iniciarCicloLavadora,
+  iniciarSegundoCicloLavadora,
   pausarCicloLavadora,
   registrarErroCicloLavadora,
   retomarCicloLavadora,
   valoresIguais,
 } from "../../services/lavadorasTriagemService.js";
-
-const TIPOS_ERRO = [
-  "Não liga",
-  "Código de erro no display",
-  "Não enche",
-  "Não drena",
-  "Vazamento",
-  "Não gira",
-  "Não centrifuga",
-  "Ruído anormal",
-  "Vibração excessiva",
-  "Falha de motor",
-  "Falha de placa",
-  "Falha elétrica",
-  "Outro",
-];
-
-const AREAS_REPARO = ["Reparo Mecânico", "Reparo Elétrico", "Reparo Estético"];
-const STATUS_ATIVOS = ["em_ciclo", "pausado", "pausado_erro"];
 
 const EMPTY_VALIDACAO = {
   marca: "",
@@ -68,11 +58,21 @@ const EMPTY_VALIDACAO = {
 };
 
 const EMPTY_ERRO = {
-  tipoErro: "",
+  erroDescricao: "",
   codigoErro: "",
   observacoes: "",
-  areaReparo: "Reparo Elétrico",
+  mecanicos: [],
+  eletricos: [],
+  esteticos: [],
+  motivoCondenacao: "",
 };
+
+const STATUS_VISIVEIS = [
+  ...STATUS_RESERVA_POSICAO,
+  "concluido",
+  "enviado_reparo",
+  "reprovado",
+];
 
 function formatarSegundos(total) {
   const valor = Math.max(0, Number(total || 0));
@@ -134,11 +134,8 @@ function StatusPill({ status }) {
     neutral: "bg-slate-100 text-slate-600 ring-slate-200",
     purple: "bg-violet-50 text-violet-700 ring-violet-200",
   };
-
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black ring-1 ring-inset ${styles[status.tone] || styles.neutral}`}
-    >
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black ring-1 ring-inset ${styles[status.tone] || styles.neutral}`}>
       {status.tone === "success" ? <Check className="h-3 w-3" /> : null}
       {status.tone === "danger" ? <AlertTriangle className="h-3 w-3" /> : null}
       {status.label}
@@ -154,7 +151,6 @@ function MetricCard({ icon: Icon, value, label, helper, tone = "purple" }) {
     green: "bg-emerald-50 text-emerald-600",
     indigo: "bg-indigo-50 text-indigo-600",
   };
-
   return (
     <div className="flex min-h-[104px] items-center gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-4">
       <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${tones[tone]}`}>
@@ -177,6 +173,27 @@ function RingProgress({ percent, tone = "blue", children }) {
       style={{ background: `conic-gradient(${color} ${percent}%, #e2e8f0 0)` }}
     >
       <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white">{children}</div>
+    </div>
+  );
+}
+
+function RepairGroup({ title, items, selected, onToggle }) {
+  return (
+    <div className="rounded-xl border border-slate-200 p-3">
+      <div className="mb-2 text-[11px] font-black text-slate-700">{title}</div>
+      <div className="max-h-44 space-y-1 overflow-y-auto pr-1">
+        {items.map((item) => (
+          <label key={item} className="flex cursor-pointer items-start gap-2 rounded-lg px-2 py-1.5 text-[10px] text-slate-600 hover:bg-slate-50">
+            <input
+              type="checkbox"
+              checked={selected.includes(item)}
+              onChange={() => onToggle(item)}
+              className="mt-0.5"
+            />
+            <span>{item}</span>
+          </label>
+        ))}
+      </div>
     </div>
   );
 }
@@ -206,15 +223,13 @@ export default function TriagemLavadorasV2Page() {
       if (!silencioso) setLoading(true);
       const data = await fetchPainelTriagemLavadoras();
       setPainel(data);
-
       setSelectedOsId((atual) => {
         if (atual && data.aguardando.some((item) => String(item.id) === String(atual))) return atual;
         return data.aguardando[0]?.id ? String(data.aguardando[0].id) : "";
       });
-
       setSelectedCicloId((atual) => {
         if (atual && data.ciclos.some((item) => String(item.id) === String(atual))) return atual;
-        const preferido = data.ciclos.find((item) => STATUS_ATIVOS.includes(item.status)) || data.ciclos[0];
+        const preferido = data.ciclos.find((item) => STATUS_RESERVA_POSICAO.includes(item.status)) || data.ciclos[0];
         return preferido?.id ? String(preferido.id) : "";
       });
     } catch (error) {
@@ -296,7 +311,6 @@ export default function TriagemLavadorasV2Page() {
         ciclo.status === "em_ciclo" &&
         calcularTempoExecutado(ciclo, tick) >= Number(ciclo.duracao_alvo_segundos || DURACAO_CICLO_LAVADORA)
     );
-
     vencidos.forEach((ciclo) => {
       if (finalizandoRef.current.has(ciclo.id)) return;
       finalizandoRef.current.add(ciclo.id);
@@ -349,7 +363,7 @@ export default function TriagemLavadorasV2Page() {
     () =>
       new Set(
         painel.ciclos
-          .filter((item) => STATUS_ATIVOS.includes(item.status))
+          .filter((item) => STATUS_RESERVA_POSICAO.includes(item.status))
           .map((item) => String(item.posicao))
       ),
     [painel.ciclos]
@@ -379,21 +393,19 @@ export default function TriagemLavadorasV2Page() {
   const metricas = useMemo(() => {
     const emCiclo = painel.ciclos.filter((item) => item.status === "em_ciclo").length;
     const erros = painel.ciclos.filter((item) => item.status === "pausado_erro").length;
-    const concluidasHoje = painel.ciclos.filter(
-      (item) => item.status === "concluido" && hoje(item.concluido_em)
+    const aprovadasHoje = painel.ciclos.filter(
+      (item) => item.status === "concluido" && Number(item.numero_ciclo) === 2 && hoje(item.concluido_em)
     ).length;
-    const primeiraTentativa = painel.ciclos.filter(
-      (item) => Number(item.tentativa) === 1 && ["concluido", "enviado_reparo"].includes(item.status)
+    const finalizados = painel.ciclos.filter(
+      (item) => Number(item.numero_ciclo) === 2 && ["concluido", "enviado_reparo"].includes(item.status)
     );
-    const aprovadasPrimeira = primeiraTentativa.filter((item) => item.status === "concluido").length;
+    const aprovados = finalizados.filter((item) => item.status === "concluido").length;
     return {
       aguardando: painel.aguardando.length,
       emCiclo,
       erros,
-      concluidasHoje,
-      taxa: primeiraTentativa.length
-        ? Math.round((aprovadasPrimeira / primeiraTentativa.length) * 100)
-        : 0,
+      aprovadasHoje,
+      taxa: finalizados.length ? Math.round((aprovados / finalizados.length) * 100) : 0,
     };
   }, [painel]);
 
@@ -402,15 +414,16 @@ export default function TriagemLavadorasV2Page() {
     const recentes = [...painel.ciclos].sort(
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
-
     recentes.forEach((ciclo) => {
       const posicao = String(ciclo.posicao);
       if (porPosicao.has(posicao)) return;
-      if (STATUS_ATIVOS.includes(ciclo.status) || (ciclo.status === "concluido" && hoje(ciclo.concluido_em))) {
+      if (
+        STATUS_VISIVEIS.includes(ciclo.status) &&
+        (STATUS_RESERVA_POSICAO.includes(ciclo.status) || hoje(ciclo.concluido_em))
+      ) {
         porPosicao.set(posicao, ciclo);
       }
     });
-
     return POSICOES_BANCADA_LAVADORAS.map((posicao) => ({
       posicao,
       ciclo: porPosicao.get(posicao) || null,
@@ -450,7 +463,6 @@ export default function TriagemLavadorasV2Page() {
       return setMensagem("Confirme os campos obrigatórios do produto antes de iniciar o ciclo.");
     }
     if (!posicaoNova) return setMensagem("Não há posição de bancada disponível.");
-
     executarAcao(async () => {
       const ciclo = await iniciarCicloLavadora({
         os: selectedOs,
@@ -459,7 +471,7 @@ export default function TriagemLavadorasV2Page() {
         posicao: posicaoNova,
       });
       setSelectedCicloId(String(ciclo.id));
-      setMensagem(`OS ${selectedOs.numero_os} iniciou o ciclo de 25 minutos na posição ${posicaoNova}.`);
+      setMensagem(`OS ${selectedOs.numero_os}: 1º ciclo iniciado na posição ${posicaoNova}.`);
     });
   }
 
@@ -467,44 +479,76 @@ export default function TriagemLavadorasV2Page() {
     executarAcao(async () => {
       const pausado =
         ciclo.status === "em_ciclo" ? await pausarCicloLavadora(ciclo, operador, true) : ciclo;
-      setErroCiclo({ ...ciclo, ...pausado, os: ciclo.os });
+      const atualizado = { ...ciclo, ...pausado, os: ciclo.os };
+      setErroCiclo(atualizado);
       setErroForm({
-        tipoErro: ciclo.erro_tipo || "",
-        codigoErro: ciclo.erro_codigo || "",
-        observacoes: ciclo.erro_observacoes || "",
-        areaReparo: ciclo.area_reparo || "Reparo Elétrico",
+        ...EMPTY_ERRO,
+        erroDescricao: atualizado.erro_descricao || "",
+        codigoErro: atualizado.erro_codigo || "",
+        observacoes: atualizado.erro_observacoes || "",
       });
       setSelectedCicloId(String(ciclo.id));
     });
   }
 
-  async function salvarErro(somenteSalvar = true) {
+  async function salvarErro() {
     if (!erroCiclo) return;
-    if (!erroForm.tipoErro) return setMensagem("Informe o tipo de erro antes de salvar.");
-
+    if (!erroForm.erroDescricao.trim()) return setMensagem("Informe o erro apresentado pela lavadora.");
     await executarAcao(async () => {
       const atualizado = await registrarErroCicloLavadora({
         ciclo: erroCiclo,
-        tipoErro: erroForm.tipoErro,
+        erroDescricao: erroForm.erroDescricao,
         codigoErro: erroForm.codigoErro,
         observacoes: erroForm.observacoes,
-        areaReparo: erroForm.areaReparo,
         operador,
       });
+      setErroCiclo((atual) => ({ ...atual, ...atualizado }));
+      setMensagem("Erro registrado. Selecione os reparos ou retome o ciclo.");
+    });
+  }
 
-      if (!somenteSalvar) {
-        await enviarCicloParaReparo({
-          ciclo: { ...erroCiclo, ...atualizado },
-          areaReparo: erroForm.areaReparo,
-          operador,
-        });
-        setErroCiclo(null);
-        setErroForm({ ...EMPTY_ERRO });
-        setMensagem(`OS encaminhada para ${erroForm.areaReparo}.`);
-      } else {
-        setErroCiclo((atual) => ({ ...atual, ...atualizado }));
-        setMensagem("Parada e erro registrados com sucesso.");
-      }
+  function toggleLista(chave, item) {
+    setErroForm((atual) => ({
+      ...atual,
+      [chave]: atual[chave].includes(item)
+        ? atual[chave].filter((valor) => valor !== item)
+        : [...atual[chave], item],
+    }));
+  }
+
+  async function enviarParaReparo() {
+    if (!erroCiclo) return;
+    if (!erroForm.erroDescricao.trim()) return setMensagem("Informe o erro apresentado antes de enviar para reparo.");
+    await executarAcao(async () => {
+      await enviarCicloParaReparo({
+        ciclo: erroCiclo,
+        reparosMecanicos: erroForm.mecanicos,
+        reparosEletricos: erroForm.eletricos,
+        reparosEsteticos: erroForm.esteticos,
+        erroDescricao: erroForm.erroDescricao,
+        codigoErro: erroForm.codigoErro,
+        observacoes: erroForm.observacoes,
+        operador,
+      });
+      setErroCiclo(null);
+      setErroForm({ ...EMPTY_ERRO });
+      setMensagem("OS encaminhada para reparo com o escopo selecionado.");
+    });
+  }
+
+  async function condenar() {
+    if (!erroCiclo) return;
+    if (!erroForm.motivoCondenacao.trim()) return setMensagem("Informe a justificativa da condenação / scrap.");
+    await executarAcao(async () => {
+      await condenarLavadora({
+        ciclo: erroCiclo,
+        os: erroCiclo.os,
+        motivo: erroForm.motivoCondenacao,
+        operador,
+      });
+      setErroCiclo(null);
+      setErroForm({ ...EMPTY_ERRO });
+      setMensagem("Produto condenado e encaminhado para Scrap.");
     });
   }
 
@@ -513,10 +557,10 @@ export default function TriagemLavadorasV2Page() {
     if (ciclo.status === "pausado_erro") {
       setErroCiclo(ciclo);
       setErroForm({
-        tipoErro: ciclo.erro_tipo || "",
+        ...EMPTY_ERRO,
+        erroDescricao: ciclo.erro_descricao || "",
         codigoErro: ciclo.erro_codigo || "",
         observacoes: ciclo.erro_observacoes || "",
-        areaReparo: ciclo.area_reparo || "Reparo Elétrico",
       });
     }
   }
@@ -536,27 +580,18 @@ export default function TriagemLavadorasV2Page() {
     <div className="mx-auto max-w-[1800px]">
       <div className="flex flex-col gap-5 border-b border-slate-200 pb-6 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <div className="text-[10px] font-black uppercase tracking-[0.2em] text-[#765D81]">
-            Linha Branca · Lavadoras
-          </div>
+          <div className="text-[10px] font-black uppercase tracking-[0.2em] text-[#765D81]">Linha Branca · Lavadoras</div>
           <div className="mt-2 flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#F3EFF5] text-[#4C1D95]">
               <WashingMachine className="h-6 w-6" />
             </div>
             <div>
               <h1 className="text-3xl font-black tracking-[-0.035em] text-slate-900">Triagem de Lavadoras</h1>
-              <p className="mt-1 max-w-3xl text-sm text-slate-500">
-                Valide o produto e execute o ciclo de lavagem de 25 minutos, com até 20 máquinas em paralelo.
-              </p>
+              <p className="mt-1 max-w-3xl text-sm text-slate-500">Validação do produto + dois ciclos obrigatórios de 25 minutos sem falhas.</p>
             </div>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => carregarPainel()}
-          disabled={saving}
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-xs font-black text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
-        >
+        <button type="button" onClick={() => carregarPainel()} disabled={saving} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-xs font-black text-slate-600 hover:bg-slate-50 disabled:opacity-50">
           <RefreshCw className="h-4 w-4" /> Atualizar operação
         </button>
       </div>
@@ -564,104 +599,62 @@ export default function TriagemLavadorasV2Page() {
       {mensagem ? (
         <div className="mt-5 flex items-start justify-between gap-4 rounded-2xl border border-violet-100 bg-violet-50 px-4 py-3 text-sm font-semibold text-violet-800">
           <span>{mensagem}</span>
-          <button type="button" onClick={() => setMensagem("")} className="shrink-0 text-violet-400 hover:text-violet-700">
-            <X className="h-4 w-4" />
-          </button>
+          <button type="button" onClick={() => setMensagem("")} className="shrink-0 text-violet-400 hover:text-violet-700"><X className="h-4 w-4" /></button>
         </div>
       ) : null}
 
       <section className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <MetricCard icon={Clock3} value={metricas.aguardando} label="Aguardando triagem" helper="OS na fila de validação" />
-        <MetricCard icon={Play} value={metricas.emCiclo} label="Em ciclo" helper="Lavadoras em execução" tone="blue" />
-        <MetricCard icon={AlertTriangle} value={metricas.erros} label="Paradas por erro" helper="Aguardando avaliação" tone="red" />
-        <MetricCard icon={CheckCircle2} value={metricas.concluidasHoje} label="Aprovadas hoje" helper="Ciclos concluídos no dia" tone="green" />
-        <MetricCard icon={Settings2} value={`${metricas.taxa}%`} label="Aprovação 1ª tentativa" helper="Base nos ciclos finalizados" tone="indigo" />
+        <MetricCard icon={Play} value={metricas.emCiclo} label="Em ciclo" helper="1º ou 2º ciclo em execução" tone="blue" />
+        <MetricCard icon={AlertTriangle} value={metricas.erros} label="Paradas por erro" helper="Aguardando decisão técnica" tone="red" />
+        <MetricCard icon={CheckCircle2} value={metricas.aprovadasHoje} label="Aprovadas hoje" helper="Dois ciclos concluídos" tone="green" />
+        <MetricCard icon={Settings2} value={`${metricas.taxa}%`} label="Aprovação final" helper="Triagem sem reparo" tone="indigo" />
       </section>
 
-      <section className="mt-5 grid gap-5 2xl:grid-cols-[420px_minmax(0,1fr)_340px]">
+      <section className="mt-5 grid gap-5 2xl:grid-cols-[420px_minmax(0,1fr)_390px]">
         <div className="min-w-0 rounded-2xl border border-slate-200 bg-white">
           <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
             <div>
               <h2 className="text-sm font-black text-slate-900">Validação do Produto</h2>
               <p className="mt-0.5 text-[11px] text-slate-400">Confira sistema x equipamento físico.</p>
             </div>
-            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black text-slate-500">
-              {painel.aguardando.length} OS
-            </span>
+            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black text-slate-500">{painel.aguardando.length} OS</span>
           </div>
-
           <div className="p-5">
             <div className="relative">
               <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input
-                value={buscaOs}
-                onChange={(event) => setBuscaOs(event.target.value)}
-                placeholder="Buscar OS, modelo ou serial"
-                className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-3 text-sm outline-none transition focus:border-[#765D81] focus:bg-white focus:ring-2 focus:ring-[#765D81]/10"
-              />
+              <input value={buscaOs} onChange={(event) => setBuscaOs(event.target.value)} placeholder="Buscar OS, modelo ou serial" className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-3 text-sm outline-none focus:border-[#765D81]" />
             </div>
-
-            <select
-              value={selectedOsId}
-              onChange={(event) => setSelectedOsId(event.target.value)}
-              className="mt-3 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 outline-none focus:border-[#765D81] focus:ring-2 focus:ring-[#765D81]/10"
-            >
+            <select value={selectedOsId} onChange={(event) => setSelectedOsId(event.target.value)} className="mt-3 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 outline-none focus:border-[#765D81]">
               <option value="">Selecione uma OS</option>
-              {osFiltradas.map((os) => (
-                <option key={os.id} value={os.id}>
-                  {os.numero_os} — {os.marca || "Sem marca"} {os.modelo || ""}
-                </option>
-              ))}
+              {osFiltradas.map((os) => <option key={os.id} value={os.id}>{os.numero_os} — {os.marca || "Sem marca"} {os.modelo || ""}</option>)}
             </select>
 
             {selectedOs ? (
               <>
                 <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">OS</div>
-                      <div className="mt-1 text-lg font-black text-slate-900">{selectedOs.numero_os}</div>
-                    </div>
+                    <div><div className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">OS</div><div className="mt-1 text-lg font-black text-slate-900">{selectedOs.numero_os}</div></div>
                     <StatusPill status={{ label: "Aguardando triagem", tone: "purple" }} />
                   </div>
                   <div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-200 pt-4 text-xs">
-                    <div>
-                      <div className="font-bold text-slate-400">Entrada</div>
-                      <div className="mt-1 font-black text-slate-700">{formatarData(selectedOs.dt_entrada)}</div>
-                    </div>
-                    <div>
-                      <div className="font-bold text-slate-400">Serial</div>
-                      <div className="mt-1 truncate font-black text-slate-700">{selectedOs.serial_number || "—"}</div>
-                    </div>
+                    <div><div className="font-bold text-slate-400">Entrada</div><div className="mt-1 font-black text-slate-700">{formatarData(selectedOs.dt_entrada)}</div></div>
+                    <div><div className="font-bold text-slate-400">Serial</div><div className="mt-1 truncate font-black text-slate-700">{selectedOs.serial_number || "—"}</div></div>
                   </div>
                 </div>
-
                 <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
-                  <div className="grid grid-cols-[96px_1fr_1fr] border-b border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-slate-400">
-                    <div>Característica</div><div>Sistema</div><div>Físico</div>
-                  </div>
+                  <div className="grid grid-cols-[96px_1fr_1fr] border-b border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-slate-400"><div>Característica</div><div>Sistema</div><div>Físico</div></div>
                   {linhasValidacao.map((item) => {
                     const status = statusValidacao(item.sistema, validacao[item.key], item.obrigatorio);
                     return (
                       <div key={item.key} className="border-b border-slate-100 px-3 py-3 last:border-b-0">
                         <div className="grid grid-cols-[96px_1fr_1fr] items-start gap-2">
-                          <div className="pt-2 text-[11px] font-black text-slate-600">
-                            {item.label}{item.obrigatorio ? <span className="ml-1 text-rose-500">*</span> : null}
-                          </div>
+                          <div className="pt-2 text-[11px] font-black text-slate-600">{item.label}{item.obrigatorio ? <span className="ml-1 text-rose-500">*</span> : null}</div>
                           <div className="pt-2 text-[11px] font-semibold text-slate-500">{item.sistema || "—"}</div>
                           {item.key === "descricao" ? (
-                            <textarea
-                              rows={2}
-                              value={validacao[item.key]}
-                              onChange={(event) => setValidacao((atual) => ({ ...atual, [item.key]: event.target.value }))}
-                              className="min-h-[54px] w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[11px] outline-none focus:border-[#765D81]"
-                            />
+                            <textarea rows={2} value={validacao[item.key]} onChange={(event) => setValidacao((atual) => ({ ...atual, [item.key]: event.target.value }))} className="min-h-[54px] w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[11px] outline-none focus:border-[#765D81]" />
                           ) : (
-                            <input
-                              value={validacao[item.key]}
-                              onChange={(event) => setValidacao((atual) => ({ ...atual, [item.key]: event.target.value }))}
-                              className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-[11px] outline-none focus:border-[#765D81]"
-                            />
+                            <input value={validacao[item.key]} onChange={(event) => setValidacao((atual) => ({ ...atual, [item.key]: event.target.value }))} className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-[11px] outline-none focus:border-[#765D81]" />
                           )}
                         </div>
                         <div className="mt-2 flex justify-end"><StatusPill status={status} /></div>
@@ -669,74 +662,33 @@ export default function TriagemLavadorasV2Page() {
                     );
                   })}
                 </div>
-
                 <div className="mt-4 grid grid-cols-[1fr_auto] gap-3">
-                  <select
-                    value={posicaoNova}
-                    onChange={(event) => setPosicaoNova(event.target.value)}
-                    className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 outline-none focus:border-[#765D81]"
-                  >
+                  <select value={posicaoNova} onChange={(event) => setPosicaoNova(event.target.value)} className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 outline-none focus:border-[#765D81]">
                     {posicoesDisponiveis.length === 0 ? <option value="">Sem posição disponível</option> : null}
                     {posicoesDisponiveis.map((posicao) => <option key={posicao} value={posicao}>Posição {posicao}</option>)}
                   </select>
-                  <button
-                    type="button"
-                    onClick={iniciarCiclo}
-                    disabled={!validacaoLiberada || !posicaoNova || saving}
-                    className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#5B35C9] px-4 text-xs font-black text-white transition hover:bg-[#4C2AB2] disabled:cursor-not-allowed disabled:bg-slate-300"
-                  >
-                    <Play className="h-4 w-4 fill-current" /> Iniciar ciclo
-                  </button>
+                  <button type="button" onClick={iniciarCiclo} disabled={!validacaoLiberada || !posicaoNova || saving} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#5B35C9] px-4 text-xs font-black text-white hover:bg-[#4C2AB2] disabled:bg-slate-300"><Play className="h-4 w-4 fill-current" /> Iniciar 1º ciclo</button>
                 </div>
               </>
             ) : (
-              <div className="mt-5 rounded-2xl border border-dashed border-slate-300 px-5 py-10 text-center">
-                <WashingMachine className="mx-auto h-7 w-7 text-slate-300" />
-                <div className="mt-3 text-sm font-black text-slate-500">Nenhuma OS selecionada</div>
-                <p className="mt-1 text-xs text-slate-400">Selecione uma lavadora aguardando triagem.</p>
-              </div>
+              <div className="mt-5 rounded-2xl border border-dashed border-slate-300 px-5 py-10 text-center"><WashingMachine className="mx-auto h-7 w-7 text-slate-300" /><div className="mt-3 text-sm font-black text-slate-500">Nenhuma OS selecionada</div></div>
             )}
           </div>
         </div>
 
         <div className="min-w-0 rounded-2xl border border-slate-200 bg-white">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
-            <div>
-              <h2 className="flex items-center gap-2 text-sm font-black text-slate-900">
-                <Settings2 className="h-4 w-4 text-[#5B35C9]" /> Bancada de Lavagem
-              </h2>
-              <p className="mt-0.5 text-[11px] text-slate-400">
-                20 posições · cronômetros independentes de 25 minutos efetivos.
-              </p>
-            </div>
-            <div className="flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-[10px] font-black text-emerald-700">
-              <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              {metricas.emCiclo} máquinas em operação
-            </div>
+            <div><h2 className="flex items-center gap-2 text-sm font-black text-slate-900"><Settings2 className="h-4 w-4 text-[#5B35C9]" /> Bancada de Lavagem</h2><p className="mt-0.5 text-[11px] text-slate-400">20 posições · dois ciclos obrigatórios por produto sem falhas.</p></div>
+            <div className="flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-[10px] font-black text-emerald-700"><span className="h-2 w-2 rounded-full bg-emerald-500" />{metricas.emCiclo} máquinas em operação</div>
           </div>
-
-          <div className="max-h-[980px] overflow-y-auto p-4">
+          <div className="max-h-[1080px] overflow-y-auto p-4">
             <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
               {cardsBancada.map(({ posicao, ciclo }) => {
                 if (!ciclo) {
                   return (
-                    <button
-                      key={posicao}
-                      type="button"
-                      onClick={() => {
-                        setPosicaoNova(posicao);
-                        document.querySelector("input[placeholder='Buscar OS, modelo ou serial']")?.focus();
-                      }}
-                      className="flex min-h-[222px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50/60 p-5 text-center transition hover:border-violet-300 hover:bg-violet-50/40"
-                    >
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-[#5B35C9] ring-1 ring-slate-200">
-                        <Play className="h-4 w-4 fill-current" />
-                      </div>
-                      <div className="mt-3 text-xs font-black text-slate-600">Bancada disponível</div>
-                      <div className="mt-1 text-[10px] font-semibold text-slate-400">Posição {posicao}</div>
-                      <div className="mt-4 rounded-lg border border-violet-200 bg-white px-3 py-2 text-[10px] font-black text-violet-700">
-                        Iniciar novo ciclo
-                      </div>
+                    <button key={posicao} type="button" onClick={() => { setPosicaoNova(posicao); document.querySelector("input[placeholder='Buscar OS, modelo ou serial']")?.focus(); }} className="flex min-h-[230px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50/60 p-5 text-center hover:border-violet-300 hover:bg-violet-50/40">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-[#5B35C9] ring-1 ring-slate-200"><Play className="h-4 w-4 fill-current" /></div>
+                      <div className="mt-3 text-xs font-black text-slate-600">Bancada disponível</div><div className="mt-1 text-[10px] font-semibold text-slate-400">Posição {posicao}</div>
                     </button>
                   );
                 }
@@ -746,126 +698,42 @@ export default function TriagemLavadorasV2Page() {
                 const progresso = Math.min(100, Math.round((executado / alvo) * 100));
                 const pausadoErro = ciclo.status === "pausado_erro";
                 const pausado = ciclo.status === "pausado";
+                const aguardandoSegundo = ciclo.status === "aguardando_segundo";
+                const aguardandoHigienizacao = ciclo.status === "aguardando_higienizacao";
                 const concluido = ciclo.status === "concluido";
-                const tone = concluido ? "green" : pausadoErro ? "red" : "blue";
-                const status = concluido
-                  ? { label: "Concluída", tone: "success" }
-                  : pausadoErro
-                    ? { label: "Pausada por erro", tone: "danger" }
-                    : pausado
-                      ? { label: "Pausada", tone: "warning" }
-                      : { label: "Em ciclo", tone: "info" };
+                const tone = aguardandoSegundo || aguardandoHigienizacao || concluido ? "green" : pausadoErro ? "red" : "blue";
+                const status = aguardandoSegundo
+                  ? { label: "1º ciclo aprovado", tone: "success" }
+                  : aguardandoHigienizacao
+                    ? { label: "2 ciclos aprovados", tone: "success" }
+                    : concluido
+                      ? { label: "Concluída", tone: "success" }
+                      : pausadoErro
+                        ? { label: "Pausada por erro", tone: "danger" }
+                        : pausado
+                          ? { label: "Pausada", tone: "warning" }
+                          : { label: `${Number(ciclo.numero_ciclo) || 1}º ciclo`, tone: "info" };
 
                 return (
-                  <div
-                    key={posicao}
-                    onClick={() => selecionarCiclo(ciclo)}
-                    className={`min-h-[222px] cursor-pointer rounded-2xl border bg-white p-4 transition ${
-                      String(selectedCicloId) === String(ciclo.id)
-                        ? "border-violet-400 ring-2 ring-violet-100"
-                        : pausadoErro
-                          ? "border-rose-200"
-                          : "border-slate-200 hover:border-slate-300"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="text-[10px] font-black text-slate-600">Posição {posicao}</div>
-                      <StatusPill status={status} />
-                    </div>
-
+                  <div key={`${posicao}-${ciclo.id}`} onClick={() => selecionarCiclo(ciclo)} className={`min-h-[230px] cursor-pointer rounded-2xl border bg-white p-4 ${String(selectedCicloId) === String(ciclo.id) ? "border-violet-400 ring-2 ring-violet-100" : pausadoErro ? "border-rose-200" : "border-slate-200 hover:border-slate-300"}`}>
+                    <div className="flex items-center justify-between gap-2"><div className="text-[10px] font-black text-slate-600">Posição {posicao}</div><StatusPill status={status} /></div>
                     <div className="mt-4 flex items-start gap-3">
-                      <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-xl ${concluido ? "bg-emerald-50 text-emerald-600" : pausadoErro ? "bg-rose-50 text-rose-600" : "bg-slate-100 text-slate-500"}`}>
-                        <WashingMachine className="h-7 w-7" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-xs font-black text-slate-900">{ciclo.os?.numero_os || `OS #${ciclo.os_id}`}</div>
-                        <div className="mt-1 truncate text-[11px] font-semibold text-slate-500">{ciclo.os?.marca || "—"} {ciclo.os?.modelo || ""}</div>
-                        <div className="text-[10px] text-slate-400">{ciclo.os?.voltagem || "—"} · Tentativa {ciclo.tentativa}</div>
-                        <div className="mt-1 truncate text-[10px] text-slate-400">Operador: {ciclo.operador || "—"}</div>
-                      </div>
+                      <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-xl ${tone === "green" ? "bg-emerald-50 text-emerald-600" : pausadoErro ? "bg-rose-50 text-rose-600" : "bg-slate-100 text-slate-500"}`}><WashingMachine className="h-7 w-7" /></div>
+                      <div className="min-w-0 flex-1"><div className="truncate text-xs font-black text-slate-900">{ciclo.os?.numero_os || `OS #${ciclo.os_id}`}</div><div className="mt-1 truncate text-[11px] font-semibold text-slate-500">{ciclo.os?.marca || "—"} {ciclo.os?.modelo || ""}</div><div className="text-[10px] text-slate-400">{ciclo.os?.voltagem || "—"} · Ciclo {ciclo.numero_ciclo || 1}</div><div className="mt-1 truncate text-[10px] text-slate-400">Operador: {ciclo.operador || "—"}</div></div>
                     </div>
-
                     <div className="mt-4 flex items-center gap-3">
-                      <RingProgress percent={progresso} tone={tone}>
-                        {concluido ? <Check className="h-5 w-5 text-emerald-600" /> : pausadoErro ? <CircleAlert className="h-5 w-5 text-rose-600" /> : <span className="text-[9px] font-black text-slate-500">{progresso}%</span>}
-                      </RingProgress>
-                      <div>
-                        <div className="text-base font-black text-slate-900">{formatarSegundos(executado)} <span className="text-xs text-slate-400">/ 25:00</span></div>
-                        <div className={`text-[10px] font-semibold ${pausadoErro ? "text-rose-500" : concluido ? "text-emerald-600" : "text-slate-400"}`}>
-                          {pausadoErro ? "Cronômetro parado por falha" : pausado ? "Ciclo pausado" : concluido ? `Concluído ${formatarDataHora(ciclo.concluido_em)}` : "Ciclo de lavagem"}
-                        </div>
-                      </div>
+                      <RingProgress percent={progresso} tone={tone}>{tone === "green" ? <Check className="h-5 w-5 text-emerald-600" /> : pausadoErro ? <CircleAlert className="h-5 w-5 text-rose-600" /> : <span className="text-[9px] font-black text-slate-500">{progresso}%</span>}</RingProgress>
+                      <div><div className="text-base font-black text-slate-900">{formatarSegundos(executado)} <span className="text-xs text-slate-400">/ 25:00</span></div><div className={`text-[10px] font-semibold ${pausadoErro ? "text-rose-500" : tone === "green" ? "text-emerald-600" : "text-slate-400"}`}>{pausadoErro ? "Cronômetro parado por falha" : aguardandoSegundo ? "Pronto para o 2º ciclo" : aguardandoHigienizacao ? "Laudo sem falhas gerado" : pausado ? "Ciclo pausado" : "Ciclo de lavagem"}</div></div>
                     </div>
-
                     <div className="mt-4 flex gap-2">
                       {ciclo.status === "em_ciclo" ? (
-                        <>
-                          <button
-                            type="button"
-                            disabled={saving}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              executarAcao(() => pausarCicloLavadora(ciclo, operador, false));
-                            }}
-                            className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 text-[10px] font-black text-slate-600 hover:bg-slate-100"
-                          >
-                            <Pause className="h-3.5 w-3.5 fill-current" /> Pausar
-                          </button>
-                          <button
-                            type="button"
-                            disabled={saving}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              abrirErro(ciclo);
-                            }}
-                            className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-rose-600 text-[10px] font-black text-white hover:bg-rose-700"
-                          >
-                            <AlertTriangle className="h-3.5 w-3.5" /> Parar por erro
-                          </button>
-                        </>
+                        <><button type="button" disabled={saving} onClick={(event) => { event.stopPropagation(); executarAcao(() => pausarCicloLavadora(ciclo, operador, false)); }} className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 text-[10px] font-black text-slate-600"><Pause className="h-3.5 w-3.5 fill-current" /> Pausar</button><button type="button" disabled={saving} onClick={(event) => { event.stopPropagation(); abrirErro(ciclo); }} className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-rose-600 text-[10px] font-black text-white"><AlertTriangle className="h-3.5 w-3.5" /> Pausar por erro</button></>
                       ) : null}
-
                       {pausado || pausadoErro ? (
-                        <>
-                          <button
-                            type="button"
-                            disabled={saving}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              executarAcao(() => retomarCicloLavadora(ciclo, operador));
-                            }}
-                            className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#5B35C9] text-[10px] font-black text-white hover:bg-[#4C2AB2]"
-                          >
-                            <RotateCcw className="h-3.5 w-3.5" /> Retomar ciclo
-                          </button>
-                          {pausadoErro ? (
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                selecionarCiclo(ciclo);
-                              }}
-                              className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-rose-600 text-[10px] font-black text-white hover:bg-rose-700"
-                            >
-                              <Wrench className="h-3.5 w-3.5" /> Tratar erro
-                            </button>
-                          ) : null}
-                        </>
+                        <><button type="button" disabled={saving} onClick={(event) => { event.stopPropagation(); executarAcao(() => retomarCicloLavadora(ciclo, operador)); }} className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#5B35C9] text-[10px] font-black text-white"><RotateCcw className="h-3.5 w-3.5" /> Retomar ciclo</button>{pausadoErro ? <button type="button" onClick={(event) => { event.stopPropagation(); abrirErro(ciclo); }} className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-rose-600 text-[10px] font-black text-white"><Wrench className="h-3.5 w-3.5" /> Enviar para reparo</button> : null}</>
                       ) : null}
-
-                      {concluido ? (
-                        <button
-                          type="button"
-                          disabled={saving}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            executarAcao(() => encaminharLavadoraParaBancada(ciclo, operador));
-                          }}
-                          className="flex h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-[10px] font-black text-emerald-700 hover:bg-emerald-100"
-                        >
-                          Enviar para próxima etapa <ChevronRight className="h-3.5 w-3.5" />
-                        </button>
-                      ) : null}
+                      {aguardandoSegundo ? <button type="button" disabled={saving} onClick={(event) => { event.stopPropagation(); executarAcao(async () => { const novo = await iniciarSegundoCicloLavadora(ciclo, operador); setSelectedCicloId(String(novo.id)); }); }} className="flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-[#5B35C9] text-[10px] font-black text-white"><Play className="h-3.5 w-3.5 fill-current" /> Iniciar 2º ciclo</button> : null}
+                      {aguardandoHigienizacao ? <button type="button" disabled={saving} onClick={(event) => { event.stopPropagation(); executarAcao(() => enviarTriagemParaHigienizacao(ciclo, operador)); }} className="flex h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-[10px] font-black text-emerald-700">Enviar para Higienização <ChevronRight className="h-3.5 w-3.5" /></button> : null}
                     </div>
                   </div>
                 );
@@ -877,146 +745,28 @@ export default function TriagemLavadorasV2Page() {
         <div className="min-w-0 rounded-2xl border border-slate-200 bg-white">
           {erroCiclo ? (
             <>
-              <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4">
-                <div>
-                  <h2 className="flex items-center gap-2 text-sm font-black text-slate-900">
-                    <AlertTriangle className="h-4 w-4 text-rose-600" /> Registro de Erro
-                  </h2>
-                  <p className="mt-1 text-[11px] font-semibold text-slate-400">{erroCiclo.os?.numero_os || `OS #${erroCiclo.os_id}`}</p>
-                </div>
-                <button type="button" onClick={() => setErroCiclo(null)} className="text-slate-400 hover:text-slate-700"><X className="h-4 w-4" /></button>
-              </div>
-
+              <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4"><div><h2 className="flex items-center gap-2 text-sm font-black text-slate-900"><AlertTriangle className="h-4 w-4 text-rose-600" /> Erro e encaminhamento</h2><p className="mt-1 text-[11px] font-semibold text-slate-400">{erroCiclo.os?.numero_os || `OS #${erroCiclo.os_id}`}</p></div><button type="button" onClick={() => setErroCiclo(null)} className="text-slate-400 hover:text-slate-700"><X className="h-4 w-4" /></button></div>
               <div className="space-y-4 p-5">
-                <label className="block">
-                  <span className="text-[11px] font-black text-slate-600">Tipo de erro *</span>
-                  <select
-                    value={erroForm.tipoErro}
-                    onChange={(event) => setErroForm((atual) => ({ ...atual, tipoErro: event.target.value }))}
-                    className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-100"
-                  >
-                    <option value="">Selecione...</option>
-                    {TIPOS_ERRO.map((item) => <option key={item} value={item}>{item}</option>)}
-                  </select>
-                </label>
-
-                <label className="block">
-                  <span className="text-[11px] font-black text-slate-600">Código do erro</span>
-                  <input
-                    value={erroForm.codigoErro}
-                    onChange={(event) => setErroForm((atual) => ({ ...atual, codigoErro: event.target.value }))}
-                    placeholder="Ex.: E3"
-                    className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-100"
-                  />
-                </label>
-
-                <label className="block">
-                  <span className="text-[11px] font-black text-slate-600">Área de reparo</span>
-                  <select
-                    value={erroForm.areaReparo}
-                    onChange={(event) => setErroForm((atual) => ({ ...atual, areaReparo: event.target.value }))}
-                    className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-100"
-                  >
-                    {AREAS_REPARO.map((item) => <option key={item} value={item}>{item}</option>)}
-                  </select>
-                </label>
-
-                <label className="block">
-                  <span className="text-[11px] font-black text-slate-600">Observações do técnico</span>
-                  <textarea
-                    rows={5}
-                    maxLength={500}
-                    value={erroForm.observacoes}
-                    onChange={(event) => setErroForm((atual) => ({ ...atual, observacoes: event.target.value }))}
-                    placeholder="Descreva o comportamento da lavadora..."
-                    className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-100"
-                  />
-                  <div className="mt-1 text-right text-[10px] font-semibold text-slate-400">{erroForm.observacoes.length}/500</div>
-                </label>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => salvarErro(true)}
-                    disabled={saving || !erroForm.tipoErro}
-                    className="h-10 rounded-xl border border-slate-200 bg-slate-50 text-[11px] font-black text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-                  >
-                    Salvar parada
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => salvarErro(false)}
-                    disabled={saving || !erroForm.tipoErro}
-                    className="flex h-10 items-center justify-center gap-2 rounded-xl bg-rose-600 text-[11px] font-black text-white hover:bg-rose-700 disabled:opacity-50"
-                  >
-                    <Wrench className="h-4 w-4" /> Enviar para reparo
-                  </button>
-                </div>
-
-                <div className="rounded-xl border border-rose-100 bg-rose-50 p-3 text-[10px] font-semibold leading-5 text-rose-700">
-                  Ao enviar para reparo, o ciclo é encerrado e a tentativa fica preservada no histórico da OS.
-                </div>
+                <label className="block"><span className="text-[11px] font-black text-slate-600">Erro apresentado *</span><input value={erroForm.erroDescricao} onChange={(event) => setErroForm((atual) => ({ ...atual, erroDescricao: event.target.value }))} placeholder="Digite exatamente o erro apresentado pela lavadora" className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-rose-400" /></label>
+                <label className="block"><span className="text-[11px] font-black text-slate-600">Código do erro</span><input value={erroForm.codigoErro} onChange={(event) => setErroForm((atual) => ({ ...atual, codigoErro: event.target.value }))} placeholder="Ex.: E3" className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-rose-400" /></label>
+                <label className="block"><span className="text-[11px] font-black text-slate-600">Observações do técnico</span><textarea rows={3} value={erroForm.observacoes} onChange={(event) => setErroForm((atual) => ({ ...atual, observacoes: event.target.value }))} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-rose-400" /></label>
+                <button type="button" onClick={salvarErro} disabled={saving || !erroForm.erroDescricao.trim()} className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 text-[11px] font-black text-slate-700 disabled:opacity-50">Salvar erro apresentado</button>
+                <RepairGroup title="Reparos Mecânicos" items={REPAROS_MECANICOS_LAVADORAS} selected={erroForm.mecanicos} onToggle={(item) => toggleLista("mecanicos", item)} />
+                <RepairGroup title="Reparos Elétricos" items={REPAROS_ELETRICOS_LAVADORAS} selected={erroForm.eletricos} onToggle={(item) => toggleLista("eletricos", item)} />
+                <RepairGroup title="Reparos Estéticos" items={REPAROS_ESTETICOS_LAVADORAS} selected={erroForm.esteticos} onToggle={(item) => toggleLista("esteticos", item)} />
+                <button type="button" onClick={enviarParaReparo} disabled={saving || !erroForm.erroDescricao.trim()} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-rose-600 text-[11px] font-black text-white disabled:opacity-50"><Wrench className="h-4 w-4" /> Enviar para reparo</button>
+                <div className="rounded-xl border border-rose-100 bg-rose-50 p-3"><div className="text-[11px] font-black text-rose-800">Condenação / Scrap</div><textarea rows={2} value={erroForm.motivoCondenacao} onChange={(event) => setErroForm((atual) => ({ ...atual, motivoCondenacao: event.target.value }))} placeholder="Justificativa obrigatória" className="mt-2 w-full rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs outline-none" /><button type="button" onClick={condenar} disabled={saving || !erroForm.motivoCondenacao.trim()} className="mt-2 flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-slate-900 text-[10px] font-black text-white disabled:opacity-40"><Trash2 className="h-3.5 w-3.5" /> Condenar e enviar para Scrap</button></div>
               </div>
             </>
           ) : (
-            <div className="flex min-h-[460px] flex-col items-center justify-center px-6 text-center">
-              <TimerReset className="h-9 w-9 text-slate-300" />
-              <div className="mt-4 text-sm font-black text-slate-600">Registro de erro</div>
-              <p className="mt-2 max-w-[230px] text-xs leading-5 text-slate-400">
-                Clique em <strong>Parar por erro</strong> em qualquer lavadora para congelar o relógio e registrar a falha.
-              </p>
-            </div>
+            <div className="flex min-h-[500px] flex-col items-center justify-center px-6 text-center"><TimerReset className="h-9 w-9 text-slate-300" /><div className="mt-4 text-sm font-black text-slate-600">Erro / envio para reparo</div><p className="mt-2 max-w-[250px] text-xs leading-5 text-slate-400">Use <strong>Pausar por erro</strong> para informar o erro apresentado, selecionar os reparos ou condenar o produto.</p></div>
           )}
         </div>
       </section>
 
       <section className="mt-5 rounded-2xl border border-slate-200 bg-white">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
-          <div>
-            <h2 className="flex items-center gap-2 text-sm font-black text-slate-900">
-              <History className="h-4 w-4 text-[#5B35C9]" /> Histórico do Ciclo / Eventos
-            </h2>
-            <p className="mt-0.5 text-[11px] text-slate-400">Histórico completo da OS selecionada na bancada.</p>
-          </div>
-          {selectedCiclo ? (
-            <div className="rounded-xl bg-slate-50 px-3 py-2 text-[10px] font-black text-slate-600">
-              {selectedCiclo.os?.numero_os || `OS #${selectedCiclo.os_id}`} · Tentativa {selectedCiclo.tentativa}
-            </div>
-          ) : null}
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-left">
-            <thead className="bg-slate-50 text-[10px] font-black uppercase tracking-wide text-slate-400">
-              <tr>
-                <th className="px-5 py-3">Data e hora</th>
-                <th className="px-5 py-3">Evento</th>
-                <th className="px-5 py-3">Detalhes</th>
-                <th className="px-5 py-3">Tempo executado</th>
-                <th className="px-5 py-3">Operador</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-xs text-slate-600">
-              {eventos.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-5 py-10 text-center text-slate-400">
-                    {selectedCiclo ? "Ainda não há eventos registrados para este ciclo." : "Selecione uma lavadora da bancada para visualizar o histórico."}
-                  </td>
-                </tr>
-              ) : (
-                eventos.map((evento) => (
-                  <tr key={evento.id}>
-                    <td className="whitespace-nowrap px-5 py-3 font-semibold text-slate-500">{formatarDataHora(evento.created_at)}</td>
-                    <td className="whitespace-nowrap px-5 py-3 font-black text-slate-700">{evento.tipo_evento}</td>
-                    <td className="min-w-[280px] px-5 py-3">{evento.detalhes || "—"}</td>
-                    <td className="whitespace-nowrap px-5 py-3 font-black">{evento.tempo_executado_segundos == null ? "—" : formatarSegundos(evento.tempo_executado_segundos)}</td>
-                    <td className="whitespace-nowrap px-5 py-3">{evento.operador || "Sistema"}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4"><div><h2 className="flex items-center gap-2 text-sm font-black text-slate-900"><History className="h-4 w-4 text-[#5B35C9]" /> Histórico do Ciclo / Eventos</h2><p className="mt-0.5 text-[11px] text-slate-400">Histórico da tentativa selecionada.</p></div>{selectedCiclo ? <div className="rounded-xl bg-slate-50 px-3 py-2 text-[10px] font-black text-slate-600">{selectedCiclo.os?.numero_os || `OS #${selectedCiclo.os_id}`} · Ciclo {selectedCiclo.numero_ciclo || 1}</div> : null}</div>
+        <div className="overflow-x-auto"><table className="min-w-full text-left"><thead className="bg-slate-50 text-[10px] font-black uppercase tracking-wide text-slate-400"><tr><th className="px-5 py-3">Data e hora</th><th className="px-5 py-3">Evento</th><th className="px-5 py-3">Detalhes</th><th className="px-5 py-3">Tempo executado</th><th className="px-5 py-3">Operador</th></tr></thead><tbody className="divide-y divide-slate-100 text-xs text-slate-600">{eventos.length === 0 ? <tr><td colSpan={5} className="px-5 py-10 text-center text-slate-400">Selecione uma lavadora da bancada.</td></tr> : eventos.map((evento) => <tr key={evento.id}><td className="whitespace-nowrap px-5 py-3 font-semibold text-slate-500">{formatarDataHora(evento.created_at)}</td><td className="whitespace-nowrap px-5 py-3 font-black text-slate-700">{evento.tipo_evento}</td><td className="min-w-[280px] px-5 py-3">{evento.detalhes || "—"}</td><td className="whitespace-nowrap px-5 py-3 font-black">{evento.tempo_executado_segundos == null ? "—" : formatarSegundos(evento.tempo_executado_segundos)}</td><td className="whitespace-nowrap px-5 py-3">{evento.operador || "Sistema"}</td></tr>)}</tbody></table></div>
       </section>
     </div>
   );
