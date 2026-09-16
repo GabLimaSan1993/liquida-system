@@ -1,3 +1,4 @@
+import JsBarcode from "jsbarcode";
 import { Barcode, Check, PackagePlus, QrCode, RefreshCcw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../AuthContext.jsx";
@@ -17,9 +18,7 @@ function CardComponente({ item, selecionado, onToggle }) {
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">
-            {item.tipo_unidade}
-          </div>
+          <div className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">{item.tipo_unidade}</div>
           <div className="mt-1 text-base font-black text-slate-900">{item.os?.numero_os || `OS ${item.os_id}`}</div>
           <div className="mt-1 text-xs text-slate-500">{item.os?.marca || "—"} {item.os?.modelo || ""}</div>
         </div>
@@ -79,8 +78,9 @@ export default function FormacaoKitClimatizacaoV2Page() {
     try {
       setSaving(true);
       setMensagem("Formando kit...");
+      const itensDoKit = [...itensSelecionados];
       const kit = await formarKitClimatizacao(selecionados, profile?.nome, observacoes);
-      setUltimoKit(kit);
+      setUltimoKit({ ...kit, __itens: itensDoKit });
       setSelecionados([]);
       setObservacoes("");
       await carregar();
@@ -94,13 +94,68 @@ export default function FormacaoKitClimatizacaoV2Page() {
 
   function imprimirEtiqueta() {
     if (!ultimoKit) return;
-    const conteudo = itensSelecionados.map((i) => i.os?.numero_os).filter(Boolean).join(" | ");
-    const win = window.open("", "_blank", "width=520,height=680");
+
+    const itens = ultimoKit.__itens || [];
+    const payloadQr = JSON.stringify({
+      kit: ultimoKit.codigo,
+      unidades: itens.map((item) => ({
+        os: item.os?.numero_os || String(item.os_id),
+        tipo: item.tipo_unidade,
+      })),
+    });
+
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    JsBarcode(svg, ultimoKit.codigo, {
+      format: "CODE128",
+      displayValue: true,
+      fontSize: 16,
+      height: 58,
+      margin: 0,
+    });
+
+    const linhas = itens.map((item) =>
+      `<tr><td>${item.tipo_unidade}</td><td>${item.os?.numero_os || item.os_id}</td><td>${item.os?.marca || ""} ${item.os?.modelo || ""}</td></tr>`
+    ).join("");
+
+    const qrUrl = `https://quickchart.io/qr?size=220&margin=1&text=${encodeURIComponent(payloadQr)}`;
+    const win = window.open("", "_blank", "width=620,height=820");
     if (!win) return;
+
     win.document.write(`
-      <html><head><title>${ultimoKit.codigo}</title>
-      <style>body{font-family:Arial;padding:24px}.box{border:3px solid #111;padding:22px;border-radius:10px}.code{font-size:28px;font-weight:800;text-align:center}.meta{margin-top:14px;font-size:14px}.fakebar{height:78px;margin:18px 0;background:repeating-linear-gradient(90deg,#000 0,#000 3px,#fff 3px,#fff 6px)}.qr{width:160px;height:160px;margin:20px auto;background:repeating-conic-gradient(#000 0 25%,#fff 0 50%) 0/28px 28px;border:8px solid #000}</style>
-      </head><body><div class="box"><div class="code">${ultimoKit.codigo}</div><div class="fakebar"></div><div class="qr"></div><div class="meta"><b>Conteúdo do QR:</b><br>${ultimoKit.codigo}</div><div class="meta">${conteudo || "Componentes vinculados ao kit"}</div></div><script>window.print()</script></body></html>
+      <html>
+        <head>
+          <title>${ultimoKit.codigo}</title>
+          <style>
+            @page{size:105mm 50mm;margin:3mm}
+            *{box-sizing:border-box}
+            body{font-family:Arial,sans-serif;margin:0;padding:0;color:#111}
+            .label{width:99mm;min-height:44mm;border:2px solid #111;padding:3mm;display:grid;grid-template-columns:1fr 31mm;gap:3mm}
+            .code{font-size:20px;font-weight:900;margin-bottom:2mm}
+            .barcode svg{max-width:100%;height:19mm}
+            table{width:100%;border-collapse:collapse;margin-top:2mm;font-size:8px}
+            td{border-top:1px solid #ddd;padding:1.2mm 0;vertical-align:top}
+            td:nth-child(1){font-weight:bold;text-transform:uppercase;width:25%}
+            td:nth-child(2){font-weight:bold;width:29%}
+            .qr{text-align:center;font-size:8px;font-weight:bold}
+            .qr img{width:29mm;height:29mm;display:block;margin:0 auto 1mm}
+            .meta{font-size:8px;color:#444;margin-top:1mm}
+          </style>
+        </head>
+        <body>
+          <div class="label">
+            <div>
+              <div class="code">${ultimoKit.codigo}</div>
+              <div class="barcode">${svg.outerHTML}</div>
+              <table><tbody>${linhas}</tbody></table>
+              <div class="meta">Kit formado em ${new Date(ultimoKit.formado_em || Date.now()).toLocaleString("pt-BR")}</div>
+            </div>
+            <div class="qr">
+              <img src="${qrUrl}" alt="QR do kit" onload="setTimeout(()=>window.print(),250)" />
+              QR · componentes do kit
+            </div>
+          </div>
+        </body>
+      </html>
     `);
     win.document.close();
   }
