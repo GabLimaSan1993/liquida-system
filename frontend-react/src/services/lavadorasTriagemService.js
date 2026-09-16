@@ -2,7 +2,7 @@ import { supabase } from "../lib/supabase.js";
 
 export const DURACAO_CICLO_LAVADORA = 25 * 60;
 export const POSICOES_BANCADA_LAVADORAS = Array.from(
-  { length: 12 },
+  { length: 20 },
   (_, index) => String(index + 1).padStart(2, "0")
 );
 
@@ -167,7 +167,7 @@ export async function iniciarCicloLavadora({
 
   const { data: existentes, error: existentesError } = await supabase
     .from("linha_branca_lavadora_ciclos")
-    .select("id, tentativa, posicao, status")
+    .select("id, os_id, tentativa, posicao, status")
     .or(`os_id.eq.${os.id},status.in.(${STATUS_CICLO_ATIVO.join(",")})`);
 
   if (existentesError) throw existentesError;
@@ -235,8 +235,8 @@ export async function iniciarCicloLavadora({
   const { error: osError } = await supabase
     .from("ordens_servico")
     .update({
-      status_atual: "Em ciclo de lavagem",
-      etapa_atual: "Triagem Operacional",
+      status_atual: "Em triagem",
+      etapa_atual: "Triagem",
       area_destino: "Triagem Lavadoras",
       tecnico_triagem: operador || null,
     })
@@ -280,8 +280,8 @@ export async function pausarCicloLavadora(ciclo, operador, porErro = false) {
   const { error: osError } = await supabase
     .from("ordens_servico")
     .update({
-      status_atual: porErro ? "Ciclo pausado - erro" : "Ciclo pausado",
-      etapa_atual: "Triagem Operacional",
+      status_atual: "Em triagem",
+      etapa_atual: "Triagem",
       area_destino: "Triagem Lavadoras",
     })
     .eq("id", ciclo.os_id);
@@ -372,8 +372,8 @@ export async function retomarCicloLavadora(ciclo, operador) {
   const { error: osError } = await supabase
     .from("ordens_servico")
     .update({
-      status_atual: "Em ciclo de lavagem",
-      etapa_atual: "Triagem Operacional",
+      status_atual: "Em triagem",
+      etapa_atual: "Triagem",
       area_destino: "Triagem Lavadoras",
     })
     .eq("id", ciclo.os_id);
@@ -528,7 +528,7 @@ export async function concluirCicloLavadora(ciclo, operador) {
     .from("ordens_servico")
     .update({
       status_atual: "Aprovado",
-      etapa_atual: "Ciclo de lavagem concluído",
+      etapa_atual: "Aprovado",
       area_destino: null,
       tecnico_triagem: operador || ciclo.operador || null,
     })
