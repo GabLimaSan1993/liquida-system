@@ -1,640 +1,414 @@
 import {
+  AlertTriangle,
   Check,
-  FlaskConical,
+  CheckCircle2,
+  CircleAlert,
+  Clock3,
+  History,
+  Loader2,
+  Pause,
+  Play,
+  RefreshCw,
   RotateCcw,
-  Save,
   Search,
+  Trash2,
+  WashingMachine,
+  Wrench,
   X,
 } from "lucide-react";
-
-import {
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "../../AuthContext.jsx";
-import { supabase } from "../../lib/supabase.js";
-import { fetchTriagemDaOs } from "../../services/reparoLinhaBrancaService.js";
+import {
+  REPAROS_ELETRICOS_LAVADORAS,
+  REPAROS_ESTETICOS_LAVADORAS,
+  REPAROS_MECANICOS_LAVADORAS,
+} from "../../services/linhaBrancaService.js";
+import {
+  DURACAO_CICLO_LAVADORA,
+  POSICOES_BANCADA_LAVADORAS,
+  STATUS_RESERVA_POSICAO,
+  aprovarPosReparo,
+  calcularTempoExecutado,
+  concluirCicloLavadora,
+  condenarLavadora,
+  enviarCicloParaReparo,
+  fetchHistoricoLavadora,
+  fetchPainelBancadaPosReparo,
+  iniciarCicloPosReparo,
+  pausarCicloLavadora,
+  registrarErroCicloLavadora,
+  retomarCicloLavadora,
+} from "../../services/lavadorasTriagemService.js";
 
-const EMPTY = {
-  aprovado: null,
-  etapa_retorno: "",
-  obs_bancada: "",
+const EMPTY_DECISAO = {
+  erroDescricao: "",
+  codigoErro: "",
+  observacoes: "",
+  mecanicos: [],
+  eletricos: [],
+  esteticos: [],
+  motivoCondenacao: "",
 };
 
-const ETAPAS_REPARO = [
-  "Reparo Mecânico",
-  "Reparo Elétrico",
-  "Reparo Estético",
-];
+function formatarSegundos(total) {
+  const valor = Math.max(0, Number(total || 0));
+  const minutos = Math.floor(valor / 60);
+  const segundos = Math.floor(valor % 60);
+  return `${String(minutos).padStart(2, "0")}:${String(segundos).padStart(2, "0")}`;
+}
 
-function InfoField({ label, value }) {
+function formatarDataHora(valor) {
+  if (!valor) return "—";
+  const data = new Date(valor);
+  if (Number.isNaN(data.getTime())) return "—";
+  return data.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function RepairGroup({ title, items, selected, onToggle }) {
   return (
-    <div>
-      <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
-        {label}
+    <div className="rounded-xl border border-slate-200 p-3">
+      <div className="mb-2 text-[11px] font-black text-slate-700">{title}</div>
+      <div className="max-h-40 space-y-1 overflow-y-auto pr-1">
+        {items.map((item) => (
+          <label key={item} className="flex cursor-pointer items-start gap-2 rounded-lg px-2 py-1.5 text-[10px] text-slate-600 hover:bg-slate-50">
+            <input
+              type="checkbox"
+              checked={selected.includes(item)}
+              onChange={() => onToggle(item)}
+              className="mt-0.5"
+            />
+            <span>{item}</span>
+          </label>
+        ))}
       </div>
+    </div>
+  );
+}
 
-      <div className="mt-1 text-sm font-bold text-slate-800">
-        {value || "—"}
-      </div>
+function Stat({ icon: Icon, value, label, tone = "violet" }) {
+  const styles = {
+    violet: "bg-violet-50 text-violet-700",
+    blue: "bg-blue-50 text-blue-700",
+    red: "bg-rose-50 text-rose-700",
+    green: "bg-emerald-50 text-emerald-700",
+  };
+  return (
+    <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4">
+      <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${styles[tone]}`}><Icon className="h-5 w-5" /></div>
+      <div><div className="text-xl font-black text-slate-900">{value}</div><div className="text-[10px] font-bold text-slate-500">{label}</div></div>
     </div>
   );
 }
 
 export default function BancadaTestesLavadorasV2Page() {
   const { profile } = useAuth();
+  const operador = profile?.nome || "Operação";
 
-  const [osList, setOsList] = useState([]);
-  const [busca, setBusca] = useState("");
+  const [painel, setPainel] = useState({ aguardando: [], ciclos: [], osList: [] });
   const [selectedOsId, setSelectedOsId] = useState("");
-  const [form, setForm] = useState({ ...EMPTY });
-
-  const [loading, setLoading] = useState(false);
+  const [selectedCicloId, setSelectedCicloId] = useState("");
+  const [posicaoNova, setPosicaoNova] = useState("");
+  const [busca, setBusca] = useState("");
+  const [historico, setHistorico] = useState(null);
+  const [decisao, setDecisao] = useState({ ...EMPTY_DECISAO });
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [mensagem, setMensagem] = useState("");
+  const [tick, setTick] = useState(Date.now());
+  const finalizandoRef = useRef(new Set());
 
-  const selectedOs = useMemo(() => {
-    return (
-      osList.find(
-        (item) =>
-          String(item.id) ===
-          String(selectedOsId)
-      ) || null
+  const carregar = useCallback(async ({ silencioso = false } = {}) => {
+    try {
+      if (!silencioso) setLoading(true);
+      const data = await fetchPainelBancadaPosReparo();
+      setPainel(data);
+      setSelectedOsId((atual) => {
+        if (atual && data.aguardando.some((item) => String(item.id) === String(atual))) return atual;
+        return data.aguardando[0]?.id ? String(data.aguardando[0].id) : "";
+      });
+      setSelectedCicloId((atual) => {
+        if (atual && data.ciclos.some((item) => String(item.id) === String(atual))) return atual;
+        const ciclo = data.ciclos.find((item) => STATUS_RESERVA_POSICAO.includes(item.status)) || data.ciclos[0];
+        return ciclo?.id ? String(ciclo.id) : "";
+      });
+    } catch (error) {
+      setMensagem(`Erro ao carregar bancada: ${error.message}`);
+    } finally {
+      if (!silencioso) setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    carregar();
+  }, [carregar]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setTick(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const selectedOs = useMemo(
+    () => painel.aguardando.find((item) => String(item.id) === String(selectedOsId)) || null,
+    [painel.aguardando, selectedOsId]
+  );
+
+  const selectedCiclo = useMemo(
+    () => painel.ciclos.find((item) => String(item.id) === String(selectedCicloId)) || null,
+    [painel.ciclos, selectedCicloId]
+  );
+
+  useEffect(() => {
+    let cancelado = false;
+    async function buscarHistorico() {
+      const osId = selectedCiclo?.os_id || selectedOs?.id;
+      if (!osId) {
+        setHistorico(null);
+        return;
+      }
+      try {
+        const data = await fetchHistoricoLavadora(osId);
+        if (!cancelado) setHistorico(data);
+      } catch (error) {
+        if (!cancelado) setMensagem(`Erro ao carregar histórico técnico: ${error.message}`);
+      }
+    }
+    buscarHistorico();
+    return () => {
+      cancelado = true;
+    };
+  }, [selectedCiclo?.os_id, selectedOs?.id]);
+
+  useEffect(() => {
+    const vencidos = painel.ciclos.filter(
+      (ciclo) =>
+        ciclo.status === "em_ciclo" &&
+        calcularTempoExecutado(ciclo, tick) >= Number(ciclo.duracao_alvo_segundos || DURACAO_CICLO_LAVADORA)
     );
-  }, [osList, selectedOsId]);
+    vencidos.forEach((ciclo) => {
+      if (finalizandoRef.current.has(ciclo.id)) return;
+      finalizandoRef.current.add(ciclo.id);
+      concluirCicloLavadora(ciclo, ciclo.operador || operador)
+        .then(() => carregar({ silencioso: true }))
+        .catch((error) => setMensagem(`Erro ao concluir teste pós-reparo: ${error.message}`))
+        .finally(() => finalizandoRef.current.delete(ciclo.id));
+    });
+  }, [tick, painel.ciclos, carregar, operador]);
+
+  const ocupadas = useMemo(
+    () => new Set(painel.ciclos.filter((item) => STATUS_RESERVA_POSICAO.includes(item.status)).map((item) => String(item.posicao))),
+    [painel.ciclos]
+  );
+
+  const disponiveis = useMemo(
+    () => POSICOES_BANCADA_LAVADORAS.filter((item) => !ocupadas.has(item)),
+    [ocupadas]
+  );
+
+  useEffect(() => {
+    if (!posicaoNova || !disponiveis.includes(posicaoNova)) setPosicaoNova(disponiveis[0] || "");
+  }, [disponiveis, posicaoNova]);
 
   const osFiltradas = useMemo(() => {
     const termo = busca.trim().toLowerCase();
+    if (!termo) return painel.aguardando;
+    return painel.aguardando.filter((os) =>
+      [os.numero_os, os.serial_number, os.marca, os.modelo]
+        .filter(Boolean)
+        .some((valor) => String(valor).toLowerCase().includes(termo))
+    );
+  }, [painel.aguardando, busca]);
 
-    if (!termo) return osList;
+  const cards = useMemo(() => {
+    const mapa = new Map();
+    [...painel.ciclos]
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .forEach((ciclo) => {
+        if (!mapa.has(String(ciclo.posicao)) && STATUS_RESERVA_POSICAO.includes(ciclo.status)) {
+          mapa.set(String(ciclo.posicao), ciclo);
+        }
+      });
+    return POSICOES_BANCADA_LAVADORAS.map((posicao) => ({ posicao, ciclo: mapa.get(posicao) || null }));
+  }, [painel.ciclos]);
 
-    return osList.filter((os) => {
-      const campos = [
-        os.numero_os,
-        os.serial_number,
-        os.marca,
-        os.modelo,
-        os.fornecedor,
-        os.lote,
-      ];
+  const metricas = useMemo(() => ({
+    aguardando: painel.aguardando.length,
+    emTeste: painel.ciclos.filter((item) => item.status === "em_ciclo").length,
+    erro: painel.ciclos.filter((item) => item.status === "pausado_erro").length,
+    aguardandoResultado: painel.ciclos.filter((item) => item.status === "aguardando_resultado").length,
+  }), [painel]);
 
-      return campos.some((campo) =>
-        String(campo || "")
-          .toLowerCase()
-          .includes(termo)
-      );
-    });
-  }, [osList, busca]);
-
-  const canSave = Boolean(
-    selectedOs &&
-      form.aprovado !== null &&
-      (form.aprovado ||
-        form.etapa_retorno)
-  );
-
-  async function carregarOs() {
-    try {
-      setLoading(true);
-      setMensagem("");
-
-      const { data, error } = await supabase
-        .from("ordens_servico")
-        .select("*")
-        .eq(
-          "area_destino",
-          "Bancada de Testes"
-        )
-        .order("dt_entrada", {
-          ascending: true,
-        });
-
-      if (error) throw error;
-
-      const filtradas =
-        await Promise.all(
-          (data || []).map(
-            async (os) => {
-              try {
-                const triagem =
-                  await fetchTriagemDaOs(
-                    os.id
-                  );
-
-                if (
-                  triagem?.tipo_produto !==
-                  "Lavadoras"
-                ) {
-                  return null;
-                }
-
-                return os;
-              } catch {
-                return null;
-              }
-            }
-          )
-        );
-
-      setOsList(
-        filtradas.filter(Boolean)
-      );
-    } catch (error) {
-      setMensagem(
-        `Erro ao carregar OS: ${error.message}`
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    carregarOs();
-  }, []);
-
-  function selecionarOs(os) {
-    setSelectedOsId(os.id);
-    setBusca("");
-    setForm({ ...EMPTY });
-    setMensagem("");
-  }
-
-  function definirResultado(aprovado) {
-    setForm((current) => ({
-      ...current,
-      aprovado,
-      etapa_retorno: aprovado
-        ? ""
-        : current.etapa_retorno,
-    }));
-  }
-
-  function limpar() {
-    setSelectedOsId("");
-    setBusca("");
-    setForm({ ...EMPTY });
-    setMensagem("");
-  }
-
-  async function salvar() {
-    if (!canSave) {
-      setMensagem(
-        "Selecione a OS e defina o resultado do teste."
-      );
-      return;
-    }
-
+  async function executar(acao) {
     try {
       setSaving(true);
-      setMensagem(
-        "Registrando resultado da bancada..."
-      );
-
-      const numeroOs =
-        selectedOs.numero_os;
-
-      if (form.aprovado) {
-        const { error } = await supabase
-          .from("ordens_servico")
-          .update({
-            status_atual: "Limpeza",
-            etapa_atual: "Limpeza",
-            area_destino: "Limpeza",
-            aprovado_bancada: true,
-            obs_bancada:
-              form.obs_bancada,
-            tecnico_bancada:
-              profile?.nome,
-          })
-          .eq("id", selectedOs.id);
-
-        if (error) throw error;
-      } else {
-        const novasConcluidas = (
-          selectedOs.areas_concluidas || []
-        ).filter(
-          (area) =>
-            area !== form.etapa_retorno
-        );
-
-        const { error } = await supabase
-          .from("ordens_servico")
-          .update({
-            status_atual: "Triado",
-            etapa_atual:
-              form.etapa_retorno,
-            area_destino:
-              form.etapa_retorno,
-            areas_concluidas:
-              novasConcluidas,
-            aprovado_bancada: false,
-            obs_bancada:
-              form.obs_bancada,
-            tecnico_bancada:
-              profile?.nome,
-          })
-          .eq("id", selectedOs.id);
-
-        if (error) throw error;
-      }
-
-      const mensagemFinal =
-        form.aprovado
-          ? `OS ${numeroOs} aprovada. Encaminhada para Higienização.`
-          : `OS ${numeroOs} reprovada. Retorna para ${form.etapa_retorno}.`;
-
-      limpar();
-      await carregarOs();
-
-      setMensagem(mensagemFinal);
+      setMensagem("");
+      await acao();
+      await carregar({ silencioso: true });
     } catch (error) {
-      setMensagem(
-        `Erro ao salvar resultado: ${error.message}`
-      );
+      setMensagem(error.message || "Não foi possível concluir a operação.");
     } finally {
       setSaving(false);
     }
   }
 
+  function iniciar() {
+    if (!selectedOs) return setMensagem("Selecione uma OS para iniciar o teste pós-reparo.");
+    if (!posicaoNova) return setMensagem("Não há posição disponível.");
+    executar(async () => {
+      const ciclo = await iniciarCicloPosReparo({ os: selectedOs, operador, posicao: posicaoNova });
+      setSelectedCicloId(String(ciclo.id));
+      setMensagem(`Teste pós-reparo iniciado na posição ${posicaoNova}.`);
+    });
+  }
+
+  function abrirErro(ciclo) {
+    executar(async () => {
+      const pausado = ciclo.status === "em_ciclo" ? await pausarCicloLavadora(ciclo, operador, true) : ciclo;
+      setSelectedCicloId(String(ciclo.id));
+      setDecisao({
+        ...EMPTY_DECISAO,
+        erroDescricao: pausado.erro_descricao || ciclo.erro_descricao || "",
+        codigoErro: pausado.erro_codigo || ciclo.erro_codigo || "",
+        observacoes: pausado.erro_observacoes || ciclo.erro_observacoes || "",
+      });
+    });
+  }
+
+  function toggle(chave, item) {
+    setDecisao((atual) => ({
+      ...atual,
+      [chave]: atual[chave].includes(item)
+        ? atual[chave].filter((valor) => valor !== item)
+        : [...atual[chave], item],
+    }));
+  }
+
+  async function registrarErro() {
+    if (!selectedCiclo) return;
+    if (!decisao.erroDescricao.trim()) return setMensagem("Informe o erro apresentado.");
+    await executar(async () => {
+      await registrarErroCicloLavadora({
+        ciclo: selectedCiclo,
+        erroDescricao: decisao.erroDescricao,
+        codigoErro: decisao.codigoErro,
+        observacoes: decisao.observacoes,
+        operador,
+      });
+      setMensagem("Erro registrado no teste pós-reparo.");
+    });
+  }
+
+  async function retornarReparo() {
+    if (!selectedCiclo) return;
+    await executar(async () => {
+      await enviarCicloParaReparo({
+        ciclo: selectedCiclo,
+        reparosMecanicos: decisao.mecanicos,
+        reparosEletricos: decisao.eletricos,
+        reparosEsteticos: decisao.esteticos,
+        erroDescricao: decisao.erroDescricao,
+        codigoErro: decisao.codigoErro,
+        observacoes: decisao.observacoes,
+        operador,
+      });
+      setDecisao({ ...EMPTY_DECISAO });
+      setMensagem("Lavadora devolvida ao reparo com o novo escopo técnico.");
+    });
+  }
+
+  async function aprovar() {
+    if (!selectedCiclo) return;
+    await executar(async () => {
+      await aprovarPosReparo(selectedCiclo, operador, decisao.observacoes);
+      setDecisao({ ...EMPTY_DECISAO });
+      setMensagem("Lavadora aprovada. Laudo pós-reparo gerado e equipamento encaminhado para Higienização.");
+    });
+  }
+
+  async function condenar() {
+    if (!selectedCiclo) return;
+    if (!decisao.motivoCondenacao.trim()) return setMensagem("Informe a justificativa da condenação.");
+    await executar(async () => {
+      await condenarLavadora({
+        ciclo: selectedCiclo,
+        os: selectedCiclo.os,
+        motivo: decisao.motivoCondenacao,
+        operador,
+      });
+      setDecisao({ ...EMPTY_DECISAO });
+      setMensagem("Produto condenado e encaminhado para Scrap.");
+    });
+  }
+
+  if (loading) {
+    return <div className="flex min-h-[520px] items-center justify-center"><div className="text-center"><Loader2 className="mx-auto h-7 w-7 animate-spin text-[#4C1D95]" /><div className="mt-3 text-sm font-bold text-slate-500">Carregando bancada pós-reparo...</div></div></div>;
+  }
+
   return (
-    <div className="mx-auto max-w-[1500px]">
-      <div className="border-b border-slate-200 pb-7">
-        <div className="text-[10px] font-black uppercase tracking-[0.2em] text-[#765D81]">
-          Lavadoras
-        </div>
-
-        <h1 className="mt-2 text-3xl font-black tracking-[-0.035em] text-slate-900">
-          Bancada de Testes
-        </h1>
-
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-          Valide o funcionamento após o reparo e defina a liberação ou o retorno técnico.
-        </p>
+    <div className="mx-auto max-w-[1800px]">
+      <div className="flex flex-col gap-4 border-b border-slate-200 pb-6 xl:flex-row xl:items-end xl:justify-between">
+        <div><div className="text-[10px] font-black uppercase tracking-[0.2em] text-[#765D81]">Linha Branca · Lavadoras</div><h1 className="mt-2 text-3xl font-black tracking-[-0.035em] text-slate-900">Bancada Pós-Reparo</h1><p className="mt-1 text-sm text-slate-500">Uma lavagem de 25 minutos para validar o reparo, com histórico técnico completo.</p></div>
+        <button type="button" onClick={() => carregar()} className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-xs font-black text-slate-600"><RefreshCw className="h-4 w-4" /> Atualizar</button>
       </div>
 
-      <section className="mt-8">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-black text-slate-800">
-            1. Identificar equipamento
-          </h2>
+      {mensagem ? <div className="mt-5 flex items-start justify-between rounded-2xl border border-violet-100 bg-violet-50 px-4 py-3 text-sm font-semibold text-violet-800"><span>{mensagem}</span><button type="button" onClick={() => setMensagem("")}><X className="h-4 w-4" /></button></div> : null}
 
-          <span className="text-xs font-semibold text-slate-400">
-            {loading
-              ? "Carregando..."
-              : `${osList.length} OS aguardando teste`}
-          </span>
-        </div>
+      <section className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Stat icon={Clock3} value={metricas.aguardando} label="Aguardando bancada" />
+        <Stat icon={Play} value={metricas.emTeste} label="Em teste agora" tone="blue" />
+        <Stat icon={AlertTriangle} value={metricas.erro} label="Paradas por erro" tone="red" />
+        <Stat icon={CheckCircle2} value={metricas.aguardandoResultado} label="Aguardando decisão final" tone="green" />
+      </section>
 
+      <section className="mt-5 grid gap-5 2xl:grid-cols-[380px_minmax(0,1fr)_420px]">
         <div className="rounded-2xl border border-slate-200 bg-white p-5">
-          {!selectedOs ? (
-            <>
-              <div className="relative">
-                <Search className="absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-slate-400" />
+          <h2 className="text-sm font-black text-slate-900">Selecionar OS pós-reparo</h2>
+          <div className="relative mt-4"><Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar OS, modelo ou serial" className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-3 text-sm outline-none" /></div>
+          <select value={selectedOsId} onChange={(e) => setSelectedOsId(e.target.value)} className="mt-3 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700"><option value="">Selecione uma OS</option>{osFiltradas.map((os) => <option key={os.id} value={os.id}>{os.numero_os} — {os.marca} {os.modelo}</option>)}</select>
+          {selectedOs ? <div className="mt-4 rounded-xl bg-slate-50 p-4 text-xs"><div className="text-lg font-black text-slate-900">{selectedOs.numero_os}</div><div className="mt-2 text-slate-500">{selectedOs.marca} {selectedOs.modelo}</div><div className="text-slate-400">{selectedOs.voltagem || "—"} · {selectedOs.serial_number || "Sem serial"}</div></div> : null}
+          <div className="mt-4 grid grid-cols-[1fr_auto] gap-2"><select value={posicaoNova} onChange={(e) => setPosicaoNova(e.target.value)} className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold"><option value="">Posição</option>{disponiveis.map((p) => <option key={p} value={p}>Posição {p}</option>)}</select><button type="button" onClick={iniciar} disabled={!selectedOs || !posicaoNova || saving} className="flex h-11 items-center gap-2 rounded-xl bg-[#5B35C9] px-4 text-xs font-black text-white disabled:bg-slate-300"><Play className="h-4 w-4 fill-current" /> Iniciar</button></div>
 
-                <input
-                  value={busca}
-                  onChange={(event) =>
-                    setBusca(event.target.value)
-                  }
-                  placeholder="Busque por OS, serial, modelo, fornecedor ou lote"
-                  className="
-                    h-12 w-full rounded-xl border border-slate-200
-                    bg-slate-50 pl-11 pr-4 text-sm text-slate-800
-                    outline-none transition focus:border-[#765D81]
-                    focus:bg-white focus:ring-2 focus:ring-[#765D81]/10
-                  "
-                />
-              </div>
-<div className="mt-3">
-  <select
-    value=""
-    onChange={(event) => {
-      const osSelecionada =
-        osFiltradas.find(
-          (os) =>
-            String(os.id) ===
-            String(event.target.value)
-        );
+          <div className="mt-6 border-t border-slate-100 pt-4"><div className="text-xs font-black text-slate-800">Histórico carregado</div><div className="mt-3 grid grid-cols-2 gap-2 text-[10px]"><div className="rounded-lg bg-slate-50 p-2">Ciclos anteriores: <strong>{historico?.ciclos?.length || 0}</strong></div><div className="rounded-lg bg-slate-50 p-2">Reparos: <strong>{historico?.reparos?.length || 0}</strong></div><div className="rounded-lg bg-slate-50 p-2">Eventos: <strong>{historico?.eventos?.length || 0}</strong></div><div className="rounded-lg bg-slate-50 p-2">Laudos: <strong>{historico?.laudos?.length || 0}</strong></div></div></div>
+        </div>
 
-      if (osSelecionada) {
-        selecionarOs(osSelecionada);
-      }
-    }}
-    disabled={
-      loading ||
-      osFiltradas.length === 0
-    }
-    className="
-      h-12 w-full rounded-xl
-      border border-slate-200
-      bg-white px-4
-      text-sm font-semibold
-      text-slate-700
-      outline-none transition
-      focus:border-[#765D81]
-      focus:ring-2
-      focus:ring-[#765D81]/10
-      disabled:cursor-not-allowed
-      disabled:bg-slate-100
-      disabled:text-slate-400
-    "
-  >
-    <option value="">
-      {loading
-        ? "Carregando OS..."
-        : osFiltradas.length === 0
-        ? "Nenhuma OS disponível"
-        : "Selecione uma OS"}
-    </option>
+        <div className="rounded-2xl border border-slate-200 bg-white">
+          <div className="border-b border-slate-100 px-5 py-4"><h2 className="text-sm font-black text-slate-900">Bancada de validação</h2><p className="mt-1 text-[11px] text-slate-400">20 posições · 1 ciclo pós-reparo por passagem.</p></div>
+          <div className="max-h-[1080px] overflow-y-auto p-4"><div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">{cards.map(({ posicao, ciclo }) => {
+            if (!ciclo) return <button key={posicao} type="button" onClick={() => setPosicaoNova(posicao)} className="flex min-h-[215px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50/60 p-4"><WashingMachine className="h-8 w-8 text-slate-300" /><div className="mt-3 text-xs font-black text-slate-600">Posição {posicao}</div><div className="mt-1 text-[10px] text-slate-400">Disponível</div></button>;
+            const executado = calcularTempoExecutado(ciclo, tick);
+            const progresso = Math.min(100, Math.round((executado / DURACAO_CICLO_LAVADORA) * 100));
+            const erro = ciclo.status === "pausado_erro";
+            const pausado = ciclo.status === "pausado";
+            const resultado = ciclo.status === "aguardando_resultado";
+            return <div key={`${posicao}-${ciclo.id}`} onClick={() => setSelectedCicloId(String(ciclo.id))} className={`min-h-[215px] cursor-pointer rounded-2xl border p-4 ${String(selectedCicloId) === String(ciclo.id) ? "border-violet-400 ring-2 ring-violet-100" : erro ? "border-rose-200" : "border-slate-200"}`}><div className="flex justify-between"><span className="text-[10px] font-black text-slate-600">Posição {posicao}</span><span className={`rounded-full px-2 py-1 text-[9px] font-black ${resultado ? "bg-emerald-50 text-emerald-700" : erro ? "bg-rose-50 text-rose-700" : "bg-blue-50 text-blue-700"}`}>{resultado ? "Teste concluído" : erro ? "Erro" : pausado ? "Pausada" : "Em teste"}</span></div><div className="mt-4 text-xs font-black text-slate-900">{ciclo.os?.numero_os || `OS #${ciclo.os_id}`}</div><div className="mt-1 text-[10px] text-slate-500">{ciclo.os?.marca} {ciclo.os?.modelo}</div><div className="mt-5 text-lg font-black text-slate-900">{formatarSegundos(executado)} <span className="text-xs text-slate-400">/ 25:00</span></div><div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-100"><div className={`h-full ${erro ? "bg-rose-500" : resultado ? "bg-emerald-500" : "bg-blue-500"}`} style={{ width: `${progresso}%` }} /></div><div className="mt-4 flex gap-2">{ciclo.status === "em_ciclo" ? <><button type="button" onClick={(e) => { e.stopPropagation(); executar(() => pausarCicloLavadora(ciclo, operador, false)); }} className="flex h-9 flex-1 items-center justify-center gap-1 rounded-lg border border-slate-200 text-[10px] font-black"><Pause className="h-3.5 w-3.5" /> Pausar</button><button type="button" onClick={(e) => { e.stopPropagation(); abrirErro(ciclo); }} className="flex h-9 flex-1 items-center justify-center gap-1 rounded-lg bg-rose-600 text-[10px] font-black text-white"><AlertTriangle className="h-3.5 w-3.5" /> Erro</button></> : null}{pausado || erro ? <button type="button" onClick={(e) => { e.stopPropagation(); executar(() => retomarCicloLavadora(ciclo, operador)); }} className="flex h-9 flex-1 items-center justify-center gap-1 rounded-lg bg-[#5B35C9] text-[10px] font-black text-white"><RotateCcw className="h-3.5 w-3.5" /> Retomar</button> : null}</div></div>;
+          })}</div></div>
+        </div>
 
-    {osFiltradas.map((os) => (
-      <option
-        key={os.id}
-        value={os.id}
-      >
-        {os.numero_os}
-        {" — "}
-        {os.marca || "Sem marca"}
-        {" "}
-        {os.modelo || ""}
-        {os.serial_number
-          ? ` — ${os.serial_number}`
-          : ""}
-      </option>
-    ))}
-  </select>
-</div>
-              {busca && (
-                <div className="mt-3 max-h-[320px] overflow-y-auto rounded-xl border border-slate-200">
-                  {osFiltradas.length === 0 ? (
-                    <div className="p-5 text-center text-sm text-slate-400">
-                      Nenhuma OS encontrada.
-                    </div>
-                  ) : (
-                    osFiltradas
-                      .slice(0, 20)
-                      .map((os) => (
-                        <button
-                          key={os.id}
-                          type="button"
-                          onClick={() =>
-                            selecionarOs(os)
-                          }
-                          className="
-                            flex w-full items-center justify-between gap-4
-                            border-b border-slate-100 px-4 py-3
-                            text-left transition last:border-b-0
-                            hover:bg-slate-50
-                          "
-                        >
-                          <div>
-                            <div className="text-sm font-black text-slate-800">
-                              {os.numero_os}
-                            </div>
-
-                            <div className="mt-0.5 text-xs text-slate-500">
-                              {os.marca || "—"}{" "}
-                              {os.modelo || ""}
-                            </div>
-                          </div>
-
-                          <div className="text-right text-[11px] text-slate-400">
-                            {os.serial_number ||
-                              "Sem serial"}
-                          </div>
-                        </button>
-                      ))
-                  )}
-                </div>
-              )}
-            </>
-          ) : (
-            <div>
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#F3EFF5] text-[#4C1D95]">
-                    <FlaskConical className="h-5 w-5" />
-                  </div>
-
-                  <div>
-                    <div className="text-lg font-black text-slate-900">
-                      {selectedOs.numero_os}
-                    </div>
-
-                    <div className="text-xs text-slate-500">
-                      Equipamento selecionado
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={limpar}
-                  className="text-xs font-bold text-slate-500 hover:text-slate-800"
-                >
-                  Trocar OS
-                </button>
-              </div>
-
-              <div className="mt-6 grid gap-5 border-t border-slate-100 pt-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-                <InfoField label="Marca" value={selectedOs.marca} />
-                <InfoField label="Modelo" value={selectedOs.modelo} />
-                <InfoField label="Serial" value={selectedOs.serial_number} />
-                <InfoField label="Fornecedor" value={selectedOs.fornecedor} />
-                <InfoField label="Lote" value={selectedOs.lote} />
-                <InfoField label="Status" value={selectedOs.status_atual} />
-              </div>
-            </div>
-          )}
+        <div className="rounded-2xl border border-slate-200 bg-white">
+          <div className="border-b border-slate-100 px-5 py-4"><h2 className="text-sm font-black text-slate-900">Resultado e decisão</h2><p className="mt-1 text-[11px] text-slate-400">Aprovar, retornar ao reparo ou condenar.</p></div>
+          {!selectedCiclo ? <div className="flex min-h-[500px] flex-col items-center justify-center px-6 text-center"><History className="h-9 w-9 text-slate-300" /><div className="mt-3 text-sm font-black text-slate-600">Selecione uma lavadora</div></div> : <div className="space-y-4 p-5">
+            <div className="rounded-xl bg-slate-50 p-3"><div className="text-xs font-black text-slate-900">{selectedCiclo.os?.numero_os || `OS #${selectedCiclo.os_id}`}</div><div className="mt-1 text-[10px] text-slate-500">Status: {selectedCiclo.status} · {formatarDataHora(selectedCiclo.concluido_em || selectedCiclo.iniciado_em)}</div></div>
+            {selectedCiclo.status === "aguardando_resultado" ? <button type="button" onClick={aprovar} disabled={saving} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 text-xs font-black text-white"><Check className="h-4 w-4" /> Aprovar e enviar para Higienização</button> : null}
+            <label className="block"><span className="text-[11px] font-black text-slate-600">Erro apresentado / motivo da reprovação</span><input value={decisao.erroDescricao} onChange={(e) => setDecisao((a) => ({ ...a, erroDescricao: e.target.value }))} className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm" placeholder="Campo digitável" /></label>
+            <label className="block"><span className="text-[11px] font-black text-slate-600">Código do erro</span><input value={decisao.codigoErro} onChange={(e) => setDecisao((a) => ({ ...a, codigoErro: e.target.value }))} className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm" /></label>
+            <label className="block"><span className="text-[11px] font-black text-slate-600">Observações</span><textarea rows={3} value={decisao.observacoes} onChange={(e) => setDecisao((a) => ({ ...a, observacoes: e.target.value }))} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" /></label>
+            {selectedCiclo.status === "pausado_erro" ? <button type="button" onClick={registrarErro} className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 text-[11px] font-black">Salvar erro</button> : null}
+            <RepairGroup title="Retornar para Reparo Mecânico" items={REPAROS_MECANICOS_LAVADORAS} selected={decisao.mecanicos} onToggle={(item) => toggle("mecanicos", item)} />
+            <RepairGroup title="Retornar para Reparo Elétrico" items={REPAROS_ELETRICOS_LAVADORAS} selected={decisao.eletricos} onToggle={(item) => toggle("eletricos", item)} />
+            <RepairGroup title="Retornar para Reparo Estético" items={REPAROS_ESTETICOS_LAVADORAS} selected={decisao.esteticos} onToggle={(item) => toggle("esteticos", item)} />
+            <button type="button" onClick={retornarReparo} disabled={saving || !decisao.erroDescricao.trim()} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-rose-600 text-xs font-black text-white disabled:opacity-40"><Wrench className="h-4 w-4" /> Reprovar e retornar ao reparo</button>
+            <div className="rounded-xl border border-rose-100 bg-rose-50 p-3"><div className="text-[11px] font-black text-rose-800">Condenação / Scrap</div><textarea rows={2} value={decisao.motivoCondenacao} onChange={(e) => setDecisao((a) => ({ ...a, motivoCondenacao: e.target.value }))} placeholder="Justificativa obrigatória" className="mt-2 w-full rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs" /><button type="button" onClick={condenar} disabled={saving || !decisao.motivoCondenacao.trim()} className="mt-2 flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-slate-900 text-[10px] font-black text-white disabled:opacity-40"><Trash2 className="h-3.5 w-3.5" /> Condenar e enviar para Scrap</button></div>
+          </div>}
         </div>
       </section>
 
-      <section className="mt-8">
-        <h2 className="mb-3 text-sm font-black text-slate-800">
-          2. Resultado do teste
-        </h2>
-
-        <div
-          className={`grid gap-3 sm:grid-cols-2 ${
-            !selectedOs
-              ? "pointer-events-none opacity-40"
-              : ""
-          }`}
-        >
-          <button
-            type="button"
-            onClick={() =>
-              definirResultado(true)
-            }
-            className={`
-              flex items-center gap-4 rounded-2xl border
-              bg-white p-5 text-left transition
-              ${
-                form.aprovado === true
-                  ? "border-emerald-500 ring-2 ring-emerald-100"
-                  : "border-slate-200 hover:border-slate-300"
-              }
-            `}
-          >
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-              <Check className="h-5 w-5" />
-            </div>
-
-            <div>
-              <div className="text-sm font-black text-slate-800">
-                Aprovado
-              </div>
-
-              <div className="mt-1 text-xs text-slate-500">
-                Equipamento segue para Higienização.
-              </div>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={() =>
-              definirResultado(false)
-            }
-            className={`
-              flex items-center gap-4 rounded-2xl border
-              bg-white p-5 text-left transition
-              ${
-                form.aprovado === false
-                  ? "border-rose-500 ring-2 ring-rose-100"
-                  : "border-slate-200 hover:border-slate-300"
-              }
-            `}
-          >
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-rose-50 text-rose-600">
-              <X className="h-5 w-5" />
-            </div>
-
-            <div>
-              <div className="text-sm font-black text-slate-800">
-                Reprovado
-              </div>
-
-              <div className="mt-1 text-xs text-slate-500">
-                Equipamento retorna para a especialidade indicada.
-              </div>
-            </div>
-          </button>
-        </div>
-      </section>
-
-      {form.aprovado === false && (
-        <section className="mt-8">
-          <h2 className="mb-3 text-sm font-black text-slate-800">
-            3. Retorno técnico
-          </h2>
-
-          <select
-            value={form.etapa_retorno}
-            onChange={(event) =>
-              setForm((current) => ({
-                ...current,
-                etapa_retorno:
-                  event.target.value,
-              }))
-            }
-            className="
-              h-12 w-full rounded-xl border border-slate-200
-              bg-white px-4 text-sm font-semibold text-slate-700
-              outline-none focus:border-[#765D81]
-              focus:ring-2 focus:ring-[#765D81]/10
-            "
-          >
-            <option value="">
-              Selecione a etapa de retorno
-            </option>
-
-            {ETAPAS_REPARO.map((etapa) => (
-              <option
-                key={etapa}
-                value={etapa}
-              >
-                {etapa}
-              </option>
-            ))}
-          </select>
-        </section>
-      )}
-
-      <section className="mt-8">
-        <h2 className="mb-3 text-sm font-black text-slate-800">
-          {form.aprovado === false
-            ? "4. Problema identificado"
-            : "3. Observações"}
-        </h2>
-
-        <textarea
-          value={form.obs_bancada}
-          onChange={(event) =>
-            setForm((current) => ({
-              ...current,
-              obs_bancada:
-                event.target.value,
-            }))
-          }
-          disabled={!selectedOs}
-          rows={4}
-          placeholder={
-            form.aprovado === false
-              ? "Descreva o problema identificado durante o teste."
-              : "Registre observações finais da bancada."
-          }
-          className="
-            w-full resize-none rounded-2xl border border-slate-200
-            bg-white p-4 text-sm text-slate-700 outline-none
-            transition placeholder:text-slate-400
-            focus:border-[#765D81] focus:ring-2
-            focus:ring-[#765D81]/10 disabled:bg-slate-100
-          "
-        />
-      </section>
-
-      {mensagem && (
-        <div className="mt-6 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600">
-          {mensagem}
-        </div>
-      )}
-
-      <div className="mt-8 flex flex-wrap items-center gap-3 border-t border-slate-200 pt-6">
-        <button
-          type="button"
-          disabled={!canSave || saving}
-          onClick={salvar}
-          className="
-            inline-flex h-11 items-center gap-2 rounded-xl
-            bg-[#4C1D95] px-5 text-sm font-bold text-white
-            transition hover:bg-[#3F177D]
-            disabled:cursor-not-allowed disabled:opacity-40
-          "
-        >
-          <Save className="h-4 w-4" />
-
-          {saving
-            ? "Salvando..."
-            : "Confirmar resultado"}
-        </button>
-
-        <button
-          type="button"
-          onClick={limpar}
-          className="
-            inline-flex h-11 items-center gap-2 rounded-xl
-            border border-slate-200 bg-white px-5
-            text-sm font-bold text-slate-500
-            transition hover:bg-slate-50
-          "
-        >
-          <RotateCcw className="h-4 w-4" />
-          Limpar
-        </button>
-      </div>
+      {historico ? <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-5"><h2 className="text-sm font-black text-slate-900">Histórico técnico consolidado</h2><div className="mt-4 grid gap-3 lg:grid-cols-3"><div className="rounded-xl bg-slate-50 p-4"><div className="text-[10px] font-black uppercase text-slate-400">Ciclos</div>{historico.ciclos.slice(-5).map((item) => <div key={item.id} className="mt-2 text-[10px] text-slate-600">{item.etapa_teste} · ciclo {item.numero_ciclo} · {item.status} · {formatarSegundos(item.tempo_executado_segundos)}</div>)}</div><div className="rounded-xl bg-slate-50 p-4"><div className="text-[10px] font-black uppercase text-slate-400">Reparos</div>{historico.reparos.slice(-5).map((item) => <div key={item.id} className="mt-2 text-[10px] text-slate-600">{item.area_execucao} · {item.servico_executado || item.diagnostico_final || "Registro técnico"}</div>)}</div><div className="rounded-xl bg-slate-50 p-4"><div className="text-[10px] font-black uppercase text-slate-400">Laudos</div>{historico.laudos.slice(-5).map((item) => <div key={item.id} className="mt-2 text-[10px] text-slate-600">{item.titulo}</div>)}</div></div></section> : null}
     </div>
   );
 }
