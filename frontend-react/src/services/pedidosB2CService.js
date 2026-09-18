@@ -13,6 +13,7 @@ const GRADE_HIERARQUIA = {
 // Sufixo -CCx do SKU do anúncio indica a grade vendida.
 // A triagem guarda só o SKU base (modelo), com a grade em coluna própria.
 const CC_GRADE = {
+  cc0: "Like New",
   cc2: "Muito Bom",
   cc3: "Bom",
   cc4: "Outlet",
@@ -2336,7 +2337,7 @@ function imeiDoXProd(xProd) {
   return m ? m[1] : null;
 }
 
-// Compara SKUs ignorando sufixo de grade (-CC2/-CC3/-CC4), espaços e caixa.
+// Compara SKUs ignorando sufixo de grade (-CCx), espaços e caixa.
 function baseSku(s) {
   return String(s || "").toUpperCase().trim().replace(/\s+/g, "").replace(/-CC\d+$/, "");
 }
