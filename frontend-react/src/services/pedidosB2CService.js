@@ -369,8 +369,8 @@ export async function buscarSugestaoFifo(skuProduto, gradePedido) {
   const ccMatch = skuRaw.match(/-(CC\d+)$/i);
   const skuSemCC = skuRaw.replace(/-CC\d+$/i, "").trim();
   const ccCode  = ccMatch ? ccMatch[1].toLowerCase() : null;
-  // Grade vem do código -CCx; sem código conhecido (ex.: sem sufixo), usa a grade do título.
-  const gradeAlvo = (ccCode && CC_GRADE[ccCode]) ? CC_GRADE[ccCode] : gradePedido;
+  // Grade vem do código -CCx; sem sufixo, a venda é tratada como Excelente.
+  const gradeAlvo = ccCode ? (CC_GRADE[ccCode] || gradePedido) : "Excelente";
 
   // Outlet (CC4) não é uma grade física: é definido pela bateria.
   // Regra: apenas aparelhos de grade Bom ou superior COM bateria entre 70 e 79%.
@@ -497,7 +497,7 @@ export async function buscarComparativoAging() {
     const ccMatch = skuRaw.match(/-(CC\d+)$/i);
     const skuSemCC = skuRaw.replace(/-CC\d+$/i, "").trim();
     const ccCode = ccMatch ? ccMatch[1].toLowerCase() : null;
-    const gradeAlvo = (ccCode && CC_GRADE[ccCode]) ? CC_GRADE[ccCode] : p.grade_produto;
+    const gradeAlvo = ccCode ? (CC_GRADE[ccCode] || p.grade_produto) : "Excelente";
     const ehOutlet = normalizeGrade(gradeAlvo) === "outlet";
     const skuBase = await traduzirSku(skuSemCC);
 
