@@ -152,6 +152,45 @@ export async function fetchHistoricoLavadora(osId) {
   };
 }
 
+
+export async function fetchIndicadoresLavadoras() {
+  const [{ data: osData, error: osError }, { data: ciclosData, error: ciclosError }] =
+    await Promise.all([
+      supabase
+        .from("ordens_servico")
+        .select("id,status_atual,etapa_atual,area_destino,updated_at")
+        .eq("linha_produto", "Linha Branca")
+        .eq("categoria", "Lavadora"),
+      supabase
+        .from("linha_branca_lavadora_ciclos")
+        .select("id,os_id,status,etapa_teste,updated_at")
+        .order("updated_at", { ascending: false })
+        .limit(500),
+    ]);
+
+  if (osError) throw osError;
+  if (ciclosError) throw ciclosError;
+
+  const osList = osData || [];
+  const ciclos = ciclosData || [];
+  const ativos = ciclos.filter((ciclo) => STATUS_RESERVA_POSICAO.includes(ciclo.status));
+  const osEmTeste = new Set(ativos.map((ciclo) => String(ciclo.os_id)));
+
+  return {
+    aguardandoTriagem: osList.filter((os) =>
+      STATUS_TRIAGEM_OS.includes(os.status_atual) && !osEmTeste.has(String(os.id))
+    ).length,
+    emReparo: osList.filter((os) =>
+      ["Triado", "Em reparo", "Aguardando peça"].includes(os.status_atual) ||
+      String(os.area_destino || "").startsWith("Reparo")
+    ).length,
+    emTestes: osEmTeste.size,
+    concluidas: osList.filter((os) =>
+      ["Aprovado", "Limpeza", "Higienização", "Qualidade", "Finalizado"].includes(os.status_atual)
+    ).length,
+  };
+}
+
 export async function fetchPainelTriagemLavadoras() {
   const [{ data: osData, error: osError }, { data: ciclosData, error: ciclosError }] =
     await Promise.all([

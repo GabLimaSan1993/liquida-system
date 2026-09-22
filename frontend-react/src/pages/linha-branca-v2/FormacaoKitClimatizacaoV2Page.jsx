@@ -64,7 +64,11 @@ export default function FormacaoKitClimatizacaoV2Page() {
   const itensSelecionados = useMemo(() => componentes.filter((c) => selecionados.includes(c.id)), [componentes, selecionados]);
   const qtdCond = itensSelecionados.filter((c) => c.tipo_unidade === "condensadora").length;
   const qtdEvap = itensSelecionados.filter((c) => c.tipo_unidade === "evaporadora").length;
-  const podeFormar = qtdCond >= 1 && qtdEvap >= 1;
+  const tensoes = [...new Set(itensSelecionados.map((c) => String(c.tensao || "").trim().toLowerCase()).filter(Boolean))];
+  const gases = [...new Set(itensSelecionados.map((c) => String(c.gas_refrigerante || "").trim().toLowerCase()).filter(Boolean))];
+  const marcas = [...new Set(itensSelecionados.map((c) => String(c.os?.marca || "").trim().toLowerCase()).filter(Boolean))];
+  const compatibilidadeBasica = tensoes.length <= 1 && gases.length <= 1 && marcas.length <= 1;
+  const podeFormar = qtdCond === 1 && qtdEvap >= 1 && compatibilidadeBasica;
 
   function toggle(id) {
     setSelecionados((current) => current.includes(id) ? current.filter((x) => x !== id) : [...current, id]);
@@ -72,7 +76,7 @@ export default function FormacaoKitClimatizacaoV2Page() {
 
   async function formar() {
     if (!podeFormar) {
-      setMensagem("Selecione pelo menos uma condensadora e uma evaporadora.");
+      setMensagem("O kit precisa ter exatamente 1 condensadora, ao menos 1 evaporadora e compatibilidade de marca, tensão e gás.");
       return;
     }
     try {
@@ -165,7 +169,7 @@ export default function FormacaoKitClimatizacaoV2Page() {
       <div className="border-b border-slate-200 pb-7">
         <div className="text-[10px] font-black uppercase tracking-[0.2em] text-[#765D81]">Climatização</div>
         <h1 className="mt-2 text-3xl font-black tracking-[-0.035em] text-slate-900">Formação de kits</h1>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">Associe as OS individuais em um conjunto comercial e operacional antes do teste de 30 minutos.</p>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">Associe as OS individuais em um conjunto comercial e operacional. O sistema bloqueia incompatibilidade de marca, tensão e gás e exige exatamente 1 condensadora.</p>
       </div>
 
       <div className="mt-8 grid gap-5 lg:grid-cols-2">
@@ -184,13 +188,28 @@ export default function FormacaoKitClimatizacaoV2Page() {
           <div>
             <div className="text-sm font-black text-slate-900">Kit em montagem</div>
             <div className="mt-1 text-xs text-slate-500">{qtdCond} condensadora(s) + {qtdEvap} evaporadora(s)</div>
+            <div className={`mt-2 text-[10px] font-black uppercase tracking-wide ${compatibilidadeBasica ? "text-emerald-600" : "text-rose-600"}`}>
+              {itensSelecionados.length === 0
+                ? "Selecione os componentes"
+                : compatibilidadeBasica
+                  ? "Compatibilidade básica validada"
+                  : "Incompatibilidade detectada em marca, tensão ou gás"}
+            </div>
           </div>
           <div className="flex gap-2">
             <button type="button" onClick={carregar} className="flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-bold text-slate-600"><RefreshCcw className="h-4 w-4" />Atualizar</button>
             <button type="button" onClick={formar} disabled={!podeFormar || saving} className="flex items-center gap-2 rounded-xl bg-[#4C1D95] px-4 py-2.5 text-xs font-bold text-white disabled:opacity-40"><PackagePlus className="h-4 w-4" />{saving ? "Formando..." : "Formar kit"}</button>
           </div>
         </div>
-        <textarea value={observacoes} onChange={(e) => setObservacoes(e.target.value)} rows={3} placeholder="Observações sobre a compatibilidade ou composição do kit..." className="mt-4 w-full resize-none rounded-xl border border-slate-200 p-3 text-sm outline-none focus:border-[#765D81]" />
+        {itensSelecionados.length > 0 ? (
+          <div className="mt-4 grid gap-2 rounded-xl bg-slate-50 p-4 text-xs sm:grid-cols-4">
+            <div><span className="font-black text-slate-500">Marca</span><div className="mt-1 font-bold text-slate-800">{marcas.length === 1 ? itensSelecionados[0]?.os?.marca || "—" : "Divergente"}</div></div>
+            <div><span className="font-black text-slate-500">Tensão</span><div className="mt-1 font-bold text-slate-800">{tensoes.length === 1 ? itensSelecionados[0]?.tensao || "—" : "Divergente"}</div></div>
+            <div><span className="font-black text-slate-500">Gás</span><div className="mt-1 font-bold text-slate-800">{gases.length === 1 ? itensSelecionados[0]?.gas_refrigerante || "—" : "Divergente"}</div></div>
+            <div><span className="font-black text-slate-500">Evaporadoras</span><div className="mt-1 font-bold text-slate-800">{qtdEvap}</div></div>
+          </div>
+        ) : null}
+        <textarea value={observacoes} onChange={(e) => setObservacoes(e.target.value)} rows={3} placeholder="Observações sobre a compatibilidade de modelo e composição do kit..." className="mt-4 w-full resize-none rounded-xl border border-slate-200 p-3 text-sm outline-none focus:border-[#765D81]" />
       </section>
 
       {ultimoKit && (
