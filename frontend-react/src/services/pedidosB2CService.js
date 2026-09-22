@@ -794,14 +794,17 @@ async function registrarAuditoriaFifo(pedidoId, { sugestao, candidatos, origem, 
   }
 }
 
-// O banco tem um índice único parcial (idx_b2c_imei_unico_ativo) que impede o
-// mesmo IMEI de ficar preso a dois pedidos vivos ao mesmo tempo. Quando dois
-// operadores alocam quase juntos, o segundo bate nessa trava e o Postgres
-// devolve 23505 — traduz para uma mensagem que o operador entenda.
+// A trava operacional agora é pela passagem física no WMS (wms_alocacao_id),
+// não pelo IMEI eterno. O mesmo aparelho pode sair, retornar ao estoque e ser
+// vendido novamente em um novo ciclo. Ainda protegemos corrida entre operadores:
+// a mesma posição física não pode ficar reservada em dois pedidos ao mesmo tempo.
 function traduzErroAlocacao(error, imei) {
   const cod = error?.code || "";
   const msg = error?.message || "";
-  if (cod === "23505" || /idx_b2c_imei_unico_ativo|duplicate key/i.test(msg)) {
+  if (
+    cod === "23505" ||
+    /idx_b2c_(?:imei_unico_ativo|wms_alocacao_unica_ativa)|duplicate key|posição física atual do IMEI/i.test(msg)
+  ) {
     return new Error(
       `O aparelho ${imei || ""} acabou de ser alocado em outro pedido. ` +
       `Atualize a lista e escolha outro.`
