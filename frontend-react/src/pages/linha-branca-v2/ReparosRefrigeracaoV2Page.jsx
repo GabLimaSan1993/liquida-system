@@ -32,8 +32,9 @@ import {
   fetchOsRefrigeracaoParaReparo,
   isGerenteLinhaBranca,
   registrarDemandaPeca,
+  salvarContextoReposicaoTroca,
   solicitarCondenacao,
-  uploadFotosCondenacao,
+  uploadFotosPecas,
 } from "../../services/refrigeracaoService.js";
 
 const AREA_CONFIG = {
@@ -291,11 +292,32 @@ export default function ReparosRefrigeracaoV2Page() {
     if (!selectedOs || !areaAtual || !execucao.diagnostico_final.trim() || !execucao.servicos.length) {
       return setMensagem("Informe o diagnóstico e selecione ao menos um serviço executado.");
     }
+    if (execucao.reposicaoTroca === null) {
+      return setMensagem("Informe na seção de peças se haverá ou não reposição/troca.");
+    }
 
     try {
       setSaving(true);
       const numeroOs = selectedOs.numero_os;
       const haviaMaisAreas = areasPendentes.length > 1;
+
+      let fotosPecas = [];
+      if (execucao.reposicaoTroca && fotos.length) {
+        fotosPecas = await uploadFotosPecas({
+          osId: selectedOs.id,
+          areaReparo: areaAtual,
+          files: fotos,
+          userId: profile?.id,
+        });
+      }
+
+      await salvarContextoReposicaoTroca({
+        os: selectedOs,
+        areaReparo: areaAtual,
+        temReposicaoTroca: execucao.reposicaoTroca,
+        fotos: fotosPecas,
+        usuario: profile,
+      });
 
       await salvarExecucaoReparo(
         selectedOs,
@@ -328,27 +350,13 @@ export default function ReparosRefrigeracaoV2Page() {
   async function solicitarCondenacaoAtual() {
     if (!selectedOs) return;
     if (!execucao.motivoCondenacao.trim()) return setMensagem("Informe a justificativa da condenação.");
-    if (execucao.reposicaoTroca === null) return setMensagem("Informe se haverá reposição ou troca.");
-    if (execucao.reposicaoTroca && fotos.length === 0) {
-      return setMensagem("Carregue ao menos uma foto quando houver reposição ou troca.");
-    }
 
     try {
       setSaving(true);
-      let paths = [];
-      if (execucao.reposicaoTroca && fotos.length) {
-        paths = await uploadFotosCondenacao({
-          osId: selectedOs.id,
-          files: fotos,
-          userId: profile?.id,
-        });
-      }
 
       await solicitarCondenacao({
         os: selectedOs,
         motivo: execucao.motivoCondenacao,
-        temReposicaoTroca: execucao.reposicaoTroca,
-        fotos: paths,
         usuario: profile,
       });
 
@@ -451,16 +459,6 @@ export default function ReparosRefrigeracaoV2Page() {
                     <div className="text-sm font-black text-slate-900">{item.ordens_servico?.numero_os || `OS #${item.os_id}`}</div>
                     <div className="mt-1 text-[11px] text-slate-500">{item.ordens_servico?.marca} {item.ordens_servico?.modelo}</div>
                     <div className="mt-3 rounded-lg bg-rose-50 p-3 text-xs leading-5 text-rose-700">{item.motivo}</div>
-                    <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-bold">
-                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">
-                        Reposição/troca: {item.tem_reposicao_troca ? "Sim" : "Não"}
-                      </span>
-                      {(item.fotos_assinadas || []).map((foto, index) => foto.url ? (
-                        <a key={foto.path} href={foto.url} target="_blank" rel="noreferrer" className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">
-                          Foto {index + 1}
-                        </a>
-                      ) : null)}
-                    </div>
                     <div className="mt-3 grid gap-2 md:grid-cols-[180px_1fr]">
                       <select
                         value={decisao.destino}
@@ -612,7 +610,8 @@ export default function ReparosRefrigeracaoV2Page() {
                   type="button"
                   onClick={() => {
                     setAreaAtual(area);
-                    setExecucao((a) => ({ ...a, servicos: [] }));
+                    setFotos([]);
+                    setExecucao((a) => ({ ...a, servicos: [], reposicaoTroca: null }));
                   }}
                   className={`rounded-xl px-4 py-2 text-xs font-black ${areaAtual === area ? "bg-[#5B35C9] text-white" : "bg-slate-100 text-slate-600"}`}
                 >
@@ -683,6 +682,41 @@ export default function ReparosRefrigeracaoV2Page() {
                   </span>
                 ))}
               </div>
+
+              <div className="mt-4 border-t border-slate-200 pt-4">
+                <div className="text-[11px] font-black text-slate-700">Haverá reposição ou troca de peça?</div>
+                <div className="mt-2 flex gap-2">
+                  {[true, false].map((valor) => (
+                    <button
+                      key={String(valor)}
+                      type="button"
+                      onClick={() => {
+                        setExecucao((a) => ({ ...a, reposicaoTroca: valor }));
+                        if (!valor) setFotos([]);
+                      }}
+                      className={`h-9 rounded-xl px-4 text-xs font-black ${execucao.reposicaoTroca === valor ? "bg-[#5B35C9] text-white" : "border border-slate-200 bg-white text-slate-600"}`}
+                    >
+                      {valor ? "Sim" : "Não"}
+                    </button>
+                  ))}
+                </div>
+
+                {execucao.reposicaoTroca === true ? (
+                  <label className="mt-3 block rounded-xl border border-dashed border-violet-200 bg-white p-4">
+                    <div className="flex items-center gap-2 text-[11px] font-black text-violet-800">
+                      <Camera className="h-4 w-4" /> Fotos da peça / evidência da reposição ou troca
+                    </div>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      multiple
+                      onChange={(e) => setFotos(Array.from(e.target.files || []))}
+                      className="mt-3 block w-full text-xs text-slate-500"
+                    />
+                    <div className="mt-2 text-[10px] text-slate-400">{fotos.length} arquivo(s) selecionado(s)</div>
+                  </label>
+                ) : null}
+              </div>
             </div>
 
             <button
@@ -713,6 +747,11 @@ export default function ReparosRefrigeracaoV2Page() {
                   <div className="text-[10px] font-black text-slate-400">Peças / compras</div>
                   {(historico.requisicoes || []).slice(-2).map((item) => <div key={`r-${item.id}`} className="mt-2 text-[10px] text-emerald-700">{item.pn} · requisição {item.status}</div>)}
                   {(historico.compras || []).slice(-2).map((item) => <div key={`c-${item.id}`} className="mt-2 text-[10px] text-rose-700">{item.pn} · compra {item.status}</div>)}
+                  {(historico.pecasContexto || []).slice(-2).map((item) => (
+                    <div key={`pctx-${item.id}`} className="mt-2 text-[10px] text-violet-700">
+                      {item.area_reparo} · reposição/troca: {item.tem_reposicao_troca ? "Sim" : "Não"}
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -734,40 +773,10 @@ export default function ReparosRefrigeracaoV2Page() {
               className="mt-3 w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm"
             />
 
-            <div className="mt-3">
-              <div className="text-[11px] font-black text-amber-900">Terá reposição ou troca?</div>
-              <div className="mt-2 flex gap-2">
-                {[true, false].map((valor) => (
-                  <button
-                    key={String(valor)}
-                    type="button"
-                    onClick={() => setExecucao((a) => ({ ...a, reposicaoTroca: valor }))}
-                    className={`h-9 rounded-xl px-4 text-xs font-black ${execucao.reposicaoTroca === valor ? "bg-amber-700 text-white" : "border border-amber-200 bg-white text-amber-800"}`}
-                  >
-                    {valor ? "Sim" : "Não"}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {execucao.reposicaoTroca === true ? (
-              <label className="mt-4 block rounded-xl border border-dashed border-amber-300 bg-white p-4">
-                <div className="flex items-center gap-2 text-[11px] font-black text-amber-900"><Camera className="h-4 w-4" /> Fotos para reposição / troca</div>
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  multiple
-                  onChange={(e) => setFotos(Array.from(e.target.files || []))}
-                  className="mt-3 block w-full text-xs text-slate-500"
-                />
-                <div className="mt-2 text-[10px] text-slate-400">{fotos.length} arquivo(s) selecionado(s)</div>
-              </label>
-            ) : null}
-
             <button
               type="button"
               onClick={solicitarCondenacaoAtual}
-              disabled={saving || !execucao.motivoCondenacao.trim() || execucao.reposicaoTroca === null}
+              disabled={saving || !execucao.motivoCondenacao.trim()}
               className="mt-4 flex h-10 items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 text-xs font-black text-white disabled:opacity-40"
             >
               <ShieldCheck className="h-4 w-4" /> Enviar condenação para aprovação
