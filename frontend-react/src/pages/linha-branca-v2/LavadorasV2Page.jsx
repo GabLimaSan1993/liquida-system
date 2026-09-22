@@ -4,9 +4,12 @@ import {
   CheckCircle2,
   ClipboardCheck,
   Clock3,
+  RefreshCw,
   TestTubeDiagonal,
   Wrench,
 } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { fetchIndicadoresLavadoras } from "../../services/lavadorasTriagemService.js";
 
 const FLUXO = [
   {
@@ -32,9 +35,40 @@ const FLUXO = [
 ];
 
 export default function LavadorasV2Page() {
+  const [indicadores, setIndicadores] = useState({
+    aguardandoTriagem: 0,
+    emReparo: 0,
+    emTestes: 0,
+    concluidas: 0,
+  });
+  const [loading, setLoading] = useState(true);
+  const [mensagem, setMensagem] = useState("");
+
+  const carregar = useCallback(async () => {
+    try {
+      setLoading(true);
+      setIndicadores(await fetchIndicadoresLavadoras());
+      setMensagem("");
+    } catch (error) {
+      setMensagem(`Erro ao carregar indicadores: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    carregar();
+  }, [carregar]);
+
+  const cards = [
+    { label: "Aguardando triagem", value: indicadores.aguardandoTriagem, icon: ClipboardCheck },
+    { label: "Em reparo", value: indicadores.emReparo, icon: Wrench },
+    { label: "Em testes", value: indicadores.emTestes, icon: TestTubeDiagonal },
+    { label: "Concluídas", value: indicadores.concluidas, icon: CheckCircle2 },
+  ];
+
   return (
     <div className="mx-auto max-w-[1500px]">
-      {/* CABEÇALHO */}
       <div className="flex flex-col gap-5 border-b border-slate-200 pb-7 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="text-[10px] font-black uppercase tracking-[0.2em] text-[#765D81]">
@@ -50,21 +84,24 @@ export default function LavadorasV2Page() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
-          <Activity className="h-4 w-4 text-[#765D81]" />
-          Operação em implantação
-        </div>
+        <button
+          type="button"
+          onClick={carregar}
+          disabled={loading}
+          className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-500 disabled:opacity-50"
+        >
+          <RefreshCw className={`h-4 w-4 text-[#765D81] ${loading ? "animate-spin" : ""}`} />
+          Atualizar
+        </button>
       </div>
 
-      {/* INDICADORES */}
       <section className="mt-8">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-sm font-black text-slate-800">
-            Operação atual
-          </h2>
+          <h2 className="text-sm font-black text-slate-800">Operação atual</h2>
 
-          <div className="text-xs text-slate-400">
-            Dados serão conectados à base operacional
+          <div className="flex items-center gap-2 text-xs font-semibold text-emerald-600">
+            <Activity className="h-4 w-4" />
+            Base operacional conectada
           </div>
         </div>
 
@@ -77,11 +114,7 @@ export default function LavadorasV2Page() {
                 key={item.label}
                 className={`
                   flex min-h-[118px] items-center gap-4 px-5 py-5
-                  ${
-                    index > 0
-                      ? "border-t border-slate-200 sm:border-t-0 sm:border-l"
-                      : ""
-                  }
+                  ${index > 0 ? "border-t border-slate-200 sm:border-t-0 sm:border-l" : ""}
                 `}
               >
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F3EFF5] text-[#4C1D95]">
@@ -90,7 +123,7 @@ export default function LavadorasV2Page() {
 
                 <div>
                   <div className="text-2xl font-black tracking-tight text-slate-900">
-                    {item.value}
+                    {loading ? "…" : item.value}
                   </div>
 
                   <div className="mt-0.5 text-xs font-semibold text-slate-500">
@@ -101,15 +134,14 @@ export default function LavadorasV2Page() {
             );
           })}
         </div>
+
+        {mensagem ? (
+          <div className="mt-4 rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
+            {mensagem}
+          </div>
+        ) : null}
       </section>
 
-      {mensagem ? (
-        <div className="mt-4 rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
-          {mensagem}
-        </div>
-      ) : null}
-
-      {/* FLUXO OPERACIONAL */}
       <section className="mt-10">
         <div className="mb-5">
           <h2 className="text-lg font-black tracking-tight text-slate-900">
@@ -127,11 +159,7 @@ export default function LavadorasV2Page() {
               key={etapa.numero}
               className={`
                 flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center
-                ${
-                  index !== FLUXO.length - 1
-                    ? "border-b border-slate-100"
-                    : ""
-                }
+                ${index !== FLUXO.length - 1 ? "border-b border-slate-100" : ""}
               `}
             >
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F3EFF5] text-xs font-black text-[#4C1D95]">
@@ -156,7 +184,6 @@ export default function LavadorasV2Page() {
         </div>
       </section>
 
-      {/* ACOMPANHAMENTO */}
       <section className="mt-10 grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
         <div className="rounded-2xl border border-slate-200 bg-white">
           <div className="border-b border-slate-100 px-5 py-4">
@@ -168,11 +195,9 @@ export default function LavadorasV2Page() {
           <div className="flex min-h-[220px] items-center justify-center px-5 py-8 text-center">
             <div>
               <Activity className="mx-auto h-7 w-7 text-slate-300" />
-
               <div className="mt-3 text-sm font-bold text-slate-500">
                 Indicadores em preparação
               </div>
-
               <div className="mt-1 text-xs text-slate-400">
                 Aqui entraremos com volume, backlog e distribuição por etapa.
               </div>
@@ -190,11 +215,9 @@ export default function LavadorasV2Page() {
           <div className="flex min-h-[220px] items-center justify-center px-5 py-8 text-center">
             <div>
               <Clock3 className="mx-auto h-7 w-7 text-slate-300" />
-
               <div className="mt-3 text-sm font-bold text-slate-500">
                 Lead time
               </div>
-
               <div className="mt-1 text-xs text-slate-400">
                 Vamos medir os tempos entre as etapas do processo.
               </div>
