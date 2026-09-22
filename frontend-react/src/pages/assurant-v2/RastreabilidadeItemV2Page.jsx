@@ -73,6 +73,14 @@ function fmtDateTime(value) {
 
 function fmtDate(value) {
   if (!value) return "—";
+
+  const raw = String(value);
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+
+  if (match) {
+    return `${match[3]}/${match[2]}/${match[1]}`;
+  }
+
   try {
     return new Date(value).toLocaleDateString("pt-BR");
   } catch {
