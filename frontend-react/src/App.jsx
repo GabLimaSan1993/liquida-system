@@ -74,6 +74,7 @@ import UsuariosV2Page from "./pages/assurant-v2/UsuariosV2Page.jsx";
 import IndicadoresExecutivosV2Page from "./pages/assurant-v2/IndicadoresExecutivosV2Page.jsx";
 import EstoqueAgingDetalheV2Page from "./pages/assurant-v2/EstoqueAgingDetalheV2Page.jsx";
 import EstoqueInteligenciaSkuV2Page from "./pages/assurant-v2/EstoqueInteligenciaSkuV2Page.jsx";
+import RastreabilidadeItemV2Page from "./pages/assurant-v2/RastreabilidadeItemV2Page.jsx";
 
 import LinhaBrancaHomePage from "./pages/linha-branca-v2/LinhaBrancaHomePage.jsx";
 import RefrigeracaoV2Page from "./pages/linha-branca-v2/RefrigeracaoV2Page.jsx";
@@ -469,6 +470,13 @@ export default function App() {
           path="estoque/consulta"
           element={
             <ConsultaEstoqueV2Page />
+          }
+        />
+
+        <Route
+          path="estoque/rastreabilidade"
+          element={
+            <RastreabilidadeItemV2Page />
           }
         />
 
