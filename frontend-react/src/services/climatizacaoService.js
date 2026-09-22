@@ -1,5 +1,7 @@
 import { supabase } from "../lib/supabase.js";
 import {
+  atualizarNecessidadeCompraStatus,
+  consultarPecaPorPn,
   isGerenteLinhaBranca,
   registrarDemandaPeca,
   salvarContextoReposicaoTroca,
@@ -7,6 +9,9 @@ import {
 } from "./refrigeracaoService.js";
 
 export {
+  atualizarNecessidadeCompraStatus,
+  consultarPecaPorPn,
+  isGerenteLinhaBranca,
   registrarDemandaPeca,
   salvarContextoReposicaoTroca,
   uploadFotosPecas,
