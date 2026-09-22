@@ -14,6 +14,7 @@ import {
   FileText,
   FlaskConical,
   HelpCircle,
+  History,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -44,6 +45,12 @@ import { signOut } from "../services/authService.js";
 
 const SIDEBAR_STORAGE_KEY =
   "liquida.assurant.sidebarCollapsed";
+
+const ASSURANT_TRACE_OWNER_ID =
+  "b517d70a-56be-4b4f-8b9e-a03c769dd3c3";
+
+const ASSURANT_TRACE_ROUTE =
+  "/v2/assurant/estoque/rastreabilidade";
 
 const ACTIVE_B2C_STATUSES = [
   "aguardando_alocacao",
@@ -227,6 +234,15 @@ const MENU_GROUPS = [
   to: "/v2/assurant/estoque/consulta",
   exact: true,
   enabled: true,
+},
+
+      {
+  label: "Rastreabilidade",
+  icon: History,
+  to: ASSURANT_TRACE_ROUTE,
+  exact: true,
+  enabled: true,
+  privateOwnerOnly: true,
 },
 
       {
@@ -871,10 +887,24 @@ function SidebarContent({
   pathname,
   mobile = false,
 }) {
-  const podeVerRota = (to) =>
-    !to ||
-    profile?.is_master ||
-    profile?.telas_permitidas?.includes(to);
+  const podeVerRota = (to, privateOwnerOnly = false) => {
+    if (!to) return true;
+
+    if (
+      privateOwnerOnly ||
+      to === ASSURANT_TRACE_ROUTE
+    ) {
+      return (
+        profile?.id ===
+        ASSURANT_TRACE_OWNER_ID
+      );
+    }
+
+    return (
+      profile?.is_master ||
+      profile?.telas_permitidas?.includes(to)
+    );
+  };
 
   const menuGroupsVisiveis = MENU_GROUPS
     .map((group) => ({
@@ -885,7 +915,10 @@ function SidebarContent({
             return {
               ...item,
               children: item.children.filter((child) =>
-                podeVerRota(child.to)
+                podeVerRota(
+                  child.to,
+                  child.privateOwnerOnly
+                )
               ),
             };
           }
@@ -2688,13 +2721,24 @@ const rotaAtualProtegida =
 const rotaSomenteMaster =
   location.pathname === "/v2/assurant/usuarios";
 
+const rotaSomenteGabriel =
+  location.pathname ===
+  ASSURANT_TRACE_ROUTE;
+
 if (
-  !profile?.is_master &&
   (
-    rotaSomenteMaster ||
+    rotaSomenteGabriel &&
+    profile?.id !==
+      ASSURANT_TRACE_OWNER_ID
+  ) ||
+  (
+    !profile?.is_master &&
     (
-      rotaAtualProtegida &&
-      !hasAccess(location.pathname)
+      rotaSomenteMaster ||
+      (
+        rotaAtualProtegida &&
+        !hasAccess(location.pathname)
+      )
     )
   )
 ) {
