@@ -76,22 +76,22 @@ export async function salvarExecucaoReparo(os, execucao, areaExecucao) {
 
   if (execError) throw execError;
 
-  // Adiciona área atual nas concluídas
-  const areasConcluidasAtualizadas = [
-    ...(os.areas_concluidas || []),
-    areaExecucao,
-  ];
-
-  // Verifica se todas as áreas foram concluídas
-  const areasReparo = os.areas_reparo || [];
-  const todasConcluidas = areasReparo.every((area) =>
-    areasConcluidasAtualizadas.includes(area)
+  // Adiciona a área atual nas concluídas sem duplicar registros.
+  const areasConcluidasAtualizadas = Array.from(
+    new Set([...(os.areas_concluidas || []), areaExecucao])
   );
 
-  const novoStatus = todasConcluidas ? "Bancada de Testes" : "Em reparo";
-  const novaEtapa = todasConcluidas ? "Bancada de Testes" : areaExecucao;
-  const novaArea = todasConcluidas ? "Bancada de Testes" : areaExecucao;
+  // Direciona automaticamente para a próxima especialidade ainda pendente.
+  const areasReparo = os.areas_reparo || [];
+  const areasPendentes = areasReparo.filter(
+    (area) => !areasConcluidasAtualizadas.includes(area)
+  );
+  const todasConcluidas = areasPendentes.length === 0;
+  const proximaArea = areasPendentes[0] || null;
 
+  const novoStatus = todasConcluidas ? "Bancada de Testes" : "Em reparo";
+  const novaEtapa = todasConcluidas ? "Bancada de Testes" : proximaArea;
+  const novaArea = todasConcluidas ? "Bancada de Testes" : proximaArea;
   const { error: osError } = await supabase
     .from("ordens_servico")
     .update({
