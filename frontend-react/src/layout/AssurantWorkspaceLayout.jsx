@@ -899,7 +899,10 @@ function SidebarContent({
             return item.children.length > 0;
           }
 
-          return podeVerRota(item.to);
+          return podeVerRota(
+            item.to,
+            item.privateOwnerOnly
+          );
         }),
     }))
     .filter((group) => group.items.length > 0);
