@@ -114,7 +114,7 @@ export async function fetchOsRefrigeracaoParaReparo() {
 }
 
 export async function fetchHistoricoRefrigeracao(osId) {
-  if (!osId) return { triagens: [], reparos: [], condenacoes: [], requisicoes: [], compras: [] };
+  if (!osId) return { triagens: [], reparos: [], condenacoes: [], requisicoes: [], compras: [], pecasContexto: [] };
 
   const respostas = await Promise.all([
     supabase
@@ -143,6 +143,11 @@ export async function fetchHistoricoRefrigeracao(osId) {
       .select("*")
       .eq("os_id", osId)
       .order("created_at", { ascending: true }),
+    supabase
+      .from("linha_branca_reparo_pecas_contexto")
+      .select("*")
+      .eq("os_id", osId)
+      .order("created_at", { ascending: true }),
   ]);
 
   respostas.forEach((resposta) => {
@@ -155,6 +160,7 @@ export async function fetchHistoricoRefrigeracao(osId) {
     condenacoes: respostas[2].data || [],
     requisicoes: respostas[3].data || [],
     compras: respostas[4].data || [],
+    pecasContexto: respostas[5].data || [],
   };
 }
 
@@ -278,7 +284,7 @@ export async function registrarDemandaPeca({ os, pn, quantidade = 1, usuario }) 
   return { tipo: "compra", peca, demanda: data };
 }
 
-export async function uploadFotosCondenacao({ osId, files, userId }) {
+export async function uploadFotosPecas({ osId, areaReparo, files, userId }) {
   const lista = Array.from(files || []);
   if (!lista.length) return [];
 
@@ -289,10 +295,14 @@ export async function uploadFotosCondenacao({ osId, files, userId }) {
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
       .replace(/[^a-zA-Z0-9._-]/g, "_");
-    const path = `${osId}/${userId || "usuario"}/${Date.now()}-${index}-${safeName}`;
+    const area = String(areaReparo || "reparo")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9_-]/g, "_");
+    const path = `${osId}/${area}/${userId || "usuario"}/${Date.now()}-${index}-${safeName}`;
 
     const { error } = await supabase.storage
-      .from("linha-branca-condenacoes")
+      .from("linha-branca-pecas")
       .upload(path, file, { upsert: false, contentType: file.type || undefined });
 
     if (error) throw error;
@@ -302,18 +312,54 @@ export async function uploadFotosCondenacao({ osId, files, userId }) {
   return caminhos;
 }
 
-export async function solicitarCondenacao({
+export async function salvarContextoReposicaoTroca({
   os,
-  motivo,
+  areaReparo,
   temReposicaoTroca,
   fotos,
   usuario,
 }) {
   if (!os?.id) throw new Error("Selecione a OS.");
-  if (!String(motivo || "").trim()) throw new Error("Informe a justificativa da condenação.");
+  if (!areaReparo) throw new Error("Selecione a área de reparo.");
   if (temReposicaoTroca === null || temReposicaoTroca === undefined) {
-    throw new Error("Informe se haverá reposição ou troca.");
+    throw new Error("Informe se haverá reposição ou troca de peça.");
   }
+
+  const payload = {
+    os_id: os.id,
+    area_reparo: areaReparo,
+    tem_reposicao_troca: Boolean(temReposicaoTroca),
+    fotos: fotos || [],
+    registrado_por: usuario?.id || null,
+    registrado_por_nome: usuario?.nome || null,
+  };
+
+  const { data: existente, error: existenteError } = await supabase
+    .from("linha_branca_reparo_pecas_contexto")
+    .select("id")
+    .eq("os_id", os.id)
+    .eq("area_reparo", areaReparo)
+    .limit(1)
+    .maybeSingle();
+
+  if (existenteError) throw existenteError;
+
+  const query = existente
+    ? supabase.from("linha_branca_reparo_pecas_contexto").update(payload).eq("id", existente.id)
+    : supabase.from("linha_branca_reparo_pecas_contexto").insert(payload);
+
+  const { data, error } = await query.select("*").single();
+  if (error) throw error;
+  return data;
+}
+
+export async function solicitarCondenacao({
+  os,
+  motivo,
+  usuario,
+}) {
+  if (!os?.id) throw new Error("Selecione a OS.");
+  if (!String(motivo || "").trim()) throw new Error("Informe a justificativa da condenação.");
 
   const { data, error } = await supabase
     .from("linha_branca_condenacoes")
@@ -322,8 +368,6 @@ export async function solicitarCondenacao({
       categoria: os.categoria || REFRIGERACAO_CATEGORIA,
       motivo: motivo.trim(),
       area_retorno: os.area_destino || os.etapa_atual || "Reparo Mecânico",
-      tem_reposicao_troca: Boolean(temReposicaoTroca),
-      fotos: fotos || [],
       solicitado_por: usuario?.id || null,
       solicitado_por_nome: usuario?.nome || null,
       status: "aguardando_aprovacao",
@@ -335,25 +379,6 @@ export async function solicitarCondenacao({
   return data;
 }
 
-async function assinarFotos(paths) {
-  const lista = Array.isArray(paths) ? paths : [];
-  if (!lista.length) return [];
-
-  const resultados = await Promise.all(
-    lista.map(async (path) => {
-      const { data, error } = await supabase.storage
-        .from("linha-branca-condenacoes")
-        .createSignedUrl(path, 60 * 60);
-      return {
-        path,
-        url: error ? null : data?.signedUrl || null,
-      };
-    })
-  );
-
-  return resultados;
-}
-
 export async function fetchCondenacoesPendentes() {
   const { data, error } = await supabase
     .from("linha_branca_condenacoes")
@@ -362,13 +387,7 @@ export async function fetchCondenacoesPendentes() {
     .order("solicitado_em", { ascending: true });
 
   if (error) throw error;
-
-  return Promise.all(
-    (data || []).map(async (item) => ({
-      ...item,
-      fotos_assinadas: await assinarFotos(item.fotos),
-    }))
-  );
+  return data || [];
 }
 
 export async function decidirCondenacao({
