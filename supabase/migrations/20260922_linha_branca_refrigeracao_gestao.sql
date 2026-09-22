@@ -45,6 +45,10 @@ create index if not exists linha_branca_pecas_requisicoes_os_idx
 create unique index if not exists linha_branca_pecas_requisicoes_aberta_uidx
   on public.linha_branca_pecas_requisicoes(os_id, upper(pn))
   where status in ('solicitada','separada');
+create index if not exists linha_branca_pecas_requisicoes_estoque_idx
+  on public.linha_branca_pecas_requisicoes(estoque_id);
+create index if not exists linha_branca_pecas_requisicoes_solicitado_por_idx
+  on public.linha_branca_pecas_requisicoes(solicitado_por);
 
 create table if not exists public.linha_branca_necessidades_compra (
   id bigserial primary key,
@@ -66,6 +70,10 @@ create index if not exists linha_branca_necessidades_compra_os_idx
 create unique index if not exists linha_branca_necessidades_compra_aberta_uidx
   on public.linha_branca_necessidades_compra(os_id, upper(pn))
   where status in ('necessidade_aberta','em_cotacao');
+create index if not exists linha_branca_necessidades_compra_solicitado_por_idx
+  on public.linha_branca_necessidades_compra(solicitado_por);
+create index if not exists linha_branca_necessidades_compra_responsavel_idx
+  on public.linha_branca_necessidades_compra(responsavel_id);
 
 create table if not exists public.linha_branca_condenacoes (
   id bigserial primary key,
@@ -94,6 +102,14 @@ create index if not exists linha_branca_condenacoes_status_idx
 create unique index if not exists linha_branca_condenacoes_pendente_os_uidx
   on public.linha_branca_condenacoes(os_id)
   where status = 'aguardando_aprovacao';
+create index if not exists linha_branca_condenacoes_os_idx
+  on public.linha_branca_condenacoes(os_id);
+create index if not exists linha_branca_condenacoes_solicitado_por_idx
+  on public.linha_branca_condenacoes(solicitado_por);
+create index if not exists linha_branca_condenacoes_decidido_por_idx
+  on public.linha_branca_condenacoes(decidido_por);
+create index if not exists linha_branca_responsaveis_user_idx
+  on public.linha_branca_responsaveis(user_id);
 
 insert into public.linha_branca_responsaveis (papel, user_id, ativo)
 select 'gerente_linha_branca', up.id, true
@@ -125,17 +141,22 @@ grant usage, select on sequence public.linha_branca_pecas_requisicoes_id_seq to 
 grant usage, select on sequence public.linha_branca_necessidades_compra_id_seq to authenticated;
 grant usage, select on sequence public.linha_branca_condenacoes_id_seq to authenticated;
 
+drop policy if exists linha_branca_responsaveis_select on public.linha_branca_responsaveis;
 create policy linha_branca_responsaveis_select
 on public.linha_branca_responsaveis for select to authenticated using (true);
 
+drop policy if exists linha_branca_pecas_estoque_select on public.linha_branca_pecas_estoque;
 create policy linha_branca_pecas_estoque_select
 on public.linha_branca_pecas_estoque for select to authenticated using (true);
 
+drop policy if exists linha_branca_pecas_requisicoes_select on public.linha_branca_pecas_requisicoes;
 create policy linha_branca_pecas_requisicoes_select
 on public.linha_branca_pecas_requisicoes for select to authenticated using (true);
+drop policy if exists linha_branca_pecas_requisicoes_insert on public.linha_branca_pecas_requisicoes;
 create policy linha_branca_pecas_requisicoes_insert
 on public.linha_branca_pecas_requisicoes for insert to authenticated
 with check (solicitado_por = (select auth.uid()));
+drop policy if exists linha_branca_pecas_requisicoes_update_gerente on public.linha_branca_pecas_requisicoes;
 create policy linha_branca_pecas_requisicoes_update_gerente
 on public.linha_branca_pecas_requisicoes for update to authenticated
 using (exists (
@@ -147,11 +168,14 @@ with check (exists (
   where r.user_id=(select auth.uid()) and r.papel='gerente_linha_branca' and r.ativo
 ));
 
+drop policy if exists linha_branca_necessidades_compra_select on public.linha_branca_necessidades_compra;
 create policy linha_branca_necessidades_compra_select
 on public.linha_branca_necessidades_compra for select to authenticated using (true);
+drop policy if exists linha_branca_necessidades_compra_insert on public.linha_branca_necessidades_compra;
 create policy linha_branca_necessidades_compra_insert
 on public.linha_branca_necessidades_compra for insert to authenticated
 with check (solicitado_por = (select auth.uid()));
+drop policy if exists linha_branca_necessidades_compra_update_gerente on public.linha_branca_necessidades_compra;
 create policy linha_branca_necessidades_compra_update_gerente
 on public.linha_branca_necessidades_compra for update to authenticated
 using (exists (
@@ -163,11 +187,14 @@ with check (exists (
   where r.user_id=(select auth.uid()) and r.papel='gerente_linha_branca' and r.ativo
 ));
 
+drop policy if exists linha_branca_condenacoes_select on public.linha_branca_condenacoes;
 create policy linha_branca_condenacoes_select
 on public.linha_branca_condenacoes for select to authenticated using (true);
+drop policy if exists linha_branca_condenacoes_insert on public.linha_branca_condenacoes;
 create policy linha_branca_condenacoes_insert
 on public.linha_branca_condenacoes for insert to authenticated
 with check (solicitado_por = (select auth.uid()));
+drop policy if exists linha_branca_condenacoes_update_gerente on public.linha_branca_condenacoes;
 create policy linha_branca_condenacoes_update_gerente
 on public.linha_branca_condenacoes for update to authenticated
 using (exists (
@@ -192,10 +219,12 @@ on conflict (id) do update set
   file_size_limit=excluded.file_size_limit,
   allowed_mime_types=excluded.allowed_mime_types;
 
+drop policy if exists linha_branca_condenacoes_fotos_insert on storage.objects;
 create policy linha_branca_condenacoes_fotos_insert
 on storage.objects for insert to authenticated
 with check (bucket_id='linha-branca-condenacoes');
 
+drop policy if exists linha_branca_condenacoes_fotos_select on storage.objects;
 create policy linha_branca_condenacoes_fotos_select
 on storage.objects for select to authenticated
 using (bucket_id='linha-branca-condenacoes');
