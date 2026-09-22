@@ -6,6 +6,7 @@ import {
   RotateCcw,
   Save,
   Search,
+  ShieldAlert,
   Snowflake,
   X,
 } from "lucide-react";
@@ -14,6 +15,7 @@ import { useAuth } from "../../AuthContext.jsx";
 import {
   CHECKLIST_CLIMATIZACAO,
   fetchOsClimatizacaoAguardandoTriagem,
+  inferirTipoUnidadeClimatizacao,
   salvarTriagemClimatizacao,
 } from "../../services/climatizacaoService.js";
 
@@ -98,7 +100,11 @@ export default function TriagemClimatizacaoV2Page() {
     setSelectedOsId(os.id);
     setBusca("");
     setMensagem("");
-    setForm({ ...EMPTY, tensao: os.voltagem || "" });
+    setForm({
+      ...EMPTY,
+      tipo_unidade: inferirTipoUnidadeClimatizacao(os),
+      tensao: os.voltagem || "",
+    });
   }
 
   function limpar() {
@@ -137,6 +143,7 @@ export default function TriagemClimatizacaoV2Page() {
       await salvarTriagemClimatizacao(selectedOs, {
         ...form,
         triado_por: profile?.nome || null,
+        usuario_id: profile?.id || null,
       });
       limpar();
       await carregar();
@@ -154,7 +161,7 @@ export default function TriagemClimatizacaoV2Page() {
         <div className="text-[10px] font-black uppercase tracking-[0.2em] text-[#765D81]">Climatização</div>
         <h1 className="mt-2 text-3xl font-black tracking-[-0.035em] text-slate-900">Triagem técnica</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-          Valide a unidade individual, confirme energização e condição elétrica, e direcione a peça para kit, reparo, venda no estado ou scrap.
+          Valide cada unidade individualmente antes da formação do kit. Modelo e tensão são bloqueios técnicos; condenações seguem para aprovação gerencial.
         </p>
       </div>
 
@@ -257,8 +264,14 @@ export default function TriagemClimatizacaoV2Page() {
           <StatusChoice value="aprovado" current={form.resultado} onClick={() => setForm((c) => ({ ...c, resultado: "aprovado" }))} tone="emerald">Aprovado · Aguardar kit</StatusChoice>
           <StatusChoice value="reparo" current={form.resultado} onClick={() => setForm((c) => ({ ...c, resultado: "reparo" }))} tone="violet">Enviar para reparo</StatusChoice>
           <StatusChoice value="venda_no_estado" current={form.resultado} onClick={() => setForm((c) => ({ ...c, resultado: "venda_no_estado" }))} tone="amber">Venda no estado</StatusChoice>
-          <StatusChoice value="scrap" current={form.resultado} onClick={() => setForm((c) => ({ ...c, resultado: "scrap" }))} tone="rose">Scrap</StatusChoice>
+          <StatusChoice value="condenacao" current={form.resultado} onClick={() => setForm((c) => ({ ...c, resultado: "condenacao" }))} tone="rose">Solicitar condenação</StatusChoice>
         </div>
+        {form.resultado === "condenacao" ? (
+          <div className="mt-3 flex items-start gap-2 rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-xs font-semibold text-rose-700">
+            <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+            A unidade não será enviada diretamente para Scrap. A solicitação ficará aguardando decisão do Marcelo, que poderá destinar para Scrap, Venda no estado ou Desmembramento.
+          </div>
+        ) : null}
         <textarea value={form.observacoes} onChange={(e) => setForm((c) => ({ ...c, observacoes: e.target.value }))} rows={4} placeholder="Observações da triagem, falhas percebidas, ruídos, detalhes do equipamento..." className="mt-4 w-full resize-none rounded-2xl border border-slate-200 bg-white p-4 text-sm outline-none focus:border-[#765D81]" />
       </section>
 
