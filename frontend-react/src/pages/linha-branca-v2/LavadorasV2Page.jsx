@@ -8,29 +8,6 @@ import {
   Wrench,
 } from "lucide-react";
 
-const INDICADORES = [
-  {
-    label: "Aguardando triagem",
-    value: "—",
-    icon: ClipboardCheck,
-  },
-  {
-    label: "Em reparo",
-    value: "—",
-    icon: Wrench,
-  },
-  {
-    label: "Em testes",
-    value: "—",
-    icon: TestTubeDiagonal,
-  },
-  {
-    label: "Concluídas",
-    value: "—",
-    icon: CheckCircle2,
-  },
-];
-
 const FLUXO = [
   {
     numero: "01",
@@ -92,7 +69,7 @@ export default function LavadorasV2Page() {
         </div>
 
         <div className="grid border-y border-slate-200 bg-white sm:grid-cols-2 xl:grid-cols-4">
-          {INDICADORES.map((item, index) => {
+          {cards.map((item, index) => {
             const Icon = item.icon;
 
             return (
@@ -125,6 +102,12 @@ export default function LavadorasV2Page() {
           })}
         </div>
       </section>
+
+      {mensagem ? (
+        <div className="mt-4 rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
+          {mensagem}
+        </div>
+      ) : null}
 
       {/* FLUXO OPERACIONAL */}
       <section className="mt-10">
