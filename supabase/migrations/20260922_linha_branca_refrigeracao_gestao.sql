@@ -228,3 +228,88 @@ drop policy if exists linha_branca_condenacoes_fotos_select on storage.objects;
 create policy linha_branca_condenacoes_fotos_select
 on storage.objects for select to authenticated
 using (bucket_id='linha-branca-condenacoes');
+
+
+-- Contexto de reposição/troca vinculado ao reparo e às peças, não à condenação.
+create table if not exists public.linha_branca_reparo_pecas_contexto (
+  id bigserial primary key,
+  os_id bigint not null references public.ordens_servico(id) on delete cascade,
+  area_reparo text not null,
+  tem_reposicao_troca boolean not null default false,
+  fotos text[] not null default '{}',
+  registrado_por uuid references public.user_profiles(id) on delete set null,
+  registrado_por_nome text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (os_id, area_reparo)
+);
+
+create index if not exists linha_branca_reparo_pecas_contexto_os_idx
+  on public.linha_branca_reparo_pecas_contexto(os_id);
+create index if not exists linha_branca_reparo_pecas_contexto_registrado_por_idx
+  on public.linha_branca_reparo_pecas_contexto(registrado_por);
+
+alter table public.linha_branca_reparo_pecas_contexto enable row level security;
+revoke all on table public.linha_branca_reparo_pecas_contexto from anon, authenticated;
+grant select, insert, update on table public.linha_branca_reparo_pecas_contexto to authenticated;
+grant usage, select on sequence public.linha_branca_reparo_pecas_contexto_id_seq to authenticated;
+
+drop policy if exists linha_branca_reparo_pecas_contexto_select on public.linha_branca_reparo_pecas_contexto;
+create policy linha_branca_reparo_pecas_contexto_select
+on public.linha_branca_reparo_pecas_contexto
+for select to authenticated
+using (true);
+
+drop policy if exists linha_branca_reparo_pecas_contexto_insert on public.linha_branca_reparo_pecas_contexto;
+create policy linha_branca_reparo_pecas_contexto_insert
+on public.linha_branca_reparo_pecas_contexto
+for insert to authenticated
+with check (registrado_por = (select auth.uid()));
+
+drop policy if exists linha_branca_reparo_pecas_contexto_update on public.linha_branca_reparo_pecas_contexto;
+create policy linha_branca_reparo_pecas_contexto_update
+on public.linha_branca_reparo_pecas_contexto
+for update to authenticated
+using (
+  registrado_por = (select auth.uid())
+  or exists (
+    select 1 from public.linha_branca_responsaveis r
+    where r.user_id = (select auth.uid())
+      and r.papel = 'gerente_linha_branca'
+      and r.ativo
+  )
+)
+with check (
+  registrado_por = (select auth.uid())
+  or exists (
+    select 1 from public.linha_branca_responsaveis r
+    where r.user_id = (select auth.uid())
+      and r.papel = 'gerente_linha_branca'
+      and r.ativo
+  )
+);
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'linha-branca-pecas',
+  'linha-branca-pecas',
+  false,
+  10485760,
+  array['image/jpeg','image/png','image/webp']
+)
+on conflict (id) do update set
+  public = false,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists linha_branca_pecas_fotos_insert on storage.objects;
+create policy linha_branca_pecas_fotos_insert
+on storage.objects
+for insert to authenticated
+with check (bucket_id = 'linha-branca-pecas');
+
+drop policy if exists linha_branca_pecas_fotos_select on storage.objects;
+create policy linha_branca_pecas_fotos_select
+on storage.objects
+for select to authenticated
+using (bucket_id = 'linha-branca-pecas');
