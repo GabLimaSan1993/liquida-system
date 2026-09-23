@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   Activity,
+  AlertTriangle,
   Boxes,
   CheckCircle2,
   ChevronRight,
@@ -22,17 +23,15 @@ import {
   ShoppingCart,
   Tag,
   Truck,
+  Unlink2,
   User,
   Warehouse,
   XCircle,
 } from "lucide-react";
 
-import { Navigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 
-import { useAuth } from "../../AuthContext.jsx";
 import { supabase } from "../../lib/supabase.js";
-
-const OWNER_ID = "b517d70a-56be-4b4f-8b9e-a03c769dd3c3";
 
 const TABS = [
   { id: "historico", label: "Histórico completo", icon: History },
@@ -182,6 +181,35 @@ function specialHistoryEvents(history = []) {
     }
 
     return events;
+  });
+}
+
+function unlinkHistoryEvents(history = []) {
+  return history.map((item) => {
+    const b2cCount = Array.isArray(item.b2c_vinculos) ? item.b2c_vinculos.length : 0;
+    const b2bCount = Array.isArray(item.b2b_vinculos) ? item.b2b_vinculos.length : 0;
+    const afetados = [
+      b2cCount ? `${b2cCount} vínculo(s) B2C` : null,
+      b2bCount ? `${b2bCount} vínculo(s) B2B` : null,
+    ].filter(Boolean).join(" · ");
+
+    return {
+      data: item.criado_em,
+      categoria: "Estoque",
+      evento: "Aparelho desvinculado de pedido",
+      status: "desvinculado",
+      descricao: `${item.motivo || "Sem motivo informado"}${afetados ? ` · ${afetados}` : ""}`,
+      origem: "assurant_desvinculacoes_pedido",
+      referencia: item.id,
+      usuario_id: item.usuario_id,
+      usuario: item.usuario_nome || item.usuario_id || "Sistema",
+      extra: {
+        b2c_vinculos: item.b2c_vinculos || [],
+        b2b_vinculos: item.b2b_vinculos || [],
+        wms_alocacao_id: item.wms_alocacao_id,
+        b2b_exportados: item.b2b_exportados || 0,
+      },
+    };
   });
 }
 
@@ -448,25 +476,25 @@ function OrdersPanel({ b2c, b2b }) {
 }
 
 export default function RastreabilidadeItemV2Page() {
-  const { profile } = useAuth();
   const [params, setParams] = useSearchParams();
   const [input, setInput] = useState(params.get("q") || "");
   const [activeTab, setActiveTab] = useState("historico");
   const [data, setData] = useState(null);
   const [special, setSpecial] = useState({ ativa: null, historico: [] });
+  const [unlinkHistory, setUnlinkHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState("");
   const [actionError, setActionError] = useState("");
   const [actionMessage, setActionMessage] = useState("");
   const [finalizeOpen, setFinalizeOpen] = useState(false);
+  const [unlinkOpen, setUnlinkOpen] = useState(false);
+  const [unlinkReason, setUnlinkReason] = useState("");
   const [finalizeForm, setFinalizeForm] = useState({
     pedidoAnyMarket: "",
     nf: "",
     eTicket: "",
   });
-
-  const isOwner = profile?.id === OWNER_ID;
 
   async function consultar(busca, imei = null, updateUrl = true) {
     const term = String(busca || "").trim();
@@ -487,19 +515,30 @@ export default function RastreabilidadeItemV2Page() {
       if (rpcError) throw rpcError;
 
       let specialResult = { ativa: null, historico: [] };
+      let unlinkResult = [];
 
       if (result?.selecionado_imei) {
-        const { data: specialData, error: specialError } = await supabase.rpc(
-          "assurant_reserva_especial_status",
-          { p_imei: result.selecionado_imei }
-        );
+        const [specialResponse, unlinkResponse] = await Promise.all([
+          supabase.rpc(
+            "assurant_reserva_especial_status",
+            { p_imei: result.selecionado_imei }
+          ),
+          supabase.rpc(
+            "assurant_desvinculacoes_item",
+            { p_imei: result.selecionado_imei }
+          ),
+        ]);
 
-        if (specialError) throw specialError;
-        specialResult = specialData || specialResult;
+        if (specialResponse.error) throw specialResponse.error;
+        if (unlinkResponse.error) throw unlinkResponse.error;
+
+        specialResult = specialResponse.data || specialResult;
+        unlinkResult = unlinkResponse.data || [];
       }
 
       setData(result || null);
       setSpecial(specialResult);
+      setUnlinkHistory(unlinkResult);
       setActionError("");
       setActiveTab("historico");
 
@@ -514,14 +553,13 @@ export default function RastreabilidadeItemV2Page() {
       setError(err?.message || "Não foi possível consultar a rastreabilidade.");
       setData(null);
       setSpecial({ ativa: null, historico: [] });
+      setUnlinkHistory([]);
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    if (!isOwner) return;
-
     const q = params.get("q");
     const imei = params.get("imei");
 
@@ -530,22 +568,42 @@ export default function RastreabilidadeItemV2Page() {
       consultar(q, imei, false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOwner]);
+  }, []);
 
   const events = useMemo(() => {
     const base = data?.eventos || [];
     const especiais = specialHistoryEvents(special?.historico || []);
+    const desvinculacoes = unlinkHistoryEvents(unlinkHistory);
 
-    return [...base, ...especiais].sort(
+    return [...base, ...especiais, ...desvinculacoes].sort(
       (a, b) => new Date(b.data || 0).getTime() - new Date(a.data || 0).getTime()
     );
-  }, [data, special]);
+  }, [data, special, unlinkHistory]);
 
   const summary = data?.resumo || null;
   const matches = data?.matches || [];
   const cycles = data?.wms_ciclos || [];
   const b2c = data?.pedidos_b2c || [];
   const b2b = data?.pedidos_b2b || [];
+
+  const unlinkableB2C = b2c.filter(
+    (item) =>
+      ["alocado", "em_picking", "em_analise", "aguardando_definicao_produto", "embalado"].includes(item.status) &&
+      !item.numero_nf &&
+      !item.chave_nf &&
+      !item.faturado_em
+  );
+
+  const unlinkableB2B = b2b.filter(
+    (item) =>
+      ["pendente", "nao_localizado", "em_analise", "bipado"].includes(item.item_status) &&
+      !item.nf &&
+      item.pedido_status !== "concluido"
+  );
+
+  const canUnlink =
+    Boolean(summary?.imei) &&
+    (unlinkableB2C.length > 0 || unlinkableB2B.length > 0);
 
   const filteredEvents = useMemo(() => {
     if (activeTab === "triagem") {
@@ -692,8 +750,62 @@ export default function RastreabilidadeItemV2Page() {
     }
   }
 
-  if (!isOwner) {
-    return <Navigate to="/sem-acesso" replace />;
+  async function desvincularPedidos(event) {
+    event.preventDefault();
+
+    const motivo = unlinkReason.trim();
+    if (!summary?.imei || actionLoading) return;
+
+    if (motivo.length < 3) {
+      setActionError("Informe o motivo da desvinculação com pelo menos 3 caracteres.");
+      return;
+    }
+
+    setActionLoading(true);
+    setActionError("");
+    setActionMessage("");
+
+    try {
+      const { data: result, error: rpcError } = await supabase.rpc(
+        "assurant_desvincular_item_pedidos",
+        {
+          p_imei: summary.imei,
+          p_motivo: motivo,
+        }
+      );
+
+      if (rpcError) throw rpcError;
+      if (!result?.ok) {
+        throw new Error(result?.erro || "Não foi possível desvincular o aparelho.");
+      }
+
+      setUnlinkOpen(false);
+      setUnlinkReason("");
+
+      const partes = [
+        result.b2c_desvinculados
+          ? `${result.b2c_desvinculados} vínculo(s) B2C`
+          : null,
+        result.b2b_desvinculados
+          ? `${result.b2b_desvinculados} vínculo(s) B2B`
+          : null,
+      ].filter(Boolean);
+
+      const avisoExportacao = result.b2b_exportados > 0
+        ? ` Atenção: ${result.b2b_exportados} item(ns) B2B já haviam sido exportados para faturamento e devem ser revisados.`
+        : "";
+
+      setActionMessage(
+        `Aparelho desvinculado (${partes.join(" · ")}). Status alterado para Aguardando armazenagem.${avisoExportacao}`
+      );
+
+      await consultar(input, summary.imei, false);
+    } catch (err) {
+      console.error(err);
+      setActionError(err?.message || "Não foi possível desvincular o aparelho.");
+    } finally {
+      setActionLoading(false);
+    }
   }
 
   function submit(event) {
@@ -712,7 +824,7 @@ export default function RastreabilidadeItemV2Page() {
                 Rastreabilidade do Item
               </span>
               <span className="rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-violet-700">
-                Acesso privado
+                Acesso controlado
               </span>
             </div>
 
@@ -726,7 +838,7 @@ export default function RastreabilidadeItemV2Page() {
 
           <div className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-[10px] font-bold text-emerald-700">
             <ShieldCheck size={14} />
-            Consulta + reserva controlada
+            Consulta + ações controladas
           </div>
         </div>
 
@@ -986,6 +1098,54 @@ export default function RastreabilidadeItemV2Page() {
                 )}
               </div>
 
+              <div className="rounded-2xl border border-rose-200 bg-white shadow-sm">
+                <div className="flex flex-col gap-4 p-5 xl:flex-row xl:items-center xl:justify-between">
+                  <div className="max-w-4xl">
+                    <div className="flex items-center gap-2">
+                      <Unlink2 size={16} className="text-rose-600" />
+                      <div className="text-xs font-black uppercase tracking-[0.1em] text-slate-700">
+                        Desvincular de pedido
+                      </div>
+                    </div>
+
+                    {canUnlink ? (
+                      <div className="mt-2 text-xs leading-5 text-slate-500">
+                        Vínculos operacionais encontrados:
+                        <span className="ml-1 font-black text-slate-700">
+                          {unlinkableB2C.length} B2C · {unlinkableB2B.length} B2B
+                        </span>.
+                        A ação encerra o ciclo físico atual no WMS, libera a posição e devolve o aparelho para
+                        <span className="font-black text-slate-700"> Aguardando armazenagem</span>.
+                      </div>
+                    ) : (
+                      <div className="mt-2 text-xs leading-5 text-slate-500">
+                        Não há vínculo B2B/B2C aberto elegível para desvinculação. Pedidos faturados ou concluídos permanecem apenas como histórico.
+                      </div>
+                    )}
+
+                    {special?.ativa && (
+                      <div className="mt-2 text-[10px] font-semibold text-amber-700">
+                        Existe uma reserva especial ativa. Libere essa reserva antes de desvincular o aparelho de pedidos.
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActionError("");
+                      setUnlinkReason("");
+                      setUnlinkOpen(true);
+                    }}
+                    disabled={!canUnlink || actionLoading || Boolean(special?.ativa)}
+                    className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 text-xs font-black text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <Unlink2 size={14} />
+                    Desvincular aparelho
+                  </button>
+                </div>
+              </div>
+
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <StatCard icon={History} label="Eventos registrados" value={events.length.toLocaleString("pt-BR")} helper="timeline unificada" />
                 <StatCard icon={Warehouse} label="Ciclos físicos WMS" value={summary.ciclos_wms || 0} helper="reentradas preservadas" />
@@ -1045,12 +1205,109 @@ export default function RastreabilidadeItemV2Page() {
               <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-emerald-100 bg-emerald-50/60 px-4 py-3">
                 <div className="flex items-center gap-2 text-[10px] font-semibold text-emerald-700">
                   <CheckCircle2 className="h-3.5 w-3.5" />
-                  Consulta auditável + reserva operacional controlada
+                  Consulta auditável + ações operacionais controladas
                 </div>
                 <div className="text-[10px] font-medium text-slate-500">
                   Ciclos físicos são tratados por <span className="font-mono font-bold">wms_alocacao_id</span>; reentradas do mesmo IMEI aparecem separadas no histórico.
                 </div>
               </div>
+
+              {unlinkOpen && canUnlink && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-[2px]">
+                  <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white shadow-2xl">
+                    <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-5">
+                      <div>
+                        <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.14em] text-rose-600">
+                          <AlertTriangle size={13} />
+                          Ação administrativa
+                        </div>
+                        <h2 className="mt-1 text-lg font-black text-slate-950">
+                          Desvincular aparelho do pedido
+                        </h2>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">
+                          O vínculo operacional será encerrado, a posição WMS atual será liberada e o produto voltará para a fila de armazenagem.
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setUnlinkOpen(false)}
+                        disabled={actionLoading}
+                        className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
+                      >
+                        <XCircle size={19} />
+                      </button>
+                    </div>
+
+                    <form onSubmit={desvincularPedidos} className="space-y-4 p-5">
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">
+                          Aparelho
+                        </div>
+                        <div className="mt-1 font-mono text-sm font-black text-slate-900">
+                          {summary.imei}
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {unlinkableB2C.length > 0 && (
+                            <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[9px] font-black text-amber-700 ring-1 ring-amber-200">
+                              {unlinkableB2C.length} vínculo(s) B2C
+                            </span>
+                          )}
+                          {unlinkableB2B.length > 0 && (
+                            <span className="rounded-full bg-orange-50 px-2.5 py-1 text-[9px] font-black text-orange-700 ring-1 ring-orange-200">
+                              {unlinkableB2B.length} vínculo(s) B2B
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-500">
+                          Motivo da desvinculação *
+                        </label>
+                        <textarea
+                          value={unlinkReason}
+                          onChange={(event) => setUnlinkReason(event.target.value)}
+                          autoFocus
+                          rows={4}
+                          maxLength={1000}
+                          placeholder="Descreva por que o aparelho está sendo retirado do pedido..."
+                          className="mt-1.5 w-full resize-none rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-700 outline-none focus:border-rose-300 focus:ring-4 focus:ring-rose-100"
+                        />
+                        <div className="mt-1 text-right text-[9px] font-semibold text-slate-400">
+                          {unlinkReason.length}/1000
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-[10px] leading-5 text-amber-800">
+                        <span className="font-black">Importante:</span> pedidos já faturados/concluídos não são alterados.
+                        No B2C, o pedido volta para aguardando alocação. No B2B, o item fica como Não Faturar com este motivo.
+                        O aparelho deverá passar novamente pela armazenagem antes de ser alocado a outro pedido.
+                      </div>
+
+                      <div className="flex justify-end gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setUnlinkOpen(false)}
+                          disabled={actionLoading}
+                          className="h-10 rounded-xl border border-slate-200 px-4 text-xs font-black text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+                        >
+                          Cancelar
+                        </button>
+
+                        <button
+                          type="submit"
+                          disabled={actionLoading || unlinkReason.trim().length < 3}
+                          className="inline-flex h-10 items-center gap-2 rounded-xl bg-rose-600 px-4 text-xs font-black text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <Unlink2 size={14} />}
+                          Confirmar desvinculação
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
 
               {finalizeOpen && special?.ativa && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-[2px]">
