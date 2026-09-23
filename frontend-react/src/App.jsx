@@ -476,7 +476,9 @@ export default function App() {
         <Route
           path="estoque/rastreabilidade"
           element={
-            <RastreabilidadeItemV2Page />
+            <ProtectedRoute tela="/v2/assurant/estoque/rastreabilidade">
+              <RastreabilidadeItemV2Page />
+            </ProtectedRoute>
           }
         />
 
