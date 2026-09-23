@@ -56,6 +56,7 @@ const TELAS_V2 = [
     telas: [
       { id: "/v2/assurant/estoque/armazenagem", label: "Armazenagem" },
       { id: "/v2/assurant/estoque/consulta", label: "Consulta do Estoque" },
+      { id: "/v2/assurant/estoque/rastreabilidade", label: "Rastreabilidade" },
       { id: "/v2/assurant/estoque/inventario", label: "Inventário" },
       { id: "/v2/assurant/estoque/carga-inicial", label: "Carga Inicial" },
     ],
