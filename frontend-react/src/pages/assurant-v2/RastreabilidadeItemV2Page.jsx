@@ -1114,7 +1114,7 @@ export default function RastreabilidadeItemV2Page() {
                         <span className="ml-1 font-black text-slate-700">
                           {unlinkableB2C.length} B2C · {unlinkableB2B.length} B2B
                         </span>.
-                        A ação encerra o ciclo físico atual no WMS, libera a posição e devolve o aparelho para
+                        A ação afeta somente o IMEI/serial selecionado: encerra o ciclo físico atual no WMS, libera a posição e devolve este aparelho para
                         <span className="font-black text-slate-700"> Aguardando armazenagem</span>.
                       </div>
                     ) : (
@@ -1141,7 +1141,7 @@ export default function RastreabilidadeItemV2Page() {
                     className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 text-xs font-black text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     <Unlink2 size={14} />
-                    Desvincular aparelho
+                    Desvincular este aparelho
                   </button>
                 </div>
               </div>
@@ -1222,10 +1222,10 @@ export default function RastreabilidadeItemV2Page() {
                           Ação administrativa
                         </div>
                         <h2 className="mt-1 text-lg font-black text-slate-950">
-                          Desvincular aparelho do pedido
+                          Desvincular este aparelho do pedido
                         </h2>
                         <p className="mt-1 text-xs leading-5 text-slate-500">
-                          O vínculo operacional será encerrado, a posição WMS atual será liberada e o produto voltará para a fila de armazenagem.
+                          Somente o IMEI/serial selecionado será tratado. O vínculo operacional dele será encerrado, a posição WMS atual será liberada e este produto voltará para a fila de armazenagem.
                         </p>
                       </div>
 
