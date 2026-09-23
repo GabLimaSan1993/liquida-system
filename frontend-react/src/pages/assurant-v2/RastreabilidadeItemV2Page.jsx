@@ -53,6 +53,8 @@ const CATEGORY_META = {
   FIFO: { icon: ShieldCheck, badge: "bg-slate-100 text-slate-700 ring-slate-200", dot: "bg-slate-500" },
   Expedição: { icon: Truck, badge: "bg-indigo-50 text-indigo-700 ring-indigo-200", dot: "bg-indigo-500" },
   Marketplace: { icon: Tag, badge: "bg-pink-50 text-pink-700 ring-pink-200", dot: "bg-pink-500" },
+  Troca: { icon: ShieldCheck, badge: "bg-purple-50 text-purple-700 ring-purple-200", dot: "bg-purple-500" },
+  "Venda Funcionário": { icon: User, badge: "bg-sky-50 text-sky-700 ring-sky-200", dot: "bg-sky-500" },
 };
 
 function fmtDateTime(value) {
@@ -111,6 +113,76 @@ function statusTone(status) {
   }
 
   return "bg-slate-100 text-slate-600 ring-slate-200";
+}
+
+function specialTypeLabel(tipo) {
+  return tipo === "VENDA_FUNCIONARIO"
+    ? "Venda Funcionário"
+    : "Troca";
+}
+
+function specialHistoryEvents(history = []) {
+  return history.flatMap((item) => {
+    const categoria = specialTypeLabel(item.tipo);
+    const base = {
+      categoria,
+      origem: "assurant_reservas_especiais",
+      referencia: item.id,
+    };
+
+    const events = [];
+
+    if (item.reservado_em) {
+      events.push({
+        ...base,
+        data: item.reservado_em,
+        evento:
+          item.tipo === "VENDA_FUNCIONARIO"
+            ? "Produto reservado para venda funcionário"
+            : "Produto reservado para troca",
+        status: "reservado",
+        descricao: "Produto testado e validado · indisponível para alocação B2C.",
+        usuario: item.reservado_por_nome || item.reservado_por || "Sistema",
+        extra: {
+          wms_alocacao_id: item.wms_alocacao_id,
+          tipo: item.tipo,
+        },
+      });
+    }
+
+    if (item.cancelado_em) {
+      events.push({
+        ...base,
+        data: item.cancelado_em,
+        evento: "Reserva liberada para B2C",
+        status: "cancelado",
+        descricao: item.cancelamento_motivo || "Reserva removida e produto liberado para B2C.",
+        usuario: item.cancelado_por_nome || item.cancelado_por || "Sistema",
+        extra: {
+          tipo: item.tipo,
+        },
+      });
+    }
+
+    if (item.finalizado_em) {
+      events.push({
+        ...base,
+        data: item.finalizado_em,
+        evento: "Saída especial finalizada",
+        status: "finalizado",
+        descricao: `Pedido AnyMarket ${item.pedido_anymarket || "—"} · NF ${item.nf || "—"} · E-Ticket ${item.e_ticket || "—"}`,
+        usuario: item.finalizado_por_nome || item.finalizado_por || "Sistema",
+        extra: {
+          tipo: item.tipo,
+          pedido_anymarket: item.pedido_anymarket,
+          nf: item.nf,
+          e_ticket: item.e_ticket,
+        },
+      });
+    }
+
+    return events;
+  });
 }
 
 function StatCard({ label, value, helper, icon: Icon }) {
@@ -381,8 +453,18 @@ export default function RastreabilidadeItemV2Page() {
   const [input, setInput] = useState(params.get("q") || "");
   const [activeTab, setActiveTab] = useState("historico");
   const [data, setData] = useState(null);
+  const [special, setSpecial] = useState({ ativa: null, historico: [] });
   const [loading, setLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [actionMessage, setActionMessage] = useState("");
+  const [finalizeOpen, setFinalizeOpen] = useState(false);
+  const [finalizeForm, setFinalizeForm] = useState({
+    pedidoAnyMarket: "",
+    nf: "",
+    eTicket: "",
+  });
 
   const isOwner = profile?.id === OWNER_ID;
 
@@ -404,7 +486,21 @@ export default function RastreabilidadeItemV2Page() {
 
       if (rpcError) throw rpcError;
 
+      let specialResult = { ativa: null, historico: [] };
+
+      if (result?.selecionado_imei) {
+        const { data: specialData, error: specialError } = await supabase.rpc(
+          "assurant_reserva_especial_status",
+          { p_imei: result.selecionado_imei }
+        );
+
+        if (specialError) throw specialError;
+        specialResult = specialData || specialResult;
+      }
+
       setData(result || null);
+      setSpecial(specialResult);
+      setActionError("");
       setActiveTab("historico");
 
       if (updateUrl) {
@@ -417,6 +513,7 @@ export default function RastreabilidadeItemV2Page() {
       console.error(err);
       setError(err?.message || "Não foi possível consultar a rastreabilidade.");
       setData(null);
+      setSpecial({ ativa: null, historico: [] });
     } finally {
       setLoading(false);
     }
@@ -435,7 +532,15 @@ export default function RastreabilidadeItemV2Page() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOwner]);
 
-  const events = data?.eventos || [];
+  const events = useMemo(() => {
+    const base = data?.eventos || [];
+    const especiais = specialHistoryEvents(special?.historico || []);
+
+    return [...base, ...especiais].sort(
+      (a, b) => new Date(b.data || 0).getTime() - new Date(a.data || 0).getTime()
+    );
+  }, [data, special]);
+
   const summary = data?.resumo || null;
   const matches = data?.matches || [];
   const cycles = data?.wms_ciclos || [];
@@ -459,6 +564,133 @@ export default function RastreabilidadeItemV2Page() {
 
     return events;
   }, [events, activeTab]);
+
+  async function reservarEspecial(tipo) {
+    if (!summary?.imei || actionLoading) return;
+
+    const label = specialTypeLabel(tipo);
+    const confirmado = window.confirm(
+      `Confirma que o produto ${summary.imei} foi testado e validado para ${label}? Ao confirmar, ele ficará indisponível para B2C.`
+    );
+
+    if (!confirmado) return;
+
+    setActionLoading(true);
+    setActionError("");
+    setActionMessage("");
+
+    try {
+      const { data: result, error: rpcError } = await supabase.rpc(
+        "assurant_reservar_item_especial",
+        {
+          p_imei: summary.imei,
+          p_tipo: tipo,
+        }
+      );
+
+      if (rpcError) throw rpcError;
+      if (!result?.ok) throw new Error(result?.erro || "Não foi possível criar a reserva.");
+
+      setActionMessage(
+        `${label} reservada. O produto está bloqueado para alocação B2C.`
+      );
+
+      await consultar(input, summary.imei, false);
+    } catch (err) {
+      console.error(err);
+      setActionError(err?.message || "Não foi possível reservar o produto.");
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function liberarParaB2C() {
+    const ativa = special?.ativa;
+    if (!ativa?.id || actionLoading) return;
+
+    const confirmado = window.confirm(
+      `Liberar o IMEI ${ativa.imei} da reserva de ${specialTypeLabel(ativa.tipo)} e deixá-lo novamente disponível para B2C?`
+    );
+
+    if (!confirmado) return;
+
+    setActionLoading(true);
+    setActionError("");
+    setActionMessage("");
+
+    try {
+      const { data: result, error: rpcError } = await supabase.rpc(
+        "assurant_liberar_item_especial",
+        {
+          p_reserva_id: ativa.id,
+          p_motivo: "Liberado manualmente para atender B2C",
+        }
+      );
+
+      if (rpcError) throw rpcError;
+      if (!result?.ok) throw new Error(result?.erro || "Não foi possível liberar a reserva.");
+
+      setActionMessage("Reserva removida. O produto voltou a ficar disponível para B2C.");
+      await consultar(input, ativa.imei, false);
+    } catch (err) {
+      console.error(err);
+      setActionError(err?.message || "Não foi possível liberar o produto.");
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function finalizarEspecial(event) {
+    event.preventDefault();
+
+    const ativa = special?.ativa;
+    if (!ativa?.id || actionLoading) return;
+
+    const pedido = finalizeForm.pedidoAnyMarket.trim();
+    const nf = finalizeForm.nf.trim();
+    const eTicket = finalizeForm.eTicket.trim();
+
+    if (!pedido || !nf || !eTicket) {
+      setActionError("Pedido AnyMarket, NF e E-Ticket são obrigatórios.");
+      return;
+    }
+
+    setActionLoading(true);
+    setActionError("");
+    setActionMessage("");
+
+    try {
+      const { data: result, error: rpcError } = await supabase.rpc(
+        "assurant_finalizar_item_especial",
+        {
+          p_reserva_id: ativa.id,
+          p_pedido_anymarket: pedido,
+          p_nf: nf,
+          p_e_ticket: eTicket,
+        }
+      );
+
+      if (rpcError) throw rpcError;
+      if (!result?.ok) throw new Error(result?.erro || "Não foi possível finalizar a saída.");
+
+      setFinalizeOpen(false);
+      setFinalizeForm({
+        pedidoAnyMarket: "",
+        nf: "",
+        eTicket: "",
+      });
+      setActionMessage(
+        `${specialTypeLabel(ativa.tipo)} finalizada e retirada do WMS.`
+      );
+
+      await consultar(input, ativa.imei, false);
+    } catch (err) {
+      console.error(err);
+      setActionError(err?.message || "Não foi possível finalizar a saída.");
+    } finally {
+      setActionLoading(false);
+    }
+  }
 
   if (!isOwner) {
     return <Navigate to="/sem-acesso" replace />;
@@ -494,7 +726,7 @@ export default function RastreabilidadeItemV2Page() {
 
           <div className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-[10px] font-bold text-emerald-700">
             <ShieldCheck size={14} />
-            Somente leitura
+            Consulta + reserva controlada
           </div>
         </div>
 
@@ -536,6 +768,20 @@ export default function RastreabilidadeItemV2Page() {
         <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-semibold text-rose-700">
           <XCircle size={16} className="mt-0.5 shrink-0" />
           {error}
+        </div>
+      )}
+
+      {actionError && (
+        <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-semibold text-rose-700">
+          <XCircle size={16} className="mt-0.5 shrink-0" />
+          {actionError}
+        </div>
+      )}
+
+      {actionMessage && (
+        <div className="flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-700">
+          <CheckCircle2 size={16} className="mt-0.5 shrink-0" />
+          {actionMessage}
         </div>
       )}
 
@@ -647,6 +893,99 @@ export default function RastreabilidadeItemV2Page() {
                 </div>
               </div>
 
+              <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div className="flex flex-col gap-4 p-5 xl:flex-row xl:items-center xl:justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck size={16} className="text-violet-700" />
+                      <div className="text-xs font-black uppercase tracking-[0.1em] text-slate-700">
+                        Reserva Operacional
+                      </div>
+                    </div>
+
+                    {special?.ativa ? (
+                      <>
+                        <div className="mt-2 text-sm font-black text-slate-950">
+                          Reservado para {specialTypeLabel(special.ativa.tipo)}
+                        </div>
+                        <div className="mt-1 text-xs leading-5 text-slate-500">
+                          Testado e validado em {fmtDateTime(special.ativa.validado_em)} ·
+                          {" "}local {special.ativa.local || summary.local || "—"} ·
+                          {" "}indisponível para B2C enquanto esta reserva estiver ativa.
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="mt-2 text-sm font-black text-slate-950">
+                          Produto sem reserva especial ativa
+                        </div>
+                        <div className="mt-1 text-xs leading-5 text-slate-500">
+                          Após teste e validação, reserve o ciclo físico atual para Troca ou Venda Funcionário.
+                          A reserva entra no WMS e retira o produto da fila de candidatos do B2C.
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {special?.ativa ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={liberarParaB2C}
+                          disabled={actionLoading}
+                          className="inline-flex h-10 items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 text-xs font-black text-amber-700 transition hover:bg-amber-100 disabled:opacity-50"
+                        >
+                          <RefreshCw size={14} />
+                          Liberar para B2C
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActionError("");
+                            setFinalizeOpen(true);
+                          }}
+                          disabled={actionLoading}
+                          className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-600 px-4 text-xs font-black text-white transition hover:bg-emerald-700 disabled:opacity-50"
+                        >
+                          <CheckCircle2 size={14} />
+                          Finalizar saída
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => reservarEspecial("TROCA")}
+                          disabled={actionLoading || !summary.imei || String(summary.status_wms || "").toLowerCase() !== "confirmado"}
+                          className="inline-flex h-10 items-center gap-2 rounded-xl bg-violet-700 px-4 text-xs font-black text-white transition hover:bg-violet-800 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          <ShieldCheck size={14} />
+                          Reservar para Troca
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => reservarEspecial("VENDA_FUNCIONARIO")}
+                          disabled={actionLoading || !summary.imei || String(summary.status_wms || "").toLowerCase() !== "confirmado"}
+                          className="inline-flex h-10 items-center gap-2 rounded-xl bg-sky-700 px-4 text-xs font-black text-white transition hover:bg-sky-800 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          <User size={14} />
+                          Reservar para Venda Funcionário
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {!special?.ativa && String(summary.status_wms || "").toLowerCase() !== "confirmado" && (
+                  <div className="border-t border-amber-100 bg-amber-50/70 px-5 py-3 text-[10px] font-semibold text-amber-700">
+                    A reserva só pode ser criada quando o ciclo físico atual estiver confirmado e ocupando uma posição no WMS.
+                  </div>
+                )}
+              </div>
+
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <StatCard icon={History} label="Eventos registrados" value={events.length.toLocaleString("pt-BR")} helper="timeline unificada" />
                 <StatCard icon={Warehouse} label="Ciclos físicos WMS" value={summary.ciclos_wms || 0} helper="reentradas preservadas" />
@@ -706,12 +1045,126 @@ export default function RastreabilidadeItemV2Page() {
               <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-emerald-100 bg-emerald-50/60 px-4 py-3">
                 <div className="flex items-center gap-2 text-[10px] font-semibold text-emerald-700">
                   <CheckCircle2 className="h-3.5 w-3.5" />
-                  Consulta auditável e somente leitura
+                  Consulta auditável + reserva operacional controlada
                 </div>
                 <div className="text-[10px] font-medium text-slate-500">
                   Ciclos físicos são tratados por <span className="font-mono font-bold">wms_alocacao_id</span>; reentradas do mesmo IMEI aparecem separadas no histórico.
                 </div>
               </div>
+
+              {finalizeOpen && special?.ativa && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-[2px]">
+                  <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white shadow-2xl">
+                    <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-5">
+                      <div>
+                        <div className="text-[9px] font-black uppercase tracking-[0.14em] text-violet-600">
+                          {specialTypeLabel(special.ativa.tipo)}
+                        </div>
+                        <h2 className="mt-1 text-lg font-black text-slate-950">
+                          Finalizar saída especial
+                        </h2>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">
+                          O fechamento retira o ciclo físico do WMS. Os três campos abaixo são obrigatórios e ficam gravados no histórico do aparelho.
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setFinalizeOpen(false)}
+                        className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                      >
+                        <XCircle size={19} />
+                      </button>
+                    </div>
+
+                    <form onSubmit={finalizarEspecial} className="space-y-4 p-5">
+                      <div>
+                        <label className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-500">
+                          Número do pedido AnyMarket *
+                        </label>
+                        <input
+                          value={finalizeForm.pedidoAnyMarket}
+                          onChange={(event) =>
+                            setFinalizeForm((current) => ({
+                              ...current,
+                              pedidoAnyMarket: event.target.value,
+                            }))
+                          }
+                          autoFocus
+                          className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm font-semibold text-slate-700 outline-none focus:border-violet-300 focus:ring-4 focus:ring-violet-100"
+                          placeholder="Ex.: 398123456"
+                        />
+                      </div>
+
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div>
+                          <label className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-500">
+                            NF *
+                          </label>
+                          <input
+                            value={finalizeForm.nf}
+                            onChange={(event) =>
+                              setFinalizeForm((current) => ({
+                                ...current,
+                                nf: event.target.value,
+                              }))
+                            }
+                            className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm font-semibold text-slate-700 outline-none focus:border-violet-300 focus:ring-4 focus:ring-violet-100"
+                            placeholder="Número da NF"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-500">
+                            E-Ticket *
+                          </label>
+                          <input
+                            value={finalizeForm.eTicket}
+                            onChange={(event) =>
+                              setFinalizeForm((current) => ({
+                                ...current,
+                                eTicket: event.target.value,
+                              }))
+                            }
+                            className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm font-semibold text-slate-700 outline-none focus:border-violet-300 focus:ring-4 focus:ring-violet-100"
+                            placeholder="E-Ticket da saída"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2.5 text-[10px] leading-4 text-amber-700">
+                        IMEI <span className="font-mono font-black">{special.ativa.imei}</span> ·
+                        {" "}ao finalizar, a reserva WMS passa para retirada e a posição física é liberada.
+                      </div>
+
+                      <div className="flex justify-end gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setFinalizeOpen(false)}
+                          disabled={actionLoading}
+                          className="h-10 rounded-xl border border-slate-200 px-4 text-xs font-black text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+                        >
+                          Cancelar
+                        </button>
+
+                        <button
+                          type="submit"
+                          disabled={
+                            actionLoading ||
+                            !finalizeForm.pedidoAnyMarket.trim() ||
+                            !finalizeForm.nf.trim() ||
+                            !finalizeForm.eTicket.trim()
+                          }
+                          className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-600 px-4 text-xs font-black text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                          Confirmar finalização
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
             </>
           ) : (
             <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
