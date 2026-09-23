@@ -901,10 +901,7 @@ function SidebarContent({
             return {
               ...item,
               children: item.children.filter((child) =>
-                podeVerRota(
-                  child.to,
-                  child.privateOwnerOnly
-                )
+                podeVerRota(child.to)
               ),
             };
           }
@@ -918,10 +915,7 @@ function SidebarContent({
             return item.children.length > 0;
           }
 
-          return podeVerRota(
-            item.to,
-            item.privateOwnerOnly
-          );
+          return podeVerRota(item.to);
         }),
     }))
     .filter((group) => group.items.length > 0);
@@ -2707,24 +2701,13 @@ const rotaAtualProtegida =
 const rotaSomenteMaster =
   location.pathname === "/v2/assurant/usuarios";
 
-const rotaSomenteGabriel =
-  location.pathname ===
-  ASSURANT_TRACE_ROUTE;
-
 if (
+  !profile?.is_master &&
   (
-    rotaSomenteGabriel &&
-    profile?.id !==
-      ASSURANT_TRACE_OWNER_ID
-  ) ||
-  (
-    !profile?.is_master &&
+    rotaSomenteMaster ||
     (
-      rotaSomenteMaster ||
-      (
-        rotaAtualProtegida &&
-        !hasAccess(location.pathname)
-      )
+      rotaAtualProtegida &&
+      !hasAccess(location.pathname)
     )
   )
 ) {
