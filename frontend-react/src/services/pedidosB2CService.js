@@ -664,7 +664,8 @@ async function verificarECriarGrupo(userId) {
 
   return { ...grupos[0], gruposCriados: grupos.length };
 }
-// Cria um grupo exclusivo para um pedido vindo de Aguardando Definição.
+// Cria um grupo exclusivo para um pedido que retorna de um fluxo especial
+// (Aguardando Definição ou Em Análise).
 //
 // - pedido simples: cria o grupo imediatamente;
 // - multiproduto: espera TODOS os itens estarem alocados;
@@ -1285,7 +1286,7 @@ const CAMPO_DIVERGENCIA = {
 export async function resolverAnaliseParaEmbalagem(pedidoId, { tipo, valorReal, novoImei }, userId) {
   const { data: pedido } = await supabase
     .from("pedidos_b2c")
-    .select("imei_alocado, grupo_id, motivo_analise")
+    .select("id_anymarket, imei_alocado, grupo_id, motivo_analise")
     .eq("id", pedidoId)
     .single();
   if (!pedido) throw new Error("Pedido não encontrado.");
@@ -1342,10 +1343,9 @@ export async function resolverAnaliseParaEmbalagem(pedidoId, { tipo, valorReal, 
     imeiFinal = imei;
   }
 
-  // Toda análise resolvida volta ao picking SEM grupo (grupo_id já é null desde que o
-  // item entrou em análise). Vira um alocado avulso que a formação de grupo recolhe numa
-  // leva nova — o item não pula o picking nem tenta reentrar no grupo antigo (que já
-  // pode ter faturado). A troca de aparelho, quando houve, já foi feita acima.
+  // Toda análise resolvida volta ao picking em um NOVO grupo exclusivo do pedido.
+  // O item não tenta reentrar no grupo antigo (que já pode ter sido concluído/faturado).
+  // A troca de aparelho, quando houve, já foi feita acima.
   const { error } = await supabase
     .from("pedidos_b2c")
     .update({
@@ -1359,8 +1359,12 @@ export async function resolverAnaliseParaEmbalagem(pedidoId, { tipo, valorReal, 
     .eq("id", pedidoId);
   if (error) throw traduzErroAlocacao(error, imeiFinal);
 
-  // Recolhe numa leva de grupo (respeita pedido inteiro + marketplace, como sempre).
-  const grupoFormado = await verificarECriarGrupo(userId);
+  // Retorno de análise não deve esperar a formação normal de lote de 20:
+  // cria imediatamente uma nova leva exclusiva para o pedido.
+  const grupoFormado = await criarGrupoExclusivoPedidoDefinido(
+    pedido.id_anymarket,
+    userId
+  );
   return { ok: true, imei: imeiFinal, grupoFormado };
 }
 
@@ -1455,7 +1459,10 @@ export async function seguirComOpcaoFifo(
   }
 
   const grupoFormado =
-    await verificarECriarGrupo(userId);
+    await criarGrupoExclusivoPedidoDefinido(
+      pedido.id_anymarket,
+      userId
+    );
 
   return {
     ok: true,
@@ -1474,7 +1481,7 @@ export async function resolverAnalise(
   const { data: pedido, error: erroPedido } =
     await supabase
       .from("pedidos_b2c")
-      .select("imei_alocado, grupo_id")
+      .select("id_anymarket, imei_alocado, grupo_id")
       .eq("id", pedidoId)
       .single();
 
@@ -1539,7 +1546,10 @@ export async function resolverAnalise(
   }
 
   const grupoFormado =
-    await verificarECriarGrupo(userId);
+    await criarGrupoExclusivoPedidoDefinido(
+      pedido.id_anymarket,
+      userId
+    );
 
   return {
     ok: true,
