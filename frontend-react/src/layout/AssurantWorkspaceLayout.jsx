@@ -46,9 +46,6 @@ import { signOut } from "../services/authService.js";
 const SIDEBAR_STORAGE_KEY =
   "liquida.assurant.sidebarCollapsed";
 
-const ASSURANT_TRACE_OWNER_ID =
-  "b517d70a-56be-4b4f-8b9e-a03c769dd3c3";
-
 const ASSURANT_TRACE_ROUTE =
   "/v2/assurant/estoque/rastreabilidade";
 
@@ -242,7 +239,6 @@ const MENU_GROUPS = [
   to: ASSURANT_TRACE_ROUTE,
   exact: true,
   enabled: true,
-  privateOwnerOnly: true,
 },
 
       {
@@ -887,18 +883,8 @@ function SidebarContent({
   pathname,
   mobile = false,
 }) {
-  const podeVerRota = (to, privateOwnerOnly = false) => {
+  const podeVerRota = (to) => {
     if (!to) return true;
-
-    if (
-      privateOwnerOnly ||
-      to === ASSURANT_TRACE_ROUTE
-    ) {
-      return (
-        profile?.id ===
-        ASSURANT_TRACE_OWNER_ID
-      );
-    }
 
     return (
       profile?.is_master ||
