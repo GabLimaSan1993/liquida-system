@@ -928,6 +928,11 @@ export default function RastreabilidadeItemV2Page() {
               <div className="grid gap-2 p-3 md:grid-cols-2 2xl:grid-cols-3">
                 {matches.map((match) => {
                   const selected = match.imei === data?.selecionado_imei;
+                  const vinculo = match.pedido_b2c
+                    ? `Pedido B2C ${match.pedido_b2c}${match.nf_b2c ? ` · NF ${match.nf_b2c}` : ""}`
+                    : match.lote_b2b
+                      ? `B2B ${match.lote_b2b}${match.nf_b2b ? ` · NF ${match.nf_b2b}` : ""}`
+                      : null;
                   return (
                     <button
                       key={match.imei}
@@ -945,6 +950,11 @@ export default function RastreabilidadeItemV2Page() {
                           {match.voucher || "Sem voucher"} · {match.sku || "Sem SKU"}
                         </div>
                         <div className="mt-0.5 truncate text-[9px] text-slate-400">{match.modelo || "Modelo não informado"}</div>
+                        {vinculo && (
+                          <div className="mt-1 truncate text-[9px] font-black text-violet-700">
+                            {vinculo}
+                          </div>
+                        )}
                       </div>
                       <ChevronRight size={15} className="shrink-0 text-slate-300" />
                     </button>
