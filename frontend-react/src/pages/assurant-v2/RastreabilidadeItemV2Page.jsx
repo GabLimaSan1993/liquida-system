@@ -27,11 +27,13 @@ import {
   User,
   Warehouse,
   XCircle,
+  Zap,
 } from "lucide-react";
 
 import { useSearchParams } from "react-router-dom";
 
 import { supabase } from "../../lib/supabase.js";
+import { ehProdutoOutlet } from "../../services/estoqueWmsService.js";
 
 const TABS = [
   { id: "historico", label: "Histórico completo", icon: History },
@@ -586,6 +588,21 @@ export default function RastreabilidadeItemV2Page() {
   const b2c = data?.pedidos_b2c || [];
   const b2b = data?.pedidos_b2b || [];
 
+  const cicloAtualWms =
+    cycles.find(
+      (cycle) =>
+        String(cycle.status || "").toLowerCase() === "confirmado" &&
+        !cycle.retirado_em
+    ) ||
+    cycles[0] ||
+    null;
+
+  const produtoOutlet = ehProdutoOutlet({
+    gradeFisica: cicloAtualWms?.grade_fisica,
+    grade: summary?.grade,
+    statusBateria: summary?.status_bateria,
+  });
+
   const unlinkableB2C = b2c.filter(
     (item) =>
       ["alocado", "em_picking", "em_analise", "aguardando_definicao_produto", "embalado"].includes(item.status) &&
@@ -985,6 +1002,16 @@ export default function RastreabilidadeItemV2Page() {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
+                      {produtoOutlet && (
+                        <span
+                          title="Outlet · bateria entre 70 e 79%"
+                          className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1.5 text-[10px] font-black text-amber-700 ring-1 ring-inset ring-amber-200"
+                        >
+                          <Zap size={13} className="fill-current" />
+                          OUTLET
+                        </span>
+                      )}
+
                       {summary.status_triagem && (
                         <span className={`rounded-full px-3 py-1.5 text-[10px] font-black ring-1 ring-inset ${statusTone(summary.status_triagem)}`}>
                           Triagem: {pretty(summary.status_triagem)}
