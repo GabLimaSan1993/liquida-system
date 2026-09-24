@@ -28,6 +28,104 @@ export const GRADES_WMS = [
   "OUTROS",
 ];
 
+const GRADES_OUTLET_ELEGIVEIS = new Set([
+  "BOM",
+  "MUITO BOM",
+  "EXCELENTE",
+  "LIKE NEW",
+]);
+
+function normalizarTexto(valor) {
+  return String(valor || "").trim().toUpperCase();
+}
+
+export function ehProdutoOutlet({
+  gradeFisica,
+  grade,
+  statusBateria,
+  bateriaPercentual,
+} = {}) {
+  const gradeNormalizada = normalizarTexto(gradeFisica || grade);
+
+  if (!GRADES_OUTLET_ELEGIVEIS.has(gradeNormalizada)) {
+    return false;
+  }
+
+  const bateria = Number(bateriaPercentual);
+  if (Number.isFinite(bateria) && bateria >= 70 && bateria <= 79) {
+    return true;
+  }
+
+  const status = String(statusBateria || "").trim().toLowerCase();
+  return /entre\s+70\s+e\s+79%?/.test(status);
+}
+
+async function enriquecerIndicadorOutlet(linhas = []) {
+  const imeis = [...new Set(
+    linhas
+      .map((item) => String(item?.imei || "").trim())
+      .filter(Boolean)
+  )];
+
+  if (!imeis.length) {
+    return linhas.map((item) => ({
+      ...item,
+      eh_outlet: false,
+    }));
+  }
+
+  const porImei = new Map();
+  const BLOCO = 400;
+
+  for (let i = 0; i < imeis.length; i += BLOCO) {
+    const { data, error } = await supabase
+      .from("assurant_triagem")
+      .select("id,imei,grade,status_bateria,bateria_percentual,atualizado_em,criado_em")
+      .in("imei", imeis.slice(i, i + BLOCO));
+
+    if (error) {
+      // O indicador é complementar: uma falha nessa leitura não pode derrubar a consulta do estoque.
+      return linhas.map((item) => ({
+        ...item,
+        eh_outlet: false,
+      }));
+    }
+
+    for (const triagem of data || []) {
+      const imei = String(triagem.imei || "").trim();
+      if (!imei) continue;
+
+      const atual = porImei.get(imei);
+      const dataTriagem = new Date(
+        triagem.atualizado_em || triagem.criado_em || 0
+      ).getTime();
+      const dataAtual = atual
+        ? new Date(atual.atualizado_em || atual.criado_em || 0).getTime()
+        : -1;
+
+      if (!atual || dataTriagem >= dataAtual) {
+        porImei.set(imei, triagem);
+      }
+    }
+  }
+
+  return linhas.map((item) => {
+    const triagem = porImei.get(String(item?.imei || "").trim());
+
+    return {
+      ...item,
+      status_bateria: triagem?.status_bateria || null,
+      bateria_percentual: triagem?.bateria_percentual ?? null,
+      eh_outlet: ehProdutoOutlet({
+        gradeFisica: item?.grade_fisica,
+        grade: triagem?.grade || item?.grade_venda,
+        statusBateria: triagem?.status_bateria,
+        bateriaPercentual: triagem?.bateria_percentual,
+      }),
+    };
+  });
+}
+
 export function formatarEnderecoWms(item) {
   if (!item) return "—";
   return `RUA ${String(item.rua).padStart(2, "0")} · ` +
@@ -66,7 +164,7 @@ export async function buscarMapaAndarWms(rua, bloco, andar) {
     p_andar: Number(andar),
   });
   if (error) throw new Error(error.message);
-  return data || [];
+  return enriquecerIndicadorOutlet(data || []);
 }
 
 export async function pesquisarEstoqueWms({
@@ -90,8 +188,10 @@ export async function pesquisarEstoqueWms({
   if (error) throw new Error(error.message);
 
   const linhas = data || [];
+  const linhasEnriquecidas = await enriquecerIndicadorOutlet(linhas);
+
   return {
     total: linhas[0]?.total_encontrado || 0,
-    linhas,
+    linhas: linhasEnriquecidas,
   };
 }
