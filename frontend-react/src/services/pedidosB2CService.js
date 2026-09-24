@@ -1304,41 +1304,91 @@ export async function resolverAnaliseParaEmbalagem(pedidoId, { tipo, valorReal, 
 
     const imei = String(novoImei || "").trim();
     if (!imei) throw new Error("Bipe o aparelho que será usado no pedido.");
-    if (imei === pedido.imei_alocado) throw new Error("O novo IMEI é igual ao que já está alocado.");
+
+    const mesmoImei = imei === pedido.imei_alocado;
 
     if (pedido.imei_alocado) {
-      // Corrige o cadastro só na linha mais recente — é a que o FIFO lê
-      const { data: linhas } = await supabase
-        .from("assurant_triagem")
-        .select("unique_key, " + campo)
-        .eq("imei", pedido.imei_alocado)
-        .order("criado_em", { ascending: false })
-        .limit(1);
-      const peca = linhas?.[0];
-      const valorAntigo = peca ? peca[campo] : null;
+      let valorAntigo = null;
+      let detalheSku = "";
 
-      if (peca?.unique_key) {
-        const { error: errCampo } = await supabase
+      // Divergência de cor usa a mesma regra da Rastreabilidade:
+      // corrige a cor física e troca automaticamente o SKU/modelo no WMS + Triagem.
+      if (campo === "cor") {
+        const { data: corAtual } = await supabase.rpc(
+          "assurant_rastreabilidade_cor",
+          { p_imei: pedido.imei_alocado }
+        );
+        valorAntigo = corAtual?.cor_atual || corAtual?.cor_sistema || null;
+
+        const { data: ajusteCor, error: erroCor } = await supabase.rpc(
+          "assurant_atualizar_cor_rastreabilidade",
+          {
+            p_imei: pedido.imei_alocado,
+            p_cor: valor,
+            p_motivo: `Correção durante resolução de análise do pedido ${pedido.id_anymarket}`,
+          }
+        );
+        if (erroCor) throw new Error(`Falha ao corrigir cor/SKU da peça: ${erroCor.message}`);
+        if (!ajusteCor?.ok) {
+          throw new Error(ajusteCor?.erro || "Não foi possível corrigir a cor/SKU da peça.");
+        }
+
+        if (ajusteCor?.sku_alterado) {
+          detalheSku = ` · SKU ${ajusteCor.sku_anterior || "—"} → ${ajusteCor.sku_novo || ajusteCor.sku_atual || "—"}`;
+        }
+      } else {
+        // Para SKU/grade, mantém a correção no registro atual da Triagem.
+        const { data: linhas } = await supabase
           .from("assurant_triagem")
-          .update({ [campo]: valor })
-          .eq("unique_key", peca.unique_key);
-        if (errCampo) throw new Error(`Falha ao corrigir ${campo} da peça: ${errCampo.message}`);
+          .select("unique_key, " + campo)
+          .eq("imei", pedido.imei_alocado)
+          .order("criado_em", { ascending: false })
+          .limit(1);
+        const peca = linhas?.[0];
+        valorAntigo = peca ? peca[campo] : null;
+
+        if (peca?.unique_key) {
+          const { error: errCampo } = await supabase
+            .from("assurant_triagem")
+            .update({ [campo]: valor })
+            .eq("unique_key", peca.unique_key);
+          if (errCampo) throw new Error(`Falha ao corrigir ${campo} da peça: ${errCampo.message}`);
+        }
       }
 
-      // Peça volta ao estoque já com o dado corrigido
-      await supabase.from("assurant_triagem")
-        .update({ status_atual: "Produto disponível" })
-        .eq("imei", pedido.imei_alocado);
-
       const rotulo = { cor: "cor", sku: "SKU", grade: "grade" }[campo];
-      motivo = [motivo, `Divergência de ${rotulo}: ${pedido.imei_alocado} era "${valorAntigo || "—"}" e é "${valor}" (cadastro corrigido, peça devolvida ao estoque) · trocado por ${imei}`]
-        .filter(Boolean).join(" | ");
+
+      if (mesmoImei) {
+        // O operador localizou a MESMA peça e está com ela em mãos.
+        // Corrige o cadastro e segue com o próprio IMEI, sem exigir uma troca fictícia.
+        await supabase.from("assurant_triagem")
+          .update({ status_atual: "Reservado para pedido B2C" })
+          .eq("imei", pedido.imei_alocado);
+
+        motivo = [
+          motivo,
+          `Divergência de ${rotulo}: ${pedido.imei_alocado} era "${valorAntigo || "—"}" e é "${valor}"${detalheSku} (cadastro corrigido; mesma peça mantida no pedido)`
+        ].filter(Boolean).join(" | ");
+      } else {
+        // Só devolve a peça anterior ao estoque quando existe efetivamente outro IMEI.
+        await supabase.from("assurant_triagem")
+          .update({ status_atual: "Produto disponível" })
+          .eq("imei", pedido.imei_alocado);
+
+        motivo = [
+          motivo,
+          `Divergência de ${rotulo}: ${pedido.imei_alocado} era "${valorAntigo || "—"}" e é "${valor}"${detalheSku} (cadastro corrigido, peça devolvida ao estoque) · trocado por ${imei}`
+        ].filter(Boolean).join(" | ");
+      }
     }
 
-    // Peça correta fica reservada para este pedido
-    await supabase.from("assurant_triagem")
-      .update({ status_atual: "Reservado para pedido B2C" })
-      .eq("imei", imei);
+    // Se houve troca real de IMEI, reserva a nova peça. Quando é o mesmo IMEI,
+    // ele já foi mantido reservado acima e o gatilho WMS converte "analise" → "reservado".
+    if (!mesmoImei) {
+      await supabase.from("assurant_triagem")
+        .update({ status_atual: "Reservado para pedido B2C" })
+        .eq("imei", imei);
+    }
 
     imeiFinal = imei;
   }
