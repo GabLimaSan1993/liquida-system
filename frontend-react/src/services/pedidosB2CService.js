@@ -1294,6 +1294,8 @@ export async function resolverAnaliseParaEmbalagem(pedidoId, { tipo, valorReal, 
   const agora = new Date().toISOString();
   let imeiFinal = pedido.imei_alocado;
   let motivo    = pedido.motivo_analise || "";
+  let skuAlocadoCorrigido = null;
+  let gradeAlocadaCorrigida = null;
 
   if (tipo !== "localizado") {
     const campo = CAMPO_DIVERGENCIA[tipo];
@@ -1334,7 +1336,10 @@ export async function resolverAnaliseParaEmbalagem(pedidoId, { tipo, valorReal, 
         }
 
         if (ajusteCor?.sku_alterado) {
-          detalheSku = ` · SKU ${ajusteCor.sku_anterior || "—"} → ${ajusteCor.sku_novo || ajusteCor.sku_atual || "—"}`;
+          skuAlocadoCorrigido = ajusteCor.sku_novo || ajusteCor.sku_atual || null;
+          detalheSku = ` · SKU ${ajusteCor.sku_anterior || "—"} → ${skuAlocadoCorrigido || "—"}`;
+        } else if (ajusteCor?.sku_atual) {
+          skuAlocadoCorrigido = ajusteCor.sku_atual;
         }
       } else {
         // Para SKU/grade, mantém a correção no registro atual da Triagem.
@@ -1354,6 +1359,9 @@ export async function resolverAnaliseParaEmbalagem(pedidoId, { tipo, valorReal, 
             .eq("unique_key", peca.unique_key);
           if (errCampo) throw new Error(`Falha ao corrigir ${campo} da peça: ${errCampo.message}`);
         }
+
+        if (campo === "sku") skuAlocadoCorrigido = valor;
+        if (campo === "grade") gradeAlocadaCorrigida = valor;
       }
 
       const rotulo = { cor: "cor", sku: "SKU", grade: "grade" }[campo];
@@ -1396,16 +1404,26 @@ export async function resolverAnaliseParaEmbalagem(pedidoId, { tipo, valorReal, 
   // Toda análise resolvida volta ao picking em um NOVO grupo exclusivo do pedido.
   // O item não tenta reentrar no grupo antigo (que já pode ter sido concluído/faturado).
   // A troca de aparelho, quando houve, já foi feita acima.
+  const camposResolucao = {
+    status:         "alocado",
+    imei_alocado:   imeiFinal,
+    motivo_analise: motivo || null,
+    resolvido_em:   agora,
+    resolvido_por:  userId,
+    atualizado_em:  agora,
+  };
+
+  // Quando a MESMA peça foi mantida e o cadastro físico mudou, o pedido precisa
+  // carregar também o SKU/grade corrigidos; caso contrário a tela continua mostrando
+  // o SKU antigo mesmo com Triagem/WMS já ajustados.
+  if (imeiFinal === pedido.imei_alocado) {
+    if (skuAlocadoCorrigido) camposResolucao.sku_alocado = skuAlocadoCorrigido;
+    if (gradeAlocadaCorrigida) camposResolucao.grade_alocada = gradeAlocadaCorrigida;
+  }
+
   const { error } = await supabase
     .from("pedidos_b2c")
-    .update({
-      status:         "alocado",
-      imei_alocado:   imeiFinal,
-      motivo_analise: motivo || null,
-      resolvido_em:   agora,
-      resolvido_por:  userId,
-      atualizado_em:  agora,
-    })
+    .update(camposResolucao)
     .eq("id", pedidoId);
   if (error) throw traduzErroAlocacao(error, imeiFinal);
 
