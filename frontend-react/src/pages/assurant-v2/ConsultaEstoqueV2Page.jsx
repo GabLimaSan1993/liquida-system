@@ -18,6 +18,7 @@ import {
   RefreshCw,
   Search,
   Warehouse,
+  Zap,
 } from "lucide-react";
 
 import {
@@ -1413,8 +1414,17 @@ const andarResumo =
                         </td>
 
                         <td className="px-4 py-3 font-bold">
-                          {item.grade_fisica ||
-                            "—"}
+                          <div className="inline-flex items-center gap-1.5">
+                            <span>{item.grade_fisica || "—"}</span>
+                            {item.eh_outlet && (
+                              <span
+                                title="Outlet · bateria entre 70 e 79%"
+                                className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-amber-100 text-amber-600 ring-1 ring-amber-200"
+                              >
+                                <Zap className="h-3 w-3 fill-current" />
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         <td className="px-4 py-3">
@@ -1839,9 +1849,20 @@ const ativo =
                                         )}
                                       </span>
 
-                                      <span
-                                        className={`h-2 w-2 rounded-full ${config.dot}`}
-                                      />
+                                      <div className="flex items-center gap-1">
+                                        {item?.eh_outlet && (
+                                          <span
+                                            title="Outlet · bateria entre 70 e 79%"
+                                            className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-amber-100 text-amber-600 ring-1 ring-amber-200"
+                                          >
+                                            <Zap className="h-3 w-3 fill-current" />
+                                          </span>
+                                        )}
+
+                                        <span
+                                          className={`h-2 w-2 rounded-full ${config.dot}`}
+                                        />
+                                      </div>
                                     </div>
 
                                     <div className="mt-1 truncate text-[9px] font-bold">
@@ -1880,6 +1901,13 @@ const ativo =
                         )
                       : "Selecione um AP"}
                   </div>
+
+                  {selecionado?.eh_outlet && (
+                    <div className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-100 px-2.5 py-1 text-[9px] font-black uppercase tracking-wide text-amber-700 ring-1 ring-amber-200">
+                      <Zap className="h-3.5 w-3.5 fill-current" />
+                      Outlet
+                    </div>
+                  )}
 
                   {selecionado ? (
                     <div className="mt-4 space-y-2">
