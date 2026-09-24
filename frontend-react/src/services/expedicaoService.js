@@ -1,12 +1,13 @@
 import { supabase } from "../lib/supabase";
 
-const CANAIS_VALIDOS = ["magalu", "meli", "via_varejo", "seguradora"];
+const CANAIS_VALIDOS = ["magalu", "meli", "via_varejo", "amazon", "seguradora"];
 
 export function canaisExpedicao() {
   return [
     { id: "magalu",     nome: "Magalu" },
     { id: "meli",       nome: "Meli" },
     { id: "via_varejo", nome: "Via Varejo" },
+    { id: "amazon",      nome: "Amazon" },
     { id: "seguradora", nome: "Seguradora" },
   ];
 }
