@@ -53,7 +53,13 @@ export default function EtiquetasEnvioPage() {
     setSalvando(true);
     try {
       const r = await salvarLoteEtiquetas(previa.etiquetas, user?.id);
-      setResultado({ ok: true, msg: `${r.gravadas} etiqueta(s) disponíveis para a embalagem.` });
+      const pendentes = r.pendentesAmazon || 0;
+      setResultado({
+        ok: true,
+        msg: pendentes
+          ? `${r.gravadas} etiqueta(s) salvas. ${pendentes} Amazon aguardando NF no AnyMarket — o sistema amarra automaticamente quando a nota sair.`
+          : `${r.gravadas} etiqueta(s) disponíveis para a embalagem.`,
+      });
       setPrevia(null);
       carregarLotes();
     } catch (err) {
@@ -172,7 +178,15 @@ export default function EtiquetasEnvioPage() {
               <tbody>
                 {previa.etiquetas.map((e, i) => (
                   <tr key={i} className="border-t border-slate-100">
-                    <td className="px-3 py-2 font-bold text-slate-700">{e.numero_nf}</td>
+                    <td className="px-3 py-2 font-bold text-slate-700">
+                      {e.numero_nf ? (
+                        e.numero_nf
+                      ) : e.marketplace === "Amazon" ? (
+                        <span className="inline-flex items-center gap-1 rounded-lg bg-amber-50 px-2 py-0.5 text-amber-700 ring-1 ring-amber-200">
+                          NF pendente{e.status_anymarket ? ` · ${e.status_anymarket}` : ""}
+                        </span>
+                      ) : "—"}
+                    </td>
                     <td className="px-3 py-2 text-slate-600">{e.marketplace}</td>
                     <td className="px-3 py-2 font-mono text-slate-400">{e.tag_code && e.pedido_mkt ? `${e.tag_code} · ${e.pedido_mkt}` : e.tag_code || e.pedido_mkt || "—"}</td>
                     <td className="px-3 py-2 text-slate-400 truncate max-w-[180px]">{e.arquivo_origem}</td>
