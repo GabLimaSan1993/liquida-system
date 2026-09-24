@@ -8,7 +8,7 @@ import {
 } from "../services/expedicaoService";
 
 const NOME_CANAL = {
-  magalu: "Magalu", meli: "Meli", via_varejo: "Via Varejo", seguradora: "Seguradora",
+  magalu: "Magalu", meli: "Meli", via_varejo: "Via Varejo", amazon: "Amazon", seguradora: "Seguradora",
 };
 
 function bipErro() {
@@ -176,7 +176,7 @@ export default function ExpedicaoPage() {
   return (
     <div className="max-w-4xl mx-auto">
       <p className="text-sm text-gray-500 mb-2">Canal</p>
-      <div className="grid grid-cols-4 gap-2 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-6">
         {canais.map((c) => (
           <button
             key={c.id}
