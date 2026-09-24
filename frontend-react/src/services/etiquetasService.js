@@ -100,9 +100,20 @@ function dadosAmazon(nome, zpl) {
   };
 }
 
+const AMAZON_PENDENTE_PREFIXO = "AMZPEND:";
+
+function numeroPersistenciaAmazon(etiqueta) {
+  if (etiqueta?.numero_nf) return etiqueta.numero_nf;
+  if (etiqueta?.marketplace === "Amazon" && etiqueta?.pedido_mkt) {
+    return `${AMAZON_PENDENTE_PREFIXO}${etiqueta.pedido_mkt}`;
+  }
+  return null;
+}
+
 // Resolve a NF das etiquetas Amazon pelo código do pedido no AnyMarket.
-// O ZPL da Amazon não contém o número da NF, por isso essa amarração é obrigatória.
-async function resolverNfsAmazon(etiquetas, problemas) {
+// Se o pedido ainda estiver "Pago" e sem NF, a etiqueta continua válida:
+// ela é salva como pendente e é amarrada automaticamente assim que a NF aparecer.
+async function resolverNfsAmazon(etiquetas) {
   const pendentes = etiquetas.filter(
     e => e.marketplace === "Amazon" && !e.numero_nf && e.pedido_mkt
   );
@@ -116,31 +127,35 @@ async function resolverNfsAmazon(etiquetas, problemas) {
     const bloco = codigos.slice(i, i + BLOCO);
     const { data, error } = await supabase
       .from("anymarket_pedidos")
-      .select("codigo_pedido,numero_da_nota_fiscal,importado_em")
+      .select("codigo_pedido,numero_da_nota_fiscal,status,importado_em")
       .eq("marketplace", "Amazon Global Api")
       .in("codigo_pedido", bloco)
-      .not("numero_da_nota_fiscal", "is", null)
       .order("importado_em", { ascending: false });
 
-    if (error) throw new Error(`Erro ao localizar NF da Amazon: ${error.message}`);
+    if (error) throw new Error(`Erro ao consultar pedido Amazon: ${error.message}`);
 
+    const vistos = new Set();
     for (const row of data || []) {
       const codigo = String(row.codigo_pedido || "").trim();
+      if (!codigo || vistos.has(codigo)) continue;
+      vistos.add(codigo);
+
       const nf = String(row.numero_da_nota_fiscal || "").replace(/\D/g, "");
-      if (codigo && nf && !nfPorPedido.has(codigo)) {
-        nfPorPedido.set(codigo, String(parseInt(nf, 10)));
-      }
+      nfPorPedido.set(codigo, {
+        nf: nf ? String(parseInt(nf, 10)) : null,
+        status: row.status || null,
+      });
     }
   }
 
   for (const etiqueta of pendentes) {
-    const nf = nfPorPedido.get(etiqueta.pedido_mkt);
-    if (nf) {
-      etiqueta.numero_nf = nf;
+    const pedido = nfPorPedido.get(etiqueta.pedido_mkt);
+    if (pedido?.nf) {
+      etiqueta.numero_nf = pedido.nf;
+      etiqueta.nf_pendente = false;
     } else {
-      problemas.push(
-        `${etiqueta.arquivo_origem}: Amazon reconhecida, mas a NF do pedido ${etiqueta.pedido_mkt} ainda não foi encontrada no AnyMarket.`
-      );
+      etiqueta.nf_pendente = true;
+      etiqueta.status_anymarket = pedido?.status || null;
     }
   }
 }
@@ -253,16 +268,17 @@ export async function lerArquivosEtiquetas(files) {
     }
   }
 
-  // Amazon não traz a NF no ZPL: resolve pelo código do pedido antes de salvar.
-  await resolverNfsAmazon(achadas, problemas);
+  // Amazon pode chegar antes da NF. Nesse caso mantemos a etiqueta como pendente
+  // e salvamos pelo código do pedido, sem bloquear o upload.
+  await resolverNfsAmazon(achadas);
 
-  // Não deixa etiqueta sem NF seguir para a embalagem, porque a busca operacional
-  // é feita pela chave/número da NF.
-  const prontas = achadas.filter(e => e.numero_nf);
-
-  // Dedup dentro do próprio envio (mesma NF + volume no mesmo lote)
+  // Dedup dentro do próprio envio. Para Amazon sem NF, o código do pedido vira
+  // a identidade temporária até a nota aparecer no AnyMarket.
   const mapa = new Map();
-  prontas.forEach(e => mapa.set(`${e.numero_nf}|${e.volume}`, e));
+  achadas.forEach(e => {
+    const chave = e.numero_nf || numeroPersistenciaAmazon(e);
+    if (chave) mapa.set(`${chave}|${e.volume}`, e);
+  });
 
   return { etiquetas: [...mapa.values()], problemas };
 }
@@ -270,14 +286,16 @@ export async function lerArquivosEtiquetas(files) {
 // Grava o lote. Reenvio da mesma NF sobrescreve (cobre reemissão de etiqueta).
 export async function salvarLoteEtiquetas(etiquetas, userId) {
   if (!etiquetas.length) return { ok: false, erro: "Nenhuma etiqueta para salvar." };
-  if (etiquetas.some(e => !e.numero_nf)) {
-    throw new Error("Há etiqueta sem NF resolvida. Atualize o AnyMarket e processe o lote novamente.");
+
+  const invalidas = etiquetas.filter(e => !e.numero_nf && !(e.marketplace === "Amazon" && e.pedido_mkt));
+  if (invalidas.length) {
+    throw new Error("Há etiqueta sem NF ou código de pedido reconhecido.");
   }
 
   const loteId = crypto.randomUUID();
   const agora  = new Date().toISOString();
   const linhas = etiquetas.map(e => ({
-    numero_nf:      e.numero_nf,
+    numero_nf:      e.numero_nf || numeroPersistenciaAmazon(e),
     volume:         e.volume || 1,
     marketplace:    e.marketplace,
     zpl:            e.zpl,
@@ -300,12 +318,80 @@ export async function salvarLoteEtiquetas(etiquetas, userId) {
     gravadas += Math.min(BLOCO, linhas.length - i);
   }
 
-  return { ok: true, loteId, gravadas };
+  return {
+    ok: true,
+    loteId,
+    gravadas,
+    pendentesAmazon: etiquetas.filter(e => e.marketplace === "Amazon" && !e.numero_nf).length,
+  };
+}
+
+// Atualiza etiquetas Amazon que foram subidas antes da emissão da NF.
+// Isso permite carregar o ZPL enquanto o AnyMarket ainda está em "Pago" e,
+// depois, encontrá-lo normalmente pela chave/NF na mesa de embalagem.
+export async function sincronizarEtiquetasAmazonPendentes() {
+  const { data: pendentes, error } = await supabase
+    .from("etiquetas_marketplace")
+    .select("id,numero_nf,volume,pedido_mkt")
+    .like("numero_nf", `${AMAZON_PENDENTE_PREFIXO}%`);
+
+  if (error) throw new Error(error.message);
+  if (!pendentes?.length) return { atualizadas: 0 };
+
+  const codigos = [...new Set(pendentes.map(e => e.pedido_mkt).filter(Boolean))];
+  if (!codigos.length) return { atualizadas: 0 };
+
+  const { data: pedidos, error: errPedidos } = await supabase
+    .from("anymarket_pedidos")
+    .select("codigo_pedido,numero_da_nota_fiscal,importado_em")
+    .eq("marketplace", "Amazon Global Api")
+    .in("codigo_pedido", codigos)
+    .not("numero_da_nota_fiscal", "is", null)
+    .order("importado_em", { ascending: false });
+
+  if (errPedidos) throw new Error(errPedidos.message);
+
+  const nfPorPedido = new Map();
+  for (const row of pedidos || []) {
+    const codigo = String(row.codigo_pedido || "").trim();
+    const nf = String(row.numero_da_nota_fiscal || "").replace(/\D/g, "");
+    if (codigo && nf && !nfPorPedido.has(codigo)) {
+      nfPorPedido.set(codigo, String(parseInt(nf, 10)));
+    }
+  }
+
+  let atualizadas = 0;
+  for (const etiqueta of pendentes) {
+    const nf = nfPorPedido.get(String(etiqueta.pedido_mkt || "").trim());
+    if (!nf) continue;
+
+    const { data: existente } = await supabase
+      .from("etiquetas_marketplace")
+      .select("id")
+      .eq("numero_nf", nf)
+      .eq("volume", etiqueta.volume || 1)
+      .maybeSingle();
+
+    if (existente?.id && existente.id !== etiqueta.id) continue;
+
+    const { error: errUpd } = await supabase
+      .from("etiquetas_marketplace")
+      .update({ numero_nf: nf })
+      .eq("id", etiqueta.id);
+
+    if (!errUpd) atualizadas++;
+  }
+
+  return { atualizadas };
 }
 
 // Busca a etiqueta pela chave da NF (ou pelo número dela).
 // Não depende de o pedido já existir: a NF sai da própria chave bipada.
 export async function buscarEtiqueta(entrada) {
+  // Antes da busca, tenta amarrar automaticamente qualquer Amazon que tenha sido
+  // carregada ainda como "Pago" e cuja NF já tenha sido emitida depois.
+  try { await sincronizarEtiquetasAmazonPendentes(); } catch (e) { console.warn(e); }
+
   const { nf, origem } = normalizarBuscaEtiqueta(entrada);
   if (!nf) {
     return {
