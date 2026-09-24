@@ -16,6 +16,7 @@ import {
   Loader2,
   MapPin,
   Package,
+  Palette,
   ReceiptText,
   RefreshCw,
   Search,
@@ -484,6 +485,10 @@ export default function RastreabilidadeItemV2Page() {
   const [data, setData] = useState(null);
   const [special, setSpecial] = useState({ ativa: null, historico: [] });
   const [unlinkHistory, setUnlinkHistory] = useState([]);
+  const [colorInfo, setColorInfo] = useState(null);
+  const [colorOpen, setColorOpen] = useState(false);
+  const [colorValue, setColorValue] = useState("");
+  const [colorReason, setColorReason] = useState("");
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState("");
@@ -518,9 +523,10 @@ export default function RastreabilidadeItemV2Page() {
 
       let specialResult = { ativa: null, historico: [] };
       let unlinkResult = [];
+      let colorResult = null;
 
       if (result?.selecionado_imei) {
-        const [specialResponse, unlinkResponse] = await Promise.all([
+        const [specialResponse, unlinkResponse, colorResponse] = await Promise.all([
           supabase.rpc(
             "assurant_reserva_especial_status",
             { p_imei: result.selecionado_imei }
@@ -529,18 +535,25 @@ export default function RastreabilidadeItemV2Page() {
             "assurant_desvinculacoes_item",
             { p_imei: result.selecionado_imei }
           ),
+          supabase.rpc(
+            "assurant_rastreabilidade_cor",
+            { p_imei: result.selecionado_imei }
+          ),
         ]);
 
         if (specialResponse.error) throw specialResponse.error;
         if (unlinkResponse.error) throw unlinkResponse.error;
+        if (colorResponse.error) throw colorResponse.error;
 
         specialResult = specialResponse.data || specialResult;
         unlinkResult = unlinkResponse.data || [];
+        colorResult = colorResponse.data || null;
       }
 
       setData(result || null);
       setSpecial(specialResult);
       setUnlinkHistory(unlinkResult);
+      setColorInfo(colorResult);
       setActionError("");
       setActiveTab("historico");
 
@@ -556,6 +569,7 @@ export default function RastreabilidadeItemV2Page() {
       setData(null);
       setSpecial({ ativa: null, historico: [] });
       setUnlinkHistory([]);
+      setColorInfo(null);
     } finally {
       setLoading(false);
     }
@@ -825,6 +839,60 @@ export default function RastreabilidadeItemV2Page() {
     }
   }
 
+  async function salvarCor(event) {
+    event.preventDefault();
+
+    const cor = colorValue.trim().toUpperCase();
+    const motivo = colorReason.trim();
+
+    if (!summary?.imei || actionLoading) return;
+
+    if (cor.length < 2) {
+      setActionError("Informe a cor física do aparelho.");
+      return;
+    }
+
+    if (motivo.length < 3) {
+      setActionError("Informe o motivo da correção com pelo menos 3 caracteres.");
+      return;
+    }
+
+    setActionLoading(true);
+    setActionError("");
+    setActionMessage("");
+
+    try {
+      const { data: result, error: rpcError } = await supabase.rpc(
+        "assurant_atualizar_cor_rastreabilidade",
+        {
+          p_imei: summary.imei,
+          p_cor: cor,
+          p_motivo: motivo,
+        }
+      );
+
+      if (rpcError) throw rpcError;
+      if (!result?.ok) throw new Error(result?.erro || "Não foi possível alterar a cor.");
+
+      setColorOpen(false);
+      setColorValue("");
+      setColorReason("");
+      setColorInfo(result);
+      setActionMessage(
+        result.alterado
+          ? `Cor física do IMEI ${summary.imei} alterada para ${result.cor_atual}. O SKU/modelo original foi preservado para auditoria.`
+          : `A cor física já estava registrada como ${result.cor_atual}.`
+      );
+
+      await consultar(input, summary.imei, false);
+    } catch (err) {
+      console.error(err);
+      setActionError(err?.message || "Não foi possível alterar a cor física.");
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
   function submit(event) {
     event.preventDefault();
     consultar(input, null, true);
@@ -1012,6 +1080,27 @@ export default function RastreabilidadeItemV2Page() {
                         </span>
                       )}
 
+                      {colorInfo?.cor_atual && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActionError("");
+                            setColorValue(colorInfo.cor_atual || colorInfo.cor_sistema || "");
+                            setColorReason("");
+                            setColorOpen(true);
+                          }}
+                          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-black ring-1 ring-inset transition hover:brightness-95 ${
+                            colorInfo.corrigida
+                              ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                              : "bg-slate-100 text-slate-700 ring-slate-200"
+                          }`}
+                          title="Alterar cor física"
+                        >
+                          <Palette size={13} />
+                          Cor: {colorInfo.cor_atual}
+                        </button>
+                      )}
+
                       {summary.status_triagem && (
                         <span className={`rounded-full px-3 py-1.5 text-[10px] font-black ring-1 ring-inset ${statusTone(summary.status_triagem)}`}>
                           Triagem: {pretty(summary.status_triagem)}
@@ -1030,6 +1119,34 @@ export default function RastreabilidadeItemV2Page() {
                   <DetailField label="Voucher" value={summary.voucher} mono />
                   <DetailField label="IMEI / Serial" value={summary.imei} mono />
                   <DetailField label="SKU" value={summary.sku} mono />
+                  <div>
+                    <div className="text-[9px] font-black uppercase tracking-[0.12em] text-slate-400">
+                      Cor física
+                    </div>
+                    <div className="mt-1 flex items-center gap-2">
+                      <span className="text-xs font-black text-slate-800">
+                        {colorInfo?.cor_atual || colorInfo?.cor_sistema || "—"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActionError("");
+                          setColorValue(colorInfo?.cor_atual || colorInfo?.cor_sistema || "");
+                          setColorReason("");
+                          setColorOpen(true);
+                        }}
+                        className="inline-flex h-7 items-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-2 text-[9px] font-black text-violet-700 transition hover:bg-violet-100"
+                      >
+                        <Palette size={11} />
+                        Alterar
+                      </button>
+                    </div>
+                    {colorInfo?.corrigida && colorInfo?.cor_sistema && colorInfo.cor_sistema !== colorInfo.cor_atual && (
+                      <div className="mt-1 text-[9px] font-semibold text-amber-600">
+                        Sistema: {colorInfo.cor_sistema} → físico: {colorInfo.cor_atual}
+                      </div>
+                    )}
+                  </div>
                   <DetailField label="Grade" value={summary.grade} />
                   <DetailField label="Condição" value={summary.condicao} />
                   <DetailField label="Status bateria" value={summary.status_bateria} />
@@ -1248,6 +1365,108 @@ export default function RastreabilidadeItemV2Page() {
                   Ciclos físicos são tratados por <span className="font-mono font-bold">wms_alocacao_id</span>; reentradas do mesmo IMEI aparecem separadas no histórico.
                 </div>
               </div>
+
+              {colorOpen && summary?.imei && (
+                <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-[2px]">
+                  <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white shadow-2xl">
+                    <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-5">
+                      <div>
+                        <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.14em] text-violet-600">
+                          <Palette size={13} />
+                          Correção física
+                        </div>
+                        <h2 className="mt-1 text-lg font-black text-slate-950">
+                          Alterar cor do aparelho
+                        </h2>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">
+                          Corrige a cor física identificada no aparelho sem alterar o SKU ou apagar o dado sistêmico original.
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setColorOpen(false)}
+                        disabled={actionLoading}
+                        className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
+                      >
+                        <XCircle size={19} />
+                      </button>
+                    </div>
+
+                    <form onSubmit={salvarCor} className="space-y-4 p-5">
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">
+                          IMEI
+                        </div>
+                        <div className="mt-1 font-mono text-sm font-black text-slate-900">
+                          {summary.imei}
+                        </div>
+
+                        {colorInfo?.cor_sistema && (
+                          <div className="mt-2 text-[10px] font-semibold text-slate-500">
+                            Cor sistêmica pelo SKU: <span className="font-black text-slate-700">{colorInfo.cor_sistema}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-500">
+                          Cor física *
+                        </label>
+                        <input
+                          value={colorValue}
+                          onChange={(event) => setColorValue(event.target.value.toUpperCase())}
+                          autoFocus
+                          maxLength={60}
+                          placeholder="Ex.: GREEN, BLACK, WHITE, BLUE..."
+                          className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm font-black uppercase text-slate-700 outline-none focus:border-violet-300 focus:ring-4 focus:ring-violet-100"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-500">
+                          Motivo da correção *
+                        </label>
+                        <textarea
+                          value={colorReason}
+                          onChange={(event) => setColorReason(event.target.value)}
+                          rows={3}
+                          maxLength={500}
+                          placeholder="Ex.: Conferência física do aparelho; cadastro original com cor incorreta."
+                          className="mt-1.5 w-full resize-none rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-700 outline-none focus:border-violet-300 focus:ring-4 focus:ring-violet-100"
+                        />
+                        <div className="mt-1 text-right text-[9px] font-semibold text-slate-400">
+                          {colorReason.length}/500
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-[10px] leading-5 text-amber-800">
+                        <span className="font-black">Auditoria:</span> o SKU/modelo sistêmico permanece preservado. A correção física fica registrada por IMEI, usuário, data e motivo.
+                      </div>
+
+                      <div className="flex justify-end gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setColorOpen(false)}
+                          disabled={actionLoading}
+                          className="h-10 rounded-xl border border-slate-200 px-4 text-xs font-black text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+                        >
+                          Cancelar
+                        </button>
+
+                        <button
+                          type="submit"
+                          disabled={actionLoading || colorValue.trim().length < 2 || colorReason.trim().length < 3}
+                          className="inline-flex h-10 items-center gap-2 rounded-xl bg-violet-700 px-4 text-xs font-black text-white transition hover:bg-violet-800 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <Palette size={14} />}
+                          Salvar cor física
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
 
               {unlinkOpen && canUnlink && (
                 <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-[2px]">
