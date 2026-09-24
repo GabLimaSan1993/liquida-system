@@ -10,6 +10,9 @@ import JSZip from "jszip";
 //   Mercado L. — 1 arquivo .txt com várias etiquetas, NF em texto puro ("NF: 59174")
 //   Via Varejo — 1 arquivo por etiqueta, tudo é imagem (^GFA); a NF só existe
 //                no NOME do arquivo: AAAAMMDD_<chave>_<000059038>_<volume>.zpl
+//   Amazon      — 1 arquivo por etiqueta. O ZPL não traz a NF diretamente;
+//                usamos o código AnyMarket no nome/ZPL (ex.: PfdyQbBZg) para
+//                localizar a NF em anymarket_pedidos e amarrar a etiqueta.
 //
 // O elo com o pedido é o número da NF. A chave de acesso da NF-e carrega o
 // número dela nas posições 26–34, então o operador pode bipar a chave da caixa
@@ -65,6 +68,83 @@ function nfDoNomeArquivo(nome) {
   return null;
 }
 
+// Amazon: o código usado pelo AnyMarket aparece no nome do arquivo
+// A3SPPFNXUZXE4P_txt_PfdyQbBZg_txt_1.zpl e também no DataMatrix como
+// ^FDSPfdyQbBZg_001_v^FS. A etiqueta também traz o rastreio TBR... .
+function dadosAmazon(nome, zpl) {
+  const nomeBase = String(nome || "").split("/").pop() || "";
+  const peloNome = nomeBase.match(/_txt_([A-Za-z0-9]+)_txt_/i);
+  const peloZpl = String(zpl || "").match(/\^FDS([A-Za-z0-9]+)_\d+_v\^FS/i);
+  const pedidoMkt = (peloNome?.[1] || peloZpl?.[1] || "").trim();
+
+  if (!pedidoMkt) return null;
+
+  const zplDecodificado = decodeHexZpl(zpl);
+  const rastreio = zplDecodificado.match(/\b(TBR\d{6,})\b/i);
+  const pedidoAmazon = zplDecodificado.match(/Order\s*ID:\s*([0-9]{3}-[0-9]{7}-[0-9]{7})/i);
+
+  const marcadorAmazon =
+    /A3SPPFNXUZXE4P/i.test(nomeBase) ||
+    Boolean(rastreio) ||
+    Boolean(pedidoAmazon) ||
+    /\^FDS[A-Za-z0-9]+_\d+_v\^FS/i.test(String(zpl || ""));
+
+  if (!marcadorAmazon) return null;
+
+  return {
+    numero_nf: null,
+    marketplace: "Amazon",
+    tag_code: rastreio ? rastreio[1].toUpperCase() : null,
+    pedido_mkt: pedidoMkt,
+    pedido_amazon: pedidoAmazon ? pedidoAmazon[1] : null,
+  };
+}
+
+// Resolve a NF das etiquetas Amazon pelo código do pedido no AnyMarket.
+// O ZPL da Amazon não contém o número da NF, por isso essa amarração é obrigatória.
+async function resolverNfsAmazon(etiquetas, problemas) {
+  const pendentes = etiquetas.filter(
+    e => e.marketplace === "Amazon" && !e.numero_nf && e.pedido_mkt
+  );
+  const codigos = [...new Set(pendentes.map(e => e.pedido_mkt))];
+  if (!codigos.length) return;
+
+  const nfPorPedido = new Map();
+  const BLOCO = 100;
+
+  for (let i = 0; i < codigos.length; i += BLOCO) {
+    const bloco = codigos.slice(i, i + BLOCO);
+    const { data, error } = await supabase
+      .from("anymarket_pedidos")
+      .select("codigo_pedido,numero_da_nota_fiscal,importado_em")
+      .eq("marketplace", "Amazon Global Api")
+      .in("codigo_pedido", bloco)
+      .not("numero_da_nota_fiscal", "is", null)
+      .order("importado_em", { ascending: false });
+
+    if (error) throw new Error(`Erro ao localizar NF da Amazon: ${error.message}`);
+
+    for (const row of data || []) {
+      const codigo = String(row.codigo_pedido || "").trim();
+      const nf = String(row.numero_da_nota_fiscal || "").replace(/\D/g, "");
+      if (codigo && nf && !nfPorPedido.has(codigo)) {
+        nfPorPedido.set(codigo, String(parseInt(nf, 10)));
+      }
+    }
+  }
+
+  for (const etiqueta of pendentes) {
+    const nf = nfPorPedido.get(etiqueta.pedido_mkt);
+    if (nf) {
+      etiqueta.numero_nf = nf;
+    } else {
+      problemas.push(
+        `${etiqueta.arquivo_origem}: Amazon reconhecida, mas a NF do pedido ${etiqueta.pedido_mkt} ainda não foi encontrada no AnyMarket.`
+      );
+    }
+  }
+}
+
 // Quebra um arquivo ZPL em etiquetas individuais (^XA ... ^XZ)
 function separarEtiquetas(texto) {
   const partes = String(texto || "").split("^XA");
@@ -79,7 +159,10 @@ function separarEtiquetas(texto) {
 }
 
 // Descobre NF, marketplace e identificadores de UMA etiqueta ZPL
-function lerEtiqueta(zpl) {
+function lerEtiqueta(zpl, nome = "") {
+  const amazon = dadosAmazon(nome, zpl);
+  if (amazon) return amazon;
+
   // Mercado Livre: NF em texto puro. O rótulo muda conforme a origem do arquivo —
   // "NF:" nos lotes com vários pedidos, "NFe:" quando a etiqueta é baixada avulsa.
   const meli = zpl.match(/\^FDNFe?:\s*(\d+)/i);
@@ -117,7 +200,7 @@ function processarArquivo(nome, conteudo) {
   if (!etiquetas.length) return [];
 
   // Via Varejo: arquivo único, todo em imagem — a NF vem do nome
-  if (etiquetas.length === 1 && !lerEtiqueta(etiquetas[0])) {
+  if (etiquetas.length === 1 && !lerEtiqueta(etiquetas[0], nome)) {
     const doNome = nfDoNomeArquivo(nome);
     if (doNome) {
       return [{
@@ -135,7 +218,7 @@ function processarArquivo(nome, conteudo) {
 
   const saida = [];
   etiquetas.forEach(z => {
-    const info = lerEtiqueta(z);
+    const info = lerEtiqueta(z, nome);
     if (info) saida.push({ ...info, volume: 1, zpl: z, arquivo_origem: nome });
   });
   return saida;
@@ -170,9 +253,16 @@ export async function lerArquivosEtiquetas(files) {
     }
   }
 
+  // Amazon não traz a NF no ZPL: resolve pelo código do pedido antes de salvar.
+  await resolverNfsAmazon(achadas, problemas);
+
+  // Não deixa etiqueta sem NF seguir para a embalagem, porque a busca operacional
+  // é feita pela chave/número da NF.
+  const prontas = achadas.filter(e => e.numero_nf);
+
   // Dedup dentro do próprio envio (mesma NF + volume no mesmo lote)
   const mapa = new Map();
-  achadas.forEach(e => mapa.set(`${e.numero_nf}|${e.volume}`, e));
+  prontas.forEach(e => mapa.set(`${e.numero_nf}|${e.volume}`, e));
 
   return { etiquetas: [...mapa.values()], problemas };
 }
@@ -180,6 +270,9 @@ export async function lerArquivosEtiquetas(files) {
 // Grava o lote. Reenvio da mesma NF sobrescreve (cobre reemissão de etiqueta).
 export async function salvarLoteEtiquetas(etiquetas, userId) {
   if (!etiquetas.length) return { ok: false, erro: "Nenhuma etiqueta para salvar." };
+  if (etiquetas.some(e => !e.numero_nf)) {
+    throw new Error("Há etiqueta sem NF resolvida. Atualize o AnyMarket e processe o lote novamente.");
+  }
 
   const loteId = crypto.randomUUID();
   const agora  = new Date().toISOString();
