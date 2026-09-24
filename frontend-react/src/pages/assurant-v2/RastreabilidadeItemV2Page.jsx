@@ -489,6 +489,7 @@ export default function RastreabilidadeItemV2Page() {
   const [colorOpen, setColorOpen] = useState(false);
   const [colorValue, setColorValue] = useState("");
   const [colorReason, setColorReason] = useState("");
+  const [colorSkuPreview, setColorSkuPreview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState("");
@@ -585,6 +586,46 @@ export default function RastreabilidadeItemV2Page() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!colorOpen || !data?.resumo?.imei || colorValue.trim().length < 2) {
+      setColorSkuPreview(null);
+      return undefined;
+    }
+
+    let cancelado = false;
+    const timer = window.setTimeout(async () => {
+      try {
+        const { data: preview, error: previewError } = await supabase.rpc(
+          "assurant_rastreabilidade_sku_por_cor",
+          {
+            p_imei: data.resumo.imei,
+            p_cor: colorValue.trim().toUpperCase(),
+          }
+        );
+
+        if (cancelado) return;
+        setColorSkuPreview(
+          previewError
+            ? { ok: false, encontrado: false, erro: previewError.message }
+            : preview
+        );
+      } catch (err) {
+        if (!cancelado) {
+          setColorSkuPreview({
+            ok: false,
+            encontrado: false,
+            erro: err?.message || "Não foi possível localizar o SKU da nova cor.",
+          });
+        }
+      }
+    }, 250);
+
+    return () => {
+      cancelado = true;
+      window.clearTimeout(timer);
+    };
+  }, [colorOpen, colorValue, data?.resumo?.imei]);
 
   const events = useMemo(() => {
     const base = data?.eventos || [];
@@ -877,11 +918,14 @@ export default function RastreabilidadeItemV2Page() {
       setColorOpen(false);
       setColorValue("");
       setColorReason("");
+      setColorSkuPreview(null);
       setColorInfo(result);
       setActionMessage(
         result.alterado
-          ? `Cor física do IMEI ${summary.imei} alterada para ${result.cor_atual}. O SKU/modelo original foi preservado para auditoria.`
-          : `A cor física já estava registrada como ${result.cor_atual}.`
+          ? result.sku_alterado
+            ? `Cor física alterada para ${result.cor_atual} e SKU atualizado automaticamente: ${result.sku_anterior || "—"} → ${result.sku_novo || result.sku_atual || "—"}.`
+            : `Cor física do IMEI ${summary.imei} alterada para ${result.cor_atual}. O SKU já correspondia à nova cor.`
+          : `Cor e SKU já estavam consistentes para ${result.cor_atual}.`
       );
 
       await consultar(input, summary.imei, false);
@@ -1085,6 +1129,7 @@ export default function RastreabilidadeItemV2Page() {
                           type="button"
                           onClick={() => {
                             setActionError("");
+                            setColorSkuPreview(null);
                             setColorValue(colorInfo.cor_atual || colorInfo.cor_sistema || "");
                             setColorReason("");
                             setColorOpen(true);
@@ -1131,6 +1176,7 @@ export default function RastreabilidadeItemV2Page() {
                         type="button"
                         onClick={() => {
                           setActionError("");
+                          setColorSkuPreview(null);
                           setColorValue(colorInfo?.cor_atual || colorInfo?.cor_sistema || "");
                           setColorReason("");
                           setColorOpen(true);
@@ -1144,6 +1190,11 @@ export default function RastreabilidadeItemV2Page() {
                     {colorInfo?.corrigida && colorInfo?.cor_sistema && colorInfo.cor_sistema !== colorInfo.cor_atual && (
                       <div className="mt-1 text-[9px] font-semibold text-amber-600">
                         Sistema: {colorInfo.cor_sistema} → físico: {colorInfo.cor_atual}
+                      </div>
+                    )}
+                    {colorInfo?.sku_cor_pendente && (
+                      <div className="mt-1 text-[9px] font-black text-rose-600">
+                        SKU ainda incompatível com a cor física · {colorInfo.sku_atual || summary.sku || "—"}
                       </div>
                     )}
                   </div>
@@ -1440,8 +1491,33 @@ export default function RastreabilidadeItemV2Page() {
                         </div>
                       </div>
 
+                      {colorSkuPreview && (
+                        <div
+                          className={`rounded-xl border px-3 py-3 text-[10px] leading-5 ${
+                            colorSkuPreview.encontrado
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                              : "border-rose-200 bg-rose-50 text-rose-700"
+                          }`}
+                        >
+                          {colorSkuPreview.encontrado ? (
+                            <>
+                              <span className="font-black">SKU automático:</span>{" "}
+                              {colorSkuPreview.sku_atual || colorInfo?.sku_atual || summary.sku || "—"}
+                              {" → "}
+                              <span className="font-black">{colorSkuPreview.sku_novo}</span>
+                              {colorSkuPreview.descricao_nova ? ` · ${colorSkuPreview.descricao_nova}` : ""}
+                            </>
+                          ) : (
+                            <>
+                              <span className="font-black">Sem correspondência de SKU:</span>{" "}
+                              {colorSkuPreview.erro || "Revise o catálogo de produtos."}
+                            </>
+                          )}
+                        </div>
+                      )}
+
                       <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-[10px] leading-5 text-amber-800">
-                        <span className="font-black">Auditoria:</span> o SKU/modelo sistêmico permanece preservado. A correção física fica registrada por IMEI, usuário, data e motivo.
+                        <span className="font-black">Regra:</span> ao alterar a cor, o sistema procura no catálogo o mesmo produto/modelo/capacidade na nova cor e atualiza o SKU automaticamente no estoque e na triagem. O histórico anterior fica preservado para auditoria.
                       </div>
 
                       <div className="flex justify-end gap-2 pt-1">
@@ -1456,7 +1532,12 @@ export default function RastreabilidadeItemV2Page() {
 
                         <button
                           type="submit"
-                          disabled={actionLoading || colorValue.trim().length < 2 || colorReason.trim().length < 3}
+                          disabled={
+                            actionLoading ||
+                            colorValue.trim().length < 2 ||
+                            colorReason.trim().length < 3 ||
+                            (colorSkuPreview && !colorSkuPreview.encontrado)
+                          }
                           className="inline-flex h-10 items-center gap-2 rounded-xl bg-violet-700 px-4 text-xs font-black text-white transition hover:bg-violet-800 disabled:cursor-not-allowed disabled:opacity-40"
                         >
                           {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <Palette size={14} />}
