@@ -103,7 +103,7 @@ export default function EtiquetasEnvioPage() {
                 <Upload className="h-8 w-8 mx-auto mb-2 text-slate-400" />
                 <p className="text-sm font-bold text-slate-700">Clique para escolher os arquivos</p>
                 <p className="text-xs text-slate-500 mt-1">
-                  ZIP do Mercado Livre e do Magalu, ou os .zpl soltos do Via Varejo — pode mandar todos juntos
+                  ZIP do Mercado Livre, Magalu e Amazon, ou os .zpl soltos do Via Varejo — pode mandar todos juntos
                 </p>
               </>
             )}
@@ -174,7 +174,7 @@ export default function EtiquetasEnvioPage() {
                   <tr key={i} className="border-t border-slate-100">
                     <td className="px-3 py-2 font-bold text-slate-700">{e.numero_nf}</td>
                     <td className="px-3 py-2 text-slate-600">{e.marketplace}</td>
-                    <td className="px-3 py-2 font-mono text-slate-400">{e.tag_code || e.pedido_mkt || "—"}</td>
+                    <td className="px-3 py-2 font-mono text-slate-400">{e.tag_code && e.pedido_mkt ? `${e.tag_code} · ${e.pedido_mkt}` : e.tag_code || e.pedido_mkt || "—"}</td>
                     <td className="px-3 py-2 text-slate-400 truncate max-w-[180px]">{e.arquivo_origem}</td>
                   </tr>
                 ))}
