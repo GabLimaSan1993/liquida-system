@@ -1504,7 +1504,6 @@ export default function TriagemFuncionalV2Page() {
   }
 
   function confirmarBateria() {
-  function confirmarBateria() {
     const rotulo =
       classificarBateria(
         faixasBateria,
