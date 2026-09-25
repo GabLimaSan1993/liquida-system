@@ -702,19 +702,14 @@ export default function TriagemFuncionalV2Page() {
   ] = useState([]);
 
   const [
-    pedindoDefeito,
-    setPedindoDefeito,
-  ] = useState(false);
-
-  const [
-    defeitosSel,
-    setDefeitosSel,
-  ] = useState([]);
-
-  const [
     defeitosTodos,
     setDefeitosTodos,
   ] = useState([]);
+
+  const [
+    buscaDefeito,
+    setBuscaDefeito,
+  ] = useState("");
 
   const [
     faixasBateria,
@@ -729,6 +724,11 @@ export default function TriagemFuncionalV2Page() {
   const [
     resultado,
     setResultado,
+  ] = useState(null);
+
+  const [
+    finalizacaoPendente,
+    setFinalizacaoPendente,
   ] = useState(null);
 
   const [
@@ -900,6 +900,50 @@ export default function TriagemFuncionalV2Page() {
       ]
     );
 
+  const defeitosFiltrados =
+    useMemo(() => {
+      const termo =
+        buscaDefeito
+          .trim()
+          .toUpperCase();
+
+      if (!termo) {
+        return defeitosCatalogo;
+      }
+
+      return defeitosCatalogo.filter(
+        (defeito) =>
+          String(
+            defeito.nome ||
+              ""
+          )
+            .toUpperCase()
+            .includes(
+              termo
+            ) ||
+          String(
+            defeito.categoria ||
+              ""
+          )
+            .toUpperCase()
+            .includes(
+              termo
+            )
+      );
+    }, [
+      buscaDefeito,
+      defeitosCatalogo,
+    ]);
+
+  const exigeDefeitoFinal =
+    Boolean(
+      finalizacaoPendente
+        ?.lista?.some(
+          (resposta) =>
+            resposta.divergente
+        )
+    );
+
   async function carregarFila() {
     setCarregandoFila(
       true
@@ -963,16 +1007,16 @@ export default function TriagemFuncionalV2Page() {
       []
     );
 
-    setDefeitosSel(
-      []
-    );
-
     setDefeitosTodos(
       []
     );
 
-    setPedindoDefeito(
-      false
+    setBuscaDefeito(
+      ""
+    );
+
+    setFinalizacaoPendente(
+      null
     );
 
     setValorBateria(
@@ -1383,19 +1427,36 @@ export default function TriagemFuncionalV2Page() {
       novaLista
     );
 
-    if (
-      divergente &&
-      pergunta.exige_defeito
-    ) {
-      setPedindoDefeito(
-        true
-      );
+    avancar(
+      novaLista
+    );
+  }
 
+  function voltarPergunta() {
+    if (
+      idx <= 0
+    ) {
       return;
     }
 
-    avancar(
-      novaLista
+    setRespostas(
+      (anteriores) =>
+        anteriores.slice(
+          0,
+          -1
+        )
+    );
+
+    setIdx(
+      (atual) =>
+        Math.max(
+          0,
+          atual - 1
+        )
+    );
+
+    setFeedback(
+      null
     );
   }
 
@@ -1429,7 +1490,7 @@ export default function TriagemFuncionalV2Page() {
     if (
       !pergunta
     ) {
-      finalizar(
+      prepararFinalizacao(
         lista,
         null
       );
@@ -1442,33 +1503,7 @@ export default function TriagemFuncionalV2Page() {
     );
   }
 
-  function confirmarDefeitos() {
-    if (
-      !defeitosSel.length
-    ) {
-      return;
-    }
-
-    setDefeitosTodos(
-      (anteriores) => [
-        ...new Set([
-          ...anteriores,
-          ...defeitosSel,
-        ]),
-      ]
-    );
-
-    setDefeitosSel(
-      []
-    );
-
-    setPedindoDefeito(
-      false
-    );
-
-    avancar();
-  }
-
+  function confirmarBateria() {
   function confirmarBateria() {
     const rotulo =
       classificarBateria(
@@ -1484,12 +1519,70 @@ export default function TriagemFuncionalV2Page() {
       return;
     }
 
-    finalizar(
+    prepararFinalizacao(
       respostas,
       rotulo,
       Number(
         valorBateria
       )
+    );
+  }
+
+  function prepararFinalizacao(
+    lista,
+    bateria,
+    percentual = null
+  ) {
+    setFinalizacaoPendente({
+      lista:
+        Array.isArray(
+          lista
+        )
+          ? lista
+          : [],
+
+      bateria:
+        bateria ||
+        null,
+
+      percentual,
+    });
+
+    setResultado(
+      null
+    );
+
+    setBuscaDefeito(
+      ""
+    );
+
+    setEtapa(
+      "fim"
+    );
+  }
+
+  async function confirmarFinalizacao() {
+    if (
+      !finalizacaoPendente
+    ) {
+      return;
+    }
+
+    if (
+      exigeDefeitoFinal &&
+      !defeitosTodos.length
+    ) {
+      mostrarErro(
+        "Selecione ao menos um defeito para concluir uma triagem com resposta negativa."
+      );
+
+      return;
+    }
+
+    await finalizar(
+      finalizacaoPendente.lista,
+      finalizacaoPendente.bateria,
+      finalizacaoPendente.percentual
     );
   }
 
@@ -1577,7 +1670,13 @@ export default function TriagemFuncionalV2Page() {
           percentual,
         respostas:
           lista,
+        defeitos:
+          defeitosTodos,
       });
+
+      setFinalizacaoPendente(
+        null
+      );
 
       setEtapa(
         "fim"
@@ -1857,17 +1956,25 @@ export default function TriagemFuncionalV2Page() {
                         )}
 
                       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                        <Campo label="Marca">
-                          <select
+                        <Campo
+                          label="Marca"
+                          helper="Digite para pesquisar"
+                        >
+                          <input
+                            list="triagem-marcas"
                             value={
                               produto.marca
                             }
+                            placeholder="Pesquise ou digite a marca"
                             onChange={(
                               event
                             ) => {
+                              const valor =
+                                event.target.value.toUpperCase();
+
                               setProduto({
                                 marca:
-                                  event.target.value,
+                                  valor,
                                 modelo:
                                   "",
                                 armazenamento:
@@ -1883,11 +1990,9 @@ export default function TriagemFuncionalV2Page() {
                             className={
                               inputClass
                             }
-                          >
-                            <option value="">
-                              Selecione...
-                            </option>
+                          />
 
+                          <datalist id="triagem-marcas">
                             {marcas.map(
                               (marca) => (
                                 <option
@@ -1897,291 +2002,178 @@ export default function TriagemFuncionalV2Page() {
                                   value={
                                     marca
                                   }
-                                >
-                                  {
-                                    marca
-                                  }
-                                </option>
+                                />
                               )
                             )}
-                          </select>
+                          </datalist>
                         </Campo>
 
-                        <Campo label="Modelo">
-                          {modeloLivre ? (
-                            <>
-                              <input
-                                autoFocus
-                                value={
-                                  produto.modelo
-                                }
-                                placeholder="Digite o modelo"
-                                onChange={(
-                                  event
-                                ) =>
-                                  setProduto(
-                                    {
-                                      ...produto,
-                                      modelo:
-                                        event.target.value.toUpperCase(),
-                                    }
-                                  )
-                                }
-                                className={
-                                  inputClass
-                                }
-                              />
+                        <Campo
+                          label="Modelo"
+                          helper="Digite para pesquisar"
+                        >
+                          <input
+                            list="triagem-modelos"
+                            value={
+                              produto.modelo
+                            }
+                            disabled={
+                              !produto.marca
+                            }
+                            placeholder={
+                              produto.marca
+                                ? "Pesquise ou digite o modelo"
+                                : "Informe a marca primeiro"
+                            }
+                            onChange={(
+                              event
+                            ) => {
+                              const valor =
+                                event.target.value.toUpperCase();
 
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setModeloLivre(
-                                    false
-                                  );
-
-                                  setProduto(
-                                    {
-                                      ...produto,
-                                      modelo:
-                                        "",
-                                    }
-                                  );
-                                }}
-                                className="mt-1.5 text-[10px] font-bold text-slate-400 transition hover:text-violet-600"
-                              >
-                                Voltar para catálogo
-                              </button>
-                            </>
-                          ) : (
-                            <select
-                              value={
-                                produto.modelo
-                              }
-                              disabled={
-                                !produto.marca
-                              }
-                              onChange={(
-                                event
-                              ) => {
-                                if (
-                                  event.target.value ===
-                                  "__outro__"
-                                ) {
-                                  setModeloLivre(
-                                    true
-                                  );
-
-                                  setProduto(
-                                    {
-                                      ...produto,
-                                      modelo:
-                                        "",
-                                      armazenamento:
-                                        "",
-                                      cor:
-                                        "",
-                                    }
-                                  );
-
-                                  return;
-                                }
-
-                                setProduto(
-                                  {
-                                    ...produto,
-                                    modelo:
-                                      event.target.value,
-                                    armazenamento:
-                                      "",
-                                    cor:
-                                      "",
-                                  }
+                              const existeNoCatalogo =
+                                modelos.some(
+                                  (modelo) =>
+                                    String(
+                                      modelo
+                                    ).toUpperCase() ===
+                                    valor
                                 );
-                              }}
-                              className={
-                                inputClass
-                              }
-                            >
-                              <option value="">
-                                {produto.marca
-                                  ? "Selecione..."
-                                  : "Escolha a marca"}
-                              </option>
 
-                              {modelos.map(
-                                (modelo) => (
-                                  <option
-                                    key={
-                                      modelo
-                                    }
-                                    value={
-                                      modelo
-                                    }
-                                  >
-                                    {
-                                      modelo
-                                    }
-                                  </option>
+                              setModeloLivre(
+                                Boolean(
+                                  valor &&
+                                    !existeNoCatalogo
                                 )
-                              )}
+                              );
 
-                              {produto.marca && (
-                                <option value="__outro__">
-                                  Não encontrei o modelo
-                                </option>
-                              )}
-                            </select>
-                          )}
+                              setProduto({
+                                ...produto,
+                                modelo:
+                                  valor,
+                                armazenamento:
+                                  "",
+                                cor:
+                                  "",
+                              });
+                            }}
+                            className={
+                              inputClass
+                            }
+                          />
+
+                          <datalist id="triagem-modelos">
+                            {modelos.map(
+                              (modelo) => (
+                                <option
+                                  key={
+                                    modelo
+                                  }
+                                  value={
+                                    modelo
+                                  }
+                                />
+                              )
+                            )}
+                          </datalist>
                         </Campo>
 
-                        <Campo label="Armazenamento">
-                          {modeloLivre ||
-                          (produto.modelo &&
-                            !capacidades.length) ? (
-                            <input
-                              value={
-                                produto.armazenamento
-                              }
-                              placeholder="Ex: 128GB"
-                              onChange={(
-                                event
-                              ) =>
-                                setProduto(
-                                  {
-                                    ...produto,
-                                    armazenamento:
-                                      event.target.value.toUpperCase(),
-                                  }
-                                )
-                              }
-                              className={
-                                inputClass
-                              }
-                            />
-                          ) : (
-                            <select
-                              value={
-                                produto.armazenamento
-                              }
-                              disabled={
-                                !produto.modelo
-                              }
-                              onChange={(
-                                event
-                              ) =>
-                                setProduto(
-                                  {
-                                    ...produto,
-                                    armazenamento:
-                                      event.target.value,
-                                    cor:
-                                      "",
-                                  }
-                                )
-                              }
-                              className={
-                                inputClass
-                              }
-                            >
-                              <option value="">
-                                {produto.modelo
-                                  ? "Selecione..."
-                                  : "Escolha o modelo"}
-                              </option>
+                        <Campo
+                          label="Armazenamento"
+                          helper="Digite para pesquisar"
+                        >
+                          <input
+                            list="triagem-capacidades"
+                            value={
+                              produto.armazenamento
+                            }
+                            disabled={
+                              !produto.modelo
+                            }
+                            placeholder={
+                              produto.modelo
+                                ? "Ex: 128GB"
+                                : "Informe o modelo primeiro"
+                            }
+                            onChange={(
+                              event
+                            ) =>
+                              setProduto({
+                                ...produto,
+                                armazenamento:
+                                  event.target.value.toUpperCase(),
+                                cor:
+                                  "",
+                              })
+                            }
+                            className={
+                              inputClass
+                            }
+                          />
 
-                              {capacidades.map(
-                                (
-                                  capacidade
-                                ) => (
-                                  <option
-                                    key={
-                                      capacidade
-                                    }
-                                    value={
-                                      capacidade
-                                    }
-                                  >
-                                    {
-                                      capacidade
-                                    }
-                                  </option>
-                                )
-                              )}
-                            </select>
-                          )}
+                          <datalist id="triagem-capacidades">
+                            {capacidades.map(
+                              (
+                                capacidade
+                              ) => (
+                                <option
+                                  key={
+                                    capacidade
+                                  }
+                                  value={
+                                    capacidade
+                                  }
+                                />
+                              )
+                            )}
+                          </datalist>
                         </Campo>
 
-                        <Campo label="Cor">
-                          {modeloLivre ||
-                          (produto.armazenamento &&
-                            !cores.length) ? (
-                            <input
-                              value={
-                                produto.cor
-                              }
-                              placeholder="Ex: BLACK"
-                              onChange={(
-                                event
-                              ) =>
-                                setProduto(
-                                  {
-                                    ...produto,
-                                    cor:
-                                      event.target.value.toUpperCase(),
-                                  }
-                                )
-                              }
-                              className={
-                                inputClass
-                              }
-                            />
-                          ) : (
-                            <select
-                              value={
-                                produto.cor
-                              }
-                              disabled={
-                                !produto.armazenamento
-                              }
-                              onChange={(
-                                event
-                              ) =>
-                                setProduto(
-                                  {
-                                    ...produto,
-                                    cor:
-                                      event.target.value,
-                                  }
-                                )
-                              }
-                              className={
-                                inputClass
-                              }
-                            >
-                              <option value="">
-                                {produto.armazenamento
-                                  ? "Selecione..."
-                                  : "Escolha a capacidade"}
-                              </option>
+                        <Campo
+                          label="Cor"
+                          helper="Digite para pesquisar"
+                        >
+                          <input
+                            list="triagem-cores"
+                            value={
+                              produto.cor
+                            }
+                            disabled={
+                              !produto.armazenamento
+                            }
+                            placeholder={
+                              produto.armazenamento
+                                ? "Pesquise ou digite a cor"
+                                : "Informe o armazenamento primeiro"
+                            }
+                            onChange={(
+                              event
+                            ) =>
+                              setProduto({
+                                ...produto,
+                                cor:
+                                  event.target.value.toUpperCase(),
+                              })
+                            }
+                            className={
+                              inputClass
+                            }
+                          />
 
-                              {cores.map(
-                                (cor) => (
-                                  <option
-                                    key={
-                                      cor
-                                    }
-                                    value={
-                                      cor
-                                    }
-                                  >
-                                    {
-                                      cor
-                                    }
-                                  </option>
-                                )
-                              )}
-                            </select>
-                          )}
+                          <datalist id="triagem-cores">
+                            {cores.map(
+                              (cor) => (
+                                <option
+                                  key={
+                                    cor
+                                  }
+                                  value={
+                                    cor
+                                  }
+                                />
+                              )
+                            )}
+                          </datalist>
                         </Campo>
                       </div>
 
@@ -2335,32 +2327,19 @@ export default function TriagemFuncionalV2Page() {
                                 : "IMEI divergente do cadastrado na loja"}
                             </h3>
 
-                            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                              <div className="rounded-xl bg-white/70 p-3 ring-1 ring-rose-200">
-                                <div className="text-[9px] font-black uppercase tracking-wide text-rose-400">
-                                  {validacao.tipoBase ===
-                                  "devolucao"
-                                    ? "IMEI esperado"
-                                    : "IMEI TradeIn"}
-                                </div>
-
-                                <div className="mt-1 break-all font-mono text-xs font-bold text-rose-700">
-                                  {validacao.imeiEsperado ||
-                                    validacao.imeiTradein ||
-                                    "Sem registro"}
-                                </div>
+                            <div className="mt-3 rounded-xl bg-white/70 p-3 ring-1 ring-rose-200">
+                              <div className="text-[9px] font-black uppercase tracking-wide text-rose-400">
+                                IMEI bipado
                               </div>
 
-                              <div className="rounded-xl bg-white/70 p-3 ring-1 ring-rose-200">
-                                <div className="text-[9px] font-black uppercase tracking-wide text-rose-400">
-                                  IMEI bipado
-                                </div>
+                              <div className="mt-1 break-all font-mono text-xs font-bold text-rose-700">
+                                {
+                                  imeiDigitado
+                                }
+                              </div>
 
-                                <div className="mt-1 break-all font-mono text-xs font-bold text-rose-700">
-                                  {
-                                    imeiDigitado
-                                  }
-                                </div>
+                              <div className="mt-2 text-[10px] font-semibold leading-4 text-rose-500">
+                                O IMEI de referência não é exibido na bancada. Rebipe o aparelho físico ou confirme a divergência.
                               </div>
                             </div>
 
@@ -2467,135 +2446,71 @@ export default function TriagemFuncionalV2Page() {
                       </h3>
                     </div>
 
-                    {!pedindoDefeito ? (
-                      <div className="mt-8 grid gap-3 sm:grid-cols-2">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            responder(
-                              "sim"
-                            )
-                          }
-                          className="group rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-5 text-left transition hover:border-emerald-400 hover:bg-emerald-100"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white">
-                              <CheckCircle2 className="h-5 w-5" />
-                            </div>
-
-                            <div>
-                              <div className="text-sm font-black text-emerald-800">
-                                Sim
-                              </div>
-
-                              <div className="mt-0.5 text-[10px] text-emerald-700/70">
-                                Confirmar resposta positiva
-                              </div>
-                            </div>
+                    <div className="mt-8 grid gap-3 sm:grid-cols-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          responder(
+                            "sim"
+                          )
+                        }
+                        className="group rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-5 text-left transition hover:border-emerald-400 hover:bg-emerald-100"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white">
+                            <CheckCircle2 className="h-5 w-5" />
                           </div>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            responder(
-                              "nao"
-                            )
-                          }
-                          className="group rounded-2xl border border-rose-200 bg-rose-50 px-5 py-5 text-left transition hover:border-rose-400 hover:bg-rose-100"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-600 text-white">
-                              <ShieldAlert className="h-5 w-5" />
-                            </div>
-
-                            <div>
-                              <div className="text-sm font-black text-rose-800">
-                                Não
-                              </div>
-
-                              <div className="mt-0.5 text-[10px] text-rose-700/70">
-                                Registrar resposta negativa
-                              </div>
-                            </div>
-                          </div>
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="mt-7 rounded-2xl border border-rose-200 bg-rose-50/50 p-5">
-                        <div className="flex items-start gap-3">
-                          <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" />
 
                           <div>
-                            <h4 className="text-sm font-black text-slate-800">
-                              Selecione o defeito encontrado
-                            </h4>
+                            <div className="text-sm font-black text-emerald-800">
+                              Sim
+                            </div>
 
-                            <p className="mt-1 text-[10px] leading-4 text-slate-500">
-                              A identificação do defeito é obrigatória para esta resposta e ficará vinculada à pergunta.
-                            </p>
+                            <div className="mt-0.5 text-[10px] text-emerald-700/70">
+                              Confirmar resposta positiva
+                            </div>
                           </div>
                         </div>
+                      </button>
 
-                        <div className="mt-4 flex flex-wrap gap-2">
-                          {defeitosCatalogo.map(
-                            (
-                              defeito
-                            ) => {
-                              const marcado =
-                                defeitosSel.includes(
-                                  defeito.nome
-                                );
+                      <button
+                        type="button"
+                        onClick={() =>
+                          responder(
+                            "nao"
+                          )
+                        }
+                        className="group rounded-2xl border border-rose-200 bg-rose-50 px-5 py-5 text-left transition hover:border-rose-400 hover:bg-rose-100"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-600 text-white">
+                            <ShieldAlert className="h-5 w-5" />
+                          </div>
 
-                              return (
-                                <button
-                                  key={
-                                    defeito.id
-                                  }
-                                  type="button"
-                                  onClick={() =>
-                                    setDefeitosSel(
-                                      marcado
-                                        ? defeitosSel.filter(
-                                            (
-                                              nome
-                                            ) =>
-                                              nome !==
-                                              defeito.nome
-                                          )
-                                        : [
-                                            ...defeitosSel,
-                                            defeito.nome,
-                                          ]
-                                    )
-                                  }
-                                  className={`rounded-xl border px-3 py-2 text-[11px] font-bold transition ${
-                                    marcado
-                                      ? "border-rose-600 bg-rose-600 text-white"
-                                      : "border-slate-200 bg-white text-slate-600 hover:border-rose-200 hover:bg-rose-50"
-                                  }`}
-                                >
-                                  {
-                                    defeito.nome
-                                  }
-                                </button>
-                              );
-                            }
-                          )}
+                          <div>
+                            <div className="text-sm font-black text-rose-800">
+                              Não
+                            </div>
+
+                            <div className="mt-0.5 text-[10px] text-rose-700/70">
+                              Registrar resposta negativa
+                            </div>
+                          </div>
                         </div>
+                      </button>
+                    </div>
 
+                    {idx > 0 && (
+                      <div className="mt-5 flex justify-center">
                         <button
                           type="button"
                           onClick={
-                            confirmarDefeitos
+                            voltarPergunta
                           }
-                          disabled={
-                            !defeitosSel.length
-                          }
-                          className="mt-5 inline-flex h-10 items-center gap-2 rounded-xl bg-violet-700 px-5 text-xs font-bold text-white transition hover:bg-violet-800 disabled:opacity-40"
+                          className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[11px] font-bold text-slate-600 transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700"
                         >
-                          <CheckCircle2 className="h-4 w-4" />
-                          Confirmar defeito
+                          <ArrowLeft className="h-4 w-4" />
+                          Voltar à pergunta anterior
                         </button>
                       </div>
                     )}
@@ -2715,6 +2630,208 @@ export default function TriagemFuncionalV2Page() {
           {/* =========================
               ETAPA 6 — RESULTADO
           ========================== */}
+          {etapa ===
+            "fim" &&
+            !resultado &&
+            finalizacaoPendente && (
+              <Panel
+                title="Resultado da Triagem Funcional"
+                subtitle="Revise os defeitos antes de concluir o processamento."
+                icon={
+                  CheckCircle2
+                }
+              >
+                <div className="space-y-5 p-5 lg:p-6">
+                  <div
+                    className={`rounded-2xl border p-5 ${
+                      exigeDefeitoFinal
+                        ? "border-amber-200 bg-amber-50"
+                        : "border-emerald-200 bg-emerald-50"
+                    }`}
+                  >
+                    <div
+                      className={`text-sm font-black ${
+                        exigeDefeitoFinal
+                          ? "text-amber-900"
+                          : "text-emerald-900"
+                      }`}
+                    >
+                      {exigeDefeitoFinal
+                        ? "Há resposta negativa na triagem"
+                        : "Triagem sem divergência funcional"}
+                    </div>
+
+                    <div
+                      className={`mt-1 text-xs ${
+                        exigeDefeitoFinal
+                          ? "text-amber-700"
+                          : "text-emerald-700"
+                      }`}
+                    >
+                      {exigeDefeitoFinal
+                        ? "Selecione ao menos um defeito para concluir."
+                        : "A inclusão de defeito é opcional neste caso."}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-black text-slate-800">
+                          Defeitos encontrados
+                        </h3>
+
+                        <p className="mt-1 text-[10px] leading-4 text-slate-400">
+                          Pesquise pelo nome ou categoria e selecione todos os defeitos aplicáveis.
+                        </p>
+                      </div>
+
+                      <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-[10px] font-black text-slate-600">
+                        {defeitosTodos.length} selecionado
+                        {defeitosTodos.length ===
+                        1
+                          ? ""
+                          : "s"}
+                      </span>
+                    </div>
+
+                    <div className="relative mt-4">
+                      <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+
+                      <input
+                        autoFocus
+                        value={
+                          buscaDefeito
+                        }
+                        onChange={(
+                          event
+                        ) =>
+                          setBuscaDefeito(
+                            event.target.value
+                          )
+                        }
+                        placeholder="Pesquisar defeito..."
+                        className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-3.5 text-sm font-medium text-slate-700 outline-none transition placeholder:text-slate-300 focus:border-violet-300 focus:ring-4 focus:ring-violet-100"
+                      />
+                    </div>
+
+                    {defeitosTodos.length >
+                      0 && (
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {defeitosTodos.map(
+                          (
+                            defeito
+                          ) => (
+                            <button
+                              key={
+                                defeito
+                              }
+                              type="button"
+                              onClick={() =>
+                                setDefeitosTodos(
+                                  defeitosTodos.filter(
+                                    (
+                                      item
+                                    ) =>
+                                      item !==
+                                      defeito
+                                  )
+                                )
+                              }
+                              className="rounded-lg bg-violet-700 px-2.5 py-1.5 text-[10px] font-bold text-white"
+                              title="Clique para remover"
+                            >
+                              {defeito} ×
+                            </button>
+                          )
+                        )}
+                      </div>
+                    )}
+
+                    <div className="mt-4 max-h-[300px] overflow-y-auto rounded-xl border border-slate-100 bg-slate-50/60 p-3">
+                      {defeitosFiltrados.length ? (
+                        <div className="flex flex-wrap gap-2">
+                          {defeitosFiltrados.map(
+                            (
+                              defeito
+                            ) => {
+                              const marcado =
+                                defeitosTodos.includes(
+                                  defeito.nome
+                                );
+
+                              return (
+                                <button
+                                  key={
+                                    defeito.id
+                                  }
+                                  type="button"
+                                  onClick={() =>
+                                    setDefeitosTodos(
+                                      marcado
+                                        ? defeitosTodos.filter(
+                                            (
+                                              nome
+                                            ) =>
+                                              nome !==
+                                              defeito.nome
+                                          )
+                                        : [
+                                            ...defeitosTodos,
+                                            defeito.nome,
+                                          ]
+                                    )
+                                  }
+                                  className={`rounded-xl border px-3 py-2 text-[11px] font-bold transition ${
+                                    marcado
+                                      ? "border-violet-700 bg-violet-700 text-white"
+                                      : "border-slate-200 bg-white text-slate-600 hover:border-violet-200 hover:bg-violet-50"
+                                  }`}
+                                >
+                                  {
+                                    defeito.nome
+                                  }
+                                </button>
+                              );
+                            }
+                          )}
+                        </div>
+                      ) : (
+                        <div className="py-6 text-center text-xs font-semibold text-slate-400">
+                          Nenhum defeito encontrado para esta pesquisa.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-4">
+                    <button
+                      type="button"
+                      onClick={
+                        confirmarFinalizacao
+                      }
+                      disabled={
+                        carregando ||
+                        (exigeDefeitoFinal &&
+                          !defeitosTodos.length)
+                      }
+                      className="inline-flex h-11 items-center gap-2 rounded-xl bg-violet-700 px-5 text-xs font-bold text-white transition hover:bg-violet-800 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {carregando ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="h-4 w-4" />
+                      )}
+
+                      {carregando
+                        ? "Concluindo..."
+                        : "Concluir triagem"}
+                    </button>
+                  </div>
+                </div>
+              </Panel>
+            )}
+
           {etapa ===
             "fim" &&
             resultado && (
