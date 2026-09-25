@@ -2777,21 +2777,6 @@ export default function TriagemFuncionalV2Page() {
                                 : "Triagem concluída sem divergências"}
                             </h3>
 
-                            <div
-                              className={`mt-1 text-xs ${
-                                resultado.divergencias
-                                  ? "text-amber-700"
-                                  : "text-emerald-700"
-                              }`}
-                            >
-                              Próxima etapa:{" "}
-                              <strong>
-                                {resultado.precisaLaudo
-                                  ? "Laudo"
-                                  : "Triagem Cosmética"}
-                              </strong>
-                            </div>
-
                             {resultado.motivoDestino && (
                               <div className="mt-1 text-[10px] opacity-75">
                                 {
@@ -2807,6 +2792,58 @@ export default function TriagemFuncionalV2Page() {
                               Bateria 70–79%
                             </span>
                           )}
+                        </div>
+                      </div>
+
+                      <div
+                        className={`rounded-2xl border p-5 ${
+                          resultado.precisaLaudo
+                            ? "border-rose-200 bg-rose-50"
+                            : "border-violet-200 bg-violet-50"
+                        }`}
+                      >
+                        <div
+                          className={`text-[10px] font-black uppercase tracking-[0.14em] ${
+                            resultado.precisaLaudo
+                              ? "text-rose-600"
+                              : "text-violet-600"
+                          }`}
+                        >
+                          Próxima etapa operacional
+                        </div>
+
+                        <div className="mt-2 flex items-center gap-2">
+                          <ChevronRight
+                            className={`h-5 w-5 ${
+                              resultado.precisaLaudo
+                                ? "text-rose-600"
+                                : "text-violet-600"
+                            }`}
+                          />
+
+                          <div
+                            className={`text-xl font-black ${
+                              resultado.precisaLaudo
+                                ? "text-rose-900"
+                                : "text-violet-900"
+                            }`}
+                          >
+                            {resultado.precisaLaudo
+                              ? "LAUDO"
+                              : "TRIAGEM COSMÉTICA"}
+                          </div>
+                        </div>
+
+                        <div
+                          className={`mt-2 text-xs font-semibold ${
+                            resultado.precisaLaudo
+                              ? "text-rose-700"
+                              : "text-violet-700"
+                          }`}
+                        >
+                          {resultado.precisaLaudo
+                            ? "Encaminhar o aparelho para a etapa de Laudo."
+                            : "Encaminhar o aparelho para a Triagem Cosmética."}
                         </div>
                       </div>
 
