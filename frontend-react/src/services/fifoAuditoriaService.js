@@ -52,30 +52,71 @@ async function buscarPedidosFaturadosAno(ano) {
   return rows;
 }
 
-async function buscarAuditoriasPorJanela(ano) {
-  const rows = [];
-  const inicioAno = new Date(isoInicioAno(ano));
-  const fimAno = new Date(isoFimAno(ano));
+function normalizarFront(rows) {
+  return (rows || []).map((r) => ({
+    ...r,
+    fonte_auditoria: "frontend",
+    auditavel_db: null,
+    motivo_nao_auditavel: null,
+  }));
+}
 
-  // Margem para capturar alocações feitas antes do faturamento na virada do ano.
-  inicioAno.setUTCDate(inicioAno.getUTCDate() - 45);
-  fimAno.setUTCDate(fimAno.getUTCDate() + 7);
+function normalizarDb(rows) {
+  return (rows || []).map((r) => ({
+    ...r,
+    fonte_auditoria: "banco",
+    auditavel_db: r.auditavel,
+  }));
+}
+
+async function buscarTabelaPorJanela(tabela, select, inicio, fim, normalizador) {
+  const rows = [];
 
   for (let from = 0; ; from += PAGE_SIZE) {
     const { data, error } = await supabase
-      .from("fifo_auditoria")
-      .select("id,pedido_id,id_anymarket,sku_buscado,grade_alvo,imei_escolhido,data_subinv_escolhido,posicao_escolhida,total_candidatos,origem,criado_por,criado_em")
-      .gte("criado_em", inicioAno.toISOString())
-      .lt("criado_em", fimAno.toISOString())
+      .from(tabela)
+      .select(select)
+      .gte("criado_em", inicio)
+      .lt("criado_em", fim)
       .order("criado_em", { ascending: true })
       .range(from, from + PAGE_SIZE - 1);
 
     if (error) throw new Error(error.message);
-    rows.push(...(data || []));
+    rows.push(...normalizador(data || []));
     if (!data || data.length < PAGE_SIZE) break;
   }
 
   return rows;
+}
+
+async function buscarAuditoriasPorJanela(ano) {
+  const inicioAno = new Date(isoInicioAno(ano));
+  const fimAno = new Date(isoFimAno(ano));
+
+  inicioAno.setUTCDate(inicioAno.getUTCDate() - 45);
+  fimAno.setUTCDate(fimAno.getUTCDate() + 7);
+
+  const inicio = inicioAno.toISOString();
+  const fim = fimAno.toISOString();
+
+  const [front, banco] = await Promise.all([
+    buscarTabelaPorJanela(
+      "fifo_auditoria",
+      "id,pedido_id,id_anymarket,sku_buscado,grade_alvo,imei_escolhido,data_subinv_escolhido,posicao_escolhida,total_candidatos,candidatos,origem,criado_por,criado_em",
+      inicio,
+      fim,
+      normalizarFront
+    ),
+    buscarTabelaPorJanela(
+      "fifo_auditoria_db",
+      "id,pedido_id,id_anymarket,sku_buscado,grade_alvo,imei_escolhido,data_subinv_escolhido,local_subinv_escolhido,posicao_escolhida,total_candidatos,candidatos,auditavel,motivo_nao_auditavel,origem,criado_por,criado_em",
+      inicio,
+      fim,
+      normalizarDb
+    ),
+  ]);
+
+  return [...front, ...banco];
 }
 
 async function buscarAuditoriasFaltantes(pedidoIds) {
@@ -85,14 +126,25 @@ async function buscarAuditoriasFaltantes(pedidoIds) {
 
   for (let i = 0; i < pedidoIds.length; i += PEDIDO_CHUNK) {
     const bloco = pedidoIds.slice(i, i + PEDIDO_CHUNK);
-    const { data, error } = await supabase
-      .from("fifo_auditoria")
-      .select("id,pedido_id,id_anymarket,sku_buscado,grade_alvo,imei_escolhido,data_subinv_escolhido,posicao_escolhida,total_candidatos,origem,criado_por,criado_em")
-      .in("pedido_id", bloco)
-      .order("criado_em", { ascending: true });
 
-    if (error) throw new Error(error.message);
-    rows.push(...(data || []));
+    const [frontRes, dbRes] = await Promise.all([
+      supabase
+        .from("fifo_auditoria")
+        .select("id,pedido_id,id_anymarket,sku_buscado,grade_alvo,imei_escolhido,data_subinv_escolhido,posicao_escolhida,total_candidatos,candidatos,origem,criado_por,criado_em")
+        .in("pedido_id", bloco)
+        .order("criado_em", { ascending: true }),
+      supabase
+        .from("fifo_auditoria_db")
+        .select("id,pedido_id,id_anymarket,sku_buscado,grade_alvo,imei_escolhido,data_subinv_escolhido,local_subinv_escolhido,posicao_escolhida,total_candidatos,candidatos,auditavel,motivo_nao_auditavel,origem,criado_por,criado_em")
+        .in("pedido_id", bloco)
+        .order("criado_em", { ascending: true }),
+    ]);
+
+    if (frontRes.error) throw new Error(frontRes.error.message);
+    if (dbRes.error) throw new Error(dbRes.error.message);
+
+    rows.push(...normalizarFront(frontRes.data || []));
+    rows.push(...normalizarDb(dbRes.data || []));
   }
 
   return rows;
@@ -129,7 +181,15 @@ function indexarAuditorias(rows) {
   }
 
   for (const lista of mapa.values()) {
-    lista.sort((a, b) => new Date(b.criado_em) - new Date(a.criado_em));
+    lista.sort((a, b) => {
+      // Quando banco + frontend registram o mesmo evento, prefere o frontend,
+      // pois ele conhece a fila exata usada pela tela. Caso não exista, usa o banco.
+      const mesmoMomento = Math.abs(new Date(b.criado_em) - new Date(a.criado_em)) < 5000;
+      if (mesmoMomento && a.fonte_auditoria !== b.fonte_auditoria) {
+        return a.fonte_auditoria === "frontend" ? -1 : 1;
+      }
+      return new Date(b.criado_em) - new Date(a.criado_em);
+    });
   }
 
   return mapa;
@@ -143,21 +203,17 @@ function montarLinha(pedido, auditorias, usuarios) {
   const finalImei = normalizarImei(pedido.imei_bipado || pedido.imei_alocado);
   const lista = auditorias || [];
 
-  const auditoriaFinal = finalImei
-    ? lista.find((a) => normalizarImei(a.imei_escolhido) === finalImei)
-    : null;
+  const correspondentes = finalImei
+    ? lista.filter((a) => normalizarImei(a.imei_escolhido) === finalImei)
+    : [];
 
+  const auditoriaFinal = correspondentes[0] || null;
   const auditoriaContexto = auditoriaFinal || lista[0] || null;
 
   const posicaoFinal = auditoriaFinal?.posicao_escolhida ?? null;
-  const auditavel = Boolean(
-    auditoriaFinal &&
-    posicaoFinal !== null &&
-    posicaoFinal !== undefined &&
-    Number.isFinite(Number(posicaoFinal))
-  );
-  const fifoCorreto = auditavel && Number(posicaoFinal) === 1;
-  const divergente = auditavel && Number(posicaoFinal) !== 1;
+  const auditado = Boolean(auditoriaFinal);
+  const fifoCorreto = auditado && Number(posicaoFinal) === 1;
+  const divergente = auditado && !fifoCorreto;
 
   const operadorId =
     auditoriaFinal?.criado_por ||
@@ -167,26 +223,47 @@ function montarLinha(pedido, auditorias, usuarios) {
 
   const operador = usuarios.get(operadorId);
 
+  let motivoResultado = auditoriaFinal?.motivo_nao_auditavel || null;
+  if (!motivoResultado && divergente) {
+    if (posicaoFinal == null) {
+      motivoResultado = "Escolha registrada, mas sem posição FIFO determinável.";
+    } else if (Number(posicaoFinal) === 0) {
+      motivoResultado = "IMEI escolhido fora da fila FIFO elegível.";
+    } else {
+      motivoResultado = `IMEI escolhido na posição #${posicaoFinal} da fila FIFO.`;
+    }
+  }
+
   return {
     ...pedido,
     imei_faturado: finalImei || null,
-    auditoria_id: auditoriaContexto?.id || null,
-    auditoria_final_id: auditoriaFinal?.id || null,
+    auditoria_id: auditoriaContexto
+      ? `${auditoriaContexto.fonte_auditoria}:${auditoriaContexto.id}`
+      : null,
+    auditoria_final_id: auditoriaFinal
+      ? `${auditoriaFinal.fonte_auditoria}:${auditoriaFinal.id}`
+      : null,
     auditoria_em: auditoriaContexto?.criado_em || null,
+    fonte_auditoria: auditoriaContexto?.fonte_auditoria || null,
     origem_fifo: auditoriaContexto?.origem || null,
     imei_auditado: auditoriaContexto?.imei_escolhido || null,
     data_subinv_auditada: auditoriaContexto?.data_subinv_escolhido || null,
     posicao_fifo: posicaoFinal,
-    total_candidatos: auditoriaFinal?.total_candidatos ?? auditoriaContexto?.total_candidatos ?? null,
-    auditavel,
+    total_candidatos:
+      auditoriaFinal?.total_candidatos ??
+      auditoriaContexto?.total_candidatos ??
+      null,
+    auditavel: auditado,
+    auditado,
     fifo_correto: fifoCorreto,
     divergente,
-    sem_rastro_final: !auditavel,
+    motivo_resultado: motivoResultado,
+    sem_rastro_final: !auditado,
     operador_id: operadorId,
     operador_nome: operador?.nome || null,
     operador_email: operador?.email || null,
     total_eventos_fifo: lista.length,
-    teve_reescolha: lista.length > 1,
+    teve_reescolha: correspondentes.length > 1 || lista.length > 2,
   };
 }
 
@@ -222,26 +299,42 @@ export async function carregarAuditoriaFifoAno(ano) {
   );
 }
 
-export async function buscarFilaAuditoriaFifo(auditoriaId) {
-  if (!auditoriaId) return null;
+export async function buscarFilaAuditoriaFifo(auditoriaRef) {
+  if (!auditoriaRef) return null;
+
+  const [fonte, id] = String(auditoriaRef).split(":");
+  const tabela = fonte === "banco" ? "fifo_auditoria_db" : "fifo_auditoria";
+
+  const campos =
+    tabela === "fifo_auditoria_db"
+      ? "id,pedido_id,id_anymarket,imei_escolhido,posicao_escolhida,total_candidatos,candidatos,auditavel,motivo_nao_auditavel,origem,criado_em"
+      : "id,pedido_id,id_anymarket,imei_escolhido,posicao_escolhida,total_candidatos,candidatos,origem,criado_em";
 
   const { data, error } = await supabase
-    .from("fifo_auditoria")
-    .select("id,pedido_id,id_anymarket,imei_escolhido,posicao_escolhida,total_candidatos,candidatos,origem,criado_em")
-    .eq("id", auditoriaId)
+    .from(tabela)
+    .select(campos)
+    .eq("id", id)
     .maybeSingle();
 
   if (error) throw new Error(error.message);
   if (!data) return null;
 
   const candidatos = Array.isArray(data.candidatos)
-    ? [...data.candidatos].sort(
-        (a, b) => Number(a.posicao || 999999) - Number(b.posicao || 999999)
-      )
+    ? [...data.candidatos]
+        .map((c) => ({
+          ...c,
+          escolhido:
+            normalizarImei(c.imei) === normalizarImei(data.imei_escolhido),
+        }))
+        .sort(
+          (a, b) =>
+            Number(a.posicao || 999999) - Number(b.posicao || 999999)
+        )
     : [];
 
   return {
     ...data,
+    fonte_auditoria: fonte,
     candidatos,
     historico_truncado:
       Number(data.total_candidatos || 0) > candidatos.length,
