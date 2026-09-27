@@ -2582,18 +2582,28 @@ async function verificarConclusaoFaturamentoGrupo(
 // ══════════════════════════════════════════════════════════
 
 export async function buscarKpisPedidosB2C() {
-  const { data, error } = await supabase
-    .from("pedidos_b2c")
-    .select("status, status_anymarket");
+  const [{ data, error }, gruposPicking] = await Promise.all([
+    supabase
+      .from("pedidos_b2c")
+      .select("status, status_anymarket"),
+    listarGruposPicking(),
+  ]);
   if (error) throw new Error(error.message);
 
   const todos = data || [];
+  // Mantém o KPI "Em Picking" idêntico à aba Picking:
+  // só conta pedidos de grupos realmente visíveis e com trabalho ativo.
+  const emPickingAtivo = gruposPicking.reduce(
+    (total, grupo) => total + Number(grupo.total_picking_atual || 0),
+    0
+  );
+
   return {
     total:               todos.length,
     // Só conta como aguardando alocação os que estão pagos (igual à lista de alocação).
     aguardando_alocacao: todos.filter(p => p.status === "aguardando_alocacao" && p.status_anymarket === "Pago").length,
     alocado:             todos.filter(p => p.status === "alocado").length,
-    em_picking:          todos.filter(p => p.status === "em_picking").length,
+    em_picking:          emPickingAtivo,
     em_analise:          todos.filter(p => p.status === "em_analise").length,
     embalado:            todos.filter(p => p.status === "embalado").length,
     faturado:            todos.filter(p => p.status === "faturado").length,
