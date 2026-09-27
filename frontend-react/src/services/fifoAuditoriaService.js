@@ -150,7 +150,12 @@ function montarLinha(pedido, auditorias, usuarios) {
   const auditoriaContexto = auditoriaFinal || lista[0] || null;
 
   const posicaoFinal = auditoriaFinal?.posicao_escolhida ?? null;
-  const auditavel = Boolean(auditoriaFinal && Number.isFinite(Number(posicaoFinal)));
+  const auditavel = Boolean(
+    auditoriaFinal &&
+    posicaoFinal !== null &&
+    posicaoFinal !== undefined &&
+    Number.isFinite(Number(posicaoFinal))
+  );
   const fifoCorreto = auditavel && Number(posicaoFinal) === 1;
   const divergente = auditavel && Number(posicaoFinal) !== 1;
 
