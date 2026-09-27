@@ -122,7 +122,7 @@ function AccuracyCard({ label, rows, active, onClick }) {
       </div>
       <div className="mt-2 text-3xl font-black text-slate-900">{fmtPct(m.acuracia)}</div>
       <div className="mt-1 text-xs text-slate-500">
-        {m.acertos} corretos de {m.auditados} auditáveis · cobertura {fmtPct(m.cobertura)}
+        {m.acertos} corretos de {m.auditados} auditados · cobertura {fmtPct(m.cobertura)}
       </div>
     </button>
   );
@@ -150,7 +150,7 @@ function ResultadoBadge({ row }) {
   return (
     <span className="inline-flex items-center gap-1 rounded-lg bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700 ring-1 ring-amber-200">
       <AlertTriangle className="h-3.5 w-3.5" />
-      Sem rastro final
+      Sem auditoria
     </span>
   );
 }
@@ -406,10 +406,10 @@ export default function AuditoriaFifoV2Page() {
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
         <Kpi label="Itens faturados" value={metricasEscopo.total.toLocaleString("pt-BR")} sub="Linhas faturadas no período" />
-        <Kpi label="Auditáveis" value={metricasEscopo.auditados.toLocaleString("pt-BR")} sub={"Cobertura " + fmtPct(metricasEscopo.cobertura)} tone="violet" />
+        <Kpi label="Auditados" value={metricasEscopo.auditados.toLocaleString("pt-BR")} sub={"Cobertura " + fmtPct(metricasEscopo.cobertura)} tone="violet" />
         <Kpi label="FIFO correto" value={metricasEscopo.acertos.toLocaleString("pt-BR")} sub={"Acurácia " + fmtPct(metricasEscopo.acuracia)} tone="emerald" />
-        <Kpi label="Divergências" value={metricasEscopo.divergencias.toLocaleString("pt-BR")} sub="Escolha fora da posição #1" tone="rose" />
-        <Kpi label="Sem rastro final" value={metricasEscopo.semRastro.toLocaleString("pt-BR")} sub="Fora do denominador da acurácia" tone="amber" />
+        <Kpi label="Divergências" value={metricasEscopo.divergencias.toLocaleString("pt-BR")} sub="Escolha fora da posição #1 ou inválida" tone="rose" />
+        <Kpi label="Sem auditoria" value={metricasEscopo.semRastro.toLocaleString("pt-BR")} sub="Sem snapshot correspondente ao IMEI final" tone="amber" />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
@@ -426,7 +426,7 @@ export default function AuditoriaFifoV2Page() {
                 <tr>
                   <th className="px-4 py-2">Dia</th>
                   <th className="px-3 py-2 text-right">Faturados</th>
-                  <th className="px-3 py-2 text-right">Auditáveis</th>
+                  <th className="px-3 py-2 text-right">Auditados</th>
                   <th className="px-3 py-2 text-right">Diverg.</th>
                   <th className="px-4 py-2 text-right">Acurácia</th>
                 </tr>
@@ -468,7 +468,7 @@ export default function AuditoriaFifoV2Page() {
                 <tr>
                   <th className="px-4 py-2">Mês</th>
                   <th className="px-3 py-2 text-right">Faturados</th>
-                  <th className="px-3 py-2 text-right">Auditáveis</th>
+                  <th className="px-3 py-2 text-right">Auditados</th>
                   <th className="px-3 py-2 text-right">Diverg.</th>
                   <th className="px-4 py-2 text-right">Acurácia</th>
                 </tr>
@@ -580,7 +580,11 @@ export default function AuditoriaFifoV2Page() {
                                 : "bg-rose-50 text-rose-700")
                             }
                           >
-                            #{row.posicao_fifo}
+                            {row.posicao_fifo == null
+                              ? "Sem posição"
+                              : Number(row.posicao_fifo) === 0
+                              ? "Fora da fila"
+                              : "#" + row.posicao_fifo}
                           </span>
                         ) : (
                           <span className="text-xs text-slate-400">—</span>
@@ -601,7 +605,14 @@ export default function AuditoriaFifoV2Page() {
                           </div>
                         )}
                       </td>
-                      <td className="px-3 py-3"><ResultadoBadge row={row} /></td>
+                      <td className="px-3 py-3">
+                        <ResultadoBadge row={row} />
+                        {row.motivo_resultado && (
+                          <div className="mt-1 max-w-[260px] text-[10px] font-semibold leading-4 text-slate-500">
+                            {row.motivo_resultado}
+                          </div>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-right">
                         <button
                           type="button"
@@ -706,8 +717,8 @@ export default function AuditoriaFifoV2Page() {
           Regra da auditoria
         </div>
         <p className="mt-1">
-          Acurácia = itens cujo IMEI faturado possui snapshot correspondente e estava na posição #1 do FIFO ÷ itens auditáveis.
-          Itens sem snapshot correspondente ao IMEI efetivamente faturado ficam em “Sem rastro final” e não entram no denominador.
+          Acurácia = itens cujo IMEI faturado possui snapshot correspondente e estava na posição #1 do FIFO ÷ itens auditados.
+          Itens sem snapshot correspondente ao IMEI efetivamente faturado ficam em “Sem auditoria” e não entram no denominador.
           A base de snapshots começa em 24/07/2026. Nos registros históricos anteriores à implantação desta tela, filas muito grandes
           podem ter apenas as 10 primeiras opções preservadas; novas alocações passam a guardar a fila elegível completa.
         </p>
