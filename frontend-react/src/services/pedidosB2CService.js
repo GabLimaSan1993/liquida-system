@@ -1845,7 +1845,7 @@ export async function validarSkuDefinicao(skuDigitado, grade) {
 export async function definirProduto(pedidoId, { mesmoSku, novoSku, novaGrade, imei }, userId) {
   const { data: pedido } = await supabase
   .from("pedidos_b2c")
-  .select("id_anymarket, sku_produto, grade_produto")
+  .select("id_anymarket, sku_produto, grade_produto, sku_definido, grade_definida")
   .eq("id", pedidoId)
   .single();
   if (!pedido) throw new Error("Pedido não encontrado.");
@@ -1889,7 +1889,19 @@ if (!imeiTrim) {
   };
 
   if (imeiTrim) {
-    // Aloca DIRETO neste IMEI, pula o FIFO. Reserva o aparelho e aponta o pedido.
+    // Mesmo quando a definição indica um IMEI manualmente, congela a fila FIFO
+    // vigente para medir se a exceção respeitou a ordem ou ficou fora da fila.
+    const candidatos = await buscarSugestaoFifo(skuEfetivo, gradeEfetiva);
+    const escolhido = (candidatos || []).find(
+      (item) => String(item.imei) === String(imeiTrim)
+    ) || {
+      imei: imeiTrim,
+      sku: skuEfetivo,
+      grade: gradeEfetiva,
+    };
+
+    // Aloca DIRETO neste IMEI. A auditoria abaixo classifica posição #1 como correto
+    // e posição 0 como escolha manual fora da fila elegível.
     const { error: errDef } = await supabase.from("pedidos_b2c").update({
       ...campos,
       status:        "alocado",
@@ -1906,6 +1918,18 @@ if (!imeiTrim) {
       .update({ status_atual: "Reservado para pedido B2C" })
       .eq("imei", imeiTrim);
     if (errTri) throw new Error(errTri.message);
+
+    await registrarAuditoriaFifo(pedidoId, {
+      sugestao: escolhido,
+      candidatos,
+      origem: "definicao_produto_manual",
+      pedido: {
+        ...pedido,
+        sku_definido: mesmoSku ? null : skuVal,
+        grade_definida: mesmoSku ? null : gradeVal,
+      },
+      userId,
+    });
 
     const grupoFormado =
   await criarGrupoExclusivoPedidoDefinido(
