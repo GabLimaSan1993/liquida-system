@@ -764,9 +764,10 @@ async function registrarAuditoriaFifo(pedidoId, { sugestao, candidatos, origem, 
       fifo_origem:           origem || null,
     }).eq("id", pedidoId);
 
-    // Só os 10 primeiros: é a vizinhança que explica a escolha. A fila inteira de um SKU
-    // com centenas de peças infla a tabela sem agregar nada à auditoria.
-    const candidatosLog = lista.slice(0, 10).map((c, i) => ({
+    // Auditoria FIFO completa: preserva todas as opções elegíveis existentes
+    // naquele exato momento. Isso permite revisar posteriormente não só a 1ª posição,
+    // mas toda a fila que estava disponível quando a escolha foi feita.
+    const candidatosLog = lista.map((c, i) => ({
       posicao:      i + 1,
       imei:         c.imei,
       grade:        c.grade,
