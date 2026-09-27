@@ -2314,11 +2314,10 @@ export default function PedidosB2CPage() {
       </div>
 
       {kpis && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <KpiMini label="Aguard. Alocação" value={fmtN(kpis.aguardando_alocacao)} color="bg-slate-50 ring-slate-200 text-slate-700" />
           <KpiMini label="Em Picking"        value={fmtN(kpis.em_picking)}          color="bg-yellow-50 ring-yellow-200 text-yellow-700" />
           <KpiMini label="Em Análise"        value={fmtN(kpis.em_analise)}          color="bg-orange-50 ring-orange-200 text-orange-700" />
-          <KpiMini label="Faturados"         value={fmtN(kpis.faturado + kpis.concluido)} color="bg-emerald-50 ring-emerald-200 text-emerald-700" />
         </div>
       )}
 
