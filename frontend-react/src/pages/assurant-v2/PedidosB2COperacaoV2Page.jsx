@@ -2144,12 +2144,6 @@ function TabAguardandoDefinicao() {
 // ══════════════════════════════════════════════════════════
 // PÁGINA PRINCIPAL
 // ══════════════════════════════════════════════════════════
-// Emails com acesso à aba de comparativo de aging. Preencha com os endereços certos.
-const EMAILS_COMPARATIVO = [
-  "SEU_EMAIL_AQUI@liquidapreco.com.br",
-  "EMAIL_DO_JHONATAN_AQUI@liquidapreco.com.br",
-];
-
 function TabComparativoAging() {
   const [linhas, setLinhas]   = useState([]);
   const [loading, setLoading] = useState(true);
@@ -2289,20 +2283,11 @@ export default function PedidosB2COperacaoV2Page() {
     buscarKpisPedidosB2C().then(setKpis).catch(console.error);
   }
 
-  // Acesso à aba de comparativo: master OU email na allowlist
-  const emailUsuario = (user?.email || "").toLowerCase();
-  const podeVerComparativo =
-    profile?.is_master ||
-    EMAILS_COMPARATIVO.map(e => e.toLowerCase()).includes(emailUsuario);
-
   const ABAS = [
     { key: "picking",     label: "Picking",     icon: Search        },
     { key: "analise",     label: "Em Análise",  icon: AlertTriangle },
     { key: "definicao",   label: "Aguardando Definição", icon: HelpCircle },
     { key: "faturamento", label: "Faturamento", icon: FileText      },
-    ...(podeVerComparativo
-      ? [{ key: "comparativo", label: "Comparativo Aging", icon: Scale }]
-      : []),
   ];
 
   return (
@@ -2343,7 +2328,6 @@ export default function PedidosB2COperacaoV2Page() {
       {aba === "analise"     && <TabAnalise />}
       {aba === "definicao"   && <TabAguardandoDefinicao />}
       {aba === "faturamento" && <TabFaturamento />}
-      {aba === "comparativo" && podeVerComparativo && <TabComparativoAging />}
     </div>
   );
 }
