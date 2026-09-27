@@ -1289,7 +1289,7 @@ const CAMPO_DIVERGENCIA = {
 export async function resolverAnaliseParaEmbalagem(pedidoId, { tipo, valorReal, novoImei }, userId) {
   const { data: pedido } = await supabase
     .from("pedidos_b2c")
-    .select("id_anymarket, imei_alocado, grupo_id, motivo_analise")
+    .select("id_anymarket, imei_alocado, grupo_id, motivo_analise, sku_produto, grade_produto, sku_definido, grade_definida")
     .eq("id", pedidoId)
     .single();
   if (!pedido) throw new Error("Pedido não encontrado.");
@@ -1299,6 +1299,7 @@ export async function resolverAnaliseParaEmbalagem(pedidoId, { tipo, valorReal, 
   let motivo    = pedido.motivo_analise || "";
   let skuAlocadoCorrigido = null;
   let gradeAlocadaCorrigida = null;
+  let auditoriaTroca = null;
 
   if (tipo !== "localizado") {
     const campo = CAMPO_DIVERGENCIA[tipo];
@@ -1311,6 +1312,21 @@ export async function resolverAnaliseParaEmbalagem(pedidoId, { tipo, valorReal, 
     if (!imei) throw new Error("Bipe o aparelho que será usado no pedido.");
 
     const mesmoImei = imei === pedido.imei_alocado;
+
+    if (!mesmoImei) {
+      const candidatos = await buscarSugestaoFifo(
+        pedido.sku_definido || pedido.sku_produto,
+        pedido.grade_definida || pedido.grade_produto
+      );
+      const escolhido = (candidatos || []).find(
+        (item) => String(item.imei) === String(imei)
+      ) || {
+        imei,
+        sku: pedido.sku_definido || pedido.sku_produto,
+        grade: pedido.grade_definida || pedido.grade_produto,
+      };
+      auditoriaTroca = { escolhido, candidatos };
+    }
 
     if (pedido.imei_alocado) {
       let valorAntigo = null;
@@ -1429,6 +1445,16 @@ export async function resolverAnaliseParaEmbalagem(pedidoId, { tipo, valorReal, 
     .update(camposResolucao)
     .eq("id", pedidoId);
   if (error) throw traduzErroAlocacao(error, imeiFinal);
+
+  if (auditoriaTroca) {
+    await registrarAuditoriaFifo(pedidoId, {
+      sugestao: auditoriaTroca.escolhido,
+      candidatos: auditoriaTroca.candidatos,
+      origem: "resolucao_analise_divergencia",
+      pedido,
+      userId,
+    });
+  }
 
   // Retorno de análise não deve esperar a formação normal de lote de 20:
   // cria imediatamente uma nova leva exclusiva para o pedido.
