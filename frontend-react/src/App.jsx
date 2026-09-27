@@ -75,6 +75,7 @@ import IndicadoresExecutivosV2Page from "./pages/assurant-v2/IndicadoresExecutiv
 import EstoqueAgingDetalheV2Page from "./pages/assurant-v2/EstoqueAgingDetalheV2Page.jsx";
 import EstoqueInteligenciaSkuV2Page from "./pages/assurant-v2/EstoqueInteligenciaSkuV2Page.jsx";
 import RastreabilidadeItemV2Page from "./pages/assurant-v2/RastreabilidadeItemV2Page.jsx";
+import AuditoriaFifoV2Page from "./pages/assurant-v2/AuditoriaFifoV2Page.jsx";
 
 import LinhaBrancaHomePage from "./pages/linha-branca-v2/LinhaBrancaHomePage.jsx";
 import RefrigeracaoV2Page from "./pages/linha-branca-v2/RefrigeracaoV2Page.jsx";
@@ -135,6 +136,44 @@ function ProtectedRoute({
       tela
     )
   ) {
+    return (
+      <Navigate
+        to="/sem-acesso"
+        replace
+      />
+    );
+  }
+
+  return children;
+}
+
+function UserOnlyRoute({
+  userId,
+  children,
+}) {
+  const {
+    user,
+    loading,
+  } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-purple-700 font-bold">
+        Carregando...
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <Navigate
+        to="/login"
+        replace
+      />
+    );
+  }
+
+  if (user.id !== userId) {
     return (
       <Navigate
         to="/sem-acesso"
@@ -479,6 +518,15 @@ export default function App() {
             <ProtectedRoute tela="/v2/assurant/estoque/rastreabilidade">
               <RastreabilidadeItemV2Page />
             </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="estoque/auditoria-fifo"
+          element={
+            <UserOnlyRoute userId="b517d70a-56be-4b4f-8b9e-a03c769dd3c3">
+              <AuditoriaFifoV2Page />
+            </UserOnlyRoute>
           }
         />
 
