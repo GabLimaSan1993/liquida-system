@@ -752,7 +752,9 @@ async function registrarAuditoriaFifo(pedidoId, { sugestao, candidatos, origem, 
   try {
     const lista = Array.isArray(candidatos) ? candidatos : [];
     const idx = sugestao ? lista.findIndex(c => String(c.imei) === String(sugestao.imei)) : -1;
-    const posicao = idx >= 0 ? idx + 1 : null;
+    // posição 0 = escolha manual/fora da fila elegível. Assim continua auditável
+    // e entra como divergência, em vez de desaparecer como "sem rastro".
+    const posicao = idx >= 0 ? idx + 1 : (sugestao ? 0 : null);
     const gradeAlvo = pedido?.grade_definida || pedido?.grade_produto || null;
 
     await supabase.from("pedidos_b2c").update({
@@ -1527,6 +1529,18 @@ export async function seguirComOpcaoFifo(
     );
   }
 
+  const candidatosAuditoria = (sugestoes || []).filter(
+    (sugestao) => sugestao.imei !== imeiAntigo
+  );
+
+  await registrarAuditoriaFifo(pedido.id, {
+    sugestao: proximo,
+    candidatos: candidatosAuditoria,
+    origem: "resolucao_analise_fifo",
+    pedido,
+    userId,
+  });
+
   const grupoFormado =
     await criarGrupoExclusivoPedidoDefinido(
       pedido.id_anymarket,
@@ -1550,7 +1564,7 @@ export async function resolverAnalise(
   const { data: pedido, error: erroPedido } =
     await supabase
       .from("pedidos_b2c")
-      .select("id_anymarket, imei_alocado, grupo_id")
+      .select("id_anymarket, imei_alocado, grupo_id, sku_produto, grade_produto, sku_definido, grade_definida")
       .eq("id", pedidoId)
       .single();
 
@@ -1558,6 +1572,22 @@ export async function resolverAnalise(
     throw new Error(
       erroPedido?.message || "Pedido não encontrado."
     );
+  }
+
+  let auditoriaResolucao = null;
+  if (novoImei) {
+    const candidatos = await buscarSugestaoFifo(
+      pedido.sku_definido || pedido.sku_produto,
+      pedido.grade_definida || pedido.grade_produto
+    );
+    const escolhido = (candidatos || []).find(
+      (item) => String(item.imei) === String(novoImei)
+    ) || {
+      imei: novoImei,
+      sku: pedido.sku_definido || pedido.sku_produto,
+      grade: pedido.grade_definida || pedido.grade_produto,
+    };
+    auditoriaResolucao = { escolhido, candidatos };
   }
 
   if (pedido.imei_alocado) {
@@ -1612,6 +1642,16 @@ export async function resolverAnalise(
 
   if (error) {
     throw new Error(error.message);
+  }
+
+  if (auditoriaResolucao) {
+    await registrarAuditoriaFifo(pedidoId, {
+      sugestao: auditoriaResolucao.escolhido,
+      candidatos: auditoriaResolucao.candidatos,
+      origem: "resolucao_analise_manual",
+      pedido,
+      userId,
+    });
   }
 
   const grupoFormado =
