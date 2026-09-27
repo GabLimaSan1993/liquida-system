@@ -49,6 +49,13 @@ const SIDEBAR_STORAGE_KEY =
 const ASSURANT_TRACE_ROUTE =
   "/v2/assurant/estoque/rastreabilidade";
 
+const ASSURANT_FIFO_AUDIT_ROUTE =
+  "/v2/assurant/estoque/auditoria-fifo";
+
+const FIFO_AUDIT_ALLOWED_USERS = [
+  "b517d70a-56be-4b4f-8b9e-a03c769dd3c3",
+];
+
 const ACTIVE_B2C_STATUSES = [
   "aguardando_alocacao",
   "aguardando_definicao_produto",
@@ -239,6 +246,15 @@ const MENU_GROUPS = [
   to: ASSURANT_TRACE_ROUTE,
   exact: true,
   enabled: true,
+},
+
+      {
+  label: "Auditoria FIFO",
+  icon: ShieldCheck,
+  to: ASSURANT_FIFO_AUDIT_ROUTE,
+  exact: true,
+  enabled: true,
+  allowedUserIds: FIFO_AUDIT_ALLOWED_USERS,
 },
 
       {
@@ -883,7 +899,14 @@ function SidebarContent({
   pathname,
   mobile = false,
 }) {
-  const podeVerRota = (to) => {
+  const podeVerRota = (to, allowedUserIds) => {
+    if (
+      allowedUserIds?.length &&
+      !allowedUserIds.includes(profile?.id)
+    ) {
+      return false;
+    }
+
     if (!to) return true;
 
     return (
@@ -901,7 +924,7 @@ function SidebarContent({
             return {
               ...item,
               children: item.children.filter((child) =>
-                podeVerRota(child.to)
+                podeVerRota(child.to, child.allowedUserIds)
               ),
             };
           }
@@ -915,7 +938,7 @@ function SidebarContent({
             return item.children.length > 0;
           }
 
-          return podeVerRota(item.to);
+          return podeVerRota(item.to, item.allowedUserIds);
         }),
     }))
     .filter((group) => group.items.length > 0);
