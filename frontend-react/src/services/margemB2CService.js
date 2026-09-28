@@ -61,78 +61,25 @@ export async function buscarDetalheMargemB2C({
   porPagina = 50,
 }) {
   const { inicio, fim } = periodoIso(ano, mes);
-  const from = Math.max(0, (pagina - 1) * porPagina);
-  const to = from + porPagina - 1;
+  const offset = Math.max(0, (pagina - 1) * porPagina);
 
-  let query = supabase
-    .from("vw_margem_b2c_gabriel")
-    .select(
-      [
-        "pedido_item_id",
-        "id_anymarket",
-        "item_seq",
-        "marketplace",
-        "numero_nf",
-        "faturado_em",
-        "titulo_produto",
-        "sku_produto",
-        "sku_alocado",
-        "grade_produto",
-        "grade_alocada",
-        "imei_final",
-        "preco_venda",
-        "voucher_liquida",
-        "voucher_tradein",
-        "data_tradein",
-        "custo_entrada",
-        "valor_trade_in",
-        "valor_campanha",
-        "rede",
-        "loja",
-        "margem_rs",
-        "margem_pct",
-        "aging_ate_venda_dias",
-        "status_margem",
-      ].join(","),
-      { count: "exact" }
-    )
-    .gte("faturado_em", inicio)
-    .lt("faturado_em", fim)
-    .order("faturado_em", { ascending: false });
-
-  if (status === "com_margem") {
-    query = query.eq("status_margem", "margem_calculavel");
-  } else if (status === "sem_margem") {
-    query = query.neq("status_margem", "margem_calculavel");
-  }
-
-  const q = busca.trim();
-  if (q) {
-    if (/^\d+$/.test(q) && q.length >= 7 && q.length <= 12) {
-      query = query.eq("id_anymarket", Number(q));
-    } else {
-      const seguro = q.replaceAll(",", " ").replaceAll("(", " ").replaceAll(")", " ");
-      query = query.or(
-        [
-          `imei_final.ilike.%${seguro}%`,
-          `voucher_tradein.ilike.%${seguro}%`,
-          `voucher_liquida.ilike.%${seguro}%`,
-          `numero_nf.ilike.%${seguro}%`,
-          `titulo_produto.ilike.%${seguro}%`,
-          `sku_produto.ilike.%${seguro}%`,
-          `sku_alocado.ilike.%${seguro}%`,
-        ].join(",")
-      );
-    }
-  }
-
-  const { data, error, count } = await query.range(from, to);
+  const { data, error } = await supabase.rpc("margem_b2c_detalhe_gabriel", {
+    p_inicio: inicio,
+    p_fim: fim,
+    p_status: status,
+    p_busca: busca.trim(),
+    p_limit: porPagina,
+    p_offset: offset,
+  });
 
   if (error) throw new Error(error.message);
 
+  const rows = data || [];
+  const total = rows.length ? Number(rows[0].total_count || 0) : 0;
+
   return {
-    rows: data || [],
-    total: count || 0,
+    rows,
+    total,
     pagina,
     porPagina,
   };
