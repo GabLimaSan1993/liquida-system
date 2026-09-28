@@ -49,6 +49,7 @@ const TELAS_V2 = [
       { id: "/v2/assurant/b2c/expedicao", label: "Expedição" },
       { id: "/v2/assurant/b2c/etiquetas", label: "Etiquetas" },
       { id: "/v2/assurant/b2c/gestao", label: "Gestão B2C" },
+      { id: "/v2/assurant/b2c/desvinculacoes", label: "Desvinculações — Liquida Preço" },
     ],
   },
   {
