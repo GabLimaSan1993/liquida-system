@@ -11,6 +11,7 @@ import {
   ChevronRight,
   ClipboardCheck,
   Clock3,
+  CircleDollarSign,
   FileText,
   FlaskConical,
   HelpCircle,
@@ -53,6 +54,10 @@ const ASSURANT_FIFO_AUDIT_ROUTE =
   "/v2/assurant/estoque/auditoria-fifo";
 
 const FIFO_AUDIT_ALLOWED_USERS = [
+  "b517d70a-56be-4b4f-8b9e-a03c769dd3c3",
+];
+
+const MARGEM_B2C_ALLOWED_USERS = [
   "b517d70a-56be-4b4f-8b9e-a03c769dd3c3",
 ];
 
@@ -215,6 +220,14 @@ const MENU_GROUPS = [
       icon: BarChart3,
       to: "/v2/assurant/b2c/gestao",
       exact: true,
+    },
+
+    {
+      label: "Margem",
+      icon: CircleDollarSign,
+      to: "/v2/assurant/b2c/gestao/margem",
+      exact: true,
+      allowedUserIds: MARGEM_B2C_ALLOWED_USERS,
     },
   ],
 },
