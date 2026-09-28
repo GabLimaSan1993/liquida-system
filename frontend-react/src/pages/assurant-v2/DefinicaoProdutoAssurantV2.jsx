@@ -266,7 +266,7 @@ export default function DefinicaoProdutoAssurantV2() {
               </h3>
             </div>
             <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-500">
-              A Assurant escolhe a alternativa comercial. O Liquida mostra somente estoque real disponível e aloca automaticamente o primeiro IMEI do FIFO da opção aprovada.
+              A Assurant escolhe a alternativa comercial. Itens livres seguem direto para o B2C; itens vinculados a B2B, Troca ou Venda Funcionário geram uma solicitação para a Liquida Preço autorizar a transferência.
             </p>
           </div>
           <button
@@ -551,7 +551,7 @@ export default function DefinicaoProdutoAssurantV2() {
 
                           <div className="mt-3 rounded-xl bg-slate-50 p-3">
                             <div className="text-[10px] font-black uppercase text-slate-400">
-                              IMEI que será alocado · FIFO
+                              IMEI selecionado · FIFO
                             </div>
                             <div className="mt-1 font-mono text-xs font-black text-slate-700">
                               {o.fifo?.imei}
