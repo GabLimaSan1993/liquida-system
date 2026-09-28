@@ -1842,6 +1842,284 @@ export async function validarSkuDefinicao(skuDigitado, grade) {
   return resultado;
 }
 
+
+function nomeGradeComercial(grade) {
+  const g = normalizeGrade(grade);
+  if (g === "like new" || g === "sou como novo") return "Like New";
+  if (g === "excelente") return "Excelente";
+  if (g === "muito bom") return "Muito Bom";
+  if (g === "bom") return "Bom";
+  if (g === "outlet" || g === "outlet bateria 70%") return "Outlet";
+  if (g === "regular") return "Regular";
+  if (g === "quebrado") return "Quebrado";
+  return String(grade || "").trim();
+}
+
+function gradeOriginalPedido(pedido) {
+  const sku = String(pedido?.sku_produto || "").trim();
+  const cc = sku.match(/-(CC\d+)$/i)?.[1]?.toLowerCase();
+  return nomeGradeComercial(cc ? (CC_GRADE[cc] || pedido?.grade_produto) : (pedido?.grade_produto || "Excelente"));
+}
+
+function relacaoGrade(gradeDestino, gradeOrigem) {
+  const destino = gradeOrdem(gradeDestino);
+  const origem = gradeOrdem(gradeOrigem);
+  if (destino >= GRADE_FORA_HIERARQUIA || origem >= GRADE_FORA_HIERARQUIA) return "indefinida";
+  if (destino < origem) return "upgrade";
+  if (destino > origem) return "downgrade";
+  return "mesma_grade";
+}
+
+// Retorna as alternativas REAIS e livres do WMS para a Assurant decidir a definição.
+// Regulares e Quebrados não são oferecidos. Itens com bateria 70–79% aparecem como Outlet.
+// As opções são agrupadas por grade comercial + cor; dentro do grupo o IMEI escolhido é
+// sempre o primeiro do FIFO, preservando a ordem de DATA_SUBINV.
+export async function buscarOpcoesDefinicao(skuDigitado, pedidoOuGrade) {
+  const raw = String(skuDigitado || "").trim();
+  if (!raw) return { existe: false, opcoes: [] };
+
+  const skuSemCC = raw.replace(/-CC\d+$/i, "").trim();
+  const skuBase = await traduzirSku(skuSemCC);
+  const gradeOrigem = typeof pedidoOuGrade === "object"
+    ? gradeOriginalPedido(pedidoOuGrade)
+    : nomeGradeComercial(pedidoOuGrade || "Excelente");
+
+  const { data: candidatos, error } = await supabase.rpc("wms_buscar_candidatos_saida", {
+    p_sku: skuBase,
+  });
+  if (error) throw new Error(`Falha ao consultar opções do WMS: ${error.message}`);
+
+  const base = candidatos || [];
+  if (!base.length) {
+    const { data: catalogo } = await supabase
+      .from("assurant_triagem")
+      .select("modelo")
+      .eq("sku", skuBase)
+      .limit(1);
+
+    return {
+      existe: Boolean(catalogo?.length),
+      skuBase,
+      modelo: catalogo?.[0]?.modelo || null,
+      gradeOrigem,
+      opcoes: [],
+    };
+  }
+
+  const imeis = [...new Set(base.map((x) => String(x.imei || "").trim()).filter(Boolean))];
+  const detalhesPorImei = new Map();
+
+  for (let i = 0; i < imeis.length; i += 300) {
+    const { data: detalhes, error: erroDetalhes } = await supabase
+      .from("vw_assurant_estoque_detalhe_atual")
+      .select("imei,cor,capacidade,modelo")
+      .in("imei", imeis.slice(i, i + 300));
+
+    if (erroDetalhes) throw new Error(`Falha ao consultar cor das opções: ${erroDetalhes.message}`);
+    for (const d of detalhes || []) {
+      const key = String(d.imei || "").trim();
+      if (key && !detalhesPorImei.has(key)) detalhesPorImei.set(key, d);
+    }
+  }
+
+  const elegiveis = base
+    .map((item) => {
+      const gradeFisica = nomeGradeComercial(item.grade);
+      const ordemFisica = gradeOrdem(gradeFisica);
+      const bateria = normalizeGrade(item.status_bateria);
+      const outlet = bateria === BATERIA_OUTLET && ordemFisica <= gradeOrdem("Bom");
+
+      if (["Regular", "Quebrado"].includes(gradeFisica)) return null;
+      if (BATERIA_RUINS_NAO_OUTLET.includes(bateria) && !outlet) return null;
+
+      const gradeComercial = outlet ? "Outlet" : gradeFisica;
+      if (!["Like New", "Excelente", "Muito Bom", "Bom", "Outlet"].includes(gradeComercial)) return null;
+
+      const det = detalhesPorImei.get(String(item.imei || "").trim()) || {};
+      const cor = String(det.cor || "Sem cor").trim() || "Sem cor";
+
+      return {
+        ...item,
+        grade_fisica: gradeFisica,
+        grade_comercial: gradeComercial,
+        cor,
+        capacidade: det.capacidade || null,
+        modelo_exibicao: det.modelo || item.modelo || null,
+        outlet,
+        relacao: relacaoGrade(gradeComercial, gradeOrigem),
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => {
+      const d = new Date(a.data_subinv) - new Date(b.data_subinv);
+      if (d !== 0) return d;
+      return String(a.imei).localeCompare(String(b.imei));
+    });
+
+  const grupos = new Map();
+  for (const item of elegiveis) {
+    const chave = `${item.grade_comercial}|||${item.cor}`;
+    if (!grupos.has(chave)) grupos.set(chave, []);
+    grupos.get(chave).push(item);
+  }
+
+  const ordemVisual = { "Like New": 1, "Excelente": 2, "Muito Bom": 3, "Bom": 4, "Outlet": 5 };
+  const opcoes = Array.from(grupos.values())
+    .map((lista) => ({
+      sku: skuBase,
+      modelo: lista[0]?.modelo_exibicao || lista[0]?.modelo || null,
+      grade: lista[0].grade_comercial,
+      grade_fisica_fifo: lista[0].grade_fisica,
+      cor: lista[0].cor,
+      outlet: lista[0].outlet,
+      relacao: lista[0].relacao,
+      quantidade: lista.length,
+      fifo: lista[0],
+      candidatos: lista,
+    }))
+    .sort((a, b) => {
+      const g = (ordemVisual[a.grade] || 99) - (ordemVisual[b.grade] || 99);
+      if (g !== 0) return g;
+      return String(a.cor).localeCompare(String(b.cor), "pt-BR");
+    });
+
+  return {
+    existe: true,
+    skuBase,
+    modelo: opcoes[0]?.modelo || base[0]?.modelo || null,
+    gradeOrigem,
+    opcoes,
+  };
+}
+
+// Fluxo novo de Aguardando Definição: a Assurant aprova SKU/grade/cor e o Liquida
+// aloca automaticamente o primeiro IMEI FIFO daquela opção. Upgrade exige aceite explícito.
+// Downgrade permanece bloqueado.
+export async function aprovarDefinicaoProduto(
+  pedidoId,
+  { sku, grade, cor, imei, upgradeConfirmado = false },
+  userId
+) {
+  const { data: pedido, error: errPedido } = await supabase
+    .from("pedidos_b2c")
+    .select("id,id_anymarket,status,sku_produto,grade_produto,sku_definido,grade_definida")
+    .eq("id", pedidoId)
+    .single();
+
+  if (errPedido || !pedido) throw new Error(errPedido?.message || "Pedido não encontrado.");
+  if (pedido.status !== "aguardando_definicao_produto") {
+    throw new Error("Este pedido não está mais aguardando definição.");
+  }
+
+  const gradeOrigem = gradeOriginalPedido(pedido);
+  const consulta = await buscarOpcoesDefinicao(sku, pedido);
+  const skuBase = consulta.skuBase;
+  const imeiTrim = String(imei || "").trim();
+
+  const opcao = (consulta.opcoes || []).find(
+    (o) =>
+      o.grade === nomeGradeComercial(grade) &&
+      String(o.cor || "") === String(cor || "") &&
+      String(o.fifo?.imei || "") === imeiTrim
+  );
+
+  if (!opcao) {
+    throw new Error("A opção escolhida não está mais disponível. Atualize as opções.");
+  }
+
+  if (opcao.relacao === "downgrade") {
+    throw new Error(`Downgrade de ${gradeOrigem} para ${opcao.grade} não é permitido.`);
+  }
+
+  if (opcao.relacao === "upgrade" && !upgradeConfirmado) {
+    throw new Error(`Confirme que a Assurant está ciente do upgrade de ${gradeOrigem} para ${opcao.grade}.`);
+  }
+
+  if (opcao.relacao === "upgrade") {
+    const { error: errUpgrade } = await supabase.rpc("b2c_registrar_aprovacao_upgrade", {
+      p_pedido_id: pedidoId,
+      p_imei: imeiTrim,
+      p_sku_destino: skuBase,
+      p_grade_destino: opcao.grade,
+      p_cor_destino: opcao.cor,
+    });
+    if (errUpgrade) throw new Error(errUpgrade.message);
+  }
+
+  const skuOriginalBase = await traduzirSku(
+    String(pedido.sku_produto || "").replace(/-CC\d+$/i, "").trim()
+  );
+  const mudouSku = String(skuBase).toUpperCase() !== String(skuOriginalBase).toUpperCase();
+  const mudouGrade = nomeGradeComercial(opcao.grade) !== nomeGradeComercial(gradeOrigem);
+  const agora = new Date().toISOString();
+
+  const resumo = [
+    `Assurant definiu ${skuBase}`,
+    opcao.grade,
+    opcao.cor,
+    `IMEI FIFO ${imeiTrim}`,
+    opcao.relacao === "upgrade" ? `UPGRADE APROVADO: ${gradeOrigem} → ${opcao.grade}` : "grade compatível",
+  ].join(" · ");
+
+  const { error: errDef } = await supabase
+    .from("pedidos_b2c")
+    .update({
+      sku_definido: mudouSku ? skuBase : null,
+      grade_definida: (mudouSku || mudouGrade) ? opcao.grade : null,
+      definicao_status: "concluido",
+      definicao_resolvido_em: agora,
+      definicao_resolvido_por: userId,
+      definicao_resumo: resumo,
+      status: "alocado",
+      imei_alocado: imeiTrim,
+      sku_alocado: skuBase,
+      grade_alocada: opcao.grade_fisica_fifo || opcao.grade,
+      wms_alocacao_id: opcao.fifo?.alocacao_id || null,
+      alocado_em: agora,
+      alocado_por: userId,
+      atualizado_em: agora,
+    })
+    .eq("id", pedidoId);
+
+  if (errDef) throw traduzErroAlocacao(errDef, imeiTrim);
+
+  const { error: errTri } = await supabase
+    .from("assurant_triagem")
+    .update({ status_atual: "Reservado para pedido B2C", atualizado_em: agora })
+    .eq("imei", imeiTrim);
+  if (errTri) throw new Error(errTri.message);
+
+  const candidatos = opcao.candidatos || [];
+  await registrarAuditoriaFifo(pedidoId, {
+    sugestao: opcao.fifo,
+    candidatos,
+    origem: opcao.relacao === "upgrade"
+      ? "definicao_assurant_upgrade_aprovado"
+      : "definicao_assurant",
+    pedido: {
+      ...pedido,
+      sku_definido: mudouSku ? skuBase : null,
+      grade_definida: (mudouSku || mudouGrade) ? opcao.grade : null,
+    },
+    userId,
+  });
+
+  const grupoFormado = await criarGrupoExclusivoPedidoDefinido(
+    pedido.id_anymarket,
+    userId
+  );
+
+  return {
+    ok: true,
+    grupoFormado,
+    imei: imeiTrim,
+    sku: skuBase,
+    grade: opcao.grade,
+    cor: opcao.cor,
+    relacao: opcao.relacao,
+  };
+}
+
 // Conclui a definição de produto de um pedido em "aguardando_definicao_produto".
 // mesmoSku=false grava sku_definido/grade_definida (preserva o original do cliente).
 // Se vier imei: aloca DIRETO naquele aparelho (pula o FIFO), status = alocado,
