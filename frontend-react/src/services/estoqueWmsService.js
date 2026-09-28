@@ -126,6 +126,47 @@ async function enriquecerIndicadorOutlet(linhas = []) {
   });
 }
 
+async function enriquecerBlacklist(linhas = []) {
+  const imeis = [...new Set(
+    linhas
+      .map((item) => String(item?.imei || "").trim())
+      .filter(Boolean)
+  )];
+
+  if (!imeis.length) {
+    return linhas;
+  }
+
+  const porImei = new Map();
+  const BLOCO = 300;
+
+  for (let i = 0; i < imeis.length; i += BLOCO) {
+    const { data, error } = await supabase
+      .from("assurant_imei_blacklist_checks")
+      .select("imei,status,is_restricted,reason,provider,checked_at,created_at")
+      .in("imei", imeis.slice(i, i + BLOCO))
+      .order("checked_at", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      // Complementar e restrito no LAB: nunca derruba a consulta do WMS.
+      return linhas;
+    }
+
+    for (const check of data || []) {
+      const imei = String(check.imei || "").trim();
+      if (imei && !porImei.has(imei)) {
+        porImei.set(imei, check);
+      }
+    }
+  }
+
+  return linhas.map((item) => ({
+    ...item,
+    blacklist: porImei.get(String(item?.imei || "").trim()) || null,
+  }));
+}
+
 export function formatarEnderecoWms(item) {
   if (!item) return "—";
   return `RUA ${String(item.rua).padStart(2, "0")} · ` +
@@ -164,7 +205,8 @@ export async function buscarMapaAndarWms(rua, bloco, andar) {
     p_andar: Number(andar),
   });
   if (error) throw new Error(error.message);
-  return enriquecerIndicadorOutlet(data || []);
+  const comOutlet = await enriquecerIndicadorOutlet(data || []);
+  return enriquecerBlacklist(comOutlet);
 }
 
 export async function pesquisarEstoqueWms({
@@ -188,7 +230,8 @@ export async function pesquisarEstoqueWms({
   if (error) throw new Error(error.message);
 
   const linhas = data || [];
-  const linhasEnriquecidas = await enriquecerIndicadorOutlet(linhas);
+  const comOutlet = await enriquecerIndicadorOutlet(linhas);
+  const linhasEnriquecidas = await enriquecerBlacklist(comOutlet);
 
   return {
     total: linhas[0]?.total_encontrado || 0,
