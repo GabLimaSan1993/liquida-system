@@ -76,6 +76,7 @@ import EstoqueAgingDetalheV2Page from "./pages/assurant-v2/EstoqueAgingDetalheV2
 import EstoqueInteligenciaSkuV2Page from "./pages/assurant-v2/EstoqueInteligenciaSkuV2Page.jsx";
 import RastreabilidadeItemV2Page from "./pages/assurant-v2/RastreabilidadeItemV2Page.jsx";
 import AuditoriaFifoV2Page from "./pages/assurant-v2/AuditoriaFifoV2Page.jsx";
+import MargemB2CV2Page from "./pages/assurant-v2/MargemB2CV2Page.jsx";
 
 import LinhaBrancaHomePage from "./pages/linha-branca-v2/LinhaBrancaHomePage.jsx";
 import RefrigeracaoV2Page from "./pages/linha-branca-v2/RefrigeracaoV2Page.jsx";
@@ -610,6 +611,15 @@ export default function App() {
           path="b2c/gestao"
           element={
             <B2CFluxoComplementarV2Page tipo="gestao" />
+          }
+        />
+
+        <Route
+          path="b2c/gestao/margem"
+          element={
+            <UserOnlyRoute userId="b517d70a-56be-4b4f-8b9e-a03c769dd3c3">
+              <MargemB2CV2Page />
+            </UserOnlyRoute>
           }
         />
 
