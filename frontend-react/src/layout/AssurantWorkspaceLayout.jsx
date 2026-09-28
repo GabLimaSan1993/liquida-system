@@ -61,6 +61,10 @@ const MARGEM_B2C_ALLOWED_USERS = [
   "b517d70a-56be-4b4f-8b9e-a03c769dd3c3",
 ];
 
+const TRIAGEM_AUTO_ALLOWED_USERS = [
+  "b517d70a-56be-4b4f-8b9e-a03c769dd3c3",
+];
+
 const ACTIVE_B2C_STATUSES = [
   "aguardando_alocacao",
   "aguardando_definicao_produto",
@@ -120,6 +124,14 @@ const MENU_GROUPS = [
             icon: FlaskConical,
             to: "/v2/assurant/triagens/funcional",
             exact: true,
+          },
+
+          {
+            label: "Triagem Automática — LAB",
+            icon: Activity,
+            to: "/v2/assurant/triagens/automatica-lab",
+            exact: true,
+            allowedUserIds: TRIAGEM_AUTO_ALLOWED_USERS,
           },
 
           {
