@@ -51,7 +51,9 @@ function gradeOrdem(grade) {
 }
 
 function gradeAceita(gradeDisponivel, gradePedido) {
-  return gradeOrdem(gradeDisponivel) <= gradeOrdem(gradePedido);
+  // Regra comercial B2C: grade EXATA.
+  // Não existe mais upgrade automático (ex.: Excelente atendendo Muito Bom).
+  return gradeOrdem(gradeDisponivel) === gradeOrdem(gradePedido);
 }
 
 // O novo WMS é a única fonte física de localização. A função retorna também
@@ -364,13 +366,16 @@ async function traduzirSku(skuBase) {
 export async function buscarSugestaoFifo(skuProduto, gradePedido) {
   // O SKU do anúncio vem como MODELO-CCx, onde -CCx codifica a grade vendida.
   // A triagem guarda só o MODELO base. Então: corta o -CCx para achar o modelo
-  // no estoque, e usa o -CCx para definir a grade (mais confiável que o título).
+  // no estoque, e usa o -CCx para definir a grade. A grade é EXATA: nunca sobe ou desce.
   const skuRaw  = String(skuProduto || "").trim();
   const ccMatch = skuRaw.match(/-(CC\d+)$/i);
   const skuSemCC = skuRaw.replace(/-CC\d+$/i, "").trim();
   const ccCode  = ccMatch ? ccMatch[1].toLowerCase() : null;
-  // Grade vem do código -CCx; sem sufixo, a venda é tratada como Excelente.
-  const gradeAlvo = ccCode ? (CC_GRADE[ccCode] || gradePedido) : "Excelente";
+  // Quando existe -CCx, ele define a grade comercial. Sem sufixo,
+  // respeita uma grade explicitamente definida; caso contrário, segue a convenção Excelente.
+  const gradeAlvo = ccCode
+    ? (CC_GRADE[ccCode] || gradePedido)
+    : (gradePedido || "Excelente");
 
   // Outlet (CC4) não é uma grade física: é definido pela bateria.
   // Regra: apenas aparelhos de grade Bom ou superior COM bateria entre 70 e 79%.
@@ -1828,11 +1833,11 @@ export async function validarSkuDefinicao(skuDigitado, grade) {
   const disp = data.filter(d => STATUS_ALOCAVEIS.includes(d.status_atual));
   const resultado = { existe: true, skuBase, modelo: data[0].modelo, disponiveis: disp.length };
 
-  // Contagem por grade quando a tela informa a grade: exatos naquela grade + em grade superior.
+  // Contagem comercial agora considera somente grade exata; upgrade foi removido.
   if (grade) {
     const ordAlvo = gradeOrdem(grade);
     resultado.gradeExata = disp.filter(d => gradeOrdem(d.grade) === ordAlvo).length;
-    resultado.gradeAcima = disp.filter(d => gradeOrdem(d.grade) < ordAlvo).length;
+    resultado.gradeAcima = 0;
   }
   return resultado;
 }
