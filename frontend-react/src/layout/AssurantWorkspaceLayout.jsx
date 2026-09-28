@@ -222,13 +222,6 @@ const MENU_GROUPS = [
       exact: true,
     },
 
-    {
-      label: "Margem",
-      icon: CircleDollarSign,
-      to: "/v2/assurant/b2c/gestao/margem",
-      exact: true,
-      allowedUserIds: MARGEM_B2C_ALLOWED_USERS,
-    },
   ],
 },
     ],
@@ -331,6 +324,15 @@ const MENU_GROUPS = [
   exact: true,
   enabled: true,
 },
+
+    {
+      label: "Margem B2C",
+      icon: CircleDollarSign,
+      to: "/v2/assurant/b2c/gestao/margem",
+      exact: true,
+      enabled: true,
+      allowedUserIds: MARGEM_B2C_ALLOWED_USERS,
+    },
 
       {
         label: "SLA & Rastreabilidade",
