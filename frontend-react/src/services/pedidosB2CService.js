@@ -676,7 +676,7 @@ async function verificarECriarGrupo(userId) {
 // - multiproduto: espera TODOS os itens estarem alocados;
 // - todos os itens do mesmo id_anymarket entram juntos;
 // - nunca mistura com outro pedido.
-async function criarGrupoExclusivoPedidoDefinido(idAnyMarket, userId) {
+export async function criarGrupoExclusivoPedidoDefinido(idAnyMarket, userId) {
   const { data: itens, error } = await supabase
     .from("pedidos_b2c")
     .select("id, status, grupo_id")
@@ -1709,7 +1709,7 @@ export async function listarPedidosAguardandoDefinicao() {
     .from("pedidos_b2c")
     .select("*")
     .eq("status", "aguardando_definicao_produto")
-    .or("definicao_status.is.null,definicao_status.eq.pendente")
+    .or("definicao_status.is.null,definicao_status.eq.pendente,definicao_status.eq.aguardando_desvinculacao")
     .order("definicao_solicitada_em", { ascending: true });
   if (error) throw new Error(error.message);
   return data || [];
@@ -1884,7 +1884,7 @@ export async function buscarOpcoesDefinicao(skuDigitado, pedidoOuGrade) {
     ? gradeOriginalPedido(pedidoOuGrade)
     : nomeGradeComercial(pedidoOuGrade || "Excelente");
 
-  const { data: candidatos, error } = await supabase.rpc("wms_buscar_candidatos_saida", {
+  const { data: candidatos, error } = await supabase.rpc("assurant_definicao_candidatos", {
     p_sku: skuBase,
   });
   if (error) throw new Error(`Falha ao consultar opções do WMS: ${error.message}`);
@@ -1958,7 +1958,12 @@ export async function buscarOpcoesDefinicao(skuDigitado, pedidoOuGrade) {
 
   const grupos = new Map();
   for (const item of elegiveis) {
-    const chave = `${item.grade_comercial}|||${item.cor}`;
+    const chave = [
+      item.grade_comercial,
+      item.cor,
+      item.vinculo_tipo || "LIVRE",
+      item.vinculo_referencia || "",
+    ].join("|||");
     if (!grupos.has(chave)) grupos.set(chave, []);
     grupos.get(chave).push(item);
   }
@@ -1976,11 +1981,20 @@ export async function buscarOpcoesDefinicao(skuDigitado, pedidoOuGrade) {
       quantidade: lista.length,
       fifo: lista[0],
       candidatos: lista,
+      disponivel: Boolean(lista[0].disponivel),
+      vinculo_tipo: lista[0].vinculo_tipo || null,
+      vinculo_referencia: lista[0].vinculo_referencia || null,
+      vinculo_descricao: lista[0].vinculo_descricao || null,
+      vinculo_detalhes: lista[0].vinculo_detalhes || {},
     }))
     .sort((a, b) => {
       const g = (ordemVisual[a.grade] || 99) - (ordemVisual[b.grade] || 99);
       if (g !== 0) return g;
-      return String(a.cor).localeCompare(String(b.cor), "pt-BR");
+      const porCor = String(a.cor).localeCompare(String(b.cor), "pt-BR");
+      if (porCor !== 0) return porCor;
+      const porDisponibilidade = Number(Boolean(b.disponivel)) - Number(Boolean(a.disponivel));
+      if (porDisponibilidade !== 0) return porDisponibilidade;
+      return String(a.vinculo_descricao || "").localeCompare(String(b.vinculo_descricao || ""), "pt-BR");
     });
 
   return {
@@ -2044,6 +2058,42 @@ export async function aprovarDefinicaoProduto(
       p_cor_destino: opcao.cor,
     });
     if (errUpgrade) throw new Error(errUpgrade.message);
+  }
+
+  if (opcao.vinculo_tipo) {
+    const { data: solicitacao, error: errSolicitacao } = await supabase.rpc(
+      "assurant_solicitar_desvinculacao_b2c",
+      {
+        p_pedido_id: pedidoId,
+        p_imei: imeiTrim,
+        p_sku: skuBase,
+        p_grade: opcao.grade,
+        p_grade_fisica: opcao.grade_fisica_fifo || opcao.grade,
+        p_cor: opcao.cor,
+        p_relacao_grade: opcao.relacao,
+        p_vinculo_tipo: opcao.vinculo_tipo,
+        p_vinculo_referencia: opcao.vinculo_referencia,
+        p_vinculo_detalhes: opcao.vinculo_detalhes || {},
+      }
+    );
+
+    if (errSolicitacao) throw new Error(errSolicitacao.message);
+    if (!solicitacao?.ok) {
+      throw new Error(solicitacao?.erro || "Não foi possível criar a solicitação de desvinculação.");
+    }
+
+    return {
+      ok: true,
+      aguardandoDesvinculacao: true,
+      solicitacaoId: solicitacao.solicitacao_id,
+      imei: imeiTrim,
+      sku: skuBase,
+      grade: opcao.grade,
+      cor: opcao.cor,
+      relacao: opcao.relacao,
+      vinculoTipo: opcao.vinculo_tipo,
+      vinculoDescricao: opcao.vinculo_descricao,
+    };
   }
 
   const skuOriginalBase = await traduzirSku(
