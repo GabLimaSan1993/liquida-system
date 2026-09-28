@@ -52,14 +52,22 @@ function data(v) {
 
 function Kpi({ label, value, sub, icon: Icon }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-[11px] font-black uppercase tracking-wide text-slate-400">{label}</div>
-          <div className="mt-2 text-2xl font-black text-slate-900">{value}</div>
-          {sub && <div className="mt-1 text-xs font-semibold text-slate-500">{sub}</div>}
+    <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex min-w-0 items-start justify-between gap-2.5">
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[10px] font-black uppercase tracking-[0.06em] text-slate-400">
+            {label}
+          </div>
+          <div className="mt-2 whitespace-nowrap text-[clamp(1.3rem,1.55vw,1.9rem)] font-black leading-none tracking-[-0.035em] text-slate-900">
+            {value}
+          </div>
+          {sub && (
+            <div className="mt-2 truncate text-[11px] font-semibold leading-tight text-slate-500" title={sub}>
+              {sub}
+            </div>
+          )}
         </div>
-        <div className="rounded-xl bg-violet-50 p-2 text-violet-700">
+        <div className="shrink-0 rounded-xl bg-violet-50 p-2 text-violet-700">
           <Icon className="h-5 w-5" />
         </div>
       </div>
@@ -276,7 +284,7 @@ export default function MargemB2CV2Page() {
         </div>
       )}
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
         <Kpi label="Receita vinculada" value={money(resumo?.receita_vinculada)} sub={num(resumo?.itens_com_margem) + " itens com custo"} icon={TrendingUp} />
         <Kpi label="Custo de entrada" value={money(resumo?.custo_entrada)} sub="VALOR TOTAL A PAGAR" icon={PackageSearch} />
         <Kpi label="Margem bruta" value={money(resumo?.margem_rs)} sub="Venda − custo de entrada" icon={CircleDollarSign} />
