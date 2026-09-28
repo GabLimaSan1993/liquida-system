@@ -17,6 +17,7 @@ import {
   Package,
   RefreshCw,
   Search,
+  ShieldAlert,
   Warehouse,
   Zap,
 } from "lucide-react";
@@ -1321,6 +1322,10 @@ const andarResumo =
                   </th>
 
                   <th className="px-4 py-3">
+                    Restrição
+                  </th>
+
+                  <th className="px-4 py-3">
                     SKU
                   </th>
 
@@ -1392,6 +1397,23 @@ const andarResumo =
                             "—"}
                         </td>
 
+                        <td className="px-4 py-3">
+                          {item.blacklist?.status === "restricted" ? (
+                            <span className="inline-flex items-center gap-1 rounded-lg bg-rose-50 px-2 py-1 text-[9px] font-black text-rose-700 ring-1 ring-rose-200">
+                              <ShieldAlert className="h-3 w-3" />
+                              RESTRITO
+                            </span>
+                          ) : item.blacklist?.status === "clean" ? (
+                            <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2 py-1 text-[9px] font-black text-emerald-700 ring-1 ring-emerald-200">
+                              OK
+                            </span>
+                          ) : (
+                            <span className="text-[9px] font-bold text-slate-400">
+                              Não consultado
+                            </span>
+                          )}
+                        </td>
+
                         <td className="px-4 py-3 font-mono">
                           {item.sku ||
                             "—"}
@@ -1443,7 +1465,7 @@ const andarResumo =
                   !pesquisando && (
                     <tr>
                       <td
-                        colSpan="8"
+                        colSpan="9"
                         className="px-4 py-12 text-center text-xs text-slate-400"
                       >
                         Nenhum endereço encontrado com os filtros informados.
@@ -1944,6 +1966,17 @@ const ativo =
                           selecionado.sku
                         }
                         mono
+                      />
+
+                      <CampoDetalhe
+                        label="Restrição IMEI"
+                        value={
+                          selecionado.blacklist?.status === "restricted"
+                            ? "RESTRITO — " + (selecionado.blacklist?.reason || "consulta oficial")
+                            : selecionado.blacklist?.status === "clean"
+                            ? "Sem restrição"
+                            : "Não consultado"
+                        }
                       />
 
                       <CampoDetalhe
