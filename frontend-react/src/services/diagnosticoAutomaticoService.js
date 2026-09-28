@@ -153,7 +153,7 @@ export async function registrarResultadoBlacklist({
   return data;
 }
 
-export async function listarSessoesDiagnosticoRecentes(limit = 20) {
+export async function listarSessoesDiagnosticoRecentes(limit = 50) {
   const { data, error } = await supabase
     .from("assurant_diag_sessions")
     .select("id,voucher,status,platform,manufacturer,model,serial,started_at,finished_at,station_id,raw_device_info")
