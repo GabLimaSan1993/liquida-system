@@ -188,8 +188,8 @@ function UserOnlyRoute({
   return children;
 }
 
-function LiquidaOnlyRoute({ children }) {
-  const { user, profile, loading } = useAuth();
+function LiquidaOnlyRoute({ tela, children }) {
+  const { user, profile, loading, hasAccess } = useAuth();
 
   if (loading) {
     return (
@@ -209,6 +209,10 @@ function LiquidaOnlyRoute({ children }) {
     email.endsWith("@liquidapreco.com.br");
 
   if (!autorizado) {
+    return <Navigate to="/sem-acesso" replace />;
+  }
+
+  if (tela && !hasAccess(tela)) {
     return <Navigate to="/sem-acesso" replace />;
   }
 
@@ -665,7 +669,7 @@ export default function App() {
         <Route
           path="b2c/desvinculacoes"
           element={
-            <LiquidaOnlyRoute>
+            <LiquidaOnlyRoute tela="/v2/assurant/b2c/desvinculacoes">
               <DesvinculacoesLiquidaV2Page />
             </LiquidaOnlyRoute>
           }
