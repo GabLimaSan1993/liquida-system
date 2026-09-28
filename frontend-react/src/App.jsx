@@ -78,6 +78,7 @@ import EstoqueInteligenciaSkuV2Page from "./pages/assurant-v2/EstoqueInteligenci
 import RastreabilidadeItemV2Page from "./pages/assurant-v2/RastreabilidadeItemV2Page.jsx";
 import AuditoriaFifoV2Page from "./pages/assurant-v2/AuditoriaFifoV2Page.jsx";
 import MargemB2CV2Page from "./pages/assurant-v2/MargemB2CV2Page.jsx";
+import DesvinculacoesLiquidaV2Page from "./pages/assurant-v2/DesvinculacoesLiquidaV2Page.jsx";
 
 import LinhaBrancaHomePage from "./pages/linha-branca-v2/LinhaBrancaHomePage.jsx";
 import RefrigeracaoV2Page from "./pages/linha-branca-v2/RefrigeracaoV2Page.jsx";
@@ -186,6 +187,34 @@ function UserOnlyRoute({
 
   return children;
 }
+
+function LiquidaOnlyRoute({ children }) {
+  const { user, profile, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-purple-700 font-bold">
+        Carregando...
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  const email = String(profile?.email || user?.email || "").toLowerCase();
+  const autorizado =
+    Boolean(profile?.is_master) ||
+    email.endsWith("@liquidapreco.com.br");
+
+  if (!autorizado) {
+    return <Navigate to="/sem-acesso" replace />;
+  }
+
+  return children;
+}
+
 
 
 function DefaultRedirect() {
@@ -630,6 +659,15 @@ export default function App() {
             <UserOnlyRoute userId="b517d70a-56be-4b4f-8b9e-a03c769dd3c3">
               <MargemB2CV2Page />
             </UserOnlyRoute>
+          }
+        />
+
+        <Route
+          path="b2c/desvinculacoes"
+          element={
+            <LiquidaOnlyRoute>
+              <DesvinculacoesLiquidaV2Page />
+            </LiquidaOnlyRoute>
           }
         />
 
