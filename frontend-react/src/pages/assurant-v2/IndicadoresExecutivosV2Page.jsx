@@ -2556,31 +2556,7 @@ export default function IndicadoresExecutivosV2Page() {
                   ? "danger"
                   : "warning",
             },
-
-            {
-              label:
-                "Acuracidade FIFO",
-
-              value:
-                fmtPercentual(
-                  fifoAcuracidadeAtual
-                ),
-
-              detail:
-                `${fmtPercentual(
-                  fifoAcuracidadeAnterior
-                )} anterior · ${fmtPontosPercentuais(
-                  fifoVariacaoAcuracidade
-                )}`,
-
-              tone:
-                fifoAcuracidadeAtual !=
-                  null &&
-                fifoAcuracidadeAtual >=
-                  99
-                  ? "good"
-                  : "warning",
-            },
+
           ]}
         />
       </header>
