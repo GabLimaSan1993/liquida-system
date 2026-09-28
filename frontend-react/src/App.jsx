@@ -62,6 +62,7 @@ import GestaoTrocasDevolucoesPage from "./pages/GestaoTrocasDevolucoesPage.jsx";
 import RecebimentoV2Page from "./pages/assurant-v2/RecebimentoV2Page.jsx";
 import GestaoRecebimentoV2Page from "./pages/assurant-v2/GestaoRecebimentoV2Page.jsx";
 import TriagensV2Page from "./pages/assurant-v2/TriagensV2Page.jsx";
+import TriagemAutomaticaLabV2Page from "./pages/assurant-v2/TriagemAutomaticaLabV2Page.jsx";
 import ArmazenagemV2Page from "./pages/assurant-v2/ArmazenagemV2Page.jsx";
 import ConsultaEstoqueV2Page from "./pages/assurant-v2/ConsultaEstoqueV2Page.jsx";
 import InventarioV2Page from "./pages/assurant-v2/InventarioV2Page.jsx";
@@ -472,6 +473,15 @@ export default function App() {
           path="triagens/funcional"
           element={
             <TriagensV2Page tipo="funcional" />
+          }
+        />
+
+        <Route
+          path="triagens/automatica-lab"
+          element={
+            <UserOnlyRoute userId="b517d70a-56be-4b4f-8b9e-a03c769dd3c3">
+              <TriagemAutomaticaLabV2Page />
+            </UserOnlyRoute>
           }
         />
 
