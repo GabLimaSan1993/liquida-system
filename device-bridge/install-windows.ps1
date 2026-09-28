@@ -18,6 +18,11 @@ function Ensure-WingetPackage($Id, $CommandName, $FallbackPath = $null) {
 Ensure-WingetPackage "Google.PlatformTools" "adb"
 Ensure-WingetPackage "GoLang.Go" "go" "C:\Program Files\Go\bin\go.exe"
 
+$WinGetLinks = Join-Path $env:LOCALAPPDATA "Microsoft\WinGet\Links"
+if (Test-Path $WinGetLinks) {
+  $env:Path = "$WinGetLinks;$env:Path"
+}
+
 $GoExe = (Get-Command go -ErrorAction SilentlyContinue).Source
 if (-not $GoExe) { $GoExe = "C:\Program Files\Go\bin\go.exe" }
 if (-not (Test-Path $GoExe)) {
