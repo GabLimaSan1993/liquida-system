@@ -73,7 +73,7 @@ function pagamentoParaOrdenacao(valor) {
   );
 }
 
-async function buscarPedidosDoLote(horaCorte) {
+async function buscarPedidosDoLote(horaCorte, idsAnymarket = []) {
   const { data, error } = await supabase
     .from("pedidos_b2c")
     .select("*")
@@ -87,8 +87,14 @@ async function buscarPedidosDoLote(horaCorte) {
   }
 
   const pedidos = data || [];
+  const idsDoArquivo = new Set(
+    (idsAnymarket || [])
+      .filter(id => id != null)
+      .map(id => String(id))
+  );
 
   return pedidos
+    .filter(p => idsDoArquivo.size === 0 || idsDoArquivo.has(String(p.id_anymarket)))
     .filter(p => dentroDaHoraCorte(p.data_de_pagamento, horaCorte))
     .sort((a, b) => {
       const porPagamento =
@@ -285,7 +291,7 @@ export async function alocarPedidosAutomaticamente({
   horaCorte,
   onProgress,
 }) {
-  const pedidos = await buscarPedidosDoLote(horaCorte);
+  const pedidos = await buscarPedidosDoLote(horaCorte, idsAnymarket);
   const resultado = {
     total: pedidos.length,
     alocados: 0,
@@ -299,6 +305,7 @@ export async function alocarPedidosAutomaticamente({
   for (let indice = 0; indice < pedidos.length; indice++) {
     const pedido = pedidos[indice];
     let finalizado = false;
+    const imeisRejeitados = new Set();
 
     onProgress?.({
       atual: indice + 1,
@@ -313,7 +320,9 @@ export async function alocarPedidosAutomaticamente({
           pedido.grade_definida || pedido.grade_produto
         );
 
-        const escolhido = candidatos[0];
+        const escolhido = candidatos.find(
+          item => !imeisRejeitados.has(String(item.imei))
+        );
 
         if (!escolhido) {
           await marcarSemProduto(pedido.id, userId);
@@ -348,13 +357,27 @@ export async function alocarPedidosAutomaticamente({
         }
         finalizado = true;
       } catch (error) {
+        const mensagem = String(error?.message || error);
         const duplicidade =
           error?.code === "23505" ||
-          /já está associado|acabou de ser alocado|duplicate key/i.test(
-            String(error?.message || "")
+          /já está associado|acabou de ser alocado|duplicate key/i.test(mensagem);
+        const gradeRejeitada =
+          /definição exige grade|upgrade de .* exige aprovação|downgrade de .* não permitido/i.test(
+            mensagem
           );
 
-        if (duplicidade && tentativa < 5) continue;
+        if (duplicidade || gradeRejeitada) {
+          const candidatosAtuais = await buscarSugestaoFifo(
+            pedido.sku_definido || pedido.sku_produto,
+            pedido.grade_definida || pedido.grade_produto
+          );
+          const tentado = candidatosAtuais.find(
+            item => !imeisRejeitados.has(String(item.imei))
+          );
+          if (tentado?.imei) imeisRejeitados.add(String(tentado.imei));
+
+          if (tentativa < 5) continue;
+        }
 
         resultado.falhas++;
         resultado.pendencias.push({
