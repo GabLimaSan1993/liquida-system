@@ -937,10 +937,17 @@ function SidebarContent({
   const podeVerRota = (to, allowedUserIds, liquidaOnly = false) => {
     if (liquidaOnly) {
       const email = String(profile?.email || "").toLowerCase();
-      if (!profile?.is_master && !email.endsWith("@liquidapreco.com.br")) {
-        return false;
-      }
-      return true;
+      const identidadeLiquida =
+        Boolean(profile?.is_master) ||
+        email.endsWith("@liquidapreco.com.br");
+
+      if (!identidadeLiquida) return false;
+      if (!to) return true;
+
+      return (
+        profile?.is_master ||
+        profile?.telas_permitidas?.includes(to)
+      );
     }
     if (
       allowedUserIds?.length &&
