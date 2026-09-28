@@ -19,7 +19,7 @@ export async function listarEstacoesDiagnostico() {
   });
 }
 
-export async function criarCodigoPareamento(stationName = "TRIAGEM-MAC") {
+export async function criarCodigoPareamento(stationName = "TRIAGEM-MULTI") {
   const { data, error } = await supabase.rpc("assurant_diag_criar_pareamento", {
     p_station_name: stationName,
   });
@@ -28,8 +28,19 @@ export async function criarCodigoPareamento(stationName = "TRIAGEM-MAC") {
   return data?.[0] || null;
 }
 
-export async function iniciarDiagnosticoAutomatico({ stationId, voucher, userId }) {
+export async function iniciarDiagnosticoAutomatico({ stationId, voucher, userId, device }) {
   if (!stationId) throw new Error("Selecione uma estação online.");
+  if (!device?.connection_id || !device?.platform) {
+    throw new Error("Selecione um aparelho conectado à estação.");
+  }
+
+  const target = {
+    connection_id: device.connection_id,
+    platform: device.platform,
+    slot: device.slot ?? null,
+    model: device.model ?? null,
+    manufacturer: device.manufacturer ?? null,
+  };
 
   const { data: session, error: sessionError } = await supabase
     .from("assurant_diag_sessions")
@@ -38,6 +49,7 @@ export async function iniciarDiagnosticoAutomatico({ stationId, voucher, userId 
       voucher: voucher?.trim() || null,
       operator_id: userId,
       status: "detectando",
+      raw_device_info: { target_device: target },
     })
     .select("*")
     .single();
@@ -50,7 +62,7 @@ export async function iniciarDiagnosticoAutomatico({ stationId, voucher, userId 
       station_id: stationId,
       session_id: session.id,
       command: "detect_and_diagnose",
-      payload: { voucher: voucher?.trim() || null },
+      payload: { voucher: voucher?.trim() || null, ...target },
       created_by: userId,
     })
     .select("*")
@@ -144,7 +156,7 @@ export async function registrarResultadoBlacklist({
 export async function listarSessoesDiagnosticoRecentes(limit = 20) {
   const { data, error } = await supabase
     .from("assurant_diag_sessions")
-    .select("id,voucher,status,platform,manufacturer,model,serial,started_at,finished_at,station_id")
+    .select("id,voucher,status,platform,manufacturer,model,serial,started_at,finished_at,station_id,raw_device_info")
     .order("started_at", { ascending: false })
     .limit(limit);
 

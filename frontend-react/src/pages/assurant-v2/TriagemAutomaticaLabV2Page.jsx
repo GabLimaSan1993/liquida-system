@@ -31,6 +31,8 @@ import {
 } from "../../services/diagnosticoAutomaticoService.js";
 
 const GABRIEL_USER_ID = "b517d70a-56be-4b4f-8b9e-a03c769dd3c3";
+const MAX_SLOTS = 12;
+const TERMINAIS = new Set(["concluido", "aguardando_manual", "erro", "cancelado"]);
 
 function fmtDataHora(value) {
   if (!value) return "—";
@@ -82,16 +84,30 @@ export default function TriagemAutomaticaLabV2Page() {
   const { user } = useAuth();
   const [stations, setStations] = useState([]);
   const [stationId, setStationId] = useState("");
-  const [voucher, setVoucher] = useState("");
-  const [pairName, setPairName] = useState("TRIAGEM-MAC-01");
+  const [vouchers, setVouchers] = useState({});
+  const [startingDevices, setStartingDevices] = useState({});
+  const [pairName, setPairName] = useState("TRIAGEM-MULTI-01");
   const [pairing, setPairing] = useState(null);
   const [sessionId, setSessionId] = useState(null);
   const [snapshot, setSnapshot] = useState(null);
   const [recentes, setRecentes] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState("");
 
   const selectedStation = stations.find((s) => s.id === stationId) || null;
+  const devices = useMemo(() => {
+    const list = selectedStation?.capabilities?.connected_devices;
+    return Array.isArray(list) ? [...list].sort((a, b) => Number(a.slot) - Number(b.slot)) : [];
+  }, [selectedStation]);
+  const deviceBySlot = useMemo(() => new Map(devices.map((d) => [Number(d.slot), d])), [devices]);
+  const busyByDevice = useMemo(() => {
+    const map = {};
+    for (const item of recentes) {
+      if (item.station_id !== stationId || TERMINAIS.has(item.status)) continue;
+      const connectionId = item.raw_device_info?.target_device?.connection_id;
+      if (connectionId) map[connectionId] = item;
+    }
+    return map;
+  }, [recentes, stationId]);
 
   async function carregarEstacoes() {
     try {
@@ -126,7 +142,6 @@ export default function TriagemAutomaticaLabV2Page() {
         if (!ativo) return;
         setSnapshot(data);
         if (["concluido", "aguardando_manual", "erro", "cancelado"].includes(data.session.status)) {
-          setLoading(false);
         }
       } catch (e) {
         if (ativo) setErro(e.message);
@@ -166,14 +181,24 @@ export default function TriagemAutomaticaLabV2Page() {
     }
   }
 
-  async function iniciar() {
+  async function iniciar(device) {
     setErro("");
     if (!selectedStation?.online) {
-      setErro("Selecione uma estação Mac online.");
+      setErro("Selecione uma estação online.");
+      return;
+    }
+    if (!device?.ready) {
+      setErro(device?.note || "O aparelho ainda não está autorizado para diagnóstico.");
       return;
     }
 
-    setLoading(true);
+    const voucher = String(vouchers[device.connection_id] || "").trim();
+    if (!voucher) {
+      setErro(`Informe ou bipe o voucher do Slot ${String(device.slot).padStart(2, "0")}.`);
+      return;
+    }
+
+    setStartingDevices((prev) => ({ ...prev, [device.connection_id]: true }));
     setSnapshot(null);
 
     try {
@@ -181,11 +206,14 @@ export default function TriagemAutomaticaLabV2Page() {
         stationId,
         voucher,
         userId: user.id,
+        device,
       });
       setSessionId(session.id);
+      await carregarEstacoes();
     } catch (e) {
-      setLoading(false);
       setErro(e.message);
+    } finally {
+      setStartingDevices((prev) => ({ ...prev, [device.connection_id]: false }));
     }
   }
 
@@ -219,13 +247,13 @@ export default function TriagemAutomaticaLabV2Page() {
       <div>
         <div className="flex flex-wrap items-center gap-2">
           <Usb className="h-6 w-6 text-violet-700" />
-          <h1 className="text-2xl font-black text-slate-900">Triagem Automática — LAB</h1>
+          <h1 className="text-2xl font-black text-slate-900">Triagem Automática — Multidevice LAB</h1>
           <span className="rounded-full bg-violet-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-violet-700 ring-1 ring-violet-200">
             Somente Gabriel
           </span>
         </div>
         <p className="mt-1 max-w-4xl text-sm text-slate-500">
-          Diagnóstico automático pelo Mac. O operador trabalha somente no Liquida; o Bridge roda invisível em segundo plano.
+          Até 12 aparelhos simultâneos por estação Windows ou Mac. Cada aparelho possui voucher, sessão e diagnóstico independentes.
         </p>
       </div>
 
@@ -279,7 +307,7 @@ export default function TriagemAutomaticaLabV2Page() {
                 <div className="mt-1 text-sm font-black text-slate-700">{selectedStation.bridge_version || "—"}</div>
               </div>
               <div className="rounded-xl bg-slate-50 p-3">
-                <div className="text-[10px] font-black uppercase text-slate-400">Mac</div>
+                <div className="text-[10px] font-black uppercase text-slate-400">Computador</div>
                 <div className="mt-1 truncate text-sm font-black text-slate-700">{selectedStation.hostname || "—"}</div>
               </div>
               <div className="rounded-xl bg-slate-50 p-3">
@@ -293,7 +321,7 @@ export default function TriagemAutomaticaLabV2Page() {
         <Card className="p-4">
           <div className="flex items-center gap-2 font-black text-slate-800">
             <Cable className="h-4 w-4 text-violet-700" />
-            Parear novo Mac
+            Parear Windows ou Mac
           </div>
           <div className="mt-3 flex gap-2">
             <input
@@ -324,28 +352,97 @@ export default function TriagemAutomaticaLabV2Page() {
         </Card>
       </div>
 
-      <Card className="p-4">
-        <div className="grid gap-3 lg:grid-cols-[1fr_auto]">
+      <Card className="overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
           <div>
-            <label className="mb-1 block text-[10px] font-black uppercase tracking-wide text-slate-400">
-              Voucher
-            </label>
-            <input
-              value={voucher}
-              onChange={(e) => setVoucher(e.target.value)}
-              placeholder="Bipe ou digite o voucher"
-              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-base font-bold outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-100"
-            />
+            <div className="font-black text-slate-800">Bancada multidevice</div>
+            <div className="text-xs text-slate-400">
+              Conectados: {devices.length} · Capacidade: {selectedStation?.capabilities?.max_devices || MAX_SLOTS}
+            </div>
           </div>
-          <button
-            type="button"
-            disabled={loading || !selectedStation?.online}
-            onClick={iniciar}
-            className="mt-auto inline-flex h-[50px] items-center justify-center gap-2 rounded-xl bg-violet-700 px-6 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {loading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Usb className="h-4 w-4" />}
-            {loading ? "Diagnosticando..." : "Detectar e diagnosticar"}
-          </button>
+          <div className="rounded-lg bg-slate-50 px-3 py-2 text-[10px] font-black uppercase text-slate-500">
+            Hub USB alimentado recomendado
+          </div>
+        </div>
+
+        <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+          {Array.from({ length: MAX_SLOTS }, (_, i) => i + 1).map((slot) => {
+            const device = deviceBySlot.get(slot);
+            const busySession = device ? busyByDevice[device.connection_id] : null;
+            const starting = device ? Boolean(startingDevices[device.connection_id]) : false;
+            const busy = Boolean(busySession) || starting;
+
+            return (
+              <div key={slot} className={"rounded-2xl border p-3 " + (device ? "border-slate-200 bg-white" : "border-dashed border-slate-200 bg-slate-50/70")}>
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+                      Slot {String(slot).padStart(2, "0")}
+                    </div>
+                    {device ? (
+                      <>
+                        <div className="mt-1 font-black text-slate-800">
+                          {device.model || (device.platform === "ios" ? "iPhone / iPad" : "Android")}
+                        </div>
+                        <div className="mt-0.5 text-[10px] font-bold uppercase text-slate-400">
+                          {device.platform} · {device.connection_id?.length > 18
+                            ? device.connection_id.slice(0, 8) + "…" + device.connection_id.slice(-6)
+                            : device.connection_id}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="mt-2 text-sm font-bold text-slate-400">Aguardando USB</div>
+                    )}
+                  </div>
+                  {device && (
+                    <span className={"rounded-lg px-2 py-1 text-[9px] font-black " + (device.ready ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700")}>
+                      {device.ready ? "PRONTO" : "AUTORIZAR"}
+                    </span>
+                  )}
+                </div>
+
+                {device && (
+                  <>
+                    {!device.ready && (
+                      <div className="mt-2 rounded-lg bg-amber-50 p-2 text-[10px] font-semibold text-amber-700">
+                        {device.note}
+                      </div>
+                    )}
+                    {busySession && (
+                      <div className="mt-2 rounded-lg bg-blue-50 px-2 py-1.5 text-[10px] font-black uppercase text-blue-700">
+                        {busySession.status}
+                      </div>
+                    )}
+                    <input
+                      value={vouchers[device.connection_id] || ""}
+                      onChange={(e) => setVouchers((prev) => ({ ...prev, [device.connection_id]: e.target.value }))}
+                      placeholder="Bipe o voucher"
+                      disabled={busy}
+                      className="mt-3 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold outline-none focus:border-violet-300"
+                    />
+                    <button
+                      type="button"
+                      disabled={!selectedStation?.online || !device.ready || busy}
+                      onClick={() => iniciar(device)}
+                      className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-violet-700 px-3 py-2.5 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {busy ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Usb className="h-3.5 w-3.5" />}
+                      {busy ? "Diagnosticando..." : "Iniciar diagnóstico"}
+                    </button>
+                    {busySession?.id && (
+                      <button
+                        type="button"
+                        onClick={() => setSessionId(busySession.id)}
+                        className="mt-1.5 w-full rounded-lg px-2 py-1.5 text-[10px] font-black text-violet-700 hover:bg-violet-50"
+                      >
+                        Abrir sessão
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            );
+          })}
         </div>
       </Card>
 
@@ -498,7 +595,7 @@ export default function TriagemAutomaticaLabV2Page() {
 
       <Card className="overflow-hidden">
         <div className="border-b border-slate-100 px-4 py-3">
-          <div className="font-black text-slate-800">Sessões recentes do LAB</div>
+          <div className="font-black text-slate-800">Sessões recentes do LAB multidevice</div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-sm">
