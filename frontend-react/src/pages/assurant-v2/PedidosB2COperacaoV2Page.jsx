@@ -41,6 +41,7 @@ import {
   buscarKpisPedidosB2C,
 } from "../../services/pedidosB2CService.js";
 import { useAuth } from "../../AuthContext.jsx";
+import DefinicaoProdutoAssurantV2 from "./DefinicaoProdutoAssurantV2.jsx";
 
 const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
@@ -2326,7 +2327,7 @@ export default function PedidosB2COperacaoV2Page() {
       {aba === "alocacao"    && <TabAlocacao onGrupoFormado={recarregarKpis} />}
       {aba === "picking"     && <TabPicking />}
       {aba === "analise"     && <TabAnalise />}
-      {aba === "definicao"   && <TabAguardandoDefinicao />}
+      {aba === "definicao"   && <DefinicaoProdutoAssurantV2 />}
       {aba === "faturamento" && <TabFaturamento />}
     </div>
   );
