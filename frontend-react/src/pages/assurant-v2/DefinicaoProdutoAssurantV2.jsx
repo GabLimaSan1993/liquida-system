@@ -214,8 +214,9 @@ export default function DefinicaoProdutoAssurantV2() {
 
       setFeedback({
         tipo: "ok",
-        msg:
-          res.relacao === "upgrade"
+        msg: res.aguardandoDesvinculacao
+          ? `Produto selecionado. O IMEI ${res.imei} está vinculado a ${res.vinculoDescricao || res.vinculoTipo}. A solicitação foi enviada para a Liquida Preço realizar a transferência para o B2C.`
+          : res.relacao === "upgrade"
             ? `Upgrade aprovado e registrado: ${consulta.gradeOrigem} → ${res.grade}. IMEI FIFO ${res.imei} alocado.`
             : `Definição aprovada. IMEI FIFO ${res.imei} alocado em ${res.grade} · ${res.cor}.`,
       });
@@ -356,32 +357,44 @@ export default function DefinicaoProdutoAssurantV2() {
                       </span>
                     )}
                   </div>
+                  {p.definicao_status === "aguardando_desvinculacao" && (
+                    <div className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-orange-50 px-2.5 py-1.5 text-[10px] font-black text-orange-700 ring-1 ring-orange-200">
+                      <Clock3 className="h-3 w-3" />
+                      Aguardando ação da Liquida Preço
+                    </div>
+                  )}
                   {p.definicao_resumo && (
-                    <div className="mt-2 text-xs font-semibold text-emerald-700">
+                    <div className={"mt-2 text-xs font-semibold " + (p.definicao_status === "aguardando_desvinculacao" ? "text-orange-700" : "text-emerald-700")}>
                       {p.definicao_resumo}
                     </div>
                   )}
                 </div>
 
                 {aba === "pendentes" && (
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => abrir(p)}
-                      className="inline-flex items-center gap-1.5 rounded-xl bg-[#7F2D92] px-3 py-2 text-xs font-black text-white hover:bg-[#682378]"
-                    >
-                      <CornerUpLeft className="h-3.5 w-3.5" />
-                      Definir
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCancelar(p)}
-                      className="inline-flex items-center gap-1.5 rounded-xl bg-rose-50 px-3 py-2 text-xs font-black text-rose-700 ring-1 ring-rose-200"
-                    >
-                      <Ban className="h-3.5 w-3.5" />
-                      Cancelado
-                    </button>
-                  </div>
+                  p.definicao_status === "aguardando_desvinculacao" ? (
+                    <div className="rounded-xl bg-orange-50 px-3 py-2 text-xs font-black text-orange-700 ring-1 ring-orange-200">
+                      Liquida Preço
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => abrir(p)}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-[#7F2D92] px-3 py-2 text-xs font-black text-white hover:bg-[#682378]"
+                      >
+                        <CornerUpLeft className="h-3.5 w-3.5" />
+                        Definir
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCancelar(p)}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-rose-50 px-3 py-2 text-xs font-black text-rose-700 ring-1 ring-rose-200"
+                      >
+                        <Ban className="h-3.5 w-3.5" />
+                        Cancelado
+                      </button>
+                    </div>
+                  )
                 )}
               </div>
             </Card>
@@ -461,7 +474,7 @@ export default function DefinicaoProdutoAssurantV2() {
 
               {consulta?.existe && consulta.opcoes.length === 0 && (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-bold text-amber-700">
-                  SKU encontrado, mas não há estoque livre elegível. Regular e Quebrado não são exibidos.
+                  SKU encontrado, mas não há estoque elegível no WMS. Regular e Quebrado não são exibidos.
                 </div>
               )}
 
@@ -470,10 +483,10 @@ export default function DefinicaoProdutoAssurantV2() {
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                     <div>
                       <div className="text-sm font-black text-slate-800">
-                        Opções disponíveis
+                        Opções de atendimento
                       </div>
                       <div className="text-xs text-slate-400">
-                        {consulta.modelo || consulta.skuBase} · Regular e Quebrado excluídos
+                        {consulta.modelo || consulta.skuBase} · itens livres e vínculos operacionais elegíveis
                       </div>
                     </div>
                     <div className="text-xs font-bold text-slate-500">
@@ -488,10 +501,11 @@ export default function DefinicaoProdutoAssurantV2() {
                         opcao?.cor === o.cor &&
                         opcao?.fifo?.imei === o.fifo?.imei;
                       const bloqueada = o.relacao === "downgrade";
+                      const vinculada = Boolean(o.vinculo_tipo);
 
                       return (
                         <button
-                          key={o.grade + "|" + o.cor}
+                          key={[o.grade, o.cor, o.vinculo_tipo || "LIVRE", o.vinculo_referencia || "", o.fifo?.imei].join("|")}
                           type="button"
                           disabled={bloqueada}
                           onClick={() => {
@@ -511,6 +525,19 @@ export default function DefinicaoProdutoAssurantV2() {
                             <div className="flex items-center gap-2">
                               <GradePill grade={o.grade} outlet={o.outlet} />
                               <RelationPill relacao={o.relacao} />
+                              {vinculada ? (
+                                <span className="rounded-lg bg-orange-50 px-2 py-1 text-[10px] font-black text-orange-700 ring-1 ring-orange-200">
+                                  {o.vinculo_tipo === "B2B"
+                                    ? "VÍNCULO B2B"
+                                    : o.vinculo_tipo === "TROCA"
+                                      ? "RESERVADO TROCA"
+                                      : "VENDA FUNCIONÁRIO"}
+                                </span>
+                              ) : (
+                                <span className="rounded-lg bg-emerald-50 px-2 py-1 text-[10px] font-black text-emerald-700 ring-1 ring-emerald-200">
+                                  LIVRE
+                                </span>
+                              )}
                             </div>
                             <span className="rounded-lg bg-slate-100 px-2 py-1 text-[10px] font-black text-slate-600">
                               {o.quantidade} un.
@@ -532,6 +559,16 @@ export default function DefinicaoProdutoAssurantV2() {
                             <div className="mt-1 text-[10px] text-slate-400">
                               Subinv {o.fifo?.data_subinv || "—"} · {o.fifo?.local || "sem posição"}
                             </div>
+                            {vinculada && (
+                              <div className="mt-2 rounded-lg border border-orange-200 bg-orange-50 px-2.5 py-2 text-[10px] font-bold leading-4 text-orange-800">
+                                {o.vinculo_descricao || o.vinculo_tipo}
+                                {o.vinculo_detalhes?.b2b_status ? ` · status ${o.vinculo_detalhes.b2b_status}` : ""}
+                                {o.vinculo_detalhes?.b2b_exportado ? " · já exportado para faturamento" : ""}
+                                <div className="mt-1 font-semibold text-orange-700">
+                                  Se esta opção for escolhida, a Liquida Preço precisará autorizar a desvinculação antes do B2C seguir.
+                                </div>
+                              </div>
+                            )}
                           </div>
 
                           {bloqueada && (
@@ -588,6 +625,11 @@ export default function DefinicaoProdutoAssurantV2() {
                     <span className="text-xs font-black text-slate-700">{opcao.cor}</span>
                     <span className="font-mono text-xs text-slate-500">{opcao.fifo?.imei}</span>
                   </div>
+                  {opcao.vinculo_tipo && (
+                    <div className="mt-2 rounded-xl border border-orange-200 bg-orange-50 p-3 text-xs font-bold text-orange-800">
+                      Este aparelho está vinculado a {opcao.vinculo_descricao || opcao.vinculo_tipo}. A escolha gera uma solicitação para a Liquida Preço; a Assurant não executa a desvinculação.
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -611,7 +653,7 @@ export default function DefinicaoProdutoAssurantV2() {
                   className="inline-flex items-center gap-2 rounded-xl bg-[#7F2D92] px-5 py-2.5 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                  Aprovar e alocar FIFO
+                  {opcao?.vinculo_tipo ? "Solicitar desvinculação à Liquida" : "Aprovar e alocar FIFO"}
                 </button>
               </div>
             </div>
