@@ -117,10 +117,10 @@ export default function TriagemAutomaticaLabV2Page() {
       ]);
       setStations(s);
       setRecentes(r);
-      if (!stationId) {
-        const online = s.find((x) => x.online);
-        if (online) setStationId(online.id);
-      }
+      setStationId((current) => {
+        if (current && s.some((x) => x.id === current)) return current;
+        return s.find((x) => x.online)?.id || s[0]?.id || "";
+      });
     } catch (e) {
       setErro(e.message);
     }
