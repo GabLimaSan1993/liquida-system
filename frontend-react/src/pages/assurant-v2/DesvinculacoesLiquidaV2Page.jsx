@@ -269,6 +269,13 @@ export default function DesvinculacoesLiquidaV2Page() {
                   </div>
                 )}
 
+                {item.status === "pendente" && item.resultado?.erro && (
+                  <div className="mt-3 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-bold text-rose-800">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                    Última tentativa: {item.resultado.erro}. Corrija a condição e tente novamente.
+                  </div>
+                )}
+
                 {item.status === "pendente" ? (
                   <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-3">
                     <button
