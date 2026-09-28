@@ -234,6 +234,14 @@ const MENU_GROUPS = [
       exact: true,
     },
 
+    {
+      label: "Desvinculações",
+      icon: RefreshCw,
+      to: "/v2/assurant/b2c/desvinculacoes",
+      exact: true,
+      liquidaOnly: true,
+    },
+
   ],
 },
     ],
@@ -926,7 +934,14 @@ function SidebarContent({
   pathname,
   mobile = false,
 }) {
-  const podeVerRota = (to, allowedUserIds) => {
+  const podeVerRota = (to, allowedUserIds, liquidaOnly = false) => {
+    if (liquidaOnly) {
+      const email = String(profile?.email || "").toLowerCase();
+      if (!profile?.is_master && !email.endsWith("@liquidapreco.com.br")) {
+        return false;
+      }
+      return true;
+    }
     if (
       allowedUserIds?.length &&
       !allowedUserIds.includes(profile?.id)
@@ -951,7 +966,7 @@ function SidebarContent({
             return {
               ...item,
               children: item.children.filter((child) =>
-                podeVerRota(child.to, child.allowedUserIds)
+                podeVerRota(child.to, child.allowedUserIds, child.liquidaOnly)
               ),
             };
           }
@@ -965,7 +980,7 @@ function SidebarContent({
             return item.children.length > 0;
           }
 
-          return podeVerRota(item.to, item.allowedUserIds);
+          return podeVerRota(item.to, item.allowedUserIds, item.liquidaOnly);
         }),
     }))
     .filter((group) => group.items.length > 0);
