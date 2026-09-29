@@ -6,6 +6,7 @@ import {
 } from "./pedidosB2CService.js";
 
 const TAMANHO_LISTA = 20;
+const MOTOR_ALOCACAO_VERSION = 2;
 const BLOCO_IDS = 200;
 
 function pagamentoParaDataLocal(valor) {
@@ -291,6 +292,22 @@ export async function alocarPedidosAutomaticamente({
   horaCorte,
   onProgress,
 }) {
+  const { data: gate, error: gateError } = await supabase.rpc(
+    "b2c_validar_motor_alocacao",
+    { p_versao: MOTOR_ALOCACAO_VERSION }
+  );
+
+  if (gateError) {
+    throw new Error(`Não foi possível validar a versão do motor FIFO: ${gateError.message}`);
+  }
+
+  if (!gate?.ok) {
+    throw new Error(
+      gate?.mensagem ||
+      "Esta aba está desatualizada. Atualize a página antes de executar a alocação."
+    );
+  }
+
   const pedidos = await buscarPedidosDoLote(horaCorte, idsAnymarket);
   const resultado = {
     total: pedidos.length,
