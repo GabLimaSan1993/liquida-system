@@ -1205,6 +1205,10 @@ export default function RastreabilidadeItemV2Page() {
                   <DetailField label="Local atual / último local" value={summary.local} wide />
                   <DetailField label="Recebido em" value={fmtDateTime(summary.data_recebimento)} />
                   <DetailField label="Oracle em" value={fmtDateTime(summary.data_oracle)} />
+                  <DetailField label="Status Oracle" value={summary.oracle_status} />
+                  <DetailField label="PO Oracle" value={summary.oracle_po} />
+                  <DetailField label="RI Oracle" value={summary.oracle_ri} />
+                  <DetailField label="NF entrada Oracle" value={summary.oracle_nf} />
                   <DetailField label="Data SubInv" value={fmtDate(summary.data_subinv)} />
                   <DetailField label="Local SubInv" value={summary.local_subinv} />
                 </div>
