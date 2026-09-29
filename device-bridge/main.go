@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	bridgeVersion            = "0.5.0-agent-on-device"
+	bridgeVersion            = "0.5.1-usb-visibility"
 	endpoint                 = "https://fndkyainfdiyorwdsvkr.supabase.co/functions/v1/assurant-device-bridge"
 	maxConcurrentDiagnostics = 12
 )
@@ -786,19 +786,23 @@ func diagnoseIOS(udid string) (DiagnosticResponse, error) {
 
 
 func detectedDevices() ([]ConnectedDevice, error) {
-	android, aerr := androidDevices()
+	androidEntries, aerr := androidDeviceEntries()
 	ios, ierr := iosDevices()
 	if aerr != nil && ierr != nil {
 		return nil, fmt.Errorf("falha ao detectar USB: android=%v ios=%v", aerr, ierr)
 	}
 
-	type rawDevice struct{ platform, id string }
-	raw := make([]rawDevice, 0, len(android)+len(ios))
-	for _, id := range android {
-		raw = append(raw, rawDevice{"android", id})
+	type rawDevice struct {
+		platform string
+		id       string
+		state    string
+	}
+	raw := make([]rawDevice, 0, len(androidEntries)+len(ios))
+	for _, entry := range androidEntries {
+		raw = append(raw, rawDevice{"android", entry.ID, entry.State})
 	}
 	for _, id := range ios {
-		raw = append(raw, rawDevice{"ios", id})
+		raw = append(raw, rawDevice{"ios", id, "device"})
 	}
 	sort.Slice(raw, func(i, j int) bool { return raw[i].platform+raw[i].id < raw[j].platform+raw[j].id })
 
@@ -810,15 +814,33 @@ func detectedDevices() ([]ConnectedDevice, error) {
 
 	out := make([]ConnectedDevice, 0, len(raw))
 	for _, d := range raw {
-		item := ConnectedDevice{Platform: d.platform, ConnectionID: d.id, Slot: slotForKey(d.platform + ":" + d.id), Ready: true}
+		item := ConnectedDevice{
+			Platform: d.platform,
+			ConnectionID: d.id,
+			Slot: slotForKey(d.platform + ":" + d.id),
+			Ready: d.state == "device",
+		}
+
 		if d.platform == "android" {
-			model, err := run("adb", "-s", d.id, "shell", "getprop", "ro.product.model")
-			manufacturer, _ := run("adb", "-s", d.id, "shell", "getprop", "ro.product.manufacturer")
-			item.Model = strings.TrimSpace(model)
-			item.Manufacturer = strings.TrimSpace(manufacturer)
-			if err != nil {
-				item.Ready = false
-				item.Note = "autorize a Depuração USB neste aparelho"
+			switch d.state {
+			case "device":
+				model, err := run("adb", "-s", d.id, "shell", "getprop", "ro.product.model")
+				manufacturer, _ := run("adb", "-s", d.id, "shell", "getprop", "ro.product.manufacturer")
+				item.Model = strings.TrimSpace(model)
+				item.Manufacturer = strings.TrimSpace(manufacturer)
+				if err != nil {
+					item.Ready = false
+					item.Note = "aparelho conectado, mas o ADB não respondeu"
+				}
+			case "unauthorized":
+				item.Model = "Android conectado"
+				item.Note = "aguardando autorização de Depuração USB no aparelho"
+			case "offline":
+				item.Model = "Android conectado"
+				item.Note = "ADB offline; reconecte o cabo ou altere o modo USB"
+			default:
+				item.Model = "Android conectado"
+				item.Note = "USB detectado pelo ADB: " + d.state
 			}
 		} else {
 			item.Manufacturer = "Apple"
@@ -873,7 +895,12 @@ func slotForKey(key string) int {
 	return slotByDevice[key]
 }
 
-func androidDevices() ([]string, error) {
+type androidDeviceEntry struct {
+	ID    string
+	State string
+}
+
+func androidDeviceEntries() ([]androidDeviceEntry, error) {
 	if !toolExists("adb") {
 		return nil, nil
 	}
@@ -881,12 +908,27 @@ func androidDevices() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	var list []string
+	var list []androidDeviceEntry
 	sc := bufio.NewScanner(strings.NewReader(out))
 	for sc.Scan() {
 		f := strings.Fields(sc.Text())
-		if len(f) >= 2 && f[1] == "device" {
-			list = append(list, f[0])
+		if len(f) < 2 || strings.HasPrefix(strings.ToLower(f[0]), "list") {
+			continue
+		}
+		list = append(list, androidDeviceEntry{ID: f[0], State: f[1]})
+	}
+	return list, nil
+}
+
+func androidDevices() ([]string, error) {
+	entries, err := androidDeviceEntries()
+	if err != nil {
+		return nil, err
+	}
+	var list []string
+	for _, entry := range entries {
+		if entry.State == "device" {
+			list = append(list, entry.ID)
 		}
 	}
 	return list, nil
