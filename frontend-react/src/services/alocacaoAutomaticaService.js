@@ -1,12 +1,6 @@
 import { supabase } from "../lib/supabase";
-import {
-  buscarSugestaoFifo,
-  alocarPedido,
-  marcarSemProduto,
-} from "./pedidosB2CService.js";
-
 const TAMANHO_LISTA = 20;
-const MOTOR_ALOCACAO_VERSION = 2;
+const MOTOR_ALOCACAO_VERSION = 3;
 const BLOCO_IDS = 200;
 
 function pagamentoParaDataLocal(valor) {
@@ -321,8 +315,6 @@ export async function alocarPedidosAutomaticamente({
 
   for (let indice = 0; indice < pedidos.length; indice++) {
     const pedido = pedidos[indice];
-    let finalizado = false;
-    const imeisRejeitados = new Set();
 
     onProgress?.({
       atual: indice + 1,
@@ -330,80 +322,47 @@ export async function alocarPedidosAutomaticamente({
       pedido: pedido.id_anymarket,
     });
 
-    for (let tentativa = 1; tentativa <= 5 && !finalizado; tentativa++) {
-      try {
-        const candidatos = await buscarSugestaoFifo(
-          pedido.sku_definido || pedido.sku_produto,
-          pedido.grade_definida || pedido.grade_produto
-        );
+    try {
+      const { data: resposta, error } = await supabase.rpc(
+        "b2c_processar_alocacao_backend",
+        { p_pedido_id: pedido.id }
+      );
 
-        const escolhido = candidatos.find(
-          item => !imeisRejeitados.has(String(item.imei))
-        );
+      if (error) throw new Error(error.message);
+      if (!resposta?.ok) {
+        throw new Error(resposta?.erro || "Falha no processamento B2C pelo backend.");
+      }
 
-        if (!escolhido) {
-          await marcarSemProduto(pedido.id, userId);
-          resultado.semProduto++;
-          resultado.pendencias.push({
-            pedido: pedido.id_anymarket,
-            sku: pedido.sku_definido || pedido.sku_produto,
-            motivo: "Nenhum aparelho elegível encontrado no FIFO",
-          });
-          finalizado = true;
-          break;
-        }
-
-        const resposta = await alocarPedido(
-          pedido.id,
-          escolhido.imei,
-          escolhido.sku,
-          escolhido.grade,
-          userId,
-          {
-            sugestao: escolhido,
-            candidatos,
-            origem: "upload_anymarket_automatico",
-            pedido,
-          }
-        );
-
+      if (resposta.status === "aguardando_definicao_produto") {
+        resultado.semProduto++;
+        resultado.pendencias.push({
+          pedido: pedido.id_anymarket,
+          sku: pedido.sku_definido || pedido.sku_produto,
+          motivo:
+            resposta.motivo ||
+            "Nenhum aparelho elegível e reservável encontrado no FIFO",
+        });
+      } else if (
+        ["alocado", "em_picking", "embalado", "faturado"].includes(
+          resposta.status
+        )
+      ) {
         resultado.alocados++;
-        if (resposta?.grupoFormado) {
-          resultado.gruposCriados +=
-            resposta.grupoFormado.gruposCriados || 1;
-        }
-        finalizado = true;
-      } catch (error) {
-        const mensagem = String(error?.message || error);
-        const duplicidade =
-          error?.code === "23505" ||
-          /já está associado|acabou de ser alocado|duplicate key/i.test(mensagem);
-        const gradeRejeitada =
-          /definição exige grade|upgrade de .* exige aprovação|downgrade de .* não permitido/i.test(
-            mensagem
-          );
-
-        if (duplicidade || gradeRejeitada) {
-          const candidatosAtuais = await buscarSugestaoFifo(
-            pedido.sku_definido || pedido.sku_produto,
-            pedido.grade_definida || pedido.grade_produto
-          );
-          const tentado = candidatosAtuais.find(
-            item => !imeisRejeitados.has(String(item.imei))
-          );
-          if (tentado?.imei) imeisRejeitados.add(String(tentado.imei));
-
-          if (tentativa < 5) continue;
-        }
-
+      } else {
         resultado.falhas++;
         resultado.pendencias.push({
           pedido: pedido.id_anymarket,
           sku: pedido.sku_definido || pedido.sku_produto,
-          motivo: String(error?.message || error),
+          motivo: `Status inesperado após processamento: ${resposta.status || "—"}`,
         });
-        finalizado = true;
       }
+    } catch (error) {
+      resultado.falhas++;
+      resultado.pendencias.push({
+        pedido: pedido.id_anymarket,
+        sku: pedido.sku_definido || pedido.sku_produto,
+        motivo: String(error?.message || error),
+      });
     }
   }
 
