@@ -1,0 +1,32 @@
+{
+  "protocol": "liquida-device-agent/1",
+  "session_id": "uuid",
+  "platform": "android|ios",
+  "agent_version": "0.1.0",
+  "device": {
+    "manufacturer": "string",
+    "model": "string",
+    "os_version": "string"
+  },
+  "tests": [
+    {
+      "code": "string",
+      "block": "audio|bateria|camera|conectividade|hardware|pecas|seguranca|tela|sensores",
+      "result": "pass|fail|warning|not_supported|needs_human",
+      "source": "agent|bridge|human",
+      "value": {},
+      "details": "string|null",
+      "duration_ms": 0
+    }
+  ],
+  "human_tasks": [
+    {
+      "code": "string",
+      "kind": "choice|confirm|touch_grid|button_sequence|visual_check",
+      "prompt": "string",
+      "options": []
+    }
+  ],
+  "started_at": "ISO-8601",
+  "finished_at": "ISO-8601"
+}
