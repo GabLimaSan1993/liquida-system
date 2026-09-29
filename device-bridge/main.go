@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	bridgeVersion            = "0.3.3-imei-telephony-probe"
+	bridgeVersion            = "0.4.0-device-agent"
 	endpoint                 = "https://fndkyainfdiyorwdsvkr.supabase.co/functions/v1/assurant-device-bridge"
 	maxConcurrentDiagnostics = 12
 )
@@ -542,6 +542,31 @@ func diagnoseAndroid(serial string) (DiagnosticResponse, error) {
 
 	wg.Wait()
 
+	agentStarted := time.Now()
+	agentTests, agentErr := runAndroidDeviceAgent(serial)
+	if agentErr != nil {
+		addTest(Test{
+			Code: "device_agent",
+			Category: "hardware",
+			Label: "Liquida Device Agent",
+			Result: "warning",
+			Source: "agent",
+			DurationMS: time.Since(agentStarted).Milliseconds(),
+			Details: agentErr.Error(),
+		})
+	} else {
+		addTest(Test{
+			Code: "device_agent",
+			Category: "hardware",
+			Label: "Liquida Device Agent",
+			Result: "pass",
+			Source: "agent",
+			DurationMS: time.Since(agentStarted).Milliseconds(),
+			Details: "Agente nativo executado dentro do aparelho.",
+		})
+		tests = append(tests, agentTests...)
+	}
+
 	manual := []Test{
 		{Code: "display_visual", Category: "tela", Label: "Display / pixels / manchas", Result: "manual_required", Source: "guiado"},
 		{Code: "touch_full", Category: "tela", Label: "Touch em toda a área", Result: "manual_required", Source: "guiado"},
@@ -556,6 +581,120 @@ func diagnoseAndroid(serial string) (DiagnosticResponse, error) {
 	sort.Slice(tests, func(i, j int) bool { return tests[i].Category+tests[i].Label < tests[j].Category+tests[j].Label })
 
 	return DiagnosticResponse{Device: device, Tests: tests, DurationMS: time.Since(start).Milliseconds()}, nil
+}
+
+func androidAgentAPKPath() (string, error) {
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "LiquidaBridge", "liquida-device-agent-android.apk"), nil
+}
+
+func androidAgentLabel(code string) string {
+	labels := map[string]string{
+		"battery_agent": "Bateria — leitura interna",
+		"storage_agent": "Armazenamento — leitura interna",
+		"sensors_agent": "Sensores — inventário interno",
+		"camera_inventory_agent": "Câmeras — inventário interno",
+		"audio_inventory_agent": "Áudio — inventário interno",
+		"connectivity_inventory_agent": "Conectividade — inventário interno",
+		"agent_error": "Liquida Device Agent — erro interno",
+	}
+	if label, ok := labels[code]; ok {
+		return label
+	}
+	return code
+}
+
+func runAndroidDeviceAgent(serial string) ([]Test, error) {
+	apk, err := androidAgentAPKPath()
+	if err != nil {
+		return nil, err
+	}
+	if _, err := os.Stat(apk); err != nil {
+		return nil, errors.New("APK do Liquida Device Agent não encontrado nesta estação")
+	}
+
+	install := func() (string, error) {
+		return run("adb", "-s", serial, "install", "-r", "-t", "-g", apk)
+	}
+
+	installOut, installErr := install()
+	if installErr != nil || !strings.Contains(strings.ToLower(installOut), "success") {
+		lower := strings.ToLower(installOut)
+		if strings.Contains(lower, "update_incompatible") || strings.Contains(lower, "signatures") {
+			_, _ = run("adb", "-s", serial, "uninstall", "com.liquida.deviceagent")
+			installOut, installErr = install()
+		}
+	}
+	if installErr != nil || !strings.Contains(strings.ToLower(installOut), "success") {
+		return nil, fmt.Errorf("não foi possível instalar o Liquida Device Agent: %s", compact(installOut, 600))
+	}
+
+	_, _ = run("adb", "-s", serial, "shell", "am", "force-stop", "com.liquida.deviceagent")
+	_, _ = run("adb", "-s", serial, "shell", "run-as", "com.liquida.deviceagent", "rm", "-f", "files/result.json")
+
+	startOut, startErr := run(
+		"adb", "-s", serial, "shell", "am", "start",
+		"-n", "com.liquida.deviceagent/.MainActivity",
+	)
+	if startErr != nil {
+		return nil, fmt.Errorf("Agent instalado, mas não abriu: %s", compact(startOut, 500))
+	}
+
+	var raw string
+	for i := 0; i < 24; i++ {
+		time.Sleep(250 * time.Millisecond)
+		out, readErr := run(
+			"adb", "-s", serial, "shell", "run-as",
+			"com.liquida.deviceagent", "cat", "files/result.json",
+		)
+		if readErr == nil && strings.HasPrefix(strings.TrimSpace(out), "{") {
+			raw = strings.TrimSpace(out)
+			break
+		}
+	}
+	if raw == "" {
+		return nil, errors.New("Agent abriu no aparelho, mas não entregou o relatório dentro do tempo esperado")
+	}
+
+	var report map[string]interface{}
+	if err := json.Unmarshal([]byte(raw), &report); err != nil {
+		return nil, fmt.Errorf("relatório inválido do Agent: %w", err)
+	}
+	if stringValue(report["protocol"]) != "liquida-device-agent/1" {
+		return nil, fmt.Errorf("protocolo inesperado do Agent: %s", stringValue(report["protocol"]))
+	}
+
+	agentVersion := stringValue(report["agent_version"])
+	items, _ := report["tests"].([]interface{})
+	tests := make([]Test, 0, len(items))
+	for _, rawItem := range items {
+		item, ok := rawItem.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		result := stringValue(item["result"])
+		if result == "needs_human" {
+			result = "manual_required"
+		}
+		value, _ := item["value"].(map[string]interface{})
+		details := stringValue(item["details"])
+		if details == "" {
+			details = "Executado dentro do Liquida Device Agent " + agentVersion + "."
+		}
+		tests = append(tests, Test{
+			Code: stringValue(item["code"]),
+			Category: stringValue(item["block"]),
+			Label: androidAgentLabel(stringValue(item["code"])),
+			Result: result,
+			Source: "agent",
+			Value: value,
+			Details: details,
+		})
+	}
+	return tests, nil
 }
 
 func diagnoseIOS(udid string) (DiagnosticResponse, error) {
