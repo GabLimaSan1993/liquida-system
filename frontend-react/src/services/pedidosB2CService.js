@@ -1884,12 +1884,27 @@ export async function buscarOpcoesDefinicao(skuDigitado, pedidoOuGrade) {
     ? gradeOriginalPedido(pedidoOuGrade)
     : nomeGradeComercial(pedidoOuGrade || "Excelente");
 
-  const { data: candidatos, error } = await supabase.rpc("assurant_definicao_candidatos", {
-    p_sku: skuBase,
-  });
+  const pedidoDestinoId =
+    typeof pedidoOuGrade === "object" ? (pedidoOuGrade?.id || null) : null;
+
+  const [
+    { data: candidatos, error },
+    { data: vinculosSku, error: erroVinculos },
+  ] = await Promise.all([
+    supabase.rpc("assurant_definicao_candidatos", {
+      p_sku: skuBase,
+    }),
+    supabase.rpc("assurant_definicao_vinculos_sku", {
+      p_sku: skuBase,
+      p_pedido_destino: pedidoDestinoId,
+    }),
+  ]);
+
   if (error) throw new Error(`Falha ao consultar opções do WMS: ${error.message}`);
+  if (erroVinculos) throw new Error(`Falha ao consultar vínculos do SKU: ${erroVinculos.message}`);
 
   const base = candidatos || [];
+  const vinculos = vinculosSku || [];
   if (!base.length) {
     const { data: catalogo } = await supabase
       .from("assurant_triagem")
@@ -1903,6 +1918,7 @@ export async function buscarOpcoesDefinicao(skuDigitado, pedidoOuGrade) {
       modelo: catalogo?.[0]?.modelo || null,
       gradeOrigem,
       opcoes: [],
+      vinculosSku: vinculos,
     };
   }
 
@@ -2003,6 +2019,7 @@ export async function buscarOpcoesDefinicao(skuDigitado, pedidoOuGrade) {
     modelo: opcoes[0]?.modelo || base[0]?.modelo || null,
     gradeOrigem,
     opcoes,
+    vinculosSku: vinculos,
   };
 }
 
