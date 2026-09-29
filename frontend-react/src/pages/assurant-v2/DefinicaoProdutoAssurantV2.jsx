@@ -493,6 +493,74 @@ export default function DefinicaoProdutoAssurantV2() {
                 </div>
               )}
 
+              {consulta?.existe && (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <div className="text-sm font-black text-slate-800">
+                        Vínculos deste SKU sem NF
+                      </div>
+                      <div className="mt-0.5 text-xs text-slate-400">
+                        Pedidos B2B e B2C ainda não faturados para {consulta.skuBase}.
+                      </div>
+                    </div>
+                    <div className="flex gap-2 text-[10px] font-black">
+                      <span className="rounded-lg bg-violet-50 px-2 py-1 text-violet-700 ring-1 ring-violet-200">
+                        B2C {(consulta.vinculosSku || []).filter((v) => v.canal === "B2C").length}
+                      </span>
+                      <span className="rounded-lg bg-orange-50 px-2 py-1 text-orange-700 ring-1 ring-orange-200">
+                        B2B {(consulta.vinculosSku || []).filter((v) => v.canal === "B2B").length}
+                      </span>
+                    </div>
+                  </div>
+
+                  {(consulta.vinculosSku || []).length === 0 ? (
+                    <div className="mt-3 rounded-xl border border-dashed border-slate-200 bg-white p-3 text-xs text-slate-400">
+                      Nenhum pedido B2B ou B2C sem NF encontrado para este SKU.
+                    </div>
+                  ) : (
+                    <div className="mt-3 max-h-52 space-y-2 overflow-y-auto pr-1">
+                      {(consulta.vinculosSku || []).map((v) => (
+                        <div
+                          key={[v.canal, v.item_id, v.referencia].join("|")}
+                          className="rounded-xl border border-slate-200 bg-white px-3 py-2.5"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className={
+                                "rounded-lg px-2 py-1 text-[10px] font-black ring-1 " +
+                                (v.canal === "B2C"
+                                  ? "bg-violet-50 text-violet-700 ring-violet-200"
+                                  : "bg-orange-50 text-orange-700 ring-orange-200")
+                              }>
+                                {v.canal}
+                              </span>
+                              <span className="text-xs font-black text-slate-800">
+                                {v.canal === "B2C"
+                                  ? `Pedido #${v.referencia}`
+                                  : `Lote ${v.lote || v.referencia}`}
+                              </span>
+                              <span className="text-[10px] font-bold text-slate-400">
+                                {v.status || "—"}
+                              </span>
+                            </div>
+                            <span className="font-mono text-[10px] font-bold text-slate-500">
+                              {v.imei ? `IMEI ${v.imei}` : "sem IMEI alocado"}
+                            </span>
+                          </div>
+                          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-slate-500">
+                            {v.grade && <span>Grade: <strong>{v.grade}</strong></span>}
+                            {v.marketplace && <span>{v.marketplace}</span>}
+                            {v.cliente && <span>{v.cliente}</span>}
+                            {v.local && <span>WMS: {v.local}</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {consulta?.opcoes?.length > 0 && (
                 <div>
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -542,11 +610,13 @@ export default function DefinicaoProdutoAssurantV2() {
                               <RelationPill relacao={o.relacao} />
                               {vinculada ? (
                                 <span className="rounded-lg bg-orange-50 px-2 py-1 text-[10px] font-black text-orange-700 ring-1 ring-orange-200">
-                                  {o.vinculo_tipo === "B2B"
-                                    ? "VÍNCULO B2B"
-                                    : o.vinculo_tipo === "TROCA"
-                                      ? "RESERVADO TROCA"
-                                      : "VENDA FUNCIONÁRIO"}
+                                  {o.vinculo_tipo === "B2C"
+                                    ? "VÍNCULO B2C"
+                                    : o.vinculo_tipo === "B2B"
+                                      ? "VÍNCULO B2B"
+                                      : o.vinculo_tipo === "TROCA"
+                                        ? "RESERVADO TROCA"
+                                        : "VENDA FUNCIONÁRIO"}
                                 </span>
                               ) : (
                                 <span className="rounded-lg bg-emerald-50 px-2 py-1 text-[10px] font-black text-emerald-700 ring-1 ring-emerald-200">
@@ -577,6 +647,7 @@ export default function DefinicaoProdutoAssurantV2() {
                             {vinculada && (
                               <div className="mt-2 rounded-lg border border-orange-200 bg-orange-50 px-2.5 py-2 text-[10px] font-bold leading-4 text-orange-800">
                                 {o.vinculo_descricao || o.vinculo_tipo}
+                                {o.vinculo_detalhes?.b2c_status ? ` · status ${o.vinculo_detalhes.b2c_status}` : ""}
                                 {o.vinculo_detalhes?.b2b_status ? ` · status ${o.vinculo_detalhes.b2b_status}` : ""}
                                 {o.vinculo_detalhes?.b2b_exportado ? " · já exportado para faturamento" : ""}
                                 <div className="mt-1 font-semibold text-orange-700">
