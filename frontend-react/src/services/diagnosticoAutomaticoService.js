@@ -127,6 +127,26 @@ export async function buscarSessaoDiagnostico(sessionId) {
   };
 }
 
+export async function registrarTesteManual({
+  sessionId,
+  testId,
+  result,
+  details = null,
+  imeis = [],
+}) {
+  const { data, error } = await supabase.rpc("assurant_diag_registrar_teste_manual", {
+    p_session_id: sessionId,
+    p_test_id: testId,
+    p_result: result,
+    p_details: details?.trim() || null,
+    p_imeis: Array.isArray(imeis) && imeis.length ? imeis : null,
+  });
+
+  if (error) throw new Error(error.message);
+  if (!data?.ok) throw new Error(data?.erro || "Não foi possível registrar o teste guiado.");
+  return data;
+}
+
 export async function registrarResultadoBlacklist({
   checkId,
   status,
@@ -150,6 +170,14 @@ export async function registrarResultadoBlacklist({
     .single();
 
   if (error) throw new Error(error.message);
+
+  if (data?.session_id) {
+    const { error: recalcError } = await supabase.rpc("assurant_diag_recalcular_status", {
+      p_session_id: data.session_id,
+    });
+    if (recalcError) throw new Error(recalcError.message);
+  }
+
   return data;
 }
 
