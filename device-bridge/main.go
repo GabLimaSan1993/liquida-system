@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	bridgeVersion            = "0.4.0-device-agent"
+	bridgeVersion            = "0.5.0-agent-on-device"
 	endpoint                 = "https://fndkyainfdiyorwdsvkr.supabase.co/functions/v1/assurant-device-bridge"
 	maxConcurrentDiagnostics = 12
 )
@@ -549,7 +549,7 @@ func diagnoseAndroid(serial string) (DiagnosticResponse, error) {
 			Code: "device_agent",
 			Category: "hardware",
 			Label: "Liquida Device Agent",
-			Result: "warning",
+			Result: "fail",
 			Source: "agent",
 			DurationMS: time.Since(agentStarted).Milliseconds(),
 			Details: agentErr.Error(),
@@ -567,17 +567,6 @@ func diagnoseAndroid(serial string) (DiagnosticResponse, error) {
 		tests = append(tests, agentTests...)
 	}
 
-	manual := []Test{
-		{Code: "display_visual", Category: "tela", Label: "Display / pixels / manchas", Result: "manual_required", Source: "guiado"},
-		{Code: "touch_full", Category: "tela", Label: "Touch em toda a área", Result: "manual_required", Source: "guiado"},
-		{Code: "microphone_functional", Category: "audio", Label: "Microfone funcional", Result: "manual_required", Source: "guiado"},
-		{Code: "speaker_functional", Category: "audio", Label: "Alto-falante funcional", Result: "manual_required", Source: "guiado"},
-		{Code: "camera_functional", Category: "camera", Label: "Câmeras — imagem e foco", Result: "manual_required", Source: "guiado"},
-		{Code: "biometrics", Category: "seguranca", Label: "Biometria / reconhecimento facial", Result: "manual_required", Source: "guiado"},
-		{Code: "parts_history", Category: "pecas", Label: "Peças substituídas / não genuínas", Result: "manual_required", Source: "guiado", Details: "Confirmar histórico/alertas de componentes quando o fabricante não expuser via interface técnica."},
-		{Code: "buttons", Category: "hardware", Label: "Botões físicos", Result: "manual_required", Source: "guiado"},
-	}
-	tests = append(tests, manual...)
 	sort.Slice(tests, func(i, j int) bool { return tests[i].Category+tests[i].Label < tests[j].Category+tests[j].Label })
 
 	return DiagnosticResponse{Device: device, Tests: tests, DurationMS: time.Since(start).Milliseconds()}, nil
@@ -599,6 +588,15 @@ func androidAgentLabel(code string) string {
 		"camera_inventory_agent": "Câmeras — inventário interno",
 		"audio_inventory_agent": "Áudio — inventário interno",
 		"connectivity_inventory_agent": "Conectividade — inventário interno",
+		"speaker_functional": "Alto-falante — desafio sonoro",
+		"microphone_functional": "Microfone — captura acústica",
+		"display_visual": "Display — ciclo de cores",
+		"touch_full": "Touch — cobertura da tela",
+		"vibration_functional": "Vibração — teste funcional",
+		"camera_functional": "Câmeras — preview funcional",
+		"biometrics": "Biometria — autenticação funcional",
+		"parts_history": "Peças / autenticidade",
+		"buttons": "Botões físicos — volume",
 		"agent_error": "Liquida Device Agent — erro interno",
 	}
 	if label, ok := labels[code]; ok {
@@ -644,8 +642,8 @@ func runAndroidDeviceAgent(serial string) ([]Test, error) {
 	}
 
 	var raw string
-	for i := 0; i < 24; i++ {
-		time.Sleep(250 * time.Millisecond)
+	for i := 0; i < 360; i++ {
+		time.Sleep(500 * time.Millisecond)
 		out, readErr := run(
 			"adb", "-s", serial, "shell", "run-as",
 			"com.liquida.deviceagent", "cat", "files/result.json",
@@ -656,7 +654,7 @@ func runAndroidDeviceAgent(serial string) ([]Test, error) {
 		}
 	}
 	if raw == "" {
-		return nil, errors.New("Agent abriu no aparelho, mas não entregou o relatório dentro do tempo esperado")
+		return nil, errors.New("Agent abriu no aparelho, mas a validação não foi concluída dentro de 3 minutos")
 	}
 
 	var report map[string]interface{}
