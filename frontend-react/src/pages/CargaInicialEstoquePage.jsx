@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle, ArrowRight, Box, CheckCircle, ClipboardCheck, Loader,
-  MapPin, PackageCheck, RotateCcw, ScanLine, SkipForward, Warehouse, X,
+  MapPin, PackageCheck, Printer, RotateCcw, ScanLine, SkipForward, Warehouse, X,
 } from "lucide-react";
 import { useAuth } from "../AuthContext.jsx";
 import {
@@ -13,6 +13,10 @@ import {
   iniciarCargaInicial,
   pularPosicaoCargaInicial,
 } from "../services/cargaInicialWmsService.js";
+import {
+  baixarEtiquetaArmazenagem,
+  buscarDetalhesArmazenagem,
+} from "../services/armazenagemService.js";
 
 const COLUNAS_SEQUENCIA = ["A", "B", "C", "D", "E", "F"];
 const COLUNAS_VISUAIS = ["F", "E", "D", "C", "B", "A"];
@@ -26,7 +30,9 @@ const GRADES_RUA = {
 };
 
 function enderecoCurto(posicao) {
-  return posicao ? `AP ${posicao.coluna}${String(posicao.linha).padStart(2, "0")}` : "Andar concluído";
+  return posicao
+    ? `AP ${posicao.coluna}${String(posicao.linha).padStart(2, "0")}`
+    : "SELECIONE NO MAPA";
 }
 
 function Aviso({ tipo = "ok", children }) {
@@ -123,6 +129,8 @@ export default function CargaInicialEstoquePage() {
   const [codigoCaixa, setCodigoCaixa] = useState("");
   const [carregando, setCarregando] = useState(false);
   const [feedback, setFeedback] = useState(null);
+  const [enderecoSelecionadoId, setEnderecoSelecionadoId] = useState(null);
+  const [ultimaEtiqueta, setUltimaEtiqueta] = useState(null);
   const scanRef = useRef(null);
   const caixaRef = useRef(null);
 
@@ -157,7 +165,10 @@ export default function CargaInicialEstoquePage() {
   );
 
   const atual = posicoesOrdenadas.find(
-    (p) => p.status_endereco === "livre" && !pulados.has(Number(p.endereco_id))
+    (p) =>
+      Number(p.endereco_id) === Number(enderecoSelecionadoId) &&
+      p.status_endereco === "livre" &&
+      !pulados.has(Number(p.endereco_id))
   ) || null;
 
   const resumo = useMemo(() => ({
@@ -165,8 +176,25 @@ export default function CargaInicialEstoquePage() {
     reservados: mapa.filter((p) => p.status_endereco === "reservado").length,
     bloqueados: mapa.filter((p) => p.status_endereco === "bloqueado").length,
     pulados: pulados.size,
-    restantes: posicoesOrdenadas.filter((p) => p.status_endereco === "livre" && !pulados.has(Number(p.endereco_id))).length,
+    restantes: posicoesOrdenadas.filter(
+      (p) => p.status_endereco === "livre" && !pulados.has(Number(p.endereco_id))
+    ).length,
   }), [mapa, posicoesOrdenadas, pulados]);
+
+  useEffect(() => {
+    if (!enderecoSelecionadoId) return;
+
+    const selecionadoContinuaLivre = mapa.some(
+      (p) =>
+        Number(p.endereco_id) === Number(enderecoSelecionadoId) &&
+        p.status_endereco === "livre" &&
+        !pulados.has(Number(p.endereco_id))
+    );
+
+    if (!selecionadoContinuaLivre) {
+      setEnderecoSelecionadoId(null);
+    }
+  }, [mapa, pulados, enderecoSelecionadoId]);
 
   async function atualizarContexto(sessaoBase = sessao) {
     if (!sessaoBase) return;
@@ -185,7 +213,12 @@ export default function CargaInicialEstoquePage() {
       const novaSessao = await iniciarCargaInicial(rua, bloco, andar, user.id);
       setSessao(novaSessao);
       await atualizarContexto(novaSessao);
-      setFeedback({ tipo: "ok", msg: "Carga iniciada. Bipe o primeiro IMEI indicado." });
+      setEnderecoSelecionadoId(null);
+      setUltimaEtiqueta(null);
+      setFeedback({
+        tipo: "ok",
+        msg: "Carga iniciada. Selecione no mapa o apartamento onde o produto será armazenado e depois bipe o IMEI.",
+      });
     } catch (e) {
       setFeedback({ tipo: "erro", msg: e.message });
     } finally {
@@ -199,16 +232,56 @@ export default function CargaInicialEstoquePage() {
     setCarregando(true);
     setFeedback(null);
     try {
-      const resultado = await biparImeiCargaInicial(sessao.id, atual.coluna, atual.linha, imei, user.id);
+      const enderecoEscolhido = { ...atual };
+
+      const resultado = await biparImeiCargaInicial(
+        sessao.id,
+        enderecoEscolhido.coluna,
+        enderecoEscolhido.linha,
+        imei,
+        user.id
+      );
+
       setImei("");
+
       if (resultado.decisao === "segregar") {
         setPendente(resultado);
         setFeedback(null);
       } else {
+        let detalhesEtiqueta = null;
+
+        try {
+          detalhesEtiqueta = await buscarDetalhesArmazenagem(resultado.voucher);
+        } catch {
+          detalhesEtiqueta = {
+            voucher: resultado.voucher,
+            imei: resultado.imei,
+            sku: resultado.sku,
+            modelo: resultado.modelo,
+            grade: resultado.grade,
+            produto: {
+              marca: null,
+              modelo: resultado.modelo,
+              armazenamento: null,
+              cor: null,
+            },
+          };
+        }
+
+        const dadosEtiqueta = {
+          detalhes: detalhesEtiqueta,
+          endereco: enderecoEscolhido,
+        };
+
+        baixarEtiquetaArmazenagem(dadosEtiqueta);
+        setUltimaEtiqueta(dadosEtiqueta);
+        setEnderecoSelecionadoId(null);
+
         setFeedback({
           tipo: "ok",
-          msg: `${resultado.imei} alocado em ${resultado.local}. ${resultado.modelo || "Produto identificado."}`,
+          msg: `${resultado.imei} alocado exatamente em ${resultado.local}. Etiqueta de armazenagem gerada.`,
         });
+
         await atualizarContexto();
       }
     } catch (e) {
@@ -243,6 +316,7 @@ export default function CargaInicialEstoquePage() {
     try {
       await pularPosicaoCargaInicial(sessao.id, atual.coluna, atual.linha, user.id);
       setFeedback({ tipo: "ok", msg: `${enderecoCurto(atual)} marcado como vazio.` });
+      setEnderecoSelecionadoId(null);
       await atualizarContexto();
     } catch (e) {
       setFeedback({ tipo: "erro", msg: e.message });
@@ -278,6 +352,8 @@ export default function CargaInicialEstoquePage() {
       setMapa([]);
       setEventos([]);
       setPendente(null);
+      setEnderecoSelecionadoId(null);
+      setUltimaEtiqueta(null);
     } catch (e) {
       setFeedback({ tipo: "erro", msg: e.message });
     } finally {
@@ -302,7 +378,9 @@ export default function CargaInicialEstoquePage() {
           <div>
             <p className="text-xs font-black uppercase tracking-[0.2em] text-purple-200">WMS - Inventário de implantação</p>
             <h1 className="mt-1 text-2xl font-black">Carga Inicial do Estoque</h1>
-            <p className="mt-1 text-sm text-purple-100">Bipagem sequencial por apartamento com segregação automática.</p>
+            <p className="mt-1 text-sm text-purple-100">
+              O operador define o endereço exato no mapa; a carga inicial não escolhe posição automaticamente por grade.
+            </p>
           </div>
           <Warehouse className="h-12 w-12 text-white/70" />
         </div>
@@ -316,7 +394,9 @@ export default function CargaInicialEstoquePage() {
             <MapPin className="h-6 w-6 text-[#7F2D92]" />
             <div>
               <h2 className="font-black text-slate-800">Selecione o ponto de início</h2>
-              <p className="text-sm text-slate-500">O sistema retomará uma sessão aberta neste mesmo andar, se existir.</p>
+              <p className="text-sm text-slate-500">
+                Escolha o andar de trabalho. Depois, cada apartamento será selecionado manualmente no mapa.
+              </p>
             </div>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
@@ -355,15 +435,23 @@ export default function CargaInicialEstoquePage() {
               <div className="rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-purple-100">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-xs font-black uppercase tracking-wider text-slate-400">Endereço atual</p>
+                    <p className="text-xs font-black uppercase tracking-wider text-slate-400">
+                      Endereço escolhido pelo operador
+                    </p>
                     <p className="mt-1 text-sm font-bold text-slate-600">RUA {String(sessao.rua).padStart(2, "0")} · BL {String(sessao.bloco).padStart(2, "0")} · AD {String(sessao.andar).padStart(2, "0")}</p>
                   </div>
-                  <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-black text-purple-700">{GRADES_RUA[sessao.rua]}</span>
+                  <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-black text-purple-700">
+                    MANUAL
+                  </span>
                 </div>
 
                 <div className="my-5 rounded-3xl bg-[#16071D] p-6 text-center text-white">
-                  <p className="text-xs font-black uppercase tracking-[0.25em] text-purple-300">Guardar no</p>
-                  <p className="mt-1 text-5xl font-black">{enderecoCurto(atual)}</p>
+                  <p className="text-xs font-black uppercase tracking-[0.25em] text-purple-300">
+                    {atual ? "Guardar exatamente em" : "Escolha uma posição livre"}
+                  </p>
+                  <p className={"mt-1 font-black " + (atual ? "text-5xl" : "text-2xl")}>
+                    {enderecoCurto(atual)}
+                  </p>
                 </div>
 
                 {atual ? (
@@ -384,18 +472,33 @@ export default function CargaInicialEstoquePage() {
                       </button>
                     </div>
                   </form>
+                ) : resumo.restantes > 0 ? (
+                  <div className="rounded-2xl border border-dashed border-purple-200 bg-purple-50 px-4 py-4 text-center text-sm font-bold text-purple-700">
+                    Clique em um apartamento livre no mapa para definir o endereço da próxima alocação.
+                  </div>
                 ) : (
                   <Aviso>Não há mais posições livres neste andar. Finalize a carga.</Aviso>
                 )}
 
                 <div className="mt-4 grid gap-2 sm:grid-cols-2">
                   <button onClick={pular} disabled={!atual || carregando || !!pendente} className="flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40">
-                    <SkipForward className="h-4 w-4" /> Pular posição vazia
+                    <SkipForward className="h-4 w-4" /> Marcar posição como vazia
                   </button>
                   <button onClick={desfazer} disabled={!eventos.length || carregando} className="flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40">
                     <RotateCcw className="h-4 w-4" /> Desfazer última ação
                   </button>
                 </div>
+
+                {ultimaEtiqueta && (
+                  <button
+                    type="button"
+                    onClick={() => baixarEtiquetaArmazenagem(ultimaEtiqueta)}
+                    className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl border border-purple-200 bg-purple-50 px-4 py-3 text-sm font-black text-[#7F2D92] hover:bg-purple-100"
+                  >
+                    <Printer className="h-4 w-4" />
+                    Reimprimir etiqueta da última alocação
+                  </button>
+                )}
               </div>
 
               <button onClick={finalizar} disabled={carregando || !!pendente} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 py-4 font-black text-white disabled:opacity-50">
@@ -406,8 +509,10 @@ export default function CargaInicialEstoquePage() {
             <div className="rounded-[28px] bg-white p-5 shadow-sm ring-1 ring-purple-100">
               <div className="mb-4 flex items-center justify-between">
                 <div>
-                  <h2 className="font-black text-slate-800">Mapa do andar</h2>
-                  <p className="text-xs text-slate-500">A fica à direita; a sequência desce A01 até A10.</p>
+                  <h2 className="font-black text-slate-800">Mapa do andar — seleção manual</h2>
+                  <p className="text-xs text-slate-500">
+                    Clique em qualquer apartamento livre. Nenhuma posição é escolhida automaticamente por grade.
+                  </p>
                 </div>
                 <PackageCheck className="h-6 w-6 text-[#7F2D92]" />
               </div>
@@ -417,10 +522,11 @@ export default function CargaInicialEstoquePage() {
                 {LINHAS.flatMap((linha) => COLUNAS_VISUAIS.map((coluna) => {
                   const posicao = mapaPorChave.get(`${coluna}-${linha}`);
                   if (!posicao) return <div key={`${coluna}-${linha}`} />;
-                  const ehAtual = atual?.endereco_id === posicao.endereco_id;
+                  const ehAtual = Number(enderecoSelecionadoId) === Number(posicao.endereco_id);
                   const foiPulada = pulados.has(Number(posicao.endereco_id));
+                  const livre = posicao.status_endereco === "livre" && !foiPulada;
                   const classe = ehAtual
-                    ? "bg-[#7F2D92] text-white ring-2 ring-purple-300 animate-pulse"
+                    ? "bg-[#7F2D92] text-white ring-2 ring-purple-300"
                     : foiPulada
                       ? "bg-slate-200 text-slate-500"
                       : posicao.status_endereco === "ocupado"
@@ -429,17 +535,34 @@ export default function CargaInicialEstoquePage() {
                           ? "bg-amber-100 text-amber-700 ring-1 ring-amber-200"
                           : posicao.status_endereco === "bloqueado"
                             ? "bg-red-100 text-red-700 ring-1 ring-red-200"
-                            : "bg-white text-slate-500 ring-1 ring-slate-200";
+                            : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-purple-50 hover:text-[#7F2D92] hover:ring-purple-300 cursor-pointer";
+
                   return (
-                    <div key={`${coluna}-${linha}`} title={posicao.imei || posicao.status_endereco} className={`flex min-h-11 items-center justify-center rounded-xl text-xs font-black ${classe}`}>
+                    <button
+                      type="button"
+                      key={`${coluna}-${linha}`}
+                      title={
+                        livre
+                          ? `Selecionar AP ${coluna}${String(linha).padStart(2, "0")}`
+                          : posicao.imei || posicao.status_endereco
+                      }
+                      disabled={!livre || carregando || !!pendente}
+                      onClick={() => {
+                        if (!livre) return;
+                        setEnderecoSelecionadoId(ehAtual ? null : posicao.endereco_id);
+                        setFeedback(null);
+                        window.setTimeout(() => scanRef.current?.focus(), 30);
+                      }}
+                      className={`flex min-h-11 items-center justify-center rounded-xl text-xs font-black transition ${classe} disabled:cursor-not-allowed`}
+                    >
                       {coluna}{String(linha).padStart(2, "0")}
-                    </div>
+                    </button>
                   );
                 }))}
               </div>
 
               <div className="mt-4 flex flex-wrap gap-3 text-[10px] font-bold text-slate-500">
-                <span>🟣 Atual</span><span>🟢 Ocupado</span><span>🟡 Reservado</span><span>⬜ Livre</span><span>⬛ Vazio/pulado</span>
+                <span>🟣 Selecionado</span><span>🟢 Ocupado</span><span>🟡 Reservado</span><span>⬜ Livre/clicável</span><span>⬛ Vazio/pulado</span>
               </div>
             </div>
           </section>
