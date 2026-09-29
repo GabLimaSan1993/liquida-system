@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	bridgeVersion            = "0.3.1-imei-ui-fallback"
+	bridgeVersion            = "0.3.2-imei-mmi-fallback"
 	endpoint                 = "https://fndkyainfdiyorwdsvkr.supabase.co/functions/v1/assurant-device-bridge"
 	maxConcurrentDiagnostics = 12
 )
@@ -817,6 +817,13 @@ func collectAndroidIMEIs(serial, propsOut string) []IMEI {
 		sources = append(sources, source{"settings_ui", "high", ui})
 	}
 
+	// Segundo fallback: em Samsung/Android recentes, a tela *#06# normalmente
+	// exibe os IMEIs mesmo quando o shell ADB e a tela Sobre o telefone os ocultam.
+	// O bridge abre o discador e injeta o código por keyevents, sem efetuar ligação.
+	if ui := collectAndroidIMEIFromDialerMMI(serial); strings.TrimSpace(ui) != "" {
+		sources = append(sources, source{"dialer_mmi", "high", ui})
+	}
+
 	re := regexp.MustCompile(`\b[0-9]{15}\b`)
 	seen := map[string]IMEI{}
 	for _, s := range sources {
@@ -851,6 +858,30 @@ func collectAndroidIMEIFromSettingsUI(serial string) string {
 	out, err := run(
 		"adb", "-s", serial, "shell", "sh", "-c",
 		"uiautomator dump /sdcard/liquida_imei.xml >/dev/null 2>&1; cat /sdcard/liquida_imei.xml; rm -f /sdcard/liquida_imei.xml",
+	)
+	_, _ = run("adb", "-s", serial, "shell", "input", "keyevent", "KEYCODE_BACK")
+	if err != nil {
+		return ""
+	}
+	return out
+}
+
+func collectAndroidIMEIFromDialerMMI(serial string) string {
+	// Abre o discador e digita *#06# via keyevents. O último # costuma abrir
+	// imediatamente o painel de identificação do aparelho.
+	_, _ = run("adb", "-s", serial, "shell", "am", "start", "-a", "android.intent.action.DIAL")
+	time.Sleep(450 * time.Millisecond)
+
+	// KEYCODE_STAR=17, KEYCODE_POUND=18, KEYCODE_0=7, KEYCODE_6=13.
+	for _, key := range []string{"17", "18", "7", "13", "18"} {
+		_, _ = run("adb", "-s", serial, "shell", "input", "keyevent", key)
+		time.Sleep(90 * time.Millisecond)
+	}
+
+	time.Sleep(850 * time.Millisecond)
+	out, err := run(
+		"adb", "-s", serial, "shell", "sh", "-c",
+		"uiautomator dump /sdcard/liquida_imei_mmi.xml >/dev/null 2>&1; cat /sdcard/liquida_imei_mmi.xml; rm -f /sdcard/liquida_imei_mmi.xml",
 	)
 	_, _ = run("adb", "-s", serial, "shell", "input", "keyevent", "KEYCODE_BACK")
 	if err != nil {
