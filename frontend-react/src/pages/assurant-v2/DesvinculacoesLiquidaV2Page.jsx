@@ -249,8 +249,15 @@ export default function DesvinculacoesLiquidaV2Page() {
                       <Package className="h-3 w-3" /> Vínculo atual
                     </div>
                     <div className="mt-1 text-xs font-black text-orange-900">
-                      {d.descricao || item.vinculo_referencia || item.vinculo_tipo}
+                      {item.vinculo_tipo === "B2B"
+                        ? `Pedido/Lote B2B: ${d.b2b_lote || item.vinculo_referencia || "—"}`
+                        : (d.descricao || item.vinculo_referencia || item.vinculo_tipo)}
                     </div>
+                    {item.vinculo_tipo === "B2B" && d.b2b_cliente && (
+                      <div className="mt-1 text-[10px] font-bold text-orange-700">
+                        Cliente: {d.b2b_cliente}
+                      </div>
+                    )}
                     {d.b2b_status && <div className="mt-1 text-[10px] text-orange-700">Status B2B: {d.b2b_status}</div>}
                   </div>
 
