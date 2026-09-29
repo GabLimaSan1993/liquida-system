@@ -28,11 +28,12 @@ import {
   listarEstacoesDiagnostico,
   listarSessoesDiagnosticoRecentes,
   registrarResultadoBlacklist,
+  registrarTesteManual,
 } from "../../services/diagnosticoAutomaticoService.js";
 
 const GABRIEL_USER_ID = "b517d70a-56be-4b4f-8b9e-a03c769dd3c3";
 const MAX_SLOTS = 12;
-const TERMINAIS = new Set(["concluido", "aguardando_manual", "erro", "cancelado"]);
+const TERMINAIS = new Set(["concluido", "erro", "cancelado"]);
 
 function fmtDataHora(value) {
   if (!value) return "—";
@@ -92,6 +93,9 @@ export default function TriagemAutomaticaLabV2Page() {
   const [snapshot, setSnapshot] = useState(null);
   const [recentes, setRecentes] = useState([]);
   const [erro, setErro] = useState("");
+  const [manualNotes, setManualNotes] = useState({});
+  const [manualImeis, setManualImeis] = useState({});
+  const [savingManual, setSavingManual] = useState({});
 
   const selectedStation = stations.find((s) => s.id === stationId) || null;
   const devices = useMemo(() => {
@@ -171,6 +175,11 @@ export default function TriagemAutomaticaLabV2Page() {
     };
   }, [snapshot]);
 
+  const manualTests = useMemo(
+    () => (snapshot?.tests || []).filter((x) => x.result === "manual_required"),
+    [snapshot]
+  );
+
   async function gerarPareamento() {
     setErro("");
     try {
@@ -214,6 +223,42 @@ export default function TriagemAutomaticaLabV2Page() {
       setErro(e.message);
     } finally {
       setStartingDevices((prev) => ({ ...prev, [device.connection_id]: false }));
+    }
+  }
+
+  async function salvarTesteGuiado(test, result) {
+    if (!sessionId) return;
+
+    const imeis = test.code === "imei_collection" && result === "pass"
+      ? String(manualImeis[test.id] || "")
+          .split(/[\s,;]+/)
+          .map((x) => x.replace(/\D/g, ""))
+          .filter(Boolean)
+      : [];
+
+    if (test.code === "imei_collection" && result === "pass" && !imeis.length) {
+      setErro("Informe ao menos um IMEI antes de aprovar a identificação.");
+      return;
+    }
+
+    setErro("");
+    setSavingManual((prev) => ({ ...prev, [test.id]: true }));
+
+    try {
+      await registrarTesteManual({
+        sessionId,
+        testId: test.id,
+        result,
+        details: manualNotes[test.id] || null,
+        imeis,
+      });
+      const data = await buscarSessaoDiagnostico(sessionId);
+      setSnapshot(data);
+      await carregarEstacoes();
+    } catch (e) {
+      setErro(e.message);
+    } finally {
+      setSavingManual((prev) => ({ ...prev, [test.id]: false }));
     }
   }
 
@@ -427,7 +472,11 @@ export default function TriagemAutomaticaLabV2Page() {
                       className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-violet-700 px-3 py-2.5 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       {busy ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Usb className="h-3.5 w-3.5" />}
-                      {busy ? "Diagnosticando..." : "Iniciar diagnóstico"}
+                      {busySession?.status === "aguardando_manual"
+                        ? "Aguardando testes guiados"
+                        : busy
+                          ? "Diagnosticando..."
+                          : "Iniciar diagnóstico"}
                     </button>
                     {busySession?.id && (
                       <button
@@ -435,7 +484,7 @@ export default function TriagemAutomaticaLabV2Page() {
                         onClick={() => setSessionId(busySession.id)}
                         className="mt-1.5 w-full rounded-lg px-2 py-1.5 text-[10px] font-black text-violet-700 hover:bg-violet-50"
                       >
-                        Abrir sessão
+                        {busySession.status === "aguardando_manual" ? "Continuar testes guiados" : "Abrir sessão"}
                       </button>
                     )}
                   </>
@@ -464,6 +513,111 @@ export default function TriagemAutomaticaLabV2Page() {
               </Card>
             ))}
           </div>
+
+          {session.status === "aguardando_manual" && (
+            <Card className="overflow-hidden border-violet-200">
+              <div className="border-b border-violet-100 bg-violet-50/60 px-4 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="font-black text-violet-900">Testes guiados pendentes</div>
+                    <div className="text-xs text-violet-600">
+                      Conclua os itens abaixo para finalizar a triagem desta sessão.
+                    </div>
+                  </div>
+                  <span className="rounded-lg bg-white px-2.5 py-1 text-[10px] font-black text-violet-700 ring-1 ring-violet-200">
+                    {manualTests.length} pendente{manualTests.length === 1 ? "" : "s"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid gap-3 p-4 lg:grid-cols-2">
+                {manualTests.map((test) => {
+                  const saving = Boolean(savingManual[test.id]);
+                  const isImei = test.code === "imei_collection";
+
+                  return (
+                    <div key={test.id} className="rounded-2xl border border-slate-200 bg-white p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+                            {test.category}
+                          </div>
+                          <div className="mt-1 font-black text-slate-800">{test.label}</div>
+                          {test.details && (
+                            <div className="mt-1 text-xs text-slate-500">{test.details}</div>
+                          )}
+                        </div>
+                        <StatusBadge value={test.result} />
+                      </div>
+
+                      {isImei && (
+                        <div className="mt-3">
+                          <label className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+                            IMEI(s)
+                          </label>
+                          <input
+                            value={manualImeis[test.id] || ""}
+                            onChange={(e) =>
+                              setManualImeis((prev) => ({ ...prev, [test.id]: e.target.value }))
+                            }
+                            placeholder="Digite ou bipe o IMEI. Para Dual SIM, separe por espaço."
+                            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-mono font-bold outline-none focus:border-violet-300"
+                          />
+                        </div>
+                      )}
+
+                      <div className="mt-3">
+                        <label className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+                          Observação
+                        </label>
+                        <input
+                          value={manualNotes[test.id] || ""}
+                          onChange={(e) =>
+                            setManualNotes((prev) => ({ ...prev, [test.id]: e.target.value }))
+                          }
+                          placeholder={isImei ? "Ex.: IMEI conferido na tela do aparelho" : "Opcional; descreva a falha quando houver"}
+                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-violet-300"
+                        />
+                      </div>
+
+                      <div className="mt-3 grid grid-cols-3 gap-2">
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() => salvarTesteGuiado(test, "pass")}
+                          className="rounded-xl bg-emerald-50 px-2 py-2.5 text-[11px] font-black text-emerald-700 ring-1 ring-emerald-200 disabled:opacity-50"
+                        >
+                          {isImei ? "Salvar e aprovar" : "Aprovado"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() => salvarTesteGuiado(test, "fail")}
+                          className="rounded-xl bg-rose-50 px-2 py-2.5 text-[11px] font-black text-rose-700 ring-1 ring-rose-200 disabled:opacity-50"
+                        >
+                          Falha
+                        </button>
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() => salvarTesteGuiado(test, "not_supported")}
+                          className="rounded-xl bg-slate-50 px-2 py-2.5 text-[11px] font-black text-slate-600 ring-1 ring-slate-200 disabled:opacity-50"
+                        >
+                          Não suportado
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {!manualTests.length && (
+                  <div className="lg:col-span-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-700">
+                    Todos os testes guiados foram preenchidos. Resolva apenas eventuais consultas de restrição pendentes para concluir a sessão.
+                  </div>
+                )}
+              </div>
+            </Card>
+          )}
 
           <div className="grid gap-4 xl:grid-cols-[1fr_1.4fr]">
             <Card className="overflow-hidden">
