@@ -1,9 +1,18 @@
 #!/bin/bash
 set -euo pipefail
 
-PAIR_CODE="${1:-}"
-if [ -z "$PAIR_CODE" ]; then
-  echo "Uso: ./install-macos.sh CODIGO_DE_PAREAMENTO"
+ARG="${1:-}"
+UPDATE_ONLY=false
+PAIR_CODE=""
+
+if [ "$ARG" = "--update" ]; then
+  UPDATE_ONLY=true
+elif [ -n "$ARG" ]; then
+  PAIR_CODE="$ARG"
+else
+  echo "Uso:"
+  echo "  ./install-macos.sh CODIGO_DE_PAREAMENTO   # primeira instalação"
+  echo "  ./install-macos.sh --update               # atualizar bridge já pareado"
   exit 1
 fi
 
@@ -87,7 +96,15 @@ echo "ADB: $(adb version | head -n 1)"
 
 go build -trimpath -ldflags="-s -w" -o "$APP_DIR/liquida-device-bridge" .
 
-"$APP_DIR/liquida-device-bridge" --pair "$PAIR_CODE"
+if [ "$UPDATE_ONLY" = false ]; then
+  "$APP_DIR/liquida-device-bridge" --pair "$PAIR_CODE"
+else
+  if [ ! -f "$APP_DIR/config.json" ]; then
+    echo "Esta estação ainda não está pareada. Use um código de pareamento na primeira instalação."
+    exit 1
+  fi
+  echo "Pareamento existente preservado."
+fi
 
 cat > "$PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -123,5 +140,9 @@ launchctl bootout "gui/$(id -u)" "$PLIST" >/dev/null 2>&1 || true
 launchctl bootstrap "gui/$(id -u)" "$PLIST"
 launchctl kickstart -k "gui/$(id -u)/com.liquida.devicebridge"
 
-echo "Liquida Bridge Multidevice instalado e iniciado. Capacidade: até 12 aparelhos simultâneos."
+if [ "$UPDATE_ONLY" = true ]; then
+  echo "Liquida Bridge atualizado e reiniciado. Pareamento preservado."
+else
+  echo "Liquida Bridge Multidevice instalado e iniciado. Capacidade: até 12 aparelhos simultâneos."
+fi
 echo "Modo atual: Android habilitado. iOS depende de libimobiledevice/Homebrew."
