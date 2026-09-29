@@ -20,6 +20,7 @@ struct AgentReport: Codable {
 }
 
 enum DiagnosticEngine {
+    @MainActor
     static func run() async -> AgentReport {
         UIDevice.current.isBatteryMonitoringEnabled = true
         var tests: [AgentTest] = []
