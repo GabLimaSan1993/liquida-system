@@ -6,6 +6,10 @@ import android.os.Bundle;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.nio.charset.StandardCharsets;
+import org.json.JSONObject;
 
 public class MainActivity extends Activity {
     @Override
@@ -45,8 +49,23 @@ public class MainActivity extends Activity {
         setContentView(root);
 
         new Thread(() -> {
-            int count = DiagnosticEngine.run(this).length();
-            runOnUiThread(() -> status.setText("Diagnóstico automático concluído"));
+            try {
+                org.json.JSONArray tests = DiagnosticEngine.run(this);
+                JSONObject report = new JSONObject();
+                report.put("protocol", "liquida-device-agent/1");
+                report.put("platform", "android");
+                report.put("agent_version", "0.1.1");
+                report.put("tests", tests);
+
+                File out = new File(getFilesDir(), "result.json");
+                try (FileOutputStream fos = new FileOutputStream(out, false)) {
+                    fos.write(report.toString().getBytes(StandardCharsets.UTF_8));
+                }
+
+                runOnUiThread(() -> status.setText("Diagnóstico automático concluído"));
+            } catch (Exception e) {
+                runOnUiThread(() -> status.setText("Falha no diagnóstico"));
+            }
         }).start();
     }
 }
