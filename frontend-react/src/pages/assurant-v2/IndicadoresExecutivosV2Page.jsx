@@ -2410,6 +2410,10 @@ export default function IndicadoresExecutivosV2Page() {
 
   return (
     <div className="space-y-6 pb-10">
+      <div className="rounded-2xl border border-amber-300 bg-amber-50 px-5 py-3 text-sm font-bold text-amber-900">
+        Visão histórica temporária para reunião · dados operacionais cortados em 14/09/2026.
+      </div>
+
       <header className="rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col justify-between gap-5 px-5 py-5 xl:flex-row xl:items-center">
           <div>
