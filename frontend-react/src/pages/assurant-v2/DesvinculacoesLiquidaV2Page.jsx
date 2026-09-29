@@ -27,6 +27,7 @@ function fmtData(v) {
 
 function VinculoBadge({ tipo }) {
   const label =
+    tipo === "B2C" ? "B2C" :
     tipo === "B2B" ? "B2B" :
     tipo === "TROCA" ? "TROCA" :
     tipo === "VENDA_FUNCIONARIO" ? "VENDA FUNCIONÁRIO" :
@@ -133,7 +134,7 @@ export default function DesvinculacoesLiquidaV2Page() {
               <h1 className="text-lg font-black text-slate-900">Desvinculações para B2C</h1>
             </div>
             <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-500">
-              Fila exclusiva da Liquida Preço. A Assurant escolhe o produto; a Liquida valida e transfere vínculos B2B, Troca ou Venda Funcionário para o B2C sem retirar o aparelho da posição física do WMS.
+              Fila exclusiva da Liquida Preço. A Assurant escolhe o produto; a Liquida valida e transfere vínculos B2C, B2B, Troca ou Venda Funcionário para o B2C destino sem retirar o aparelho da posição física do WMS.
             </p>
           </div>
           <button
@@ -261,6 +262,13 @@ export default function DesvinculacoesLiquidaV2Page() {
                     <div className="mt-1 text-[10px] text-violet-700">Após aprovação segue para Picking</div>
                   </div>
                 </div>
+
+                {item.vinculo_tipo === "B2C" && item.status === "pendente" && (
+                  <div className="mt-3 flex items-start gap-2 rounded-xl border border-violet-200 bg-violet-50 p-3 text-xs font-bold text-violet-800">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                    O pedido B2C de origem ainda não possui NF. Ao aprovar, ele perderá este IMEI e voltará para Aguardando Definição; o aparelho seguirá para o B2C destino.
+                  </div>
+                )}
 
                 {exportado && item.status === "pendente" && (
                   <div className="mt-3 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-bold text-rose-800">
