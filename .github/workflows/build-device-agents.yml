@@ -1,5 +1,8 @@
 name: Build Device Agents
 
+permissions:
+  contents: write
+
 on:
   push:
     branches: [main]
@@ -27,6 +30,21 @@ jobs:
         with:
           name: liquida-device-agent-android
           path: device-agent/android/app/build/outputs/apk/debug/app-debug.apk
+      - name: Publish Android Agent for Bridge
+        run: |
+          mkdir -p bridge-assets
+          base64 -w 0 device-agent/android/app/build/outputs/apk/debug/app-debug.apk > bridge-assets/liquida-device-agent-android.apk.b64
+          printf '\n' >> bridge-assets/liquida-device-agent-android.apk.b64
+          sha256sum device-agent/android/app/build/outputs/apk/debug/app-debug.apk | awk '{print $1}' > bridge-assets/liquida-device-agent-android.sha256
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add bridge-assets/liquida-device-agent-android.apk.b64 bridge-assets/liquida-device-agent-android.sha256
+          if git diff --cached --quiet; then
+            echo "Agent asset unchanged."
+          else
+            git commit -m "build: publish Android device agent [skip ci]"
+            git push origin HEAD:main
+          fi
 
   ios:
     runs-on: macos-latest
