@@ -1,0 +1,42 @@
+name: Build Device Agents
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "device-agent/**"
+      - ".github/workflows/build-device-agents.yml"
+  workflow_dispatch:
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10.2"
+      - name: Build Android Agent
+        working-directory: device-agent/android
+        run: gradle :app:assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: liquida-device-agent-android
+          path: device-agent/android/app/build/outputs/apk/debug/app-debug.apk
+
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate project
+        working-directory: device-agent/ios
+        run: xcodegen generate
+      - name: Build iOS Agent for simulator
+        working-directory: device-agent/ios
+        run: xcodebuild -project LiquidaDeviceAgent.xcodeproj -scheme LiquidaDeviceAgent -sdk iphonesimulator -configuration Debug CODE_SIGNING_ALLOWED=NO build
