@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	bridgeVersion            = "0.2.0-multidevice"
+	bridgeVersion            = "0.3.0-auto-first"
 	endpoint                 = "https://fndkyainfdiyorwdsvkr.supabase.co/functions/v1/assurant-device-bridge"
 	maxConcurrentDiagnostics = 12
 )
@@ -419,8 +419,9 @@ func diagnoseAndroid(serial string) (DiagnosticResponse, error) {
 	}
 
 	addTest(Test{Code: "usb_adb", Category: "conectividade", Label: "USB / ADB", Result: "pass", Source: "automatico"})
+	addTest(Test{Code: "device_identity", Category: "hardware", Label: "Identificação de hardware", Result: "pass", Source: "automatico", Value: map[string]interface{}{"model": device.Model, "manufacturer": device.Manufacturer, "os": device.OSVersion}})
 
-	wg.Add(5)
+	wg.Add(6)
 
 	go func() {
 		defer wg.Done()
@@ -435,13 +436,22 @@ func diagnoseAndroid(serial string) (DiagnosticResponse, error) {
 			result = "warning"
 		}
 		addTest(Test{Code: "battery_read", Category: "bateria", Label: "Leitura da bateria", Result: result, Source: "automatico", DurationMS: time.Since(t0).Milliseconds(), Value: map[string]interface{}{"raw": compact(out, 1200)}})
+
+		powered := strings.Contains(out, "USB powered: true") || strings.Contains(out, "AC powered: true") || strings.Contains(out, "Wireless powered: true")
+		chargingResult := "warning"
+		chargingDetails := "Alimentação externa não confirmada pelo Android."
+		if powered {
+			chargingResult = "pass"
+			chargingDetails = "Alimentação externa detectada automaticamente."
+		}
+		addTest(Test{Code: "charging", Category: "bateria", Label: "Carga / alimentação", Result: chargingResult, Source: "automatico", DurationMS: time.Since(t0).Milliseconds(), Details: chargingDetails})
 	}()
 
 	go func() {
 		defer wg.Done()
 		t0 := time.Now()
-		out, _ := run("adb", "-s", serial, "shell", "df", "-B1", "/data")
-		storage := parseDFTotal(out)
+		out, _ := run("adb", "-s", serial, "shell", "df", "-k", "/data")
+		storage := parseDFTotalKB(out)
 		mu.Lock()
 		device.StorageBytes = storage
 		mu.Unlock()
@@ -456,7 +466,7 @@ func diagnoseAndroid(serial string) (DiagnosticResponse, error) {
 		defer wg.Done()
 		t0 := time.Now()
 		out, _ := run("adb", "-s", serial, "shell", "dumpsys", "media.camera")
-		count := strings.Count(out, "Camera ID")
+		count := countCameraReferences(out)
 		result := "pass"
 		if count == 0 {
 			result = "warning"
@@ -490,6 +500,46 @@ func diagnoseAndroid(serial string) (DiagnosticResponse, error) {
 		}
 	}()
 
+	go func() {
+		defer wg.Done()
+		t0 := time.Now()
+		features, _ := run("adb", "-s", serial, "shell", "pm", "list", "features")
+		has := func(name string) bool { return strings.Contains(features, "feature:"+name) }
+		addFeature := func(code, category, label, feature string) {
+			result := "not_supported"
+			details := "Recurso não declarado pelo aparelho."
+			if has(feature) {
+				result = "pass"
+				details = "Hardware declarado pelo Android."
+			}
+			addTest(Test{Code: code, Category: category, Label: label, Result: result, Source: "automatico", DurationMS: time.Since(t0).Milliseconds(), Details: details})
+		}
+
+		addFeature("wifi_hardware", "conectividade", "Wi-Fi disponível", "android.hardware.wifi")
+		addFeature("bluetooth_hardware", "conectividade", "Bluetooth disponível", "android.hardware.bluetooth")
+		addFeature("nfc_hardware", "conectividade", "NFC disponível", "android.hardware.nfc")
+		addFeature("flash_hardware", "hardware", "Flash disponível", "android.hardware.camera.flash")
+		addFeature("vibrator_hardware", "hardware", "Vibração disponível", "android.hardware.vibrator")
+
+		biometric := has("android.hardware.fingerprint") || has("android.hardware.biometrics.face") || has("android.hardware.biometrics")
+		bioResult := "not_supported"
+		bioDetails := "Nenhum hardware biométrico declarado."
+		if biometric {
+			bioResult = "pass"
+			bioDetails = "Hardware biométrico detectado automaticamente."
+		}
+		addTest(Test{Code: "biometric_hardware", Category: "seguranca", Label: "Hardware biométrico", Result: bioResult, Source: "automatico", DurationMS: time.Since(t0).Milliseconds(), Details: bioDetails})
+
+		audioOut, audioErr := run("adb", "-s", serial, "shell", "dumpsys", "audio")
+		audioResult := "warning"
+		audioDetails := "Não foi possível validar o serviço de áudio."
+		if audioErr == nil && strings.TrimSpace(audioOut) != "" {
+			audioResult = "pass"
+			audioDetails = "Serviço de áudio Android respondeu normalmente."
+		}
+		addTest(Test{Code: "audio_stack", Category: "audio", Label: "Subsistema de áudio", Result: audioResult, Source: "automatico", DurationMS: time.Since(t0).Milliseconds(), Details: audioDetails})
+	}()
+
 	wg.Wait()
 
 	manual := []Test{
@@ -501,7 +551,6 @@ func diagnoseAndroid(serial string) (DiagnosticResponse, error) {
 		{Code: "biometrics", Category: "seguranca", Label: "Biometria / reconhecimento facial", Result: "manual_required", Source: "guiado"},
 		{Code: "parts_history", Category: "pecas", Label: "Peças substituídas / não genuínas", Result: "manual_required", Source: "guiado", Details: "Confirmar histórico/alertas de componentes quando o fabricante não expuser via interface técnica."},
 		{Code: "buttons", Category: "hardware", Label: "Botões físicos", Result: "manual_required", Source: "guiado"},
-		{Code: "charging", Category: "energia", Label: "Carga física", Result: "manual_required", Source: "guiado"},
 	}
 	tests = append(tests, manual...)
 	sort.Slice(tests, func(i, j int) bool { return tests[i].Category+tests[i].Label < tests[j].Category+tests[j].Label })
@@ -856,7 +905,7 @@ func parseGetprop(out string) map[string]string {
 	return m
 }
 
-func parseDFTotal(out string) int64 {
+func parseDFTotalKB(out string) int64 {
 	lines := strings.Split(strings.TrimSpace(out), "\n")
 	if len(lines) < 2 {
 		return 0
@@ -866,7 +915,31 @@ func parseDFTotal(out string) int64 {
 		return 0
 	}
 	v, _ := strconv.ParseInt(fields[1], 10, 64)
-	return v
+	if v <= 0 {
+		return 0
+	}
+	return v * 1024
+}
+
+func countCameraReferences(out string) int {
+	seen := map[string]bool{}
+	re := regexp.MustCompile(`(?i)camera\\s+id\\s*[:=]?\\s*([0-9]+)`)
+	for _, m := range re.FindAllStringSubmatch(out, -1) {
+		if len(m) > 1 {
+			seen[m[1]] = true
+		}
+	}
+	if len(seen) > 0 {
+		return len(seen)
+	}
+
+	reCount := regexp.MustCompile(`(?i)number of camera devices\\s*:\\s*([0-9]+)`)
+	if m := reCount.FindStringSubmatch(out); len(m) > 1 {
+		if n, err := strconv.Atoi(m[1]); err == nil {
+			return n
+		}
+	}
+	return 0
 }
 
 func countSensorLines(out string) int {
