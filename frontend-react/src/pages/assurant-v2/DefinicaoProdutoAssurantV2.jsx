@@ -208,6 +208,8 @@ export default function DefinicaoProdutoAssurantV2() {
           cor: opcao.cor,
           imei: opcao.fifo.imei,
           upgradeConfirmado: opcao.relacao === "upgrade" ? cienteUpgrade : false,
+          vinculoTipo: opcao.vinculo_tipo || null,
+          vinculoReferencia: opcao.vinculo_referencia || null,
         },
         user.id
       );
@@ -224,7 +226,20 @@ export default function DefinicaoProdutoAssurantV2() {
       fechar();
       await carregar();
     } catch (e) {
-      setErro(e.message || "Não foi possível concluir a definição.");
+      const msg = e.message || "Não foi possível concluir a definição.";
+      const estoqueMudou =
+        /mudou no WMS|não está mais disponível|posição ocupada e confirmada|acabou de ser reservada|reservada por outro fluxo/i.test(msg);
+
+      if (estoqueMudou) {
+        await consultarSku(sku, pedido);
+        setFeedback({
+          tipo: "erro",
+          msg: "O estoque mudou enquanto a definição era confirmada. As opções já foram atualizadas automaticamente; selecione uma das alternativas exibidas.",
+        });
+        setErro("");
+      } else {
+        setErro(msg);
+      }
     } finally {
       setSalvando(false);
     }
