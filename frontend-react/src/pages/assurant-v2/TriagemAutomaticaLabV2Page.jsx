@@ -17,6 +17,14 @@ import {
   TimerReset,
   Usb,
   XCircle,
+  Volume2,
+  Camera,
+  Wifi,
+  Wrench,
+  LockKeyhole,
+  ScanLine,
+  Activity,
+  ChevronDown,
 } from "lucide-react";
 
 import { useAuth } from "../../AuthContext.jsx";
@@ -34,6 +42,27 @@ import {
 const GABRIEL_USER_ID = "b517d70a-56be-4b4f-8b9e-a03c769dd3c3";
 const MAX_SLOTS = 12;
 const TERMINAIS = new Set(["concluido", "erro", "cancelado"]);
+
+const DIAGNOSTIC_BLOCKS = [
+  { key: "audio", label: "Áudio", icon: Volume2, categories: ["audio"] },
+  { key: "bateria", label: "Bateria", icon: BatteryCharging, categories: ["bateria", "energia"] },
+  { key: "camera", label: "Câmera", icon: Camera, categories: ["camera"] },
+  { key: "conectividade", label: "Conectividade", icon: Wifi, categories: ["conectividade"] },
+  { key: "hardware", label: "Hardware", icon: Cpu, categories: ["hardware", "identificacao"] },
+  { key: "pecas", label: "Peças", icon: Wrench, categories: ["pecas"] },
+  { key: "seguranca", label: "Segurança", icon: LockKeyhole, categories: ["seguranca"] },
+  { key: "tela", label: "Tela", icon: ScanLine, categories: ["tela"] },
+  { key: "sensores", label: "Sensores", icon: Activity, categories: ["sensores"] },
+];
+
+function statusDoBloco(tests) {
+  if (!tests.length) return "not_run";
+  if (tests.some((t) => t.result === "fail")) return "fail";
+  if (tests.some((t) => t.result === "manual_required")) return "manual_required";
+  if (tests.some((t) => t.result === "warning")) return "warning";
+  if (tests.every((t) => t.result === "not_supported")) return "not_supported";
+  return "pass";
+}
 
 function fmtDataHora(value) {
   if (!value) return "—";
@@ -96,6 +125,7 @@ export default function TriagemAutomaticaLabV2Page() {
   const [manualNotes, setManualNotes] = useState({});
   const [manualImeis, setManualImeis] = useState({});
   const [savingManual, setSavingManual] = useState({});
+  const [expandedBlock, setExpandedBlock] = useState(null);
 
   const selectedStation = stations.find((s) => s.id === stationId) || null;
   const devices = useMemo(() => {
@@ -179,6 +209,27 @@ export default function TriagemAutomaticaLabV2Page() {
     () => (snapshot?.tests || []).filter((x) => x.result === "manual_required"),
     [snapshot]
   );
+
+  const diagnosticBlocks = useMemo(() => {
+    const tests = snapshot?.tests || [];
+    return DIAGNOSTIC_BLOCKS.map((block) => {
+      const items = tests.filter((t) => block.categories.includes(t.category));
+      return {
+        ...block,
+        tests: items,
+        status: statusDoBloco(items),
+        automaticos: items.filter((t) => t.result !== "manual_required" && t.source === "automatico").length,
+        validacoes: items.filter((t) => t.result === "manual_required").length,
+      };
+    });
+  }, [snapshot]);
+
+  const progressoDiagnostico = useMemo(() => {
+    const tests = snapshot?.tests || [];
+    if (!tests.length) return 0;
+    const resolvidos = tests.filter((t) => t.result !== "manual_required" && t.result !== "not_run").length;
+    return Math.round((resolvidos / tests.length) * 100);
+  }, [snapshot]);
 
   async function gerarPareamento() {
     setErro("");
@@ -514,14 +565,117 @@ export default function TriagemAutomaticaLabV2Page() {
             ))}
           </div>
 
+          <Card className="overflow-hidden">
+            <div className="border-b border-slate-100 px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="font-black text-slate-800">Diagnóstico por blocos</div>
+                  <div className="text-xs text-slate-400">
+                    O sistema executa primeiro tudo o que consegue provar sozinho. Você só entra nas exceções.
+                  </div>
+                </div>
+                <div className="min-w-[220px]">
+                  <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wide text-slate-400">
+                    <span>Automação concluída</span>
+                    <span>{progressoDiagnostico}%</span>
+                  </div>
+                  <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-100">
+                    <div
+                      className="h-full rounded-full bg-violet-600 transition-all"
+                      style={{ width: progressoDiagnostico + "%" }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
+              {diagnosticBlocks.map((block) => {
+                const Icon = block.icon;
+                const expanded = expandedBlock === block.key;
+                const statusText = {
+                  pass: "Concluído",
+                  fail: "Falha",
+                  warning: "Atenção",
+                  manual_required: "Validação necessária",
+                  not_supported: "Não aplicável",
+                  not_run: "Aguardando",
+                }[block.status] || "Aguardando";
+
+                const statusClass = {
+                  pass: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+                  fail: "bg-rose-50 text-rose-700 ring-rose-200",
+                  warning: "bg-amber-50 text-amber-700 ring-amber-200",
+                  manual_required: "bg-violet-50 text-violet-700 ring-violet-200",
+                  not_supported: "bg-slate-50 text-slate-500 ring-slate-200",
+                  not_run: "bg-slate-50 text-slate-500 ring-slate-200",
+                }[block.status];
+
+                return (
+                  <div key={block.key} className="rounded-2xl border border-slate-200 bg-white">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedBlock(expanded ? null : block.key)}
+                      className="w-full p-4 text-left"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className="rounded-xl bg-slate-50 p-2.5">
+                            <Icon className="h-5 w-5 text-violet-700" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="font-black text-slate-900">{block.label}</div>
+                            <div className="mt-0.5 text-[11px] font-semibold text-slate-400">
+                              {block.automaticos} automático{block.automaticos === 1 ? "" : "s"}
+                              {block.validacoes > 0 ? " · " + block.validacoes + " validação" + (block.validacoes === 1 ? "" : "ões") : ""}
+                            </div>
+                          </div>
+                        </div>
+                        <ChevronDown className={"h-4 w-4 shrink-0 text-slate-400 transition-transform " + (expanded ? "rotate-180" : "")} />
+                      </div>
+                      <div className="mt-3">
+                        <span className={"inline-flex rounded-lg px-2 py-1 text-[10px] font-black ring-1 " + statusClass}>
+                          {statusText}
+                        </span>
+                      </div>
+                    </button>
+
+                    {expanded && (
+                      <div className="border-t border-slate-100 px-4 py-3">
+                        <div className="space-y-2">
+                          {block.tests.map((t) => (
+                            <div key={t.id} className="flex items-start justify-between gap-3 rounded-xl bg-slate-50 p-2.5">
+                              <div className="min-w-0">
+                                <div className="text-xs font-bold text-slate-700">{t.label}</div>
+                                <div className="mt-0.5 text-[10px] text-slate-400">
+                                  {t.source === "automatico" ? "Automático" : "Validação"}{t.details ? " · " + t.details : ""}
+                                </div>
+                              </div>
+                              <StatusBadge value={t.result} />
+                            </div>
+                          ))}
+                          {!block.tests.length && (
+                            <div className="text-xs font-semibold text-slate-400">Nenhum teste executado neste bloco ainda.</div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+
           {session.status === "aguardando_manual" && (
             <Card className="overflow-hidden border-violet-200">
               <div className="border-b border-violet-100 bg-violet-50/60 px-4 py-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <div className="font-black text-violet-900">Testes guiados pendentes</div>
+                    <div className="font-black text-violet-900">
+                      Precisamos de você em {manualTests.length} validação{manualTests.length === 1 ? "" : "ões"}
+                    </div>
                     <div className="text-xs text-violet-600">
-                      Conclua os itens abaixo para finalizar a triagem desta sessão.
+                      O restante já foi processado automaticamente. Tempo estimado: {Math.max(5, manualTests.length * 4)} segundos.
                     </div>
                   </div>
                   <span className="rounded-lg bg-white px-2.5 py-1 text-[10px] font-black text-violet-700 ring-1 ring-violet-200">
