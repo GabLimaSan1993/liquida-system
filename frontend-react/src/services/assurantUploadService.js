@@ -7,9 +7,9 @@ import { supabase } from "../lib/supabase";
  * Se o banco não suportar um lote desse tamanho, a rotina
  * divide automaticamente o lote até ele ser processado.
  */
-const TAMANHO_LOTE_INICIAL = 500;
+const TAMANHO_LOTE_INICIAL = 100;
 const MAX_TENTATIVAS_REDE = 3;
-const PAUSA_ENTRE_LOTES_MS = 10;
+const PAUSA_ENTRE_LOTES_MS = 25;
 
 function aguardar(tempoMs) {
   return new Promise((resolve) => {
