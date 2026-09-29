@@ -99,7 +99,7 @@ AGENT_B64_URL="https://raw.githubusercontent.com/GabLimaSan1993/liquida-system/m
 AGENT_SHA_URL="https://raw.githubusercontent.com/GabLimaSan1993/liquida-system/main/bridge-assets/liquida-device-agent-android.sha256"
 curl -fsSL "$AGENT_B64_URL" -o "$APP_DIR/liquida-device-agent-android.apk.b64"
 curl -fsSL "$AGENT_SHA_URL" -o "$APP_DIR/liquida-device-agent-android.sha256"
-base64 -D "$APP_DIR/liquida-device-agent-android.apk.b64" > "$APP_DIR/liquida-device-agent-android.apk"
+/usr/bin/base64 -D -i "$APP_DIR/liquida-device-agent-android.apk.b64" -o "$APP_DIR/liquida-device-agent-android.apk"
 EXPECTED_AGENT_SHA="$(tr -d '[:space:]' < "$APP_DIR/liquida-device-agent-android.sha256")"
 ACTUAL_AGENT_SHA="$(shasum -a 256 "$APP_DIR/liquida-device-agent-android.apk" | awk '{print $1}')"
 if [ "$EXPECTED_AGENT_SHA" != "$ACTUAL_AGENT_SHA" ]; then
