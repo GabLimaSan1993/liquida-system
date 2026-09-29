@@ -36,7 +36,6 @@ import {
   listarEstacoesDiagnostico,
   listarSessoesDiagnosticoRecentes,
   registrarResultadoBlacklist,
-  registrarTesteManual,
 } from "../../services/diagnosticoAutomaticoService.js";
 
 const GABRIEL_USER_ID = "b517d70a-56be-4b4f-8b9e-a03c769dd3c3";
@@ -122,9 +121,6 @@ export default function TriagemAutomaticaLabV2Page() {
   const [snapshot, setSnapshot] = useState(null);
   const [recentes, setRecentes] = useState([]);
   const [erro, setErro] = useState("");
-  const [manualNotes, setManualNotes] = useState({});
-  const [manualImeis, setManualImeis] = useState({});
-  const [savingManual, setSavingManual] = useState({});
   const [expandedBlock, setExpandedBlock] = useState(null);
 
   const selectedStation = stations.find((s) => s.id === stationId) || null;
@@ -218,8 +214,8 @@ export default function TriagemAutomaticaLabV2Page() {
         ...block,
         tests: items,
         status: statusDoBloco(items),
-        automaticos: items.filter((t) => t.result !== "manual_required" && t.source === "automatico").length,
-        validacoes: items.filter((t) => t.result === "manual_required").length,
+        automaticos: items.filter((t) => t.result !== "manual_required" && ["automatico", "agent"].includes(t.source)).length,
+        validacoes: items.filter((t) => t.source === "agent" && ["pass", "fail", "warning", "not_supported"].includes(t.result)).length,
       };
     });
   }, [snapshot]);
@@ -274,42 +270,6 @@ export default function TriagemAutomaticaLabV2Page() {
       setErro(e.message);
     } finally {
       setStartingDevices((prev) => ({ ...prev, [device.connection_id]: false }));
-    }
-  }
-
-  async function salvarTesteGuiado(test, result) {
-    if (!sessionId) return;
-
-    const imeis = test.code === "imei_collection" && result === "pass"
-      ? String(manualImeis[test.id] || "")
-          .split(/[\s,;]+/)
-          .map((x) => x.replace(/\D/g, ""))
-          .filter(Boolean)
-      : [];
-
-    if (test.code === "imei_collection" && result === "pass" && !imeis.length) {
-      setErro("Informe ao menos um IMEI antes de aprovar a identificação.");
-      return;
-    }
-
-    setErro("");
-    setSavingManual((prev) => ({ ...prev, [test.id]: true }));
-
-    try {
-      await registrarTesteManual({
-        sessionId,
-        testId: test.id,
-        result,
-        details: manualNotes[test.id] || null,
-        imeis,
-      });
-      const data = await buscarSessaoDiagnostico(sessionId);
-      setSnapshot(data);
-      await carregarEstacoes();
-    } catch (e) {
-      setErro(e.message);
-    } finally {
-      setSavingManual((prev) => ({ ...prev, [test.id]: false }));
     }
   }
 
@@ -648,7 +608,7 @@ export default function TriagemAutomaticaLabV2Page() {
                               <div className="min-w-0">
                                 <div className="text-xs font-bold text-slate-700">{t.label}</div>
                                 <div className="mt-0.5 text-[10px] text-slate-400">
-                                  {t.source === "automatico" ? "Automático" : "Validação"}{t.details ? " · " + t.details : ""}
+                                  {t.source === "automatico" ? "Automático" : t.source === "agent" ? "No aparelho" : "Validação"}{t.details ? " · " + t.details : ""}
                                 </div>
                               </div>
                               <StatusBadge value={t.result} />
@@ -666,109 +626,40 @@ export default function TriagemAutomaticaLabV2Page() {
             </div>
           </Card>
 
-          {session.status === "aguardando_manual" && (
+          {["aguardando_dispositivo", "detectando", "diagnosticando"].includes(session.status) && (
             <Card className="overflow-hidden border-violet-200">
-              <div className="border-b border-violet-100 bg-violet-50/60 px-4 py-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="bg-violet-50/70 p-5">
+                <div className="flex items-start gap-3">
+                  <Smartphone className="mt-0.5 h-6 w-6 text-violet-700" />
                   <div>
-                    <div className="font-black text-violet-900">
-                      Precisamos de você em {manualTests.length} validação{manualTests.length === 1 ? "" : "ões"}
+                    <div className="font-black text-violet-900">Validações em andamento no aparelho</div>
+                    <div className="mt-1 text-sm font-semibold text-violet-700">
+                      Continue pela tela do dispositivo conectado. Áudio, microfone, display, touch, vibração, câmeras, biometria e botões são validados no próprio aparelho.
                     </div>
-                    <div className="text-xs text-violet-600">
-                      O restante já foi processado automaticamente. Tempo estimado: {Math.max(5, manualTests.length * 4)} segundos.
+                    <div className="mt-2 text-xs text-violet-600">
+                      Esta página é apenas o monitor da estação e atualizará os resultados automaticamente.
                     </div>
                   </div>
-                  <span className="rounded-lg bg-white px-2.5 py-1 text-[10px] font-black text-violet-700 ring-1 ring-violet-200">
-                    {manualTests.length} pendente{manualTests.length === 1 ? "" : "s"}
-                  </span>
                 </div>
               </div>
+            </Card>
+          )}
 
-              <div className="grid gap-3 p-4 lg:grid-cols-2">
-                {manualTests.map((test) => {
-                  const saving = Boolean(savingManual[test.id]);
-                  const isImei = test.code === "imei_collection";
-
-                  return (
-                    <div key={test.id} className="rounded-2xl border border-slate-200 bg-white p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="text-[10px] font-black uppercase tracking-wide text-slate-400">
-                            {test.category}
-                          </div>
-                          <div className="mt-1 font-black text-slate-800">{test.label}</div>
-                          {test.details && (
-                            <div className="mt-1 text-xs text-slate-500">{test.details}</div>
-                          )}
-                        </div>
-                        <StatusBadge value={test.result} />
-                      </div>
-
-                      {isImei && (
-                        <div className="mt-3">
-                          <label className="text-[10px] font-black uppercase tracking-wide text-slate-400">
-                            IMEI(s)
-                          </label>
-                          <input
-                            value={manualImeis[test.id] || ""}
-                            onChange={(e) =>
-                              setManualImeis((prev) => ({ ...prev, [test.id]: e.target.value }))
-                            }
-                            placeholder="Digite ou bipe o IMEI. Para Dual SIM, separe por espaço."
-                            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-mono font-bold outline-none focus:border-violet-300"
-                          />
-                        </div>
-                      )}
-
-                      <div className="mt-3">
-                        <label className="text-[10px] font-black uppercase tracking-wide text-slate-400">
-                          Observação
-                        </label>
-                        <input
-                          value={manualNotes[test.id] || ""}
-                          onChange={(e) =>
-                            setManualNotes((prev) => ({ ...prev, [test.id]: e.target.value }))
-                          }
-                          placeholder={isImei ? "Ex.: IMEI conferido na tela do aparelho" : "Opcional; descreva a falha quando houver"}
-                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-violet-300"
-                        />
-                      </div>
-
-                      <div className="mt-3 grid grid-cols-3 gap-2">
-                        <button
-                          type="button"
-                          disabled={saving}
-                          onClick={() => salvarTesteGuiado(test, "pass")}
-                          className="rounded-xl bg-emerald-50 px-2 py-2.5 text-[11px] font-black text-emerald-700 ring-1 ring-emerald-200 disabled:opacity-50"
-                        >
-                          {isImei ? "Salvar e aprovar" : "Aprovado"}
-                        </button>
-                        <button
-                          type="button"
-                          disabled={saving}
-                          onClick={() => salvarTesteGuiado(test, "fail")}
-                          className="rounded-xl bg-rose-50 px-2 py-2.5 text-[11px] font-black text-rose-700 ring-1 ring-rose-200 disabled:opacity-50"
-                        >
-                          Falha
-                        </button>
-                        <button
-                          type="button"
-                          disabled={saving}
-                          onClick={() => salvarTesteGuiado(test, "not_supported")}
-                          className="rounded-xl bg-slate-50 px-2 py-2.5 text-[11px] font-black text-slate-600 ring-1 ring-slate-200 disabled:opacity-50"
-                        >
-                          Não suportado
-                        </button>
-                      </div>
+          {session.status === "aguardando_manual" && (
+            <Card className="overflow-hidden border-amber-200">
+              <div className="bg-amber-50 p-5">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="mt-0.5 h-6 w-6 text-amber-700" />
+                  <div>
+                    <div className="font-black text-amber-900">Pendência técnica após o teste do aparelho</div>
+                    <div className="mt-1 text-sm font-semibold text-amber-700">
+                      {manualTests.length} item{manualTests.length === 1 ? "" : "s"} ainda não puderam ser resolvidos automaticamente pelo dispositivo.
                     </div>
-                  );
-                })}
-
-                {!manualTests.length && (
-                  <div className="lg:col-span-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-700">
-                    Todos os testes guiados foram preenchidos. Resolva apenas eventuais consultas de restrição pendentes para concluir a sessão.
+                    <div className="mt-2 text-xs text-amber-600">
+                      Não há mais validação funcional para preencher nesta página. A pendência ficará identificada no bloco correspondente.
+                    </div>
                   </div>
-                )}
+                </div>
               </div>
             </Card>
           )}
