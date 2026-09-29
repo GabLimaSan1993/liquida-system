@@ -94,6 +94,21 @@ fi
 echo "Go: $(go version)"
 echo "ADB: $(adb version | head -n 1)"
 
+echo "Baixando Liquida Device Agent Android..."
+AGENT_B64_URL="https://raw.githubusercontent.com/GabLimaSan1993/liquida-system/main/bridge-assets/liquida-device-agent-android.apk.b64"
+AGENT_SHA_URL="https://raw.githubusercontent.com/GabLimaSan1993/liquida-system/main/bridge-assets/liquida-device-agent-android.sha256"
+curl -fsSL "$AGENT_B64_URL" -o "$APP_DIR/liquida-device-agent-android.apk.b64"
+curl -fsSL "$AGENT_SHA_URL" -o "$APP_DIR/liquida-device-agent-android.sha256"
+base64 -D "$APP_DIR/liquida-device-agent-android.apk.b64" > "$APP_DIR/liquida-device-agent-android.apk"
+EXPECTED_AGENT_SHA="$(tr -d '[:space:]' < "$APP_DIR/liquida-device-agent-android.sha256")"
+ACTUAL_AGENT_SHA="$(shasum -a 256 "$APP_DIR/liquida-device-agent-android.apk" | awk '{print $1}')"
+if [ "$EXPECTED_AGENT_SHA" != "$ACTUAL_AGENT_SHA" ]; then
+  echo "Falha de integridade do Liquida Device Agent."
+  exit 1
+fi
+rm -f "$APP_DIR/liquida-device-agent-android.apk.b64"
+echo "Liquida Device Agent Android pronto: $ACTUAL_AGENT_SHA"
+
 go build -trimpath -ldflags="-s -w" -o "$APP_DIR/liquida-device-bridge" .
 
 if [ "$UPDATE_ONLY" = false ]; then
