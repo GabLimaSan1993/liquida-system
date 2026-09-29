@@ -1,0 +1,23 @@
+name: Build Device Bridge
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "device-bridge/**"
+      - ".github/workflows/build-device-bridge.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: device-bridge
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.x"
+      - name: Build bridge
+        run: go build ./...
