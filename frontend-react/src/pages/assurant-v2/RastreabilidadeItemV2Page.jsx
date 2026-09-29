@@ -513,7 +513,7 @@ export default function RastreabilidadeItemV2Page() {
 
     try {
       const { data: result, error: rpcError } = await supabase.rpc(
-        "assurant_rastreabilidade_privada",
+        "assurant_rastreabilidade_privada_fast",
         {
           p_busca: term,
           p_imei: imei || null,
