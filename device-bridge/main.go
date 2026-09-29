@@ -923,7 +923,7 @@ func parseDFTotalKB(out string) int64 {
 
 func countCameraReferences(out string) int {
 	seen := map[string]bool{}
-	re := regexp.MustCompile(`(?i)camera\\s+id\\s*[:=]?\\s*([0-9]+)`)
+	re := regexp.MustCompile("(?i)camera\\s+id\\s*[:=]?\\s*([0-9]+)")
 	for _, m := range re.FindAllStringSubmatch(out, -1) {
 		if len(m) > 1 {
 			seen[m[1]] = true
@@ -933,7 +933,7 @@ func countCameraReferences(out string) int {
 		return len(seen)
 	}
 
-	reCount := regexp.MustCompile(`(?i)number of camera devices\\s*:\\s*([0-9]+)`)
+	reCount := regexp.MustCompile("(?i)number of camera devices\\s*:\\s*([0-9]+)")
 	if m := reCount.FindStringSubmatch(out); len(m) > 1 {
 		if n, err := strconv.Atoi(m[1]); err == nil {
 			return n
@@ -941,7 +941,6 @@ func countCameraReferences(out string) int {
 	}
 	return 0
 }
-
 func countSensorLines(out string) int {
 	count := 0
 	for _, line := range strings.Split(out, "\n") {
