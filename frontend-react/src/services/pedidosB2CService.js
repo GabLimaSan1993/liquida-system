@@ -2011,7 +2011,15 @@ export async function buscarOpcoesDefinicao(skuDigitado, pedidoOuGrade) {
 // Downgrade permanece bloqueado.
 export async function aprovarDefinicaoProduto(
   pedidoId,
-  { sku, grade, cor, imei, upgradeConfirmado = false },
+  {
+    sku,
+    grade,
+    cor,
+    imei,
+    upgradeConfirmado = false,
+    vinculoTipo = null,
+    vinculoReferencia = null,
+  },
   userId
 ) {
   const { data: pedido, error: errPedido } = await supabase
@@ -2028,18 +2036,38 @@ export async function aprovarDefinicaoProduto(
   const gradeOrigem = gradeOriginalPedido(pedido);
   const consulta = await buscarOpcoesDefinicao(sku, pedido);
   const skuBase = consulta.skuBase;
-  const imeiTrim = String(imei || "").trim();
+  const imeiSolicitado = String(imei || "").trim();
+  const vinculoTipoAlvo = vinculoTipo || null;
+  const vinculoReferenciaAlvo = vinculoReferencia || null;
 
-  const opcao = (consulta.opcoes || []).find(
+  // Revalida o estoque no instante do clique. Se o FIFO exibido alguns segundos antes
+  // deixou de ser elegível, usa automaticamente o FIFO atual da MESMA alternativa
+  // comercial e do MESMO tipo de vínculo. Nunca migra silenciosamente de livre para B2B.
+  let opcao = (consulta.opcoes || []).find(
     (o) =>
       o.grade === nomeGradeComercial(grade) &&
       String(o.cor || "") === String(cor || "") &&
-      String(o.fifo?.imei || "") === imeiTrim
+      String(o.fifo?.imei || "") === imeiSolicitado
   );
 
   if (!opcao) {
-    throw new Error("A opção escolhida não está mais disponível. Atualize as opções.");
+    opcao = (consulta.opcoes || []).find(
+      (o) =>
+        o.grade === nomeGradeComercial(grade) &&
+        String(o.cor || "") === String(cor || "") &&
+        (o.vinculo_tipo || null) === vinculoTipoAlvo &&
+        (o.vinculo_referencia || null) === vinculoReferenciaAlvo
+    );
   }
+
+  if (!opcao?.fifo?.imei) {
+    throw new Error(
+      "A opção escolhida mudou no WMS e não há outro IMEI equivalente disponível. As opções precisam ser atualizadas."
+    );
+  }
+
+  const imeiTrim = String(opcao.fifo.imei).trim();
+  const imeiSubstituido = imeiTrim !== imeiSolicitado;
 
   if (opcao.relacao === "downgrade") {
     throw new Error(`Downgrade de ${gradeOrigem} para ${opcao.grade} não é permitido.`);
@@ -2093,6 +2121,7 @@ export async function aprovarDefinicaoProduto(
       relacao: opcao.relacao,
       vinculoTipo: opcao.vinculo_tipo,
       vinculoDescricao: opcao.vinculo_descricao,
+      imeiSubstituido,
     };
   }
 
@@ -2167,6 +2196,7 @@ export async function aprovarDefinicaoProduto(
     grade: opcao.grade,
     cor: opcao.cor,
     relacao: opcao.relacao,
+    imeiSubstituido,
   };
 }
 
