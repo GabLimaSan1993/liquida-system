@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	bridgeVersion            = "0.3.0-auto-first"
+	bridgeVersion            = "0.3.1-imei-ui-fallback"
 	endpoint                 = "https://fndkyainfdiyorwdsvkr.supabase.co/functions/v1/assurant-device-bridge"
 	maxConcurrentDiagnostics = 12
 )
@@ -808,6 +808,15 @@ func collectAndroidIMEIs(serial, propsOut string) []IMEI {
 		sources = append(sources, source{c.name, c.confidence, out})
 	}
 
+	// Android 10+ / Samsung recentes normalmente ocultam identificadores de telefonia
+	// do usuário shell. Como fallback, abrimos a tela oficial "Sobre o telefone"
+	// e lemos somente a árvore de acessibilidade exibida pelo próprio Android.
+	// Isso evita exigir que o operador digite IMEI manualmente quando o sistema
+	// operacional já o mostra na interface.
+	if ui := collectAndroidIMEIFromSettingsUI(serial); strings.TrimSpace(ui) != "" {
+		sources = append(sources, source{"settings_ui", "high", ui})
+	}
+
 	re := regexp.MustCompile(`\b[0-9]{15}\b`)
 	seen := map[string]IMEI{}
 	for _, s := range sources {
@@ -830,6 +839,24 @@ func collectAndroidIMEIs(serial, propsOut string) []IMEI {
 		values[i].Slot = i + 1
 	}
 	return values
+}
+
+func collectAndroidIMEIFromSettingsUI(serial string) string {
+	// Mantém a coleta rápida: se a tela não abrir/dumpar, apenas devolve vazio
+	// e o fluxo continua para a validação guiada existente.
+	_, _ = run("adb", "-s", serial, "shell", "input", "keyevent", "KEYCODE_WAKEUP")
+	_, _ = run("adb", "-s", serial, "shell", "am", "start", "-a", "android.settings.DEVICE_INFO_SETTINGS")
+	time.Sleep(900 * time.Millisecond)
+
+	out, err := run(
+		"adb", "-s", serial, "shell", "sh", "-c",
+		"uiautomator dump /sdcard/liquida_imei.xml >/dev/null 2>&1; cat /sdcard/liquida_imei.xml; rm -f /sdcard/liquida_imei.xml",
+	)
+	_, _ = run("adb", "-s", serial, "shell", "input", "keyevent", "KEYCODE_BACK")
+	if err != nil {
+		return ""
+	}
+	return out
 }
 
 func validIMEI(v string) bool {
