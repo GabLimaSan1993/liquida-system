@@ -45,17 +45,80 @@ export async function carregarContextoCargaInicial(sessao) {
   };
 }
 
-export async function biparImeiCargaInicial(sessaoId, coluna, linha, imei, userId) {
-  const { data, error } = await supabase.rpc("wms_carga_inicial_bipar", {
+function erroTransitorioCargaInicial(error) {
+  const mensagem = String(error?.message || error || "").toLowerCase();
+
+  return (
+    mensagem.includes("timeout") ||
+    mensagem.includes("timed out") ||
+    mensagem.includes("failed to fetch") ||
+    mensagem.includes("network") ||
+    mensagem.includes("gateway") ||
+    mensagem.includes("connection") ||
+    mensagem.includes("canceling statement")
+  );
+}
+
+async function consultarResultadoCargaInicial(sessaoId, imei, userId) {
+  const { data, error } = await supabase.rpc("wms_carga_inicial_resultado", {
     p_sessao: sessaoId,
-    p_coluna: coluna,
-    p_linha: Number(linha),
     p_imei: String(imei || "").trim(),
     p_usuario: userId,
   });
-  if (error) throw new Error(error.message);
-  if (!data?.ok) throw new Error(data?.erro || "Não foi possível registrar o IMEI.");
-  return data;
+
+  if (error) return null;
+  return data?.ok && data?.encontrado ? data : null;
+}
+
+export async function biparImeiCargaInicial(sessaoId, coluna, linha, imei, userId) {
+  const imeiNormalizado = String(imei || "").trim();
+
+  const payload = {
+    p_sessao: sessaoId,
+    p_coluna: coluna,
+    p_linha: Number(linha),
+    p_imei: imeiNormalizado,
+    p_usuario: userId,
+  };
+
+  for (let tentativa = 0; tentativa < 2; tentativa += 1) {
+    const { data, error } = await supabase.rpc("wms_carga_inicial_bipar", payload);
+
+    if (!error) {
+      if (!data?.ok) {
+        throw new Error(data?.erro || "Não foi possível registrar o IMEI.");
+      }
+
+      return data;
+    }
+
+    /*
+     * Em caso de timeout/rede, a resposta HTTP pode se perder mesmo depois
+     * de a transação ter sido concluída no banco. Antes de repetir a bipagem,
+     * confirma se o evento já existe para evitar dupla alocação.
+     */
+    const confirmado = await consultarResultadoCargaInicial(
+      sessaoId,
+      imeiNormalizado,
+      userId
+    );
+
+    if (confirmado) {
+      return confirmado;
+    }
+
+    if (tentativa === 0 && erroTransitorioCargaInicial(error)) {
+      await new Promise((resolve) => window.setTimeout(resolve, 450));
+      continue;
+    }
+
+    throw new Error(
+      error.message ||
+        "A bipagem não foi confirmada. O IMEI foi mantido para nova tentativa."
+    );
+  }
+
+  throw new Error("A bipagem não foi confirmada. Tente novamente.");
 }
 
 export async function confirmarCaixaCargaInicial(eventoId, codigo, userId) {
