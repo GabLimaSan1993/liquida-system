@@ -278,8 +278,10 @@ export default function CargaInicialEstoquePage() {
         await atualizarContexto();
       }
     } catch (e) {
-      setImei("");
-      setFeedback({ tipo: "erro", msg: e.message });
+      setFeedback({
+        tipo: "erro",
+        msg: `${e.message} Nenhuma nova alocação foi assumida pela tela; o IMEI e o endereço selecionado foram mantidos para conferência ou nova tentativa.`,
+      });
     } finally {
       setCarregando(false);
     }
