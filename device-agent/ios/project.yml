@@ -1,0 +1,19 @@
+name: LiquidaDeviceAgent
+options:
+  bundleIdPrefix: com.liquida
+targets:
+  LiquidaDeviceAgent:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - LiquidaDeviceAgent
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.liquida.deviceagent.ios
+        SWIFT_VERSION: 5.0
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_NSCameraUsageDescription: Diagnóstico funcional da câmera
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: Diagnóstico funcional do microfone
+        INFOPLIST_KEY_NSFaceIDUsageDescription: Diagnóstico de disponibilidade biométrica
