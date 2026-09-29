@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	bridgeVersion            = "0.3.2-imei-mmi-fallback"
+	bridgeVersion            = "0.3.3-imei-telephony-probe"
 	endpoint                 = "https://fndkyainfdiyorwdsvkr.supabase.co/functions/v1/assurant-device-bridge"
 	maxConcurrentDiagnostics = 12
 )
@@ -801,11 +801,26 @@ func collectAndroidIMEIs(serial, propsOut string) []IMEI {
 		{"oem_imei1", "high", []string{"-s", serial, "shell", "getprop", "ro.ril.oem.imei1"}},
 		{"oem_imei2", "high", []string{"-s", serial, "shell", "getprop", "ro.ril.oem.imei2"}},
 		{"iphonesubinfo", "high", []string{"-s", serial, "shell", "dumpsys", "iphonesubinfo"}},
+		{"telephony_registry", "medium", []string{"-s", serial, "shell", "dumpsys", "telephony.registry"}},
+		{"phone_dump", "medium", []string{"-s", serial, "shell", "dumpsys", "phone"}},
+		{"cmd_phone_imei0", "high", []string{"-s", serial, "shell", "cmd", "phone", "get-imei", "0"}},
+		{"cmd_phone_imei1", "high", []string{"-s", serial, "shell", "cmd", "phone", "get-imei", "1"}},
+		{"cmd_phone_device0", "high", []string{"-s", serial, "shell", "cmd", "phone", "get-device-id", "0"}},
+		{"cmd_phone_device1", "high", []string{"-s", serial, "shell", "cmd", "phone", "get-device-id", "1"}},
 	}
 
 	for _, c := range cmds {
 		out, _ := run("adb", c.args...)
 		sources = append(sources, source{c.name, c.confidence, out})
+	}
+
+	// Probes Binder do serviço iphonesubinfo. Em alguns builds Samsung o IMEI
+	// não aparece em texto, mas vem serializado em Parcel/UTF-16.
+	for _, probe := range androidPhoneSubInfoProbes(serial) {
+		sources = append(sources, source{probe.name, "high", probe.output})
+		if decoded := decodeBinderParcelText(probe.output); decoded != "" {
+			sources = append(sources, source{probe.name + "_decoded", "high", decoded})
+		}
 	}
 
 	// Android 10+ / Samsung recentes normalmente ocultam identificadores de telefonia
@@ -846,6 +861,62 @@ func collectAndroidIMEIs(serial, propsOut string) []IMEI {
 		values[i].Slot = i + 1
 	}
 	return values
+}
+
+type androidProbeResult struct {
+	name   string
+	output string
+}
+
+func androidPhoneSubInfoProbes(serial string) []androidProbeResult {
+	probes := []struct {
+		name string
+		args []string
+	}{
+		{"binder_getdeviceid", []string{"service", "call", "iphonesubinfo", "1", "s16", "com.android.shell"}},
+		{"binder_getdeviceid_phone0", []string{"service", "call", "iphonesubinfo", "2", "i32", "0", "s16", "com.android.shell"}},
+		{"binder_getdeviceid_phone1", []string{"service", "call", "iphonesubinfo", "2", "i32", "1", "s16", "com.android.shell"}},
+		{"binder_probe3_phone0", []string{"service", "call", "iphonesubinfo", "3", "i32", "0", "s16", "com.android.shell"}},
+		{"binder_probe3_phone1", []string{"service", "call", "iphonesubinfo", "3", "i32", "1", "s16", "com.android.shell"}},
+		{"binder_probe4_phone0", []string{"service", "call", "iphonesubinfo", "4", "i32", "0", "s16", "com.android.shell"}},
+		{"binder_probe4_phone1", []string{"service", "call", "iphonesubinfo", "4", "i32", "1", "s16", "com.android.shell"}},
+	}
+
+	out := make([]androidProbeResult, 0, len(probes))
+	for _, p := range probes {
+		args := append([]string{"-s", serial, "shell"}, p.args...)
+		raw, _ := run("adb", args...)
+		out = append(out, androidProbeResult{name: p.name, output: raw})
+	}
+	return out
+}
+
+func decodeBinderParcelText(out string) string {
+	// Exemplo típico do "service call":
+	// 0x00000008: 00330035 00310032 ...
+	// Cada word contém dois codepoints UTF-16. Extraímos os grupos hex e
+	// remontamos caracteres imprimíveis; depois a coleta normal procura 15 dígitos.
+	re := regexp.MustCompile(`\b[0-9a-fA-F]{8}\b`)
+	var b strings.Builder
+
+	for _, word := range re.FindAllString(out, -1) {
+		if len(word) != 8 {
+			continue
+		}
+		for _, half := range []string{word[4:8], word[0:4]} {
+			v, err := strconv.ParseUint(half, 16, 16)
+			if err != nil || v == 0 {
+				continue
+			}
+			r := rune(v)
+			if (r >= '0' && r <= '9') || (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') {
+				b.WriteRune(r)
+			} else if r == ' ' || r == '-' || r == ':' || r == '/' {
+				b.WriteRune(r)
+			}
+		}
+	}
+	return b.String()
 }
 
 func collectAndroidIMEIFromSettingsUI(serial string) string {
