@@ -22,13 +22,6 @@ const COLUNAS_SEQUENCIA = ["A", "B", "C", "D", "E", "F"];
 const COLUNAS_VISUAIS = ["F", "E", "D", "C", "B", "A"];
 const LINHAS = Array.from({ length: 10 }, (_, i) => i + 1);
 
-const GRADES_RUA = {
-  1: "QUEBRADO", 2: "QUEBRADO", 3: "QUEBRADO", 4: "QUEBRADO",
-  5: "QUEBRADO", 6: "QUEBRADO", 7: "REGULAR", 8: "BOM", 9: "BOM",
-  10: "MUITO BOM", 11: "MUITO BOM", 12: "EXCELENTE", 13: "EXCELENTE",
-  14: "LIKE NEW", 15: "OUTROS",
-};
-
 function enderecoCurto(posicao) {
   return posicao
     ? `AP ${posicao.coluna}${String(posicao.linha).padStart(2, "0")}`
@@ -402,7 +395,9 @@ export default function CargaInicialEstoquePage() {
           <div className="grid gap-4 md:grid-cols-3">
             <label className="text-xs font-black uppercase text-slate-500">Rua
               <select value={rua} onChange={(e) => setRua(Number(e.target.value))} className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-bold text-slate-800 outline-none focus:border-purple-400">
-                {Array.from({ length: 15 }, (_, i) => i + 1).map((n) => <option key={n} value={n}>RUA {String(n).padStart(2, "0")} - {GRADES_RUA[n]}</option>)}
+                {Array.from({ length: 15 }, (_, i) => i + 1).map((n) => (
+                  <option key={n} value={n}>RUA {String(n).padStart(2, "0")}</option>
+                ))}
               </select>
             </label>
             <label className="text-xs font-black uppercase text-slate-500">Bloco
