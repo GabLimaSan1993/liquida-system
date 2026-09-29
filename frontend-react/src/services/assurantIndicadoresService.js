@@ -6,7 +6,7 @@ import { supabase } from "../lib/supabase";
 ========================================================= */
 
 export const DATA_INICIAL_ANALISE = "2026-08-01";
-export const DATA_FINAL_ANALISE = "2026-09-30";
+export const DATA_FINAL_ANALISE = "2026-09-14";
 
 
 /* =========================================================
