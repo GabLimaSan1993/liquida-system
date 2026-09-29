@@ -105,7 +105,7 @@ enum DiagnosticEngine {
             value: [
                 "width_points": String(Int(screen.bounds.width)),
                 "height_points": String(Int(screen.bounds.height)),
-                "scale": String(screen.scale)
+                "scale": String(describing: screen.scale)
             ]
         ))
 
