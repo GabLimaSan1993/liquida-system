@@ -43,6 +43,7 @@ jobs:
             echo "Agent asset unchanged."
           else
             git commit -m "build: publish Android device agent [skip ci]"
+            git pull --rebase origin main
             git push origin HEAD:main
           fi
 
