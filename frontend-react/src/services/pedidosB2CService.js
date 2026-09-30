@@ -732,16 +732,33 @@ async function _criarGrupo(pedidoIds, userId) {
 
   if (errGrupo) throw new Error(errGrupo.message);
 
-  // Vincula os pedidos ao grupo e muda status para em_picking
-  for (const id of pedidoIds) {
+  // Vincula os pedidos ao grupo e muda status para em_picking.
+  // Nunca ignora erro: grupo com item ainda "alocado" é um estado inválido.
+  const { data: vinculados, error: errVinculo } = await supabase
+    .from("pedidos_b2c")
+    .update({
+      grupo_id:      grupo.id,
+      status:        "em_picking",
+      atualizado_em: new Date().toISOString(),
+    })
+    .in("id", pedidoIds)
+    .eq("status", "alocado")
+    .is("grupo_id", null)
+    .select("id");
+
+  if (errVinculo || (vinculados?.length || 0) !== pedidoIds.length) {
+    // Remove o cabeçalho recém-criado para não deixar lista-casca.
     await supabase
-      .from("pedidos_b2c")
-      .update({
-        grupo_id:      grupo.id,
-        status:        "em_picking",
-        atualizado_em: new Date().toISOString(),
-      })
-      .eq("id", id);
+      .from("pedidos_b2c_grupos")
+      .delete()
+      .eq("id", grupo.id);
+
+    if (errVinculo) {
+      throw new Error(`Falha ao formar grupo de picking: ${errVinculo.message}`);
+    }
+    throw new Error(
+      "A lista não foi formada porque um ou mais pedidos mudaram de etapa durante a operação. Atualize e tente novamente."
+    );
   }
 
   return grupo;
@@ -825,20 +842,37 @@ function traduzErroAlocacao(error, imei) {
 // O 6º parâmetro (auditoria) é opcional: { sugestao, candidatos, origem, pedido }.
 // Sem ele a alocação funciona igual, só não deixa rastro auditável.
 export async function alocarPedido(pedidoId, imei, sku, grade, userId, auditoria) {
-  // 1. Atualiza o pedido para alocado
-  const { error: errPedido } = await supabase
+  // 1. Atualiza somente pedido realmente aguardando alocação e ainda sem grupo.
+  // Isso impede retry/duplo clique de devolver um item já em picking para "alocado"
+  // mantendo grupo_id preenchido — estado inválido que torna o item invisível nas telas.
+  const agora = new Date().toISOString();
+  const { data: atualizados, error: errPedido } = await supabase
     .from("pedidos_b2c")
     .update({
       status:        "alocado",
       imei_alocado:  imei,
       sku_alocado:   sku,
       grade_alocada: grade,
-      alocado_em:    new Date().toISOString(),
+      alocado_em:    agora,
       alocado_por:   userId,
-      atualizado_em: new Date().toISOString(),
+      motivo_analise: null,
+      analise_em:     null,
+      analise_por:    null,
+      resolvido_em:   null,
+      resolvido_por:  null,
+      atualizado_em:  agora,
     })
-    .eq("id", pedidoId);
+    .eq("id", pedidoId)
+    .eq("status", "aguardando_alocacao")
+    .is("grupo_id", null)
+    .select("id,status,grupo_id,imei_alocado");
+
   if (errPedido) throw traduzErroAlocacao(errPedido, imei);
+  if (!atualizados?.length) {
+    throw new Error(
+      "Este pedido já mudou de etapa ou já pertence a uma lista. Atualize a tela antes de tentar alocar novamente."
+    );
+  }
 
   // 2. Reserva o IMEI na assurant_triagem
   const { error: errTriagem } = await supabase
