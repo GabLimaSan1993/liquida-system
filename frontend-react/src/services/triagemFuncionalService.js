@@ -1,5 +1,6 @@
 import { supabase } from "../lib/supabase";
 import { validarImeiTradein } from "./tradeinService";
+import { resolverVoucherCanonico } from "./voucherNormalizationService";
 
 // ══════════════════════════════════════════════════════════
 // TRIAGEM FUNCIONAL
