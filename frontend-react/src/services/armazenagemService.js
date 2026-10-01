@@ -1,6 +1,7 @@
 import JsBarcode from "jsbarcode";
 import { jsPDF } from "jspdf";
 import { supabase } from "../lib/supabase";
+import { resolverVoucherCanonico } from "./voucherNormalizationService";
 
 
 export const ETAPAS_BIPAGEM = [
