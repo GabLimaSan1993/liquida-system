@@ -134,7 +134,7 @@ export default function TriagemFuncionalPage() {
     setEtapa("voucher"); setBusca(""); setCtx(null); setValidacao(null);
     setImeiDigitado(""); setPerguntas([]); setIdx(0); setRespostas([]);
     setDefeitosSel([]); setDefeitosTodos([]); setPedindoDefeito(false);
-    setPassoBateria(0); setBateria(null); setResultado(null);
+    setValorBateria(""); setBateria(null); setResultado(null);
     setModoRetriagem(false); setMotivoRetriagem("");
     setProduto({ marca: "", modelo: "", armazenamento: "", cor: "" });
     setModeloLivre(false);
