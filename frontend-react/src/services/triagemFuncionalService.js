@@ -1,5 +1,5 @@
 import { supabase } from "../lib/supabase";
-import { validarImeiTradein } from "./tradeinService";
+import { buscarTradeinPorVoucher, validarImeiTradein } from "./tradeinService";
 import { resolverVoucherCanonico } from "./voucherNormalizationService";
 
 // ══════════════════════════════════════════════════════════
@@ -97,14 +97,7 @@ export async function consultarVoucher(voucher) {
   let tradein = null;
   if (canal === "YBV") {
     const numero = v.replace(/\D/g, "");
-    if (numero) {
-      const { data } = await supabase
-        .from("tradein_geral")
-        .select("voucher, imei, sku_base, condicao_sufixo, marca, aparelho, condicao_aparelho, loja, status_atual")
-        .eq("voucher", parseInt(numero, 10))
-        .maybeSingle();
-      tradein = data || null;
-    }
+    if (numero) tradein = await buscarTradeinPorVoucher(numero);
   }
 
   let devolucao = null;
