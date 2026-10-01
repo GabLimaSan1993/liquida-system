@@ -263,7 +263,7 @@ export async function registrarDivergenciaImei(voucher, imeiBipado, userId, imei
 // para laudo sempre — não se compra aparelho que não liga, em nenhuma condição.
 // ══════════════════════════════════════════════════════════
 export function decidirDestino({ condicaoDeclarada, respostas }) {
-  const lista = Array.isArray(respostas) ? respostas : [];
+  const lista = Array.isArray(respostas) ? respostas.filter(Boolean) : [];
   const negativas = lista.filter(r => r.divergente);
   const bloqueio  = negativas.find(r => r.bloqueante);
 
