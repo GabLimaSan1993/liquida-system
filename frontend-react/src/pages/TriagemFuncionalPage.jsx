@@ -92,6 +92,8 @@ export default function TriagemFuncionalPage() {
   const [valorBateria, setValorBateria]   = useState("");
   const [bateria, setBateria]           = useState(null);
   const [resultado, setResultado]       = useState(null);
+  const [modoRetriagem, setModoRetriagem] = useState(false);
+  const [motivoRetriagem, setMotivoRetriagem] = useState("");
 
   const [fila, setFila]                 = useState([]);
   const [carregandoFila, setCarregandoFila] = useState(true);
@@ -133,6 +135,7 @@ export default function TriagemFuncionalPage() {
     setImeiDigitado(""); setPerguntas([]); setIdx(0); setRespostas([]);
     setDefeitosSel([]); setDefeitosTodos([]); setPedindoDefeito(false);
     setPassoBateria(0); setBateria(null); setResultado(null);
+    setModoRetriagem(false); setMotivoRetriagem("");
     setProduto({ marca: "", modelo: "", armazenamento: "", cor: "" });
     setModeloLivre(false);
     carregarFila();
@@ -166,6 +169,43 @@ export default function TriagemFuncionalPage() {
       setEtapa("produto");
     } catch (e) { erro(e.message); }
     finally { setCarregando(false); }
+  }
+
+  function iniciarRetriagem() {
+    const motivo = motivoRetriagem.trim();
+    if (motivo.length < 3) {
+      erro("Informe o motivo da retriagem.");
+      return;
+    }
+
+    const ultima = ctx?.ultimaTriagem;
+    if (!ultima) {
+      erro("Não foi possível carregar a última triagem funcional.");
+      return;
+    }
+
+    const anterior = ultima.produto || {};
+    setProduto({
+      marca: String(anterior.marca || "").toUpperCase(),
+      modelo: String(anterior.modelo || ultima.modelo || "").toUpperCase(),
+      armazenamento: String(anterior.armazenamento || "").toUpperCase(),
+      cor: String(anterior.cor || "").toUpperCase(),
+    });
+    setImeiDigitado(ultima.imei || "");
+    setValorBateria(
+      ultima.bateriaPercentual == null ? "" : String(ultima.bateriaPercentual)
+    );
+    setDefeitosTodos(Array.isArray(ultima.defeitos) ? ultima.defeitos : []);
+    setDefeitosSel([]);
+    setPedindoDefeito(false);
+    setRespostas([]);
+    setValidacao(null);
+    setModoRetriagem(true);
+    setCtx(prev => ({ ...prev, bloqueado: false, retriagem: true }));
+    setFeedback({
+      tipo: "aviso",
+      msg: "Retriagem iniciada. Os dados da última triagem foram carregados para revisão.",
+    });
   }
 
   async function handleSalvarProduto() {
@@ -216,6 +256,32 @@ export default function TriagemFuncionalPage() {
     const ps = await buscarPerguntas(tipoPerguntas, produto.marca);
     if (!ps.length) { erro(`Nenhuma pergunta cadastrada para o canal ${tipoPerguntas}.`); return; }
     setPerguntas(ps);
+
+    if (modoRetriagem && Array.isArray(ctx?.ultimaTriagem?.respostas)) {
+      const anteriores = ctx.ultimaTriagem.respostas;
+      setRespostas(ps.map(p => {
+        const anterior = anteriores.find(item =>
+          String(item.pergunta_id || item.perguntaId || "") === String(p.id) ||
+          String(item.pergunta || "").trim().toUpperCase() ===
+            String(p.texto || "").trim().toUpperCase()
+        );
+        if (!anterior) return null;
+
+        const valor = String(anterior.resposta || "").toLowerCase();
+        const ok = String(p.resposta_ok || "sim").toLowerCase();
+        return {
+          perguntaId: p.id,
+          pergunta: p.texto,
+          resposta: valor,
+          divergente: valor !== ok,
+          geraLaudo: valor !== ok && p.gera_laudo,
+          bloqueante: !!p.bloqueante,
+        };
+      }));
+    } else {
+      setRespostas([]);
+    }
+
     setIdx(0);
     setEtapa("perguntas");
   }
@@ -240,10 +306,11 @@ export default function TriagemFuncionalPage() {
     const ok = (p.resposta_ok || "sim").toLowerCase();
     const divergente = valor.toLowerCase() !== ok;
 
-    const nova = [...respostas, {
+    const nova = [...respostas];
+    nova[idx] = {
       perguntaId: p.id, pergunta: p.texto, resposta: valor,
       divergente, geraLaudo: divergente && p.gera_laudo, bloqueante: !!p.bloqueante,
-    }];
+    };
     setRespostas(nova);
 
     if (divergente && p.exige_defeito) { setPedindoDefeito(true); return; }
@@ -253,7 +320,11 @@ export default function TriagemFuncionalPage() {
   function avancar(lista = respostas) {
     const proximo = idx + 1;
     const p = perguntas[proximo];
-    if (p && p.tipo_resposta === "bateria") { setEtapa("bateria"); setValorBateria(""); return; }
+    if (p && p.tipo_resposta === "bateria") {
+      setEtapa("bateria");
+      if (!modoRetriagem) setValorBateria("");
+      return;
+    }
     if (!p) { finalizar(lista, null); return; }
     setIdx(proximo);
   }
@@ -295,10 +366,13 @@ export default function TriagemFuncionalPage() {
         defeitos: defeitosTodos,
         userId: user.id,
         tradein: ctx.tradein,
+        retriagem: modoRetriagem,
+        motivoRetriagem,
       });
       if (!r.ok) { erro(r.erro); return; }
       setResultado({ ...r, bateria: bat,
-        bateriaPercentual: pct, respostas: lista });
+        bateriaPercentual: pct, respostas: lista,
+        motivoRetriagem: modoRetriagem ? motivoRetriagem : null });
       setEtapa("fim");
     } catch (e) { erro(e.message); }
     finally { setCarregando(false); }
@@ -421,16 +495,44 @@ export default function TriagemFuncionalPage() {
                   })}
                 </p>
               )}
-              <button onClick={reiniciar}
-                className="mt-4 rounded-xl bg-[#7F2D92] px-5 py-2 text-sm font-bold text-white hover:bg-[#6B1F87]">
-                Bipar outro voucher
-              </button>
+              <div className="mt-4 rounded-xl bg-white/70 p-4 ring-1 ring-amber-200">
+                <p className="text-sm font-bold text-slate-700">Deseja triar novamente?</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  Informe o motivo. A última triagem será carregada para você revisar, adicionar ou alterar informações.
+                </p>
+                <textarea
+                  value={motivoRetriagem}
+                  onChange={e => setMotivoRetriagem(e.target.value)}
+                  rows={3}
+                  placeholder="Ex.: nova conferência, correção de teste, novo defeito identificado..."
+                  className="mt-3 w-full resize-none rounded-xl border border-amber-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-[#7F2D92]"
+                />
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button onClick={iniciarRetriagem}
+                    disabled={motivoRetriagem.trim().length < 3}
+                    className="rounded-xl bg-[#7F2D92] px-5 py-2 text-sm font-bold text-white hover:bg-[#6B1F87] disabled:opacity-40">
+                    Sim, triar novamente
+                  </button>
+                  <button onClick={reiniciar}
+                    className="rounded-xl bg-slate-100 px-5 py-2 text-sm font-bold text-slate-600 hover:bg-slate-200">
+                    Bipar outro voucher
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
           {!ctx.bloqueado && (
           <>
-          {!ctx.temTradein && ctx.canal === "YBV" && (
+          {modoRetriagem && (
+            <div className="mb-4">
+              <Aviso tipo="aviso">
+                Retriagem funcional · dados da última triagem carregados para revisão. Motivo: {motivoRetriagem}
+              </Aviso>
+            </div>
+          )}
+
+                    {!ctx.temTradein && ctx.canal === "YBV" && (
             <div className="mb-4">
               <Aviso tipo="aviso">
                 Voucher não encontrado na base TradeIn. A validação de IMEI será pulada.
@@ -577,6 +679,12 @@ export default function TriagemFuncionalPage() {
         <div>
           <BarraContexto voucher={ctx.voucher} imei={imeiDigitado} produto={produto} />
           <p className="mb-4 text-[15px] font-semibold text-slate-800">{perguntas[idx].texto}</p>
+
+          {modoRetriagem && respostas[idx]?.resposta && !pedindoDefeito && (
+            <div className="mb-3 rounded-xl bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-700 ring-1 ring-violet-100">
+              Resposta da última triagem: {String(respostas[idx].resposta).toLowerCase() === "sim" ? "Sim" : "Não"}
+            </div>
+          )}
 
           {!pedindoDefeito ? (
             <div className="flex gap-3">
