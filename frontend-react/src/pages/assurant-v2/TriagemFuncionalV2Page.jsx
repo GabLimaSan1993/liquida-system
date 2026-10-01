@@ -732,6 +732,16 @@ export default function TriagemFuncionalV2Page() {
   ] = useState(null);
 
   const [
+    modoRetriagem,
+    setModoRetriagem,
+  ] = useState(false);
+
+  const [
+    motivoRetriagem,
+    setMotivoRetriagem,
+  ] = useState("");
+
+  const [
     fila,
     setFila,
   ] = useState([]);
@@ -1019,6 +1029,14 @@ export default function TriagemFuncionalV2Page() {
       null
     );
 
+    setModoRetriagem(
+      false
+    );
+
+    setMotivoRetriagem(
+      ""
+    );
+
     setValorBateria(
       ""
     );
@@ -1156,6 +1174,110 @@ export default function TriagemFuncionalV2Page() {
         false
       );
     }
+  }
+
+  function iniciarRetriagem() {
+    const motivo =
+      motivoRetriagem
+        .trim();
+
+    if (
+      motivo.length < 3
+    ) {
+      mostrarErro(
+        "Informe o motivo da retriagem."
+      );
+
+      return;
+    }
+
+    const ultima =
+      ctx?.ultimaTriagem;
+
+    if (!ultima) {
+      mostrarErro(
+        "Não foi possível carregar a última triagem funcional."
+      );
+
+      return;
+    }
+
+    const anterior =
+      ultima.produto ||
+      {};
+
+    setProduto({
+      marca:
+        String(
+          anterior.marca ||
+            ""
+        ).toUpperCase(),
+
+      modelo:
+        String(
+          anterior.modelo ||
+            ultima.modelo ||
+            ""
+        ).toUpperCase(),
+
+      armazenamento:
+        String(
+          anterior.armazenamento ||
+            ""
+        ).toUpperCase(),
+
+      cor:
+        String(
+          anterior.cor ||
+            ""
+        ).toUpperCase(),
+    });
+
+    setImeiDigitado(
+      ultima.imei ||
+        ""
+    );
+
+    setValorBateria(
+      ultima.bateriaPercentual == null
+        ? ""
+        : String(
+            ultima.bateriaPercentual
+          )
+    );
+
+    setDefeitosTodos(
+      Array.isArray(
+        ultima.defeitos
+      )
+        ? ultima.defeitos
+        : []
+    );
+
+    setRespostas(
+      []
+    );
+
+    setValidacao(
+      null
+    );
+
+    setModoRetriagem(
+      true
+    );
+
+    setCtx(
+      (atual) => ({
+        ...atual,
+        bloqueado: false,
+        retriagem: true,
+      })
+    );
+
+    setFeedback({
+      tipo: "aviso",
+      msg: "Retriagem iniciada com os dados da última triagem carregados para revisão.",
+    });
   }
 
   async function handleSalvarProduto() {
@@ -1326,6 +1448,92 @@ export default function TriagemFuncionalV2Page() {
       lista
     );
 
+    if (
+      modoRetriagem &&
+      Array.isArray(
+        ctx?.ultimaTriagem
+          ?.respostas
+      )
+    ) {
+      const anteriores =
+        ctx.ultimaTriagem
+          .respostas;
+
+      const preenchidas =
+        lista.map(
+          (pergunta) => {
+            const anterior =
+              anteriores.find(
+                (item) =>
+                  String(
+                    item.pergunta_id ||
+                      item.perguntaId ||
+                      ""
+                  ) ===
+                    String(
+                      pergunta.id
+                    ) ||
+                  String(
+                    item.pergunta ||
+                      ""
+                  )
+                    .trim()
+                    .toUpperCase() ===
+                    String(
+                      pergunta.texto ||
+                        ""
+                    )
+                      .trim()
+                      .toUpperCase()
+              );
+
+            if (!anterior) {
+              return null;
+            }
+
+            const valor =
+              String(
+                anterior.resposta ||
+                  ""
+              ).toLowerCase();
+
+            const respostaOk =
+              String(
+                pergunta.resposta_ok ||
+                  "sim"
+              ).toLowerCase();
+
+            return {
+              perguntaId:
+                pergunta.id,
+              pergunta:
+                pergunta.texto,
+              resposta:
+                valor,
+              divergente:
+                valor !==
+                respostaOk,
+              geraLaudo:
+                valor !==
+                  respostaOk &&
+                pergunta.gera_laudo,
+              bloqueante:
+                Boolean(
+                  pergunta.bloqueante
+                ),
+            };
+          }
+        );
+
+      setRespostas(
+        preenchidas
+      );
+    } else {
+      setRespostas(
+        []
+      );
+    }
+
     setIdx(0);
 
     setEtapa(
@@ -1420,8 +1628,12 @@ export default function TriagemFuncionalV2Page() {
 
     const novaLista = [
       ...respostas,
-      novaResposta,
     ];
+
+    novaLista[
+      idx
+    ] =
+      novaResposta;
 
     setRespostas(
       novaLista
@@ -1438,14 +1650,6 @@ export default function TriagemFuncionalV2Page() {
     ) {
       return;
     }
-
-    setRespostas(
-      (anteriores) =>
-        anteriores.slice(
-          0,
-          -1
-        )
-    );
 
     setIdx(
       (atual) =>
@@ -1480,9 +1684,13 @@ export default function TriagemFuncionalV2Page() {
         "bateria"
       );
 
-      setValorBateria(
-        ""
-      );
+      if (
+        !modoRetriagem
+      ) {
+        setValorBateria(
+          ""
+        );
+      }
 
       return;
     }
@@ -1650,6 +1858,12 @@ export default function TriagemFuncionalV2Page() {
 
           tradein:
             ctx.tradein,
+
+          retriagem:
+            modoRetriagem,
+
+          motivoRetriagem:
+            motivoRetriagem,
         });
 
       if (
@@ -1876,7 +2090,7 @@ export default function TriagemFuncionalV2Page() {
                 {ctx.bloqueado ? (
                   <Panel
                     title="Aparelho já processado"
-                    subtitle="O voucher não pode iniciar uma nova triagem neste momento."
+                    subtitle="O voucher já possui triagem funcional. Você pode revisar a triagem com motivo obrigatório."
                     icon={
                       ShieldAlert
                     }
@@ -1918,16 +2132,59 @@ export default function TriagemFuncionalV2Page() {
                         </div>
                       </Aviso>
 
-                      <button
-                        type="button"
-                        onClick={
-                          reiniciar
-                        }
-                        className="mt-4 inline-flex h-10 items-center gap-2 rounded-xl bg-violet-700 px-4 text-xs font-bold text-white transition hover:bg-violet-800"
-                      >
-                        <RotateCcw className="h-4 w-4" />
-                        Bipar outro voucher
-                      </button>
+                      <div className="mt-5 rounded-2xl border border-violet-100 bg-violet-50/40 p-4">
+                        <div className="text-[10px] font-black uppercase tracking-[0.12em] text-violet-600">
+                          Triar novamente
+                        </div>
+
+                        <p className="mt-1 text-[11px] leading-5 text-slate-500">
+                          Informe o motivo. A última triagem será carregada para você revisar, adicionar ou alterar informações.
+                        </p>
+
+                        <textarea
+                          value={
+                            motivoRetriagem
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            setMotivoRetriagem(
+                              event.target.value
+                            )
+                          }
+                          rows={3}
+                          placeholder="Ex.: conferência adicional, correção de teste, novo defeito identificado..."
+                          className="mt-3 w-full resize-none rounded-xl border border-violet-200 bg-white px-3.5 py-3 text-xs font-medium text-slate-700 outline-none transition placeholder:text-slate-300 focus:border-violet-400 focus:ring-4 focus:ring-violet-100"
+                        />
+
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={
+                              iniciarRetriagem
+                            }
+                            disabled={
+                              motivoRetriagem
+                                .trim()
+                                .length < 3
+                            }
+                            className="inline-flex h-10 items-center gap-2 rounded-xl bg-violet-700 px-4 text-xs font-bold text-white transition hover:bg-violet-800 disabled:opacity-40"
+                          >
+                            <RotateCcw className="h-4 w-4" />
+                            Sim, triar novamente
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={
+                              reiniciar
+                            }
+                            className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 transition hover:bg-slate-50"
+                          >
+                            Bipar outro voucher
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </Panel>
                 ) : (
@@ -1946,6 +2203,22 @@ export default function TriagemFuncionalV2Page() {
                     }
                   >
                     <div className="space-y-5 p-5">
+                      {modoRetriagem && (
+                        <Aviso tipo="aviso">
+                          <div>
+                            <div className="font-black">
+                              Retriagem funcional
+                            </div>
+                            <div className="mt-1 font-medium">
+                              Os dados abaixo vieram da última triagem. Revise e altere somente o que for necessário.
+                            </div>
+                            <div className="mt-1 text-[10px] opacity-80">
+                              Motivo: {motivoRetriagem}
+                            </div>
+                          </div>
+                        </Aviso>
+                      )}
+
                       {!ctx.temTradein &&
                         ctx.canal ===
                           "YBV" && (
@@ -2444,6 +2717,24 @@ export default function TriagemFuncionalV2Page() {
                         }
                       </h3>
                     </div>
+
+                    {modoRetriagem &&
+                      respostas[
+                        idx
+                      ]?.resposta && (
+                        <div className="mt-5 rounded-xl border border-violet-100 bg-violet-50 px-4 py-3 text-center text-[11px] font-bold text-violet-700">
+                          Resposta da última triagem: {
+                            String(
+                              respostas[
+                                idx
+                              ].resposta
+                            ).toLowerCase() ===
+                            "sim"
+                              ? "Sim"
+                              : "Não"
+                          }
+                        </div>
+                      )}
 
                     <div className="mt-8 grid gap-3 sm:grid-cols-2">
                       <button
