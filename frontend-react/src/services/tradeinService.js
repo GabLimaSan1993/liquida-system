@@ -211,20 +211,51 @@ export async function uploadTradein(file, userId, userNome, onProgress) {
 // deixaria passar aparelho que fisicamente não deveria estar aqui.
 const STATUS_NAO_COLETADO = ["Aparelho em Loja", "Aguardando Confirmação"];
 
+export async function buscarTradeinPorVoucher(voucher) {
+  const numeroVoucher = String(voucher || "").replace(/\D/g, "");
+  if (!numeroVoucher) return null;
+  const numero = parseInt(numeroVoucher, 10);
+
+  const { data: atual, error: errAtual } = await supabase
+    .from("tradein_geral")
+    .select("voucher, voucher_ybv, imei, sku, sku_base, condicao_sufixo, marca, aparelho, condicao_aparelho, loja, status_atual, canceled")
+    .eq("voucher", numero)
+    .maybeSingle();
+  if (errAtual) throw new Error(errAtual.message);
+  if (atual) return { ...atual, fonte_tradein: "tradein_geral" };
+
+  const { data: historico, error: errHistorico } = await supabase
+    .from("tradein_historico")
+    .select("voucher_original, voucher_key, imei_serial, sku_original, marca, aparelho, condicao_aparelho, loja, status_atual, cancelado")
+    .eq("voucher_key", numeroVoucher)
+    .maybeSingle();
+  if (errHistorico) throw new Error(errHistorico.message);
+  if (!historico) return null;
+
+  const { base, sufixo } = quebrarSku(historico.sku_original);
+  return {
+    voucher: numero,
+    voucher_ybv: `YBV${numeroVoucher}`,
+    imei: historico.imei_serial,
+    sku: historico.sku_original,
+    sku_base: base,
+    condicao_sufixo: sufixo,
+    marca: historico.marca,
+    aparelho: historico.aparelho,
+    condicao_aparelho: historico.condicao_aparelho,
+    loja: historico.loja,
+    status_atual: historico.status_atual,
+    canceled: historico.cancelado ? "SIM" : "NÃO",
+    fonte_tradein: "tradein_historico",
+  };
+}
+
 export async function validarImeiTradein(voucher, imeiDigitado) {
   const numeroVoucher = String(voucher || "").replace(/\D/g, "");
   if (!numeroVoucher) return { ok: false, erro: "Voucher inválido." };
 
-  const { data, error } = await supabase
-    .from("tradein_geral")
-    .select("voucher, voucher_ybv, imei, sku, sku_base, condicao_sufixo, marca, aparelho, condicao_aparelho, loja, status_atual, canceled")
-    .eq("voucher", parseInt(numeroVoucher, 10))
-    .maybeSingle();
-
-  if (error) throw new Error(error.message);
-  if (!data) {
-    return { ok: false, encontrado: false, erro: `Voucher ${numeroVoucher} não existe na base TradeIn.` };
-  }
+  const data = await buscarTradeinPorVoucher(numeroVoucher);
+  if (!data) return { ok: false, encontrado: false, erro: `Voucher ${numeroVoucher} não existe nas bases TradeIn.` };
 
   const imeiBase = String(data.imei || "").trim();
   const imeiBip  = String(imeiDigitado || "").trim();
