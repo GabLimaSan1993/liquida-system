@@ -86,7 +86,7 @@ export async function consultarVoucher(voucher) {
 
   const { data: existente, error: errT } = await supabase
     .from("assurant_triagem")
-    .select("id, imei, sku, modelo, grade, status_atual, data_funcional, local, criado_em, devolucao_id")
+    .select("id, imei, sku, modelo, grade, status_atual, data_funcional, local, criado_em, devolucao_id, respostas_funcional, status_bateria, bateria_percentual, defeitos_adicionais, resultado_triagem_funcional, funcional_por, origem_triagem")
     .eq("voucher", v)
     .maybeSingle();
   if (errT) throw new Error(errT.message);
@@ -117,6 +117,45 @@ export async function consultarVoucher(voucher) {
   // para o lugar certo.
   const etapa = etapaAtual(existente);
 
+  let respostasAnteriores = null;
+  if (existente?.respostas_funcional) {
+    try {
+      respostasAnteriores = typeof existente.respostas_funcional === "string"
+        ? JSON.parse(existente.respostas_funcional)
+        : existente.respostas_funcional;
+    } catch {
+      respostasAnteriores = null;
+    }
+  }
+
+  const ultimaTriagem = existente?.data_funcional ? {
+    imei: existente.imei || null,
+    sku: existente.sku || null,
+    modelo: existente.modelo || null,
+    statusAtual: existente.status_atual || null,
+    resultado: existente.resultado_triagem_funcional || null,
+    dataFuncional: existente.data_funcional || null,
+    funcionalPor: existente.funcional_por || null,
+    origem: existente.origem_triagem || null,
+    produto: respostasAnteriores?.produto || null,
+    respostas: Array.isArray(respostasAnteriores?.respostas)
+      ? respostasAnteriores.respostas
+      : [],
+    bateriaPercentual:
+      respostasAnteriores?.bateria?.percentual ??
+      existente.bateria_percentual ??
+      null,
+    statusBateria:
+      respostasAnteriores?.bateria?.faixa ||
+      existente.status_bateria ||
+      null,
+    defeitos: String(existente.defeitos_adicionais || "")
+      .split(";")
+      .map((x) => x.trim())
+      .filter(Boolean),
+    bruto: respostasAnteriores,
+  } : null;
+
   return {
     ok: true,
     voucher: v,
@@ -130,6 +169,7 @@ export async function consultarVoucher(voucher) {
     jaTriado: !!existente?.data_funcional,
     bloqueado: !!etapa,
     etapa,
+    ultimaTriagem,
     existente: existente || null,
   };
 }
@@ -253,7 +293,7 @@ export function decidirDestino({ condicaoDeclarada, respostas }) {
 
 export async function salvarTriagemFuncional({
   voucher, imei, canal, produto, respostas, bateria, bateriaPercentual,
-  defeitos, userId, tradein,
+  defeitos, userId, tradein, retriagem = false, motivoRetriagem = null,
 }) {
   const v = String(voucher || "").trim().toUpperCase();
   if (!v)    return { ok: false, erro: "Voucher ausente." };
@@ -312,17 +352,56 @@ export async function salvarTriagemFuncional({
     defeitos_adicionais: (defeitos || []).length ? defeitos.join("; ") : null,
   };
 
-  const { data, error } = await supabase
-    .from("assurant_triagem")
-    .upsert(registro, { onConflict: "voucher" })
-    .select("id, voucher, imei, status_atual")
-    .single();
-  if (error) throw new Error(error.message);
+  let data;
+
+  if (retriagem) {
+    const motivo = String(motivoRetriagem || "").trim();
+    if (motivo.length < 3) {
+      return { ok: false, erro: "Informe o motivo da retriagem." };
+    }
+
+    const { data: revisao, error } = await supabase.rpc(
+      "assurant_retriagem_funcional_salvar",
+      {
+        p_voucher: registro.voucher,
+        p_imei: registro.imei,
+        p_sku: registro.sku,
+        p_modelo: registro.modelo,
+        p_status_proposto: registro.status_atual,
+        p_resultado: registro.resultado_triagem_funcional,
+        p_respostas: registro.respostas_funcional,
+        p_status_bateria: registro.status_bateria,
+        p_bateria_percentual: registro.bateria_percentual,
+        p_defeitos_adicionais: registro.defeitos_adicionais,
+        p_motivo: motivo,
+      }
+    );
+    if (error) throw new Error(error.message);
+    data = {
+      id: revisao?.id,
+      voucher: revisao?.voucher,
+      imei: revisao?.imei,
+      status_atual: revisao?.status_atual,
+      ajuste_id: revisao?.ajuste_id,
+      status_preservado: !!revisao?.status_preservado,
+    };
+  } else {
+    const { data: salva, error } = await supabase
+      .from("assurant_triagem")
+      .upsert(registro, { onConflict: "voucher" })
+      .select("id, voucher, imei, status_atual")
+      .single();
+    if (error) throw new Error(error.message);
+    data = salva;
+  }
 
   return {
     ok: true,
     id: data.id,
     status: data.status_atual,
+    retriagem: !!retriagem,
+    ajusteId: data.ajuste_id || null,
+    statusPreservado: !!data.status_preservado,
     precisaLaudo: temLaudo,
     motivoDestino: ehDevolucao ? "Devolução segue para triagem cosmética" : decisao.motivo,
     divergencias: negativas.length,
