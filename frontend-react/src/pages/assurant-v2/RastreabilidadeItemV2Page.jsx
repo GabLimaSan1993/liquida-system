@@ -216,6 +216,101 @@ function unlinkHistoryEvents(history = []) {
   });
 }
 
+
+function parseJsonSeguro(value) {
+  if (!value) return null;
+  if (typeof value === "object") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+function camposTriagem(snapshot = {}) {
+  const respostas = parseJsonSeguro(snapshot?.respostas_funcional) || {};
+  const produto = respostas?.produto || {};
+  const bateria = respostas?.bateria || {};
+
+  const campos = {
+    IMEI: snapshot?.imei || "",
+    SKU: snapshot?.sku || "",
+    Modelo: produto?.modelo || snapshot?.modelo || "",
+    Marca: produto?.marca || "",
+    Armazenamento: produto?.armazenamento || "",
+    Cor: produto?.cor || "",
+    "Resultado funcional": snapshot?.resultado || "",
+    "Saúde da bateria (%)":
+      bateria?.percentual ?? snapshot?.bateria_percentual ?? "",
+    "Faixa da bateria":
+      bateria?.faixa || snapshot?.status_bateria || "",
+    Defeitos: snapshot?.defeitos_adicionais || "",
+  };
+
+  const lista = Array.isArray(respostas?.respostas) ? respostas.respostas : [];
+  lista.forEach((item) => {
+    const chave = "Teste · " + (item?.pergunta || item?.pergunta_id || "Pergunta");
+    campos[chave] = item?.resposta || "";
+  });
+
+  return campos;
+}
+
+function compararTriagens(anterior = {}, novo = {}) {
+  const a = camposTriagem(anterior);
+  const n = camposTriagem(novo);
+  const chaves = [...new Set([...Object.keys(a), ...Object.keys(n)])];
+
+  return chaves.flatMap((campo) => {
+    const antes = a[campo] ?? "";
+    const depois = n[campo] ?? "";
+    const antesTxt = String(antes).trim();
+    const depoisTxt = String(depois).trim();
+
+    if (antesTxt === depoisTxt) return [];
+
+    const tipo = !antesTxt
+      ? "adicionado"
+      : !depoisTxt
+      ? "removido"
+      : "alterado";
+
+    return [{
+      campo,
+      tipo,
+      anterior: antesTxt || "—",
+      novo: depoisTxt || "—",
+    }];
+  });
+}
+
+function retriageHistoryEvents(history = []) {
+  return history.map((item) => {
+    const alteracoes = compararTriagens(item?.anterior || {}, item?.novo || {});
+    const qtd = alteracoes.length;
+    const resumoAlteracoes = qtd
+      ? String(qtd) + " alteração(ões) registrada(s)"
+      : "sem alteração de resultado";
+
+    return {
+      data: item.criado_em,
+      categoria: "Triagem",
+      evento: "Triagem funcional refeita",
+      status: "retriagem",
+      descricao: "Motivo: " + (item.motivo || "Não informado") + " · " + resumoAlteracoes,
+      origem: "assurant_rastreabilidade_ajustes",
+      referencia: item.id,
+      usuario_id: item.usuario_id,
+      usuario: item.usuario_nome || item.usuario_id || "Sistema",
+      extra: {
+        alteracoes,
+        anterior: item.anterior || null,
+        novo: item.novo || null,
+      },
+    };
+  });
+}
+
 function StatCard({ label, value, helper, icon: Icon }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -299,6 +394,33 @@ function Timeline({ events }) {
               <div className="mt-2 text-sm font-black text-slate-900">{event.evento}</div>
               {event.descricao && (
                 <div className="mt-1 text-xs leading-5 text-slate-500">{event.descricao}</div>
+              )}
+
+              {Array.isArray(event.extra?.alteracoes) && event.extra.alteracoes.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {event.extra.alteracoes.map((alteracao, changeIndex) => (
+                    <div
+                      key={alteracao.campo + "-" + changeIndex}
+                      className="rounded-xl border border-violet-100 bg-violet-50/50 px-3 py-2.5"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-[10px] font-black text-slate-700">
+                          {alteracao.campo}
+                        </span>
+                        <span className="rounded-full bg-white px-2 py-0.5 text-[9px] font-black uppercase text-violet-700 ring-1 ring-violet-200">
+                          {alteracao.tipo}
+                        </span>
+                      </div>
+                      <div className="mt-1.5 text-[10px] leading-4 text-slate-500">
+                        <span className="font-semibold text-slate-400">Anterior:</span>{" "}
+                        {alteracao.anterior}
+                        <span className="mx-2 text-slate-300">→</span>
+                        <span className="font-semibold text-slate-400">Novo:</span>{" "}
+                        <span className="font-bold text-slate-700">{alteracao.novo}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
 
               {hasExtra && (
@@ -485,6 +607,7 @@ export default function RastreabilidadeItemV2Page() {
   const [data, setData] = useState(null);
   const [special, setSpecial] = useState({ ativa: null, historico: [] });
   const [unlinkHistory, setUnlinkHistory] = useState([]);
+  const [retriageHistory, setRetriageHistory] = useState([]);
   const [colorInfo, setColorInfo] = useState(null);
   const [colorOpen, setColorOpen] = useState(false);
   const [colorValue, setColorValue] = useState("");
@@ -524,16 +647,21 @@ export default function RastreabilidadeItemV2Page() {
 
       let specialResult = { ativa: null, historico: [] };
       let unlinkResult = [];
+      let retriageResult = [];
       let colorResult = null;
 
       if (result?.selecionado_imei) {
-        const [specialResponse, unlinkResponse, colorResponse] = await Promise.all([
+        const [specialResponse, unlinkResponse, retriageResponse, colorResponse] = await Promise.all([
           supabase.rpc(
             "assurant_reserva_especial_status",
             { p_imei: result.selecionado_imei }
           ),
           supabase.rpc(
             "assurant_desvinculacoes_item",
+            { p_imei: result.selecionado_imei }
+          ),
+          supabase.rpc(
+            "assurant_retriagens_funcionais_item",
             { p_imei: result.selecionado_imei }
           ),
           supabase.rpc(
@@ -544,16 +672,19 @@ export default function RastreabilidadeItemV2Page() {
 
         if (specialResponse.error) throw specialResponse.error;
         if (unlinkResponse.error) throw unlinkResponse.error;
+        if (retriageResponse.error) throw retriageResponse.error;
         if (colorResponse.error) throw colorResponse.error;
 
         specialResult = specialResponse.data || specialResult;
         unlinkResult = unlinkResponse.data || [];
+        retriageResult = retriageResponse.data || [];
         colorResult = colorResponse.data || null;
       }
 
       setData(result || null);
       setSpecial(specialResult);
       setUnlinkHistory(unlinkResult);
+      setRetriageHistory(retriageResult);
       setColorInfo(colorResult);
       setActionError("");
       setActiveTab("historico");
@@ -570,6 +701,7 @@ export default function RastreabilidadeItemV2Page() {
       setData(null);
       setSpecial({ ativa: null, historico: [] });
       setUnlinkHistory([]);
+      setRetriageHistory([]);
       setColorInfo(null);
     } finally {
       setLoading(false);
@@ -631,11 +763,12 @@ export default function RastreabilidadeItemV2Page() {
     const base = data?.eventos || [];
     const especiais = specialHistoryEvents(special?.historico || []);
     const desvinculacoes = unlinkHistoryEvents(unlinkHistory);
+    const retriagens = retriageHistoryEvents(retriageHistory);
 
-    return [...base, ...especiais, ...desvinculacoes].sort(
+    return [...base, ...especiais, ...desvinculacoes, ...retriagens].sort(
       (a, b) => new Date(b.data || 0).getTime() - new Date(a.data || 0).getTime()
     );
-  }, [data, special, unlinkHistory]);
+  }, [data, special, unlinkHistory, retriageHistory]);
 
   const summary = data?.resumo || null;
   const matches = data?.matches || [];
