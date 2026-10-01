@@ -1,6 +1,7 @@
 import { jsPDF } from "jspdf";
 import "jspdf-autotable";
 import { supabase } from "../lib/supabase";
+import { resolverVoucherCanonico } from "./voucherNormalizationService";
 
 // ══════════════════════════════════════════════════════════
 // LAUDO DE TRIAGEM
