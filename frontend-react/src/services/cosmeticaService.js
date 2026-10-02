@@ -184,34 +184,39 @@ export async function salvarCosmetica({ dados, tela, laterais, traseira, userId 
     return { ok: false, erro: "Responda tela, laterais e traseira." };
   }
 
-  const calc = calcularGradeFinal({
-    tela, laterais, traseira,
-    temDefeitoFuncional: dados.temDefeitoFuncional,
-    bateria: dados.bateria,
-  });
+  /*
+   * O fechamento da cosmética precisa ser atômico.
+   *
+   * A RPC faz lock do voucher, recalcula a grade no servidor e grava
+   * campos estéticos, grade, operador, data e status em uma única transação.
+   */
+  const { data, error } = await supabase.rpc(
+    "assurant_cosmetica_salvar",
+    {
+      p_voucher: dados.voucher,
+      p_tela: tela,
+      p_laterais: laterais,
+      p_traseira: traseira,
+      p_usuario: userId,
+    }
+  );
 
-  const agora = new Date().toISOString();
-
-  const { data, error } = await supabase
-    .from("assurant_triagem")
-    .update({
-      tela, laterais, traseira,
-      grade:             calc.grade,
-      grade_cosmetica:   calc.gradeCosmetica,
-      rebaixado_bateria: calc.rebaixado,
-      status_atual:      STATUS_SAIDA,
-      data_cosmetico:    agora,
-      cosmetico_por:     userId,
-      atualizado_em:     agora,
-    })
-    .eq("voucher", dados.voucher)
-    .eq("status_atual", STATUS_ENTRADA) // trava: dois operadores no mesmo aparelho
-    .select("voucher, grade, status_atual")
-    .maybeSingle();
   if (error) throw new Error(error.message);
-  if (!data) {
-    return { ok: false, erro: "Este aparelho já saiu da triagem cosmética. Recarregue a fila." };
+
+  if (!data?.ok) {
+    return {
+      ok: false,
+      erro:
+        data?.erro ||
+        "Não foi possível concluir a triagem cosmética.",
+    };
   }
 
-  return { ok: true, ...calc, status: data.status_atual };
+  return {
+    ok: true,
+    grade: data.grade,
+    gradeCosmetica: data.gradeCosmetica,
+    rebaixado: Boolean(data.rebaixado),
+    status: data.status,
+  };
 }
