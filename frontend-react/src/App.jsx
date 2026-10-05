@@ -1,3 +1,4 @@
+import FechamentoLojasV2Page from "./pages/assurant-v2/FechamentoLojasV2Page";
 import GestaoEsteiraV2Page from "./pages/assurant-v2/GestaoEsteiraV2Page.jsx";
 import {
   Navigate,
@@ -688,6 +689,7 @@ export default function App() {
 
 
         {/* Gestão */}
+        <Route path="gestao/fechamento-lojas" element={<ProtectedRoute tela="/v2/assurant/gestao/fechamento-lojas"><FechamentoLojasV2Page /></ProtectedRoute>} />
         <Route path="gestao/esteira" element={<ProtectedRoute tela="/v2/assurant/gestao/esteira"><GestaoEsteiraV2Page /></ProtectedRoute>} />
 
         <Route
