@@ -48,6 +48,7 @@ export function AuthProvider({ children }) {
 
   function hasAccess(tela) {
     if (!profile) return false;
+    if (tela === "/v2/assurant/gestao/esteira") return profile.telas_permitidas?.includes(tela) === true;
     if (profile.is_master) return true;
     return profile.telas_permitidas?.includes(tela);
   }

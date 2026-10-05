@@ -1,3 +1,4 @@
+import GestaoEsteiraV2Page from "./pages/assurant-v2/GestaoEsteiraV2Page.jsx";
 import {
   Navigate,
   Route,
@@ -687,6 +688,7 @@ export default function App() {
 
 
         {/* Gestão */}
+        <Route path="gestao/esteira" element={<ProtectedRoute tela="/v2/assurant/gestao/esteira"><GestaoEsteiraV2Page /></ProtectedRoute>} />
 
         <Route
           path="usuarios"

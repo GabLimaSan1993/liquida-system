@@ -329,6 +329,7 @@ const MENU_GROUPS = [
   {
   label: "GESTÃO",
   items: [
+    { label: "Gestão da Esteira", icon: Activity, to: "/v2/assurant/gestao/esteira", exact: true, enabled: true },
     {
       label: "Usuários",
       icon: User,
@@ -935,6 +936,7 @@ function SidebarContent({
   mobile = false,
 }) {
   const podeVerRota = (to, allowedUserIds, liquidaOnly = false) => {
+    if (to === "/v2/assurant/gestao/esteira") return profile?.telas_permitidas?.includes(to) === true;
     if (liquidaOnly) {
       const email = String(profile?.email || "").toLowerCase();
       const identidadeLiquida =

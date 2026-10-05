@@ -71,6 +71,7 @@ const TELAS_V2 = [
   {
   grupo: "GESTÃO",
   telas: [
+    { id: "/v2/assurant/gestao/esteira", label: "Gestão da Esteira — Trade-in até Armazenagem" },
     {
       id: "/v2/assurant/indicadores",
       label: "Indicadores Executivos",

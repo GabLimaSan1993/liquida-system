@@ -3,6 +3,7 @@ import { Plus, X, Shield } from "lucide-react";
 import { fetchAllProfiles, createUser, updateUserPermissions } from "../services/authService";
 
 const TELAS = [
+  { id: "/v2/assurant/gestao/esteira", label: "Gestão da Esteira — Trade-in até Armazenagem", grupo: "Assurant V2 — Gestão" },
     { id: "/v2/assurant", label: "Assurant V2 — Acesso ao Workspace", grupo: "Assurant V2" },
 
   { id: "/v2/assurant/recebimento", label: "Recebimento — Lojas", grupo: "Assurant V2 — Operação" },
