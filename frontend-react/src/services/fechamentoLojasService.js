@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase.js';
 export const COLUNAS_FECHAMENTO=['Cod_Loja','Voucher','Data_Trade_in','Loja','Estado_loja','Dealer','Rede','Vendedor','Usuário','Status','SKU','Marca','Modelo','Produto','Novo Aparelho','Cliente','CPF_CNPJ','Condicao','Imei','Total','Preço Real','Campanha','Valor Campanha','Status da Divergência','Motivo da Divergência','Laudo','NF_EMITIDA','Agrupamento','Inv_Status'];
 export async function consultarFechamento(filters,offset=0,limit=100,summary=true,signal){
- let req=supabase.rpc('assurant_fechamento_lojas_periodo',{p_situacao:filters.situacao,p_laudo:filters.laudo,p_busca:filters.busca.trim(),p_rede:filters.rede,p_offset:offset,p_limite:limit,p_resumo:summary,p_data_inicial:filters.situacao==='aguardando'?null:filters.dataInicial||null,p_data_final:filters.situacao==='aguardando'?null:filters.dataFinal||null,p_data_referencia:'cosmetica'});
+ let req=supabase.rpc('assurant_fechamento_lojas_periodo',{p_situacao:filters.situacao,p_laudo:filters.laudo,p_busca:filters.busca.trim(),p_rede:filters.rede,p_offset:offset,p_limite:limit,p_resumo:summary,p_data_inicial:filters.dataInicial||null,p_data_final:filters.dataFinal||null,p_data_referencia:'cosmetica'});
  if(signal)req=req.abortSignal(signal);
  const {data,error}=await req;if(error)throw error;return data;
 }
