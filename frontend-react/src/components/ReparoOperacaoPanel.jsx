@@ -37,6 +37,10 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
     return () => controller.abort();
   }, [carregar]);
 
+  useEffect(() => {
+    if (!busy && detail && !oracle) inputRef.current?.focus();
+  }, [busy, detail, oracle]);
+
   async function abrir(id) {
     setBusy(true); setError(''); setMessage('');
     try {
@@ -62,7 +66,7 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
       }
       setImei('');
     } catch (err) { setError(err.message); }
-    finally { setBusy(false); if (!oracle) inputRef.current?.focus(); }
+    finally { setBusy(false); }
   }
 
   async function exportar() {
