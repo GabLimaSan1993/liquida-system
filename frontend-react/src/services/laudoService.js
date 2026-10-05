@@ -1,13 +1,11 @@
 import { jsPDF } from "jspdf";
 import "jspdf-autotable";
 import { supabase } from "../lib/supabase";
-import { resolverVoucherCanonico } from "./voucherNormalizationService";
 
 // ══════════════════════════════════════════════════════════
 // LAUDO DE TRIAGEM
-// As fotos NÃO são armazenadas soltas: elas só existem dentro do PDF,
-// que é baixado pelo operador. No banco fica apenas o registro de que o
-// laudo foi feito, com as divergências e a observação.
+// As fotos ficam incorporadas no PDF completo, arquivado em bucket privado.
+// Laudos antigos podem ser reemitidos pelos metadados, sem as fotos originais.
 // ══════════════════════════════════════════════════════════
 
 const STATUS_APOS_LAUDO = "Aguardando triagem cosmética";
@@ -114,7 +112,7 @@ function linha(doc, y, titulo) {
   return y + 2;
 }
 
-export function gerarPdfLaudo(dados, fotos, observacao) {
+export function gerarPdfLaudo(dados, fotos, observacao, opcoes = {}) {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const largura = doc.internal.pageSize.getWidth();
 
@@ -125,11 +123,16 @@ export function gerarPdfLaudo(dados, fotos, observacao) {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.text(
-    `DATA: ${new Date().toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" })}`,
+    `DATA: ${new Date(opcoes.data || Date.now()).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" })}`,
     largura - 14, 28, { align: "right" }
   );
 
   let y = 42;
+  if (opcoes.reemissao) {
+    doc.setFontSize(9);
+    const aviso = doc.splitTextToSize("REEMISSÃO A PARTIR DOS DADOS REGISTRADOS. As fotografias do laudo original não foram arquivadas e não estão disponíveis nesta cópia.", largura - 28);
+    doc.text(aviso, 14, y); y += aviso.length * 4 + 6;
+  }
 
   y = linha(doc, y, "Informações do Aparelho");
   doc.autoTable({
@@ -225,11 +228,14 @@ export async function salvarLaudo({ dados, fotos, observacao, userId }) {
 
   const doc = gerarPdfLaudo(dados, fotos, observacao);
   const nome = `laudo_${dados.voucher}_${new Date().toISOString().slice(0, 10)}.pdf`;
-  doc.save(nome);
-
+  const laudoId = crypto.randomUUID();
+  const pdfPath = `${userId}/${laudoId}.pdf`;
+  const { error: errPdf } = await supabase.storage.from("triagem-laudos").upload(pdfPath, doc.output("blob"), { contentType: "application/pdf", upsert: false });
+  if (errPdf) throw new Error(`Não foi possível arquivar o PDF do laudo: ${errPdf.message}`);
   const agora = new Date().toISOString();
 
   const { error: errL } = await supabase.from("triagem_laudos").insert({
+    id:           laudoId,
     voucher:      dados.voucher,
     imei:         dados.imei || null,
     motivo:       dados.motivo || null,
@@ -237,7 +243,7 @@ export async function salvarLaudo({ dados, fotos, observacao, userId }) {
     defeitos:     (dados.defeitos || []).join("; ") || null,
     observacao:   observacao?.trim() || null,
     qtd_fotos:    preenchidas,
-    pdf_path:     null, // o PDF só é baixado pelo operador, não fica no Storage
+    pdf_path:     pdfPath, // PDF completo, incluindo fotos, no bucket privado
     criado_por:   userId,
   });
   if (errL) throw new Error(errL.message);
@@ -253,5 +259,6 @@ export async function salvarLaudo({ dados, fotos, observacao, userId }) {
     .eq("voucher", dados.voucher);
   if (errT) throw new Error(errT.message);
 
-  return { ok: true, arquivo: nome, fotos: preenchidas, status: STATUS_APOS_LAUDO };
+  doc.save(nome);
+  return { ok: true, arquivo: nome, pdfPath, fotos: preenchidas, status: STATUS_APOS_LAUDO };
 }
