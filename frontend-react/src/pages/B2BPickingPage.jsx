@@ -1,3 +1,4 @@
+import ReparoOperacaoPanel from "../components/ReparoOperacaoPanel.jsx";
 import { useState, useEffect, useRef } from "react";
 import {
   Search, CheckCircle, AlertTriangle, Download,
@@ -1938,6 +1939,7 @@ export default function B2BPickingPage({
         </div>
       ) : (
         <>
+          {aba === "picking" && <ReparoOperacaoPanel />}
           {aba === "picking"   && <TabPicking   pedidosIniciais={pedidos} onAtualizarSilencioso={atualizarSilencioso} />}
           {aba === "analise"   && <TabAnalise   pedidosIniciais={pedidos} onAtualizarSilencioso={atualizarSilencioso} itensAnalise={itensAnalise} />}
           {aba === "embalagem" && <TabEmbalagem pedidosIniciais={pedidos} onAtualizarSilencioso={atualizarSilencioso} />}

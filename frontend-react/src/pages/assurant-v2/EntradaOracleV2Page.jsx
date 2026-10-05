@@ -1,3 +1,4 @@
+import ReparoOperacaoPanel from "../../components/ReparoOperacaoPanel.jsx";
 import {
   useEffect,
   useMemo,
@@ -33,6 +34,7 @@ import {
 } from "../../services/entradaOracleService.js";
 
 const ABAS = [
+  { key: "reparo", label: "Reparos — Movimentação" },
   {
     key: "entrada",
     label: "Entrada no Oracle",
@@ -1895,6 +1897,7 @@ export default function EntradaOracleV2Page() {
         </div>
       </div>
 
+      {aba === "reparo" && <ReparoOperacaoPanel modo="oracle" />}
       {aba ===
         "entrada" && (
         <TabEntrada />
