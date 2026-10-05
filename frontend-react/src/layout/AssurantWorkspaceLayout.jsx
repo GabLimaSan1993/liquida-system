@@ -329,6 +329,7 @@ const MENU_GROUPS = [
   {
   label: "GESTÃO",
   items: [
+    { label: "Relatório de Estoque", icon: FileText, to: "/v2/assurant/gestao/relatorio-estoque", exact: true, enabled: true },
     { label: "Fechamento de Lojas", icon: FileText, to: "/v2/assurant/gestao/fechamento-lojas", exact: true, enabled: true },
     { label: "Gestão da Esteira", icon: Activity, to: "/v2/assurant/gestao/esteira", exact: true, enabled: true },
     {
@@ -937,7 +938,7 @@ function SidebarContent({
   mobile = false,
 }) {
   const podeVerRota = (to, allowedUserIds, liquidaOnly = false) => {
-    if (["/v2/assurant/gestao/esteira", "/v2/assurant/gestao/fechamento-lojas"].includes(to)) return profile?.telas_permitidas?.includes(to) === true;
+    if (["/v2/assurant/gestao/esteira", "/v2/assurant/gestao/fechamento-lojas", "/v2/assurant/gestao/relatorio-estoque"].includes(to)) return profile?.telas_permitidas?.includes(to) === true;
     if (liquidaOnly) {
       const email = String(profile?.email || "").toLowerCase();
       const identidadeLiquida =
