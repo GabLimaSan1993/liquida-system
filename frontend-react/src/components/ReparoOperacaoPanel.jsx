@@ -99,15 +99,15 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
     {loading && !detail && <p className="text-sm text-slate-500">Consultando reparos…</p>}
     {!detail && <>
       {oracle && <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={historico} onChange={e => setHistorico(e.target.checked)} />Mostrar movimentações concluídas</label>}
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{pedidosVisiveis.map(p => <button disabled={busy} onClick={() => abrir(p.id)} key={p.id} className="rounded-xl border border-slate-200 p-4 text-left hover:border-orange-400 disabled:opacity-50">
-        <p className="font-bold text-slate-800">{p.lote}</p><p className="mt-1 text-xs text-slate-500">{number(p.total)} aparelhos • {date(p.criado_em)}</p>
+      <div className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-3">{pedidosVisiveis.map(p => <button disabled={busy} onClick={() => abrir(p.id)} key={p.id} className="flex min-w-0 w-full flex-col items-start rounded-xl border border-slate-200 p-4 text-left whitespace-normal hover:border-orange-400 disabled:opacity-50">
+        <p className="w-full whitespace-normal font-bold leading-snug text-slate-800 [overflow-wrap:anywhere]">{p.lote}</p><p className="mt-1 text-xs text-slate-500">{number(p.total)} aparelhos • {date(p.criado_em)}</p>
         <p className="mt-3 text-sm">{oracle ? p.status === 'em_reparo' ? 'Movimentação confirmada' : 'Aguardando movimentação Oracle' : `${number(p.bipados)} bipados • ${number(p.bloqueados)} com pendência`}</p>
       </button>)}</div>
       {!loading && !pedidosVisiveis.length && <p className="py-3 text-sm text-slate-500">{oracle ? 'Nenhum reparo aguardando movimentação. Os pedidos entram aqui após concluir o picking.' : 'Nenhum picking de reparo em aberto.'}</p>}
     </>}
     {pedido && <>
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-orange-50 p-4">
-        <div><p className="font-bold">{pedido.lote}</p><p className="mt-1 text-sm">{number(pedido.bipados)} de {number(pedido.total)} bipados • {number(pedido.pendentes)} aguardando bipagem • {number(pedido.bloqueados)} com pendência</p></div>
+        <div className="min-w-0 flex-1"><p className="whitespace-normal font-bold [overflow-wrap:anywhere]">{pedido.lote}</p><p className="mt-1 text-sm">{number(pedido.bipados)} de {number(pedido.total)} bipados • {number(pedido.pendentes)} aguardando bipagem • {number(pedido.bloqueados)} com pendência</p></div>
         {!oracle && <button disabled={busy || pedido.bipados !== pedido.total || pedido.bloqueados > 0} onClick={() => executar('concluir')} className="flex items-center gap-2 rounded-xl bg-orange-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-40"><CheckCircle2 size={16} />Concluir picking</button>}
       </div>
       {!oracle && <form onSubmit={e => { e.preventDefault(); if (imei.trim()) executar('bipar', { p_imei: imei.trim() }); }} className="flex flex-wrap gap-2">
