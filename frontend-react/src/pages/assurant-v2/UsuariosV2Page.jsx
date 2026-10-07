@@ -45,6 +45,7 @@ const TELAS_V2 = [
     grupo: "B2C",
     telas: [
       { id: "/v2/assurant/b2c", label: "Pedidos" },
+      { id: "/v2/assurant/b2c/definicao-assurant", label: "Definição Assurant e relatório" },
       { id: "/v2/assurant/b2c/validacao-meli", label: "Validação e Testes MELI" },
       { id: "/v2/assurant/b2c/embalagem", label: "Embalagem" },
       { id: "/v2/assurant/b2c/expedicao", label: "Expedição" },

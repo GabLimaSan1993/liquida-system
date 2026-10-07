@@ -3,6 +3,7 @@ import { Plus, X, Shield } from "lucide-react";
 import { fetchAllProfiles, createUser, updateUserPermissions } from "../services/authService";
 
 const TELAS = [
+  { id: "/v2/assurant/b2c/definicao-assurant", label: "B2C — Definição Assurant e relatório", grupo: "Assurant V2 — B2C" },
   { id: "/v2/assurant/b2c/validacao-meli", label: "B2C — Validação e Testes MELI", grupo: "Assurant V2 — B2C" },
   { id: "/v2/assurant/gestao/relatorio-estoque", label: "Relatório de Estoque", grupo: "Assurant V2 — Gestão" },
   { id: "/v2/assurant/gestao/fechamento-lojas", label: "Fechamento de Lojas — Cosmética", grupo: "Assurant V2 — Gestão" },

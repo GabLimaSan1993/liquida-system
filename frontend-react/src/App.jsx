@@ -98,6 +98,7 @@ import ReparosClimatizacaoV2Page from "./pages/linha-branca-v2/ReparosClimatizac
 import BancadaTestesClimatizacaoV2Page from "./pages/linha-branca-v2/BancadaTestesClimatizacaoV2Page.jsx";
 
 import SistemasPage from "./pages/SistemasPage.jsx";
+import DefinicaoAssurantV2Page from "./pages/assurant-v2/DefinicaoAssurantV2Page.jsx";
 import ValidacaoMeliV2Page from "./pages/assurant-v2/ValidacaoMeliV2Page.jsx";
 
 import RefrigeracaoWorkspaceLayout from "./layout/RefrigeracaoWorkspaceLayout.jsx";
@@ -625,6 +626,7 @@ export default function App() {
 
 
         {/* B2C */}
+        <Route path="b2c/definicao-assurant" element={<ProtectedRoute tela="/v2/assurant/b2c/definicao-assurant"><DefinicaoAssurantV2Page /></ProtectedRoute>} />
         <Route path="b2c/validacao-meli" element={<ProtectedRoute tela="/v2/assurant/b2c/validacao-meli"><ValidacaoMeliV2Page /></ProtectedRoute>} />
 
         <Route

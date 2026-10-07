@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Ban,
@@ -16,6 +16,9 @@ import {
   X,
   Zap,
 } from "lucide-react";
+
+import { Link } from "react-router-dom";
+import { aprovarDefinicaoAssurant, carregarCasosAssurant, consultarOpcoesAssurant, DEFINICAO_ASSURANT_ROUTE, encaminharDefinicaoAssurant } from "../../services/definicaoAssurantService.js";
 
 import { useAuth } from "../../AuthContext.jsx";
 import {
@@ -92,8 +95,17 @@ function RelationPill({ relacao }) {
   );
 }
 
-export default function DefinicaoProdutoAssurantV2() {
-  const { user } = useAuth();
+export default function DefinicaoProdutoAssurantV2({ etapa = "liquida" }) {
+  const { user, profile, hasAccess } = useAuth();
+  const liquida = Boolean(profile?.is_master) || String(profile?.email || user?.email || "").toLowerCase().endsWith("@liquidapreco.com.br");
+  const podeDecidir = etapa === "assurant" ? hasAccess(DEFINICAO_ASSURANT_ROUTE) : liquida;
+  const [encaminhar, setEncaminhar] = useState(null);
+  const [motivoEnvio, setMotivoEnvio] = useState("");
+  const [enviando, setEnviando] = useState(false);
+  const [observacoes, setObservacoes] = useState("");
+  const [filtroCor, setFiltroCor] = useState("");
+  const [filtroGrade, setFiltroGrade] = useState("");
+  const consultaId = useRef(0);
   const [pedidos, setPedidos] = useState([]);
   const [concluidos, setConcluidos] = useState([]);
   const [cancelados, setCancelados] = useState([]);
@@ -113,16 +125,17 @@ export default function DefinicaoProdutoAssurantV2() {
   const [cancelar, setCancelar] = useState(null);
   const [cancelando, setCancelando] = useState(false);
 
-  async function carregar() {
+  const carregar = useCallback(async () => {
     setLoading(true);
     setErro("");
     try {
-      const [p, c, x] = await Promise.all([
-        listarPedidosAguardandoDefinicao(),
-        listarDefinicaoConcluidos(),
-        listarDefinicaoCancelados(),
+      const [p, c, x, casos] = await Promise.all([
+        listarPedidosAguardandoDefinicao(etapa),
+        listarDefinicaoConcluidos(etapa),
+        listarDefinicaoCancelados(etapa),
+        etapa === "assurant" ? carregarCasosAssurant() : Promise.resolve(new Map()),
       ]);
-      setPedidos(p || []);
+      setPedidos((p || []).map(pedido => ({ ...pedido, caso_assurant: casos.get(pedido.id) })));
       setConcluidos(c || []);
       setCancelados(x || []);
     } catch (e) {
@@ -130,11 +143,11 @@ export default function DefinicaoProdutoAssurantV2() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [etapa]);
 
   useEffect(() => {
-    carregar();
-  }, []);
+    Promise.resolve().then(carregar);
+  }, [carregar]);
 
   async function consultarSku(valor = sku, pedidoAtual = pedido) {
     const q = String(valor || "").trim();
@@ -143,19 +156,20 @@ export default function DefinicaoProdutoAssurantV2() {
       return;
     }
 
+    const requestId = ++consultaId.current;
     setBuscando(true);
+    setFiltroCor(""); setFiltroGrade("");
     setErro("");
     setOpcao(null);
     setCienteUpgrade(false);
 
     try {
-      const data = await buscarOpcoesDefinicao(q, pedidoAtual);
-      setConsulta(data);
+      const data = etapa === "assurant" ? await consultarOpcoesAssurant(pedidoAtual.id) : await buscarOpcoesDefinicao(q, pedidoAtual);
+      if (requestId === consultaId.current) setConsulta(data);
     } catch (e) {
-      setConsulta(null);
-      setErro(e.message || "Falha ao consultar opções.");
+      if (requestId === consultaId.current) { setConsulta(null); setErro(e.message || "Falha ao consultar opções."); }
     } finally {
-      setBuscando(false);
+      if (requestId === consultaId.current) setBuscando(false);
     }
   }
 
@@ -166,11 +180,13 @@ export default function DefinicaoProdutoAssurantV2() {
     setConsulta(null);
     setOpcao(null);
     setCienteUpgrade(false);
-    setTimeout(() => consultarSku(base, p), 0);
+    setObservacoes("");
+    consultarSku(base, p);
   }
 
   function fechar() {
     if (salvando) return;
+    consultaId.current += 1;
     setPedido(null);
     setConsulta(null);
     setOpcao(null);
@@ -178,7 +194,8 @@ export default function DefinicaoProdutoAssurantV2() {
   }
 
   async function confirmar() {
-    if (!pedido || !opcao?.fifo) return;
+    if (!pedido || !opcao?.fifo || !podeDecidir) return;
+    if (etapa === "liquida" && opcao.relacao === "upgrade") { setErro("Encaminhe à Assurant para aprovar o upgrade."); return; }
 
     if (opcao.relacao === "downgrade") {
       setFeedback({
@@ -200,7 +217,7 @@ export default function DefinicaoProdutoAssurantV2() {
     setErro("");
 
     try {
-      const res = await aprovarDefinicaoProduto(
+      const res = etapa === "assurant" ? await aprovarDefinicaoAssurant(pedido.id, opcao, cienteUpgrade, observacoes) : await aprovarDefinicaoProduto(
         pedido.id,
         {
           sku: consulta.skuBase,
@@ -223,7 +240,7 @@ export default function DefinicaoProdutoAssurantV2() {
             : `Definição aprovada. IMEI FIFO ${res.imei} alocado em ${res.grade} · ${res.cor}.`,
       });
 
-      fechar();
+      setPedido(null); setConsulta(null); setOpcao(null);
       await carregar();
     } catch (e) {
       const msg = e.message || "Não foi possível concluir a definição.";
@@ -263,6 +280,18 @@ export default function DefinicaoProdutoAssurantV2() {
     }
   }
 
+  async function confirmarEncaminhamento() {
+    if (!encaminhar || !motivoEnvio.trim() || enviando) return;
+    setEnviando(true); setErro("");
+    try {
+      await encaminharDefinicaoAssurant(encaminhar.id, motivoEnvio);
+      setFeedback({ tipo: "ok", msg: `Pedido #${encaminhar.id_anymarket} encaminhado à fila da Assurant, com motivo e responsável registrados.` });
+      setEncaminhar(null); setMotivoEnvio("");
+      await carregar();
+    } catch (e) { setErro(e.message); }
+    finally { setEnviando(false); }
+  }
+
   const lista = useMemo(() => {
     if (aba === "concluidos") return concluidos;
     if (aba === "cancelados") return cancelados;
@@ -277,11 +306,11 @@ export default function DefinicaoProdutoAssurantV2() {
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-[#7F2D92]" />
               <h3 className="text-sm font-black text-slate-800">
-                Aguardando Definição · Assurant
+                Aguardando Definição · {etapa === "assurant" ? "Assurant" : "Liquida"}
               </h3>
             </div>
             <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-500">
-              A Assurant escolhe a alternativa comercial. Itens livres seguem direto para o B2C; itens vinculados a B2B, Troca ou Venda Funcionário geram uma solicitação para a Liquida Preço autorizar a transferência.
+              {etapa === "assurant" ? "Alternativas do mesmo modelo e capacidade, separadas por cor e grade. A aprovação reserva o primeiro FIFO da opção; vínculos existentes exigem transferência pela Liquida." : "Primeira tentativa de alocação pela Liquida. Quando não houver produto para atender o pedido, encaminhe à Assurant com o motivo. Upgrades são aprovados na fila da Assurant."}
             </p>
           </div>
           <button
@@ -295,6 +324,8 @@ export default function DefinicaoProdutoAssurantV2() {
         </div>
       </Card>
 
+      {etapa === "liquida" && hasAccess(DEFINICAO_ASSURANT_ROUTE) && <Link to={DEFINICAO_ASSURANT_ROUTE} className="inline-flex rounded-xl bg-violet-50 px-4 py-2 text-sm font-bold text-violet-800">Abrir fila da Assurant e relatório</Link>}
+      {etapa === "liquida" && !podeDecidir && <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800">A Liquida realiza a primeira tentativa. Os pedidos encaminhados aparecem na fila separada da Assurant.</p>}
       {erro && (
         <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-bold text-rose-700">
           {erro}
@@ -314,7 +345,7 @@ export default function DefinicaoProdutoAssurantV2() {
         </div>
       )}
 
-      <div className="flex gap-1 border-b border-slate-200">
+      <div className="flex flex-wrap gap-1 border-b border-slate-200">
         {[
           ["pendentes", "Pendentes", pedidos.length],
           ["concluidos", "Concluídos", concluidos.length],
@@ -372,6 +403,7 @@ export default function DefinicaoProdutoAssurantV2() {
                       </span>
                     )}
                   </div>
+                  {p.caso_assurant && <div className="mt-2 rounded-xl bg-violet-50 p-3 text-xs text-violet-900"><strong>Encaminhado por {p.caso_assurant.encaminhado_nome}</strong> · {fmtData(p.caso_assurant.encaminhado_em)}<p className="mt-1 whitespace-pre-wrap">{p.caso_assurant.motivo}</p></div>}
                   {p.definicao_status === "aguardando_desvinculacao" && (
                     <div className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-orange-50 px-2.5 py-1.5 text-[10px] font-black text-orange-700 ring-1 ring-orange-200">
                       <Clock3 className="h-3 w-3" />
@@ -385,13 +417,13 @@ export default function DefinicaoProdutoAssurantV2() {
                   )}
                 </div>
 
-                {aba === "pendentes" && (
+                {aba === "pendentes" && podeDecidir && (
                   p.definicao_status === "aguardando_desvinculacao" ? (
                     <div className="rounded-xl bg-orange-50 px-3 py-2 text-xs font-black text-orange-700 ring-1 ring-orange-200">
                       Liquida Preço
                     </div>
                   ) : (
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
                         onClick={() => abrir(p)}
@@ -400,14 +432,15 @@ export default function DefinicaoProdutoAssurantV2() {
                         <CornerUpLeft className="h-3.5 w-3.5" />
                         Definir
                       </button>
-                      <button
+                      {etapa === "liquida" && <button type="button" onClick={() => { setEncaminhar(p); setMotivoEnvio(""); }} className="rounded-xl bg-amber-50 px-3 py-2 text-xs font-black text-amber-800 ring-1 ring-amber-200">Encaminhar à Assurant</button>}
+                      {etapa === "liquida" && <button
                         type="button"
                         onClick={() => setCancelar(p)}
                         className="inline-flex items-center gap-1.5 rounded-xl bg-rose-50 px-3 py-2 text-xs font-black text-rose-700 ring-1 ring-rose-200"
                       >
                         <Ban className="h-3.5 w-3.5" />
                         Cancelado
-                      </button>
+                      </button>}
                     </div>
                   )
                 )}
@@ -423,13 +456,13 @@ export default function DefinicaoProdutoAssurantV2() {
           onMouseDown={fechar}
         >
           <div
-            className="max-h-[92vh] w-full max-w-4xl overflow-auto rounded-2xl bg-white shadow-2xl"
+            role="dialog" aria-modal="true" aria-label="Definição de produto" className="max-h-[92vh] w-full max-w-4xl overflow-auto rounded-2xl bg-white shadow-2xl"
             onMouseDown={(e) => e.stopPropagation()}
           >
             <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-100 bg-white px-5 py-4">
               <div>
                 <h3 className="text-base font-black text-slate-900">
-                  Definição pela Assurant
+                  Definição pela {etapa === "assurant" ? "Assurant" : "Liquida"}
                 </h3>
                 <p className="mt-0.5 text-xs text-slate-500">
                   Pedido #{pedido.id_anymarket} · grade comprada:{" "}
@@ -466,6 +499,9 @@ export default function DefinicaoProdutoAssurantV2() {
                   <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" />
                   <input
                     value={sku}
+                    readOnly={etapa === "assurant"}
+                    disabled={salvando || buscando}
+                    aria-label="SKU do produto"
                     onChange={(e) => setSku(e.target.value)}
                     placeholder="Digite o SKU substituto"
                     className="h-10 w-full rounded-xl border border-slate-200 pl-9 pr-3 text-sm font-semibold outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-100"
@@ -477,7 +513,7 @@ export default function DefinicaoProdutoAssurantV2() {
                   className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 text-xs font-black text-white disabled:opacity-40"
                 >
                   {buscando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-                  Consultar estoque
+                  {etapa === "assurant" ? "Atualizar alternativas" : "Consultar estoque"}
                 </button>
               </form>
 
@@ -493,6 +529,7 @@ export default function DefinicaoProdutoAssurantV2() {
                 </div>
               )}
 
+              {etapa === "assurant" && <p className="text-xs text-slate-500">O modelo e a capacidade do pedido são preservados. As variantes de cor do catálogo aparecem com seu próprio SKU.</p>}
               {consulta?.existe && (
                 <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-2">
@@ -566,7 +603,7 @@ export default function DefinicaoProdutoAssurantV2() {
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                     <div>
                       <div className="text-sm font-black text-slate-800">
-                        Opções de atendimento
+                        Opções por cor e grade
                       </div>
                       <div className="text-xs text-slate-400">
                         {consulta.modelo || consulta.skuBase} · itens livres e vínculos operacionais elegíveis
@@ -577,13 +614,14 @@ export default function DefinicaoProdutoAssurantV2() {
                     </div>
                   </div>
 
+                  <div className="mb-3 flex flex-wrap gap-3"><label className="text-xs font-bold text-slate-600">Cor<select value={filtroCor} onChange={e => { setFiltroCor(e.target.value); setOpcao(null); setCienteUpgrade(false); }} className="ml-2 rounded-lg border border-slate-200 p-2"><option value="">Todas as cores</option>{[...new Set(consulta.opcoes.map(o => o.cor))].map(c => <option key={c}>{c}</option>)}</select></label><label className="text-xs font-bold text-slate-600">Grade<select value={filtroGrade} onChange={e => { setFiltroGrade(e.target.value); setOpcao(null); setCienteUpgrade(false); }} className="ml-2 rounded-lg border border-slate-200 p-2"><option value="">Todas as grades</option>{[...new Set(consulta.opcoes.map(o => o.grade))].map(g => <option key={g}>{g}</option>)}</select></label></div>
                   <div className="grid gap-3 md:grid-cols-2">
-                    {consulta.opcoes.map((o) => {
+                    {consulta.opcoes.filter(o => (!filtroCor || o.cor === filtroCor) && (!filtroGrade || o.grade === filtroGrade)).map((o) => {
                       const selecionada =
                         opcao?.grade === o.grade &&
                         opcao?.cor === o.cor &&
                         opcao?.fifo?.imei === o.fifo?.imei;
-                      const bloqueada = o.relacao === "downgrade";
+                      const bloqueada = o.relacao === "downgrade" || (etapa === "liquida" && o.relacao === "upgrade") || salvando || buscando;
                       const vinculada = Boolean(o.vinculo_tipo);
 
                       return (
@@ -634,6 +672,7 @@ export default function DefinicaoProdutoAssurantV2() {
                             <span className="text-sm font-black text-slate-800">{o.cor}</span>
                           </div>
 
+                          <p className="mt-2 text-xs text-slate-500">{o.sku} · {o.capacidade || o.fifo?.capacidade || ""}</p>
                           <div className="mt-3 rounded-xl bg-slate-50 p-3">
                             <div className="text-[10px] font-black uppercase text-slate-400">
                               IMEI selecionado · FIFO
@@ -659,7 +698,7 @@ export default function DefinicaoProdutoAssurantV2() {
 
                           {bloqueada && (
                             <div className="mt-2 text-[10px] font-bold text-rose-600">
-                              Grade inferior ao produto comprado — não permitida.
+                              {o.relacao === "upgrade" ? "Encaminhe à Assurant para aprovar o upgrade." : "Grade inferior ao produto comprado — não permitida."}
                             </div>
                           )}
                         </button>
@@ -685,6 +724,7 @@ export default function DefinicaoProdutoAssurantV2() {
                         <input
                           type="checkbox"
                           checked={cienteUpgrade}
+                          disabled={salvando || buscando}
                           onChange={(e) => setCienteUpgrade(e.target.checked)}
                           className="mt-0.5 h-4 w-4 rounded border-fuchsia-300 text-fuchsia-700"
                         />
@@ -704,7 +744,7 @@ export default function DefinicaoProdutoAssurantV2() {
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <span className="font-mono text-xs font-black text-slate-700">
-                      {consulta.skuBase}
+                      {opcao.sku}
                     </span>
                     <ChevronRight className="h-3.5 w-3.5 text-slate-300" />
                     <GradePill grade={opcao.grade} outlet={opcao.outlet} />
@@ -719,6 +759,7 @@ export default function DefinicaoProdutoAssurantV2() {
                 </div>
               )}
 
+              {etapa === "assurant" && <label className="block text-xs font-bold text-slate-600">Observações da decisão<textarea disabled={salvando} value={observacoes} onChange={e => setObservacoes(e.target.value)} rows={2} className="mt-1 block w-full rounded-xl border border-slate-200 p-3 text-sm" /></label>}
               <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4">
                 <button
                   type="button"
@@ -731,8 +772,9 @@ export default function DefinicaoProdutoAssurantV2() {
                   type="button"
                   onClick={confirmar}
                   disabled={
-                    salvando ||
+                    salvando || buscando || !podeDecidir ||
                     !opcao ||
+                    (etapa === "liquida" && opcao.relacao === "upgrade") ||
                     opcao.relacao === "downgrade" ||
                     (opcao.relacao === "upgrade" && !cienteUpgrade)
                   }
@@ -746,6 +788,8 @@ export default function DefinicaoProdutoAssurantV2() {
           </div>
         </div>
       )}
+
+      {encaminhar && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4"><div role="dialog" aria-modal="true" aria-label="Encaminhar à Assurant" className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl"><h3 className="text-lg font-black">Encaminhar à Assurant</h3><p className="mt-1 text-sm text-slate-500">Pedido #{encaminhar.id_anymarket} · {encaminhar.titulo_produto}</p><label className="mt-4 block text-xs font-bold text-slate-600">Motivo da impossibilidade de alocação<textarea autoFocus disabled={enviando} value={motivoEnvio} onChange={e => setMotivoEnvio(e.target.value)} rows={4} className="mt-1 block w-full rounded-xl border border-slate-300 p-3 text-sm" placeholder="Descreva o que foi conferido e por que o pedido precisa de definição da Assurant." /></label>{erro && <p role="alert" className="mt-3 text-sm text-rose-700">{erro}</p>}<div className="mt-4 flex flex-wrap justify-end gap-2"><button type="button" disabled={enviando} onClick={() => setEncaminhar(null)} className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-bold">Voltar</button><button type="button" disabled={enviando || !motivoEnvio.trim()} onClick={confirmarEncaminhamento} className="rounded-xl bg-violet-900 px-4 py-2 text-sm font-bold text-white disabled:opacity-40">{enviando ? 'Encaminhando…' : 'Confirmar encaminhamento'}</button></div></div></div>}
 
       {cancelar && (
         <div

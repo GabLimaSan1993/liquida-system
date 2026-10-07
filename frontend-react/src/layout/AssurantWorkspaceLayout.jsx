@@ -206,6 +206,7 @@ const MENU_GROUPS = [
       to: "/v2/assurant/b2c",
       exact: true,
     },
+    { label: "Definição — Assurant", icon: ShieldCheck, to: "/v2/assurant/b2c/definicao-assurant", exact: true },
     { label: "Validação e Testes MELI", icon: ShieldCheck, to: "/v2/assurant/b2c/validacao-meli", exact: true },
 
     {

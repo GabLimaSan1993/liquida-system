@@ -1740,13 +1740,15 @@ export async function resolverAnalise(
 // separação manual: gera um PDF com os dados do pedido (para a Assurant indicar um
 // substituto) e fica em "aguardando_definicao_produto" até alguém devolvê-lo ao fluxo.
 
-export async function listarPedidosAguardandoDefinicao() {
-  const { data, error } = await supabase
+export async function listarPedidosAguardandoDefinicao(etapa = null) {
+  let query = supabase
     .from("pedidos_b2c")
     .select("*")
     .eq("status", "aguardando_definicao_produto")
     .or("definicao_status.is.null,definicao_status.eq.pendente,definicao_status.eq.aguardando_desvinculacao")
     .order("definicao_solicitada_em", { ascending: true });
+  if (etapa) query = query.eq("definicao_etapa", etapa);
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
   return data || [];
 }
@@ -1826,23 +1828,27 @@ export async function cancelarPedidoDefinicao(pedidoId, userId) {
 
 // Histórico: pedidos que foram DEFINIDOS (voltaram ao fluxo). Seguem a vida normal no
 // picking/faturamento, mas ficam registrados aqui pela coluna definicao_status.
-export async function listarDefinicaoConcluidos() {
-  const { data, error } = await supabase
+export async function listarDefinicaoConcluidos(etapa = null) {
+  let query = supabase
     .from("pedidos_b2c")
     .select("*")
     .eq("definicao_status", "concluido")
     .order("definicao_resolvido_em", { ascending: false });
+  if (etapa) query = query.eq("definicao_etapa", etapa);
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
   return data || [];
 }
 
 // Histórico: pedidos cancelados pela tela de definição.
-export async function listarDefinicaoCancelados() {
-  const { data, error } = await supabase
+export async function listarDefinicaoCancelados(etapa = null) {
+  let query = supabase
     .from("pedidos_b2c")
     .select("*")
     .eq("definicao_status", "cancelado")
     .order("definicao_resolvido_em", { ascending: false });
+  if (etapa) query = query.eq("definicao_etapa", etapa);
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
   return data || [];
 }
