@@ -77,6 +77,7 @@ function StatusBadge({ status }) {
     alocado:             { label: "Alocado",             cls: "bg-blue-50 text-blue-700 ring-blue-200"    },
     em_picking:          { label: "Em Picking",          cls: "bg-yellow-50 text-yellow-700 ring-yellow-200" },
     em_analise:          { label: "Em Análise",          cls: "bg-orange-50 text-orange-700 ring-orange-200" },
+    aguardando_validacao_meli: { label: "Aguardando validação MELI", cls: "bg-amber-50 text-amber-800 ring-amber-200" },
     embalado:            { label: "Embalado",            cls: "bg-purple-50 text-purple-700 ring-purple-200" },
     faturado:            { label: "Faturado",            cls: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
     concluido:           { label: "Concluído",           cls: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
@@ -510,8 +511,8 @@ function TabPicking() {
     if (!pedido) return;
     const res = await registrarBipagem(pedido.id, pedido.imei_alocado, user.id);
     if (res.ok) {
-      setFeedback({ tipo: "ok", msg: `✓ Pedido #${pedido.id_anymarket} bipado!` });
-      setPedidos(prev => prev.map(p => p.id === pedido.id ? { ...p, status: "embalado", bipado_em: new Date().toISOString() } : p));
+      setFeedback({ tipo: "ok", msg: res.status === "aguardando_validacao_meli" ? `✓ Pedido #${pedido.id_anymarket} separado — encaminhe para Validação e Testes MELI.` : `✓ Pedido #${pedido.id_anymarket} bipado!` });
+      setPedidos(prev => prev.map(p => p.id === pedido.id ? { ...p, status: res.status || "embalado", bipado_em: new Date().toISOString() } : p));
     } else {
       setFeedback({ tipo: "erro", msg: res.erro });
     }
@@ -609,7 +610,7 @@ function TabPicking() {
     ruasSel.length === 0 ||
     ruasSel.some(r => p.local_estoque?.match(new RegExp(`^RU?A\\s+${r.replace("RUA ", "")}\\b`, "i")))
   );
-  const bipados    = pedidos.filter(p => ["embalado", "faturado", "concluido"].includes(p.status)).length;
+  const bipados    = pedidos.filter(p => ["aguardando_validacao_meli", "embalado", "faturado", "concluido"].includes(p.status)).length;
   const emAnalise  = pedidos.filter(p => p.status === "em_analise").length;
   const pendentes  = pedidos.filter(p => p.status === "em_picking").length;
   const pct        = totalGrupo > 0 ? Math.round((bipados / totalGrupo) * 100) : 0;
@@ -871,7 +872,7 @@ function TabPicking() {
           )}
           <div className="space-y-2">
             {pedidosFiltrados.map(p => {
-              const concluido = ["embalado", "faturado", "concluido"].includes(p.status);
+              const concluido = ["aguardando_validacao_meli", "embalado", "faturado", "concluido"].includes(p.status);
               return (
                 <div key={p.id} className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 ring-1 ${
                   concluido       ? "bg-emerald-50 ring-emerald-200 opacity-60" :

@@ -45,6 +45,7 @@ const TELAS_V2 = [
     grupo: "B2C",
     telas: [
       { id: "/v2/assurant/b2c", label: "Pedidos" },
+      { id: "/v2/assurant/b2c/validacao-meli", label: "Validação e Testes MELI" },
       { id: "/v2/assurant/b2c/embalagem", label: "Embalagem" },
       { id: "/v2/assurant/b2c/expedicao", label: "Expedição" },
       { id: "/v2/assurant/b2c/etiquetas", label: "Etiquetas" },
@@ -349,8 +350,8 @@ function UsuarioExpandido({ usuario, onSaved }) {
                   >
                     <input
                       type="checkbox"
-                      checked={isMaster || telas.includes(tela.id)}
-                      disabled={isMaster}
+                      checked={(isMaster && tela.id !== "/v2/assurant/b2c/validacao-meli") || telas.includes(tela.id)}
+                      disabled={isMaster && tela.id !== "/v2/assurant/b2c/validacao-meli"}
                       onChange={() => toggleTela(tela.id)}
                     />
 

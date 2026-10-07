@@ -3,6 +3,7 @@ import { Plus, X, Shield } from "lucide-react";
 import { fetchAllProfiles, createUser, updateUserPermissions } from "../services/authService";
 
 const TELAS = [
+  { id: "/v2/assurant/b2c/validacao-meli", label: "B2C — Validação e Testes MELI", grupo: "Assurant V2 — B2C" },
   { id: "/v2/assurant/gestao/relatorio-estoque", label: "Relatório de Estoque", grupo: "Assurant V2 — Gestão" },
   { id: "/v2/assurant/gestao/fechamento-lojas", label: "Fechamento de Lojas — Cosmética", grupo: "Assurant V2 — Gestão" },
   { id: "/v2/assurant/gestao/esteira", label: "Gestão da Esteira — Trade-in até Armazenagem", grupo: "Assurant V2 — Gestão" },
@@ -275,6 +276,7 @@ function ModalNovoUsuario({ onSave, onCancel }) {
             </div>
           </label>
 
+          {isMaster && <label className="flex items-center gap-2 text-sm font-semibold text-purple-700"><input type="checkbox" checked={telas.includes("/v2/assurant/b2c/validacao-meli")} onChange={e => setTelas(atual => e.target.checked ? [...atual, "/v2/assurant/b2c/validacao-meli"] : atual.filter(t => t !== "/v2/assurant/b2c/validacao-meli"))} />Validação e Testes MELI (permissão explícita)</label>}
           {!isMaster && (
             <>
               <div>
@@ -363,6 +365,7 @@ function ModalPermissoes({ usuario, onSave, onCancel }) {
             </div>
           </label>
 
+          {isMaster && <label className="flex items-center gap-2 text-sm font-semibold text-purple-700"><input type="checkbox" checked={telas.includes("/v2/assurant/b2c/validacao-meli")} onChange={e => setTelas(atual => e.target.checked ? [...atual, "/v2/assurant/b2c/validacao-meli"] : atual.filter(t => t !== "/v2/assurant/b2c/validacao-meli"))} />Validação e Testes MELI (permissão explícita)</label>}
           {!isMaster && (
             <>
               <div>

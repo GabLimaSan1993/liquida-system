@@ -68,6 +68,7 @@ export async function biparNaMesa(imeiDigitado, mesa, userId, userNome) {
   const { pedido, erro } = await acharPedidoPorCodigo(imei);
   if (erro) return { ok: false, erro };
 
+  if (pedido.status === "aguardando_validacao_meli") return { ok: false, erro: "Aparelho aguardando Validação e Testes MELI. Conclua a validação antes da embalagem." };
   // Entra na mesa a partir do "embalado" (bipado no picking)
   if (!["embalado", "faturado", "concluido"].includes(pedido.status)) {
     return { ok: false, erro: "Aparelho ainda não foi bipado no picking." };

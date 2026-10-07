@@ -1,3 +1,4 @@
+import { filtrarMeliFaturaveis } from "./meliValidacaoService.js";
 import { supabase } from "../lib/supabase";
 import * as XLSX from "xlsx";
 
@@ -941,7 +942,8 @@ export async function registrarBipagem(pedidoId, imeiDigitado, userId) {
     .single();
 
   if (error || !pedido) return { ok: false, erro: "Pedido não encontrado." };
-  if (pedido.status === "embalado") return { ok: false, erro: "Pedido já bipado." };
+  if (["aguardando_validacao_meli", "embalado", "faturado", "concluido"].includes(pedido.status)) return { ok: false, erro: "Pedido já bipado." };
+  if (pedido.status !== "em_picking") return { ok: false, erro: "Pedido não está em picking." };
   if (pedido.imei_alocado !== imei) {
     return { ok: false, erro: `IMEI incorreto. Esperado: ${pedido.imei_alocado}` };
   }
@@ -958,7 +960,7 @@ export async function registrarBipagem(pedidoId, imeiDigitado, userId) {
     return { ok: false, erro: "Pedido tem outro item em análise — resolva antes de bipar este." };
   }
 
-  const { error: errUpdate } = await supabase
+  const { data: atualizado, error: errUpdate } = await supabase
     .from("pedidos_b2c")
     .update({
       status:        "embalado",
@@ -969,7 +971,7 @@ export async function registrarBipagem(pedidoId, imeiDigitado, userId) {
       embalado_por:  userId,
       atualizado_em: new Date().toISOString(),
     })
-    .eq("id", pedidoId);
+    .eq("id", pedidoId).eq("status", "em_picking").select("id,status").single();
 
   if (errUpdate) return { ok: false, erro: errUpdate.message };
 
@@ -977,7 +979,7 @@ export async function registrarBipagem(pedidoId, imeiDigitado, userId) {
     await verificarConclusaoGrupo(pedido.grupo_id);
   }
 
-  return { ok: true, pedido };
+  return { ok: true, pedido, status: atualizado.status };
 }
 
 async function verificarConclusaoGrupo(grupoId) {
@@ -2487,7 +2489,7 @@ export async function listarGruposFaturamento() {
   const ids = lista.map(g => g.id);
   const { data: pedidos } = await supabase
     .from("pedidos_b2c")
-    .select("grupo_id, status, marketplace, total_do_pedido, embalado_em")
+    .select("id_anymarket, grupo_id, status, marketplace, total_do_pedido, embalado_em")
     .in("grupo_id", ids);
 
   // Histórico de downloads de cada grupo (todos os downloads, mais recente primeiro)
@@ -2502,8 +2504,9 @@ export async function listarGruposFaturamento() {
     (dlPorGrupo[d.grupo_id] ||= []).push(d);
   });
 
+  const pedidosFaturaveis = await filtrarMeliFaturaveis(pedidos || []);
   const cont = {};
-  (pedidos || []).forEach(p => {
+  pedidosFaturaveis.forEach(p => {
     if (!cont[p.grupo_id]) cont[p.grupo_id] = { aFaturar: 0, emAnalise: 0, emPicking: 0, faturados: 0, valorAFaturar: 0, mp: {} };
     const c = cont[p.grupo_id];
     if (p.status === "embalado") {
@@ -2796,13 +2799,14 @@ export async function gerarPlanilhaFaturamentoGrupo(grupoId, userId, userNome) {
 
   // Sem trava: qualquer usuário pode baixar (e rebaixar) a planilha do grupo.
   // Cada download é registrado em pedidos_b2c_downloads para o histórico.
-  const { data: pedidos, error } = await supabase
+  const { data: candidatos, error } = await supabase
     .from("pedidos_b2c")
     .select("*")
     .eq("grupo_id", grupoId)
     .eq("status", "embalado")
     .order("id_anymarket", { ascending: true });
   if (error) throw new Error(error.message);
+  const pedidos = await filtrarMeliFaturaveis(candidatos || []);
   if (!pedidos?.length) return { ok: false, erro: "Nenhum pedido pronto para faturar neste grupo." };
 
   // O voucher fica na triagem, não no pedido — busca pelo IMEI de cada linha.

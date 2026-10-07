@@ -71,6 +71,7 @@ const ACTIVE_B2C_STATUSES = [
   "alocado",
   "em_picking",
   "em_analise",
+  "aguardando_validacao_meli",
   "embalado",
 ];
 
@@ -205,6 +206,7 @@ const MENU_GROUPS = [
       to: "/v2/assurant/b2c",
       exact: true,
     },
+    { label: "Validação e Testes MELI", icon: ShieldCheck, to: "/v2/assurant/b2c/validacao-meli", exact: true },
 
     {
       label: "Embalagem",
@@ -938,7 +940,7 @@ function SidebarContent({
   mobile = false,
 }) {
   const podeVerRota = (to, allowedUserIds, liquidaOnly = false) => {
-    if (["/v2/assurant/gestao/esteira", "/v2/assurant/gestao/fechamento-lojas", "/v2/assurant/gestao/relatorio-estoque"].includes(to)) return profile?.telas_permitidas?.includes(to) === true;
+    if (["/v2/assurant/b2c/validacao-meli", "/v2/assurant/gestao/esteira", "/v2/assurant/gestao/fechamento-lojas", "/v2/assurant/gestao/relatorio-estoque"].includes(to)) return profile?.telas_permitidas?.includes(to) === true;
     if (liquidaOnly) {
       const email = String(profile?.email || "").toLowerCase();
       const identidadeLiquida =
