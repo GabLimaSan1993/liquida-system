@@ -315,47 +315,48 @@ export async function reverterNaoLocalizado(itemId) {
 }
 
 export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
-  const { data: exportacoes } = await supabase.from("b2b_exportacoes").select("*").eq("pedido_id", pedidoId).order("exportado_em", { ascending: false });
-  const ultimaExportacao = exportacoes?.[0] || null;
+  // Cada download contém a situação atual, inclusive itens já exportados.
+  const { count: totalExportacoes, error: errHistorico } = await supabase
+    .from("b2b_exportacoes")
+    .select("id", { count: "exact", head: true })
+    .eq("pedido_id", pedidoId);
+  if (errHistorico) throw new Error(errHistorico.message);
 
-  let idsJaExportados = new Set();
-  if (exportacoes?.length > 0) {
-    const { data: jaExportados } = await supabase.from("b2b_itens_exportados").select("item_id").in("exportacao_id", exportacoes.map(e => e.id));
-    (jaExportados || []).forEach(e => idsJaExportados.add(e.item_id));
+  const itensBipados = [];
+  const PAGE_SIZE = 1000;
+  for (let offset = 0; ; offset += PAGE_SIZE) {
+    const { data: pagina, error: errItens } = await supabase
+      .from("b2b_itens").select("*")
+      .eq("pedido_id", pedidoId)
+      .eq("status", "bipado")
+      .order("local_estoque")
+      .order("id")
+      .range(offset, offset + PAGE_SIZE - 1);
+    if (errItens) throw new Error(errItens.message);
+    itensBipados.push(...(pagina || []));
+    if ((pagina || []).length < PAGE_SIZE) break;
   }
+  if (!itensBipados.length) throw new Error("Nenhum item bipado para exportar.");
 
-  const { data: itensBipados } = await supabase
-    .from("b2b_itens").select("*")
-    .eq("pedido_id", pedidoId)
-    .eq("status", "bipado")
-    .order("local_estoque");
-  if (!itensBipados?.length) throw new Error("Nenhum item bipado para exportar.");
-
-  const itensNovos = itensBipados.filter(i => !idsJaExportados.has(i.id));
-  if (itensNovos.length === 0) {
-    return {
-      bloqueado: true, ultimaExportacao,
-      msg: `Nenhum item novo para exportar. A última versão (${ultimaExportacao.total_itens} itens) já foi baixada por ${ultimaExportacao.nome_usuario} em ${new Date(ultimaExportacao.exportado_em).toLocaleString("pt-BR")}.`,
-    };
-  }
-
-  const { data: pedido } = await supabase.from("b2b_pedidos").select("*").eq("id", pedidoId).single();
+  const { data: pedido, error: errPedido } = await supabase.from("b2b_pedidos").select("*").eq("id", pedidoId).single();
+  if (errPedido || !pedido) throw new Error(errPedido?.message || "Pedido não encontrado.");
   const { data: clienteData } = await supabase.from("b2b_clientes").select("cnpj").eq("nome", pedido.cliente).single();
   const cnpj = clienteData?.cnpj || "";
 
   const { data: novaExportacao, error: errExp } = await supabase.from("b2b_exportacoes")
-    .insert({ pedido_id: pedidoId, exportado_por: userId, nome_usuario: nomeUsuario, total_itens: itensNovos.length })
+    .insert({ pedido_id: pedidoId, exportado_por: userId, nome_usuario: nomeUsuario, total_itens: itensBipados.length })
     .select().single();
   if (errExp) throw new Error(errExp.message);
 
   const CHUNK = 500;
-  const linksItens = itensNovos.map(i => ({ exportacao_id: novaExportacao.id, item_id: i.id }));
+  const linksItens = itensBipados.map(i => ({ exportacao_id: novaExportacao.id, item_id: i.id }));
   for (let i = 0; i < linksItens.length; i += CHUNK) {
-    await supabase.from("b2b_itens_exportados").insert(linksItens.slice(i, i + CHUNK));
+    const { error: errLinks } = await supabase.from("b2b_itens_exportados").insert(linksItens.slice(i, i + CHUNK));
+    if (errLinks) throw new Error(errLinks.message);
   }
 
-  const numeroExportacao = (exportacoes?.length || 0) + 1;
-  const rows = itensNovos.map(i => ({
+  const numeroExportacao = (totalExportacoes || 0) + 1;
+  const rows = itensBipados.map(i => ({
     "LOTE":      pedido.lote,
     "CLIENTE":   pedido.cliente,
     "CNPJ":      cnpj,
@@ -379,7 +380,7 @@ export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
   const nomeArquivo = `faturamento_${pedido.lote}_v${numeroExportacao}.xlsx`;
   XLSX.writeFile(wb, nomeArquivo);
 
-  return { bloqueado: false, total: itensNovos.length, numeroExportacao, nomeArquivo };
+  return { bloqueado: false, total: itensBipados.length, numeroExportacao, nomeArquivo };
 }
 
 // ══════════════════════════════════════════════════════════
