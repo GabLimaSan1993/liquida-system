@@ -56,7 +56,12 @@ select 'assurant_triagem'::text as fonte, a.valor_novo::jsonb->>'voucher' as fon
  true as retrabalho
  from public.assurant_rastreabilidade_ajustes a where a.campo='triagem_funcional.revisao' and nullif(a.valor_novo::jsonb->>'data_funcional','') is not null
 union all
-select fonte,fonte_id,etapa,realizado_em,colaborador_id,quantidade,canal,unidade,referencia,retrabalho from liquida_private.producao_eventos;
+select e.fonte,e.fonte_id,e.etapa,e.realizado_em,e.colaborador_id,e.quantidade,e.canal,e.unidade,e.referencia,e.retrabalho from liquida_private.producao_eventos e
+where not (e.fonte='assurant_triagem' and (
+ (e.etapa='recebimento' and exists(select 1 from public.recebimento_vouchers r where r.voucher=e.fonte_id))
+ or (e.etapa='armazenagem' and exists(select 1 from public.wms_alocacoes a where a.voucher=e.fonte_id and a.confirmado_em is not null))
+ or (e.etapa='oracle' and exists(select 1 from public.assurant_triagem t where t.voucher=e.fonte_id and t.oracle_confirmado_em is not null and e.realizado_em=t.data_oracle at time zone 'UTC' and e.realizado_em<>t.oracle_confirmado_em))
+));
 revoke all on liquida_private.producao_base from public,anon,authenticated;
 create or replace function liquida_private.producao_capturar() returns trigger
 language plpgsql security definer set search_path=pg_catalog,public as $$
