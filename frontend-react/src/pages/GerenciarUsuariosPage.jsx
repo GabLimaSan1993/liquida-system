@@ -7,6 +7,7 @@ const TELAS = [
   { id: "/v2/assurant/b2c/validacao-meli", label: "B2C — Validação e Testes MELI", grupo: "Assurant V2 — B2C" },
   { id: "/v2/assurant/gestao/relatorio-estoque", label: "Relatório de Estoque", grupo: "Assurant V2 — Gestão" },
   { id: "/v2/assurant/gestao/fechamento-lojas", label: "Fechamento de Lojas — Cosmética", grupo: "Assurant V2 — Gestão" },
+  { id: "/v2/assurant/gestao/producao", label: "Produção da Esteira e Ranking", grupo: "Assurant V2 — Gestão" },
   { id: "/v2/assurant/gestao/esteira", label: "Gestão da Esteira — Trade-in até Armazenagem", grupo: "Assurant V2 — Gestão" },
     { id: "/v2/assurant", label: "Assurant V2 — Acesso ao Workspace", grupo: "Assurant V2" },
 

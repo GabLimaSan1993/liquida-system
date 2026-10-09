@@ -75,6 +75,7 @@ const TELAS_V2 = [
   telas: [
     { id: "/v2/assurant/gestao/relatorio-estoque", label: "Relatório de Estoque" },
     { id: "/v2/assurant/gestao/fechamento-lojas", label: "Fechamento de Lojas — Cosmética" },
+    { id: "/v2/assurant/gestao/producao", label: "Produção da Esteira e Ranking" },
     { id: "/v2/assurant/gestao/esteira", label: "Gestão da Esteira — Trade-in até Armazenagem" },
     {
       id: "/v2/assurant/indicadores",
