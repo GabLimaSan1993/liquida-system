@@ -11,7 +11,10 @@ async function corrigir(original,cliente){
  const doc=await PDFDocument.load(original,{updateMetadata:false});
  if(doc.getForm().getFields().some(f=>f.constructor.name.includes('Signature')))throw Error('PDF com assinatura requer revisão manual');
  const page=doc.getPages()[0],text=content(doc,page);
- const label=/\(Nome do cliente:\)\s*Tj/.exec(text);if(!label)throw Error('Campo do cliente não localizado no PDF original');
+ let label=/\(Nome do cliente:\)\s*Tj/.exec(text);
+ // AutoTable can wrap this label over two or three lines in populated PDFs.
+ if(!label){const first=/\(Nome(?: do)?\)\s*Tj/.exec(text);if(first){const last=/\(cliente:\)\s*Tj/.exec(text.slice(first.index+first[0].length));if(last&&last.index<700)label={index:first.index+first[0].length+last.index,0:last[0]};}}
+ if(!label)throw Error('Campo do cliente não localizado no PDF original');
  const segment=text.slice(label.index+label[0].length);
  const rect=/([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+re\b/.exec(segment);
  if(!rect)throw Error('Célula do cliente não localizada');
@@ -42,12 +45,12 @@ async function corrigir(original,cliente){
  return {changed:true,bytes,info:{tipo:'complementacao_cliente',...before,fonte_cliente:'triagem',tamanho_fonte:size,caption: size<7}};
 }
 async function preparar(item){
- if(item.pdf_original){const {data,error}=await bucket.download(item.pdf_original);if(error)throw error;return corrigir(await data.arrayBuffer(),item.cliente);}
+ if(item.pdf_original){const {data,error}=await bucket.download(item.pdf_original);if(error)throw error;const result=await corrigir(await data.arrayBuffer(),item.cliente);if(result.changed)result.info.fonte_cliente=item.dados.fonte_cliente||'triagem';return result;}
  const d=item.dados;const dados={...d.dados,cliente:item.cliente};
  try{const r=JSON.parse(d.respostas_funcional||'null');if(r?.produto)dados.produto=r.produto;}catch{}
  const doc=gerarPdfLaudo(dados,[],d.observacao,{data:d.criado_em,reemissao:true});
  const bytes=new Uint8Array(doc.output('arraybuffer'));const verified=await PDFDocument.load(bytes);
- return {changed:true,bytes,info:{tipo:'reemissao_sem_pdf_original',paginas:verified.getPageCount(),imagens:imageCount(verified),fotos_originais_indisponiveis:true}};
+ return {changed:true,bytes,info:{tipo:'reemissao_sem_pdf_original',paginas:verified.getPageCount(),imagens:imageCount(verified),fotos_originais_indisponiveis:true,fonte_cliente:item.dados.fonte_cliente||'triagem'}};
 }
 Deno.serve(async req=>{
  if(req.method!=='POST')return new Response('Method not allowed',{status:405});
