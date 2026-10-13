@@ -9,6 +9,7 @@ import { supabase } from "../lib/supabase";
 // ══════════════════════════════════════════════════════════
 
 const STATUS_APOS_LAUDO = "Aguardando triagem cosmética";
+const primeiroTexto = (...valores) => valores.find(v => typeof v === 'string' && v.trim())?.trim() || null;
 
 // Etapas de foto do laudo. As quatro são obrigatórias e a ordem importa:
 // IMEI, traseira e duas do defeito. O PDF sai nessa mesma sequência.
@@ -27,7 +28,7 @@ export async function carregarParaLaudo(voucher) {
 
   const { data: t, error } = await supabase
     .from("assurant_triagem")
-    .select("id, voucher, imei, sku, modelo, status_atual, respostas_funcional, defeitos_adicionais, data_funcional")
+    .select("id, voucher, imei, sku, modelo, cliente, loja, condicao, status_atual, respostas_funcional, defeitos_adicionais, data_funcional")
     .eq("voucher", v)
     .maybeSingle();
   if (error) throw new Error(error.message);
@@ -41,14 +42,14 @@ export async function carregarParaLaudo(voucher) {
     };
   }
 
-  // Dados de cliente e loja saem da TradeIn, como no laudo atual.
+  // Use the exact voucher; numeric matching could mix GRV/YBV registrations.
+  // Historical triage keeps customer/store data when TradeIn has no registration.
   let tradein = null;
-  const numero = v.replace(/\D/g, "");
-  if (numero) {
+  if (/^YBV\d+$/.test(v)) {
     const { data } = await supabase
       .from("tradein_geral")
       .select("cliente, loja, marca, aparelho, condicao_aparelho")
-      .eq("voucher", parseInt(numero, 10))
+      .eq("voucher_ybv", v)
       .maybeSingle();
     tradein = data || null;
   }
@@ -67,9 +68,9 @@ export async function carregarParaLaudo(voucher) {
     voucher: t.voucher,
     imei: t.imei,
     produto: respostas?.produto || null,
-    cliente: tradein?.cliente || null,
-    loja: tradein?.loja || null,
-    condicaoDeclarada: tradein?.condicao_aparelho || null,
+    cliente: primeiroTexto(tradein?.cliente, t.cliente),
+    loja: primeiroTexto(tradein?.loja, t.loja),
+    condicaoDeclarada: primeiroTexto(tradein?.condicao_aparelho, t.condicao),
     motivo: respostas?.destino?.motivo || null,
     divergencias,
     defeitos: t.defeitos_adicionais
