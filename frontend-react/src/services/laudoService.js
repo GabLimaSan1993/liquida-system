@@ -21,7 +21,8 @@ export function completarIdentificacao(dados, triagem = {}, tradein = {}, catalo
       ...produto,
       marca: primeiroTexto(produto.marca, catalogo?.marca, tradein?.marca),
       modelo: primeiroTexto(produto.modelo, catalogo?.modelo, triagem.modelo, tradein?.aparelho),
-      armazenamento: primeiroTexto(produto.armazenamento, produto.capacidade, catalogo?.capacidade),
+      armazenamento: primeiroTexto(produto.armazenamento, produto.capacidade, catalogo?.capacidade,
+        catalogo?.tamanho ? `${catalogo.tamanho} (tamanho)` : null),
       cor: primeiroTexto(produto.cor, catalogo?.cor),
     },
   };
@@ -87,13 +88,13 @@ export async function carregarParaLaudo(voucher) {
   if (/^[A-Z0-9]+$/.test(sku)) {
     const { data, error: erroCatalogo } = await supabase
       .from('produtos_catalogo')
-      .select('marca, modelo, capacidade, cor')
+      .select('marca, modelo, capacidade, tamanho, cor')
       .eq('ativo', true)
       .or(`sku_als.eq.${sku},sku_oracle.eq.${sku}`)
       .limit(20);
     if (erroCatalogo) throw new Error(`Não foi possível carregar o aparelho: ${erroCatalogo.message}`);
     const registros = data || [];
-    catalogo = Object.fromEntries(['marca', 'modelo', 'capacidade', 'cor'].map(campo => {
+    catalogo = Object.fromEntries(['marca', 'modelo', 'capacidade', 'tamanho', 'cor'].map(campo => {
       const valores = [...new Set(registros.map(p => primeiroTexto(p[campo])).filter(Boolean))];
       return [campo, valores.length === 1 ? valores[0] : null];
     }));
