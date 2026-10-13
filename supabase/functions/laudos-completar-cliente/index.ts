@@ -40,14 +40,18 @@ Deno.serve(async req=>{
    return Response.json({voucher:item.voucher,cliente:item.cliente,info:result.info,preview:preview?.signedUrl,original:original?.signedUrl});
   }
   const results=[];
-  for(const item of job.itens){
+  let next=0;
+  await Promise.all(Array.from({length:Math.min(4,job.itens.length)},async()=>{
+   while(next<job.itens.length){
+   const item=job.itens[next++];
    try{
     const result=await preparar(item);let path=null;
     if(result.changed){path=`retificacoes/clientes/${job.job_id}/${item.laudo_id}.pdf`;const {error:e}=await bucket.upload(path,result.bytes,{contentType:'application/pdf',upsert:true});if(e)throw e;}
     const {error:e}=await db.rpc('laudos_cliente_finalizar',{p_token:token,p_laudo_id:item.laudo_id,p_status:result.changed?'corrigido':'ja_identificado',p_path:path,p_info:result.info});if(e)throw e;
     results.push({voucher:item.voucher,status:result.changed?'corrigido':'ja_identificado',info:result.info});
    }catch(e){const message=String(e?.message||e).slice(0,500);await db.rpc('laudos_cliente_finalizar',{p_token:token,p_laudo_id:item.laudo_id,p_status:'erro',p_path:null,p_info:{erro:message}});results.push({voucher:item.voucher,status:'erro',erro:message});}
-  }
+   }
+  }));
   return Response.json({job_id:job.job_id,resultados:results});
  }catch(e){return Response.json({error:String(e?.message||e)},{status:500});}
 });
