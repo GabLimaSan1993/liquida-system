@@ -18,6 +18,28 @@ export async function consultarProducao(filters, signal) {
   return data;
 }
 
+// Page through execution records independently of the chart's aggregation.
+export async function consultarProducaoDetalhada(filters, signal) {
+  const rows = [];
+  let cursor = null;
+  do {
+    const request = supabase.rpc('assurant_producao_esteira_detalhada', {
+      p_inicio: filters.inicio, p_fim: filters.fim,
+      p_etapa: filters.etapa || null, p_canal: filters.canal || null,
+      p_colaborador: filters.colaborador || null, p_cursor: cursor,
+    });
+    const { data, error } = await (signal ? request.abortSignal(signal) : request);
+    if (error) throw error;
+    if (!data || !Array.isArray(data.dados)) throw new Error('Resposta inválida ao consultar produção detalhada.');
+    rows.push(...data.dados);
+    if (rows.length > 1048575) throw new Error('O período excede o limite de linhas do Excel. Selecione um período menor.');
+    const next = data.proximo_cursor;
+    if (next && JSON.stringify(next) === JSON.stringify(cursor)) throw new Error('Não foi possível avançar na consulta. Tente novamente.');
+    cursor = next;
+  } while (cursor);
+  return rows;
+}
+
 export function resumirProducao(dados, pesos = {}) {
   const pessoas = new Map(), etapas = new Map(), periodos = new Map();
   let total = 0, semResponsavel = 0, retrabalho = 0;

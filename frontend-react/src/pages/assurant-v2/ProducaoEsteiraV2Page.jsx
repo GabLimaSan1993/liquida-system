@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Download, RefreshCw, Trophy, TrendingUp, SlidersHorizontal } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
-import { consultarProducao, ETAPAS_PRODUCAO, resumirProducao, distribuirBonus } from '../../services/producaoEsteiraService.js';
+import { consultarProducao, consultarProducaoDetalhada, ETAPAS_PRODUCAO, resumirProducao, distribuirBonus } from '../../services/producaoEsteiraService.js';
 
 const fmt = n => Number(n || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 });
 const money = n => Number(n || 0).toLocaleString('pt-BR', { style:'currency', currency:'BRL' });
@@ -60,8 +60,33 @@ export default function ProducaoEsteiraV2Page() {
       XLSX.writeFile(wb,`Producao_Esteira_${applied.inicio}_${applied.fim}.xlsx`);
     } catch(e) { setError(e.message||'Erro ao exportar Excel.'); } finally { setExporting(false); }
   }
+  async function exportDetalhado() {
+    setExporting(true); setError('');
+    try {
+      const registros = await consultarProducaoDetalhada({ ...applied, etapa, canal, colaborador });
+      const XLSX = await import('xlsx');
+      const wb = XLSX.utils.book_new();
+      const nomes = Object.fromEntries(ETAPAS_PRODUCAO.map(s => [s.id, s.nome]));
+      nomes.funcional = 'Triagem Funcional'; nomes.cosmetica = 'Triagem Cosmética';
+      const rows = registros.map(d => ({
+        'Usuário': d.usuario || 'Responsável não identificado',
+        'Etapa': nomes[d.etapa] || d.etapa,
+        'Voucher': String(d.voucher || ''),
+        'Serial/IMEI': String(d.serial_imei || ''),
+        // Excel stores a timezone-free serial. The RPC already returns Brasília time.
+        'Data': d.data_local ? new Date(d.data_local + 'Z').getTime() / 86400000 + 25569 : '',
+      }));
+      const ws = XLSX.utils.json_to_sheet(rows, { header: ['Usuário', 'Etapa', 'Voucher', 'Serial/IMEI', 'Data'], cellDates: false, dateNF: 'dd/mm/yyyy hh:mm:ss' });
+      rows.forEach((_, i) => { const cell = ws[`E${i + 2}`]; if (cell?.t === 'n') cell.z = 'dd/mm/yyyy hh:mm:ss'; });
+      ws['!cols'] = [38, 25, 18, 23, 23].map(wch => ({ wch }));
+      ws['!autofilter'] = { ref: ws['!ref'] }; ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+      XLSX.utils.book_append_sheet(wb, ws, 'Produção detalhada');
+      XLSX.writeFile(wb, `Producao_Detalhada_${applied.inicio}_${applied.fim}.xlsx`);
+    } catch (e) { setError(e.message || 'Erro ao exportar produção detalhada.'); }
+    finally { setExporting(false); }
+  }
   return <div className="mx-auto max-w-[1800px] space-y-6 p-4 text-slate-900 md:p-7">
-    <header className="flex flex-wrap items-center justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-widest text-purple-600">Gestão • Produção</p><h1 className="mt-1 text-3xl font-bold">Produção da Esteira</h1><p className="mt-2 text-sm text-slate-500">Produção realizada por etapa e colaborador, do recebimento à expedição.</p></div><div className="flex gap-2"><button className={button} disabled={loading} onClick={()=>setApplied(p=>({...p}))}><RefreshCw size={16} className={loading?'animate-spin':''}/>Atualizar</button><button className={button} disabled={loading||!result||exporting} onClick={exportExcel}><Download size={16}/>{exporting?'Exportando…':'Excel'}</button></div></header>
+    <header className="flex flex-wrap items-center justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-widest text-purple-600">Gestão • Produção</p><h1 className="mt-1 text-3xl font-bold">Produção da Esteira</h1><p className="mt-2 text-sm text-slate-500">Produção realizada por etapa e colaborador, do recebimento à expedição.</p></div><div className="flex flex-wrap gap-2"><button className={button} disabled={loading||exporting} onClick={()=>setApplied(p=>({...p}))}><RefreshCw size={16} className={loading?'animate-spin':''}/>Atualizar</button><button className={button} disabled={loading||!result||exporting} onClick={exportExcel}><Download size={16}/>Excel</button><button className={button} disabled={loading||!result||exporting} onClick={exportDetalhado}><Download size={16}/>{exporting?'Exportando…':'Excel detalhado'}</button></div></header>
     <form onSubmit={apply} className={`${box} flex flex-wrap items-end gap-3`}><label className="text-xs font-semibold text-slate-600">Visão<select aria-label="Visão" value={filters.modo} onChange={e=>setFilters(f=>({...f,modo:e.target.value,agrupamento:e.target.value==='ano'?'mes':'dia'}))} className={input}>{[['dia','Dia'],['periodo','Período específico'],['mes','Mês'],['ano','Ano']].map(([k,n])=><option key={k} value={k}>{n}</option>)}</select></label>
       {filters.modo==='dia'&&<label className="text-xs font-semibold text-slate-600">Data<input required type="date" value={filters.dia} onChange={e=>set('dia',e.target.value)} className={input}/></label>}
       {filters.modo==='mes'&&<label className="text-xs font-semibold text-slate-600">Mês<input required type="month" value={filters.mes} onChange={e=>set('mes',e.target.value)} className={input}/></label>}
