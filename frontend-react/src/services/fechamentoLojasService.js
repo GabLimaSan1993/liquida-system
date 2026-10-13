@@ -18,8 +18,7 @@ async function arquivarReemissao(item){
  const {data,error}=await supabase.rpc('assurant_fechamento_laudo',{p_laudo_id:item.laudo_id});if(error)throw error;
  const {data:auth,error:authError}=await supabase.auth.getUser();if(authError||!auth.user)throw new Error('Sua sessão expirou. Entre novamente.');
  const {gerarPdfLaudo}=await import('./laudoService.js');
- const dados=data.dados;let respostas=null;try{respostas=JSON.parse(data.respostas_funcional||'null');}catch{respostas=null;}
- if(respostas?.produto)dados.produto=respostas.produto;
+ const dados=data.dados;
  const doc=gerarPdfLaudo(dados,[],data.observacao,{data:data.criado_em,reemissao:true});
  const path=`${auth.user.id}/reemissoes/${item.laudo_id}.pdf`;
  const {error:uploadError}=await supabase.storage.from('triagem-laudos').upload(path,doc.output('blob'),{contentType:'application/pdf',upsert:false});

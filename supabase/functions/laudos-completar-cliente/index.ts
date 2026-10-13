@@ -1,53 +1,14 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.103.0';
-import { PDFDocument, PDFArray, PDFRawStream, PDFName, StandardFonts, rgb, decodePDFRawStream } from 'npm:pdf-lib@1.17.1';
+import { PDFDocument, PDFRawStream, PDFName } from 'npm:pdf-lib@1.17.1';
+import { completarPdf } from './pdf-completar.ts';
+function imageCount(doc){return doc.context.enumerateIndirectObjects().filter(([,o])=>o instanceof PDFRawStream&&o.dict.get(PDFName.of('Subtype'))?.toString()==='/Image').length;}
 import { gerarPdfLaudo } from './pdf-reemissao.ts';
 
 const db=createClient(Deno.env.get('SUPABASE_URL')!,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,{auth:{persistSession:false,autoRefreshToken:false}});
 const bucket=db.storage.from('triagem-laudos');
-function imageCount(doc){return doc.context.enumerateIndirectObjects().filter(([,o])=>o instanceof PDFRawStream&&o.dict.get(PDFName.of('Subtype'))?.toString()==='/Image').length;}
-function content(doc,page){const value=page.node.Contents();const streams=value instanceof PDFArray?Array.from({length:value.size()},(_,i)=>doc.context.lookup(value.get(i))):[value];return streams.filter(x=>x instanceof PDFRawStream).map(x=>new TextDecoder('latin1').decode(decodePDFRawStream(x).decode())).join('\n');}
-function decodeLiteral(v){return v.replace(/\\([0-7]{1,3}|[nrtbf()\\])/g,(_,x)=>/^[0-7]/.test(x)?String.fromCharCode(parseInt(x,8)):({n:'\n',r:'\r',t:'\t',b:'\b',f:'\f'}[x]||x));}
-async function corrigir(original,cliente){
- const doc=await PDFDocument.load(original,{updateMetadata:false});
- if(doc.getForm().getFields().some(f=>f.constructor.name.includes('Signature')))throw Error('PDF com assinatura requer revisão manual');
- const page=doc.getPages()[0],text=content(doc,page);
- let label=/\(Nome do cliente:\)\s*Tj/.exec(text);
- // AutoTable can wrap this label over two or three lines in populated PDFs.
- if(!label){const first=/\(Nome(?: do)?\)\s*Tj/.exec(text);if(first){const last=/\(cliente:\)\s*Tj/.exec(text.slice(first.index+first[0].length));if(last&&last.index<700)label={index:first.index+first[0].length+last.index,0:last[0]};}}
- if(!label)throw Error('Campo do cliente não localizado no PDF original');
- const segment=text.slice(label.index+label[0].length);
- const rect=/([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+re\b/.exec(segment);
- if(!rect)throw Error('Célula do cliente não localizada');
- const cell=segment.slice(rect.index+rect[0].length);
- const value=/\(((?:\\.|[^\\)])*)\)\s*Tj/.exec(cell);if(!value)throw Error('Valor do cliente não localizado');
- const current=decodeLiteral(value[1]).trim();
- if(current.replace(/[\s\-—–\u0096\u0097]/g,''))return {changed:false,info:{motivo:'Cliente já identificado no PDF',paginas:doc.getPageCount(),imagens:imageCount(doc)}};
- const [x,y,w,h]=rect.slice(1).map(Number),bottom=y+Math.min(0,h),height=Math.abs(h);
- if(w<10||height<8)throw Error('Dimensão da célula inesperada');
- const before={paginas:doc.getPageCount(),imagens:imageCount(doc)};
- const font=await doc.embedFont(StandardFonts.Helvetica);font.encodeText(cliente);
- const available=w-8;
- let size=Math.min(9,available/font.widthOfTextAtSize(cliente,1));
- page.drawRectangle({x:x+1,y:bottom+1,width:w-2,height:height-2,color:rgb(1,1,1)});
- page.drawText(cliente,{x:x+(w-font.widthOfTextAtSize(cliente,size))/2,y:bottom+(height-size)/2+1,size,font,color:rgb(0,0,0)});
- // Long names remain fully legible above the table as well.
- if(size<7){
-  const full='Cliente: '+cliente,captionSize=Math.min(9,(page.getWidth()-80)/font.widthOfTextAtSize(full,1));
-  if(captionSize<6)throw Error('Nome exige diagramação manual');
-  page.drawText(full,{x:40,y:page.getHeight()-100,size:captionSize,font,color:rgb(0,0,0)});
- }
- const date=new Date().toLocaleDateString('pt-BR',{timeZone:'America/Sao_Paulo'});
- page.drawText(`Identificação do cliente complementada em ${date}. Data e conteúdo original preservados.`,{x:40,y:22,size:6.5,font,color:rgb(.35,.35,.35)});
- doc.setModificationDate(new Date());
- const bytes=await doc.save(),verified=await PDFDocument.load(bytes,{updateMetadata:false});
- const after={paginas:verified.getPageCount(),imagens:imageCount(verified)};
- if(before.paginas!==after.paginas||before.imagens!==after.imagens)throw Error('Falha na preservação das páginas/fotos');
- return {changed:true,bytes,info:{tipo:'complementacao_cliente',...before,fonte_cliente:'triagem',tamanho_fonte:size,caption: size<7}};
-}
 async function preparar(item){
- if(item.pdf_original){const {data,error}=await bucket.download(item.pdf_original);if(error)throw error;const result=await corrigir(await data.arrayBuffer(),item.cliente);if(result.changed)result.info.fonte_cliente=item.dados.fonte_cliente||'triagem';return result;}
- const d=item.dados;const dados={...d.dados,cliente:item.cliente};
- try{const r=JSON.parse(d.respostas_funcional||'null');if(r?.produto)dados.produto=r.produto;}catch{}
+ if(item.pdf_original){const {data,error}=await bucket.download(item.pdf_original);if(error)throw error;const result=await completarPdf(await data.arrayBuffer(),item.dados.dados);if(result.changed)result.info.fonte_cliente=item.dados.fonte_cliente||'triagem';return result;}
+ const d=item.dados;const dados=d.dados;
  const doc=gerarPdfLaudo(dados,[],d.observacao,{data:d.criado_em,reemissao:true});
  const bytes=new Uint8Array(doc.output('arraybuffer'));const verified=await PDFDocument.load(bytes);
  return {changed:true,bytes,info:{tipo:'reemissao_sem_pdf_original',paginas:verified.getPageCount(),imagens:imageCount(verified),fotos_originais_indisponiveis:true,fonte_cliente:item.dados.fonte_cliente||'triagem'}};

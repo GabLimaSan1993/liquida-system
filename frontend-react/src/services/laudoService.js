@@ -11,6 +11,31 @@ import { supabase } from "../lib/supabase";
 const STATUS_APOS_LAUDO = "Aguardando triagem cosmética";
 const primeiroTexto = (...valores) => valores.find(v => typeof v === 'string' && v.trim())?.trim() || null;
 
+export function completarIdentificacao(dados, triagem = {}, tradein = {}, catalogo = {}) {
+  const produto = dados.produto || {};
+  return {
+    ...dados,
+    cliente: primeiroTexto(dados.cliente, tradein?.cliente, triagem.cliente),
+    loja: primeiroTexto(dados.loja, tradein?.loja, triagem.loja),
+    produto: {
+      ...produto,
+      marca: primeiroTexto(produto.marca, catalogo?.marca, tradein?.marca),
+      modelo: primeiroTexto(produto.modelo, catalogo?.modelo, triagem.modelo, tradein?.aparelho),
+      armazenamento: primeiroTexto(produto.armazenamento, produto.capacidade, catalogo?.capacidade),
+      cor: primeiroTexto(produto.cor, catalogo?.cor),
+    },
+  };
+}
+
+export function camposAusentesLaudo(dados) {
+  return [
+    ['cliente', dados.cliente], ['loja', dados.loja],
+    ['marca', dados.produto?.marca], ['modelo', dados.produto?.modelo],
+    ['capacidade', dados.produto?.armazenamento], ['cor', dados.produto?.cor],
+    ['IMEI', dados.imei], ['voucher', dados.voucher],
+  ].filter(([, valor]) => !primeiroTexto(valor)).map(([campo]) => campo);
+}
+
 // Etapas de foto do laudo. As quatro são obrigatórias e a ordem importa:
 // IMEI, traseira e duas do defeito. O PDF sai nessa mesma sequência.
 export const ETAPAS_FOTO = [
@@ -46,12 +71,32 @@ export async function carregarParaLaudo(voucher) {
   // Historical triage keeps customer/store data when TradeIn has no registration.
   let tradein = null;
   if (/^YBV\d+$/.test(v)) {
-    const { data } = await supabase
+    const { data, error: erroTradein } = await supabase
       .from("tradein_geral")
       .select("cliente, loja, marca, aparelho, condicao_aparelho")
       .eq("voucher_ybv", v)
       .maybeSingle();
+    if (erroTradein) throw new Error(`Não foi possível carregar o cadastro do cliente: ${erroTradein.message}`);
     tradein = data || null;
+  }
+
+  // GAIA stores functional answers as plain text, without a product snapshot.
+  // Fill each missing field from the exact SKU, never from a similar model.
+  let catalogo = null;
+  const sku = String(t.sku || '').trim().toUpperCase().split('-')[0];
+  if (/^[A-Z0-9]+$/.test(sku)) {
+    const { data, error: erroCatalogo } = await supabase
+      .from('produtos_catalogo')
+      .select('marca, modelo, capacidade, cor')
+      .eq('ativo', true)
+      .or(`sku_als.eq.${sku},sku_oracle.eq.${sku}`)
+      .limit(20);
+    if (erroCatalogo) throw new Error(`Não foi possível carregar o aparelho: ${erroCatalogo.message}`);
+    const registros = data || [];
+    catalogo = Object.fromEntries(['marca', 'modelo', 'capacidade', 'cor'].map(campo => {
+      const valores = [...new Set(registros.map(p => primeiroTexto(p[campo])).filter(Boolean))];
+      return [campo, valores.length === 1 ? valores[0] : null];
+    }));
   }
 
   // O JSON da funcional guarda produto, divergências e o motivo do destino.
@@ -62,7 +107,7 @@ export async function carregarParaLaudo(voucher) {
     .filter(r => r.divergente)
     .map(r => ({ pergunta: r.pergunta, resposta: r.resposta === "nao" ? "NÃO" : "SIM" }));
 
-  return {
+  return completarIdentificacao({
     ok: true,
     triagemId: t.id,
     voucher: t.voucher,
@@ -76,7 +121,7 @@ export async function carregarParaLaudo(voucher) {
     defeitos: t.defeitos_adicionais
       ? t.defeitos_adicionais.split(";").map(s => s.trim()).filter(Boolean)
       : [],
-  };
+  }, t, tradein, catalogo);
 }
 
 // Fila de aparelhos parados aguardando laudo. É o que a tela mostra ao abrir,
@@ -226,6 +271,15 @@ export async function salvarLaudo({ dados, fotos, observacao, userId }) {
   if (preenchidas < obrigatorias) {
     return { ok: false, erro: `Faltam fotos: ${preenchidas} de ${obrigatorias} obrigatórias.` };
   }
+
+  // Recheck at save time, including screens opened before a deployment.
+  const atualizado = await carregarParaLaudo(dados.voucher);
+  if (!atualizado.ok) return atualizado;
+  dados = completarIdentificacao(dados, atualizado, {}, {
+    ...atualizado.produto, capacidade: atualizado.produto?.armazenamento,
+  });
+  const ausentes = camposAusentesLaudo(dados);
+  if (ausentes.length) return { ok: false, erro: `Laudo incompleto: faltam ${ausentes.join(', ')}. Complete o cadastro do aparelho antes de gerar o PDF.` };
 
   const doc = gerarPdfLaudo(dados, fotos, observacao);
   const nome = `laudo_${dados.voucher}_${new Date().toISOString().slice(0, 10)}.pdf`;
