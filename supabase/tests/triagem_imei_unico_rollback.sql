@@ -10,7 +10,7 @@ begin
  ('YBV1900000011','123456789012345','GALAXY S24','teste_imei_unico_transacional',11),
  ('YBV1900000012','R7AX60XHHLR','FIT 3','teste_imei_unico_transacional',12),
  ('YBV1900000013','F4K123ABCDEF','IPAD 10','teste_imei_unico_transacional',13);
- foreach modelo in array array['IPHONE 5','IPHONE 5C','IPHONE 5S','IPHONE 6','IPHONE 6S PLUS','IPHONE6 PLUS','IPHONE 7','IPHONE 7 PLUS','MOTO ONE MACRO','MOTOROLA ONE MICRO','SAMSUNG GALAXY J4 PLUS','GALAXY J7 PRIME','SAMSUNG J 5'] loop
+ foreach modelo in array array['IPHONE 5','IPHONE 5C','IPHONE 5S','IPHONE 6','IPHONE 6S PLUS','IPHONE6 PLUS','IPHONE 7','IPHONE 7 PLUS','MOTO ONE MACRO','MOTOROLA ONE MICRO'] loop
   r:=public.assurant_triagem_identificar('YBV1900000010','123456789012345',null,modelo,null,false);
   assert (r->>'confere')::boolean,'Modelo de um IMEI bloqueado: '||modelo;
   insert into public.assurant_triagem(voucher,imei,modelo,origem_triagem,data_funcional,status_atual,respostas_funcional)
@@ -18,7 +18,7 @@ begin
     jsonb_build_object('produto',jsonb_build_object('modelo',modelo),'identificacao',jsonb_build_object('imei1','123456789012345','aparelho_bloqueado',false))::text)
    on conflict(voucher) do update set modelo=excluded.modelo,respostas_funcional=excluded.respostas_funcional;
  end loop;
- foreach modelo in array array['IPHONE 15','IPHONE 16','IPHONE 16 PRO MAX','GALAXY S24','GALAXY S6','MOTO G6'] loop
+ foreach modelo in array array['IPHONE 15','IPHONE 16','IPHONE 16 PRO MAX','GALAXY S24','GALAXY S6','MOTO G6','SAMSUNG GALAXY J4 PLUS','GALAXY J7 PRIME','SAMSUNG J 5','GALAXY J5 PRIME'] loop
   rejeitou:=false;
   begin perform public.assurant_triagem_identificar('YBV1900000011','123456789012345',null,modelo,null,false);
   exception when others then rejeitou:=true; end;
@@ -61,5 +61,14 @@ begin
  assert public.assurant_divergencia_email_claim(c,tok) is null,'Aviso duplicado';
  assert not has_function_privilege('authenticated','public.assurant_divergencia_email_claim(uuid,uuid)','execute'),'Worker exposto';
  assert not has_function_privilege('authenticated','public.assurant_divergencias_configurar(text[])','execute'),'Destinatários editáveis pela tela';
+ -- Retornar à triagem preserva o caso sem autorizar seu IMEI divergente.
+ update liquida_private.triagem_divergencia_config set destinatarios='{}' where id;
+ update public.assurant_divergencias_imei set status='reconferencia',diretriz='Nova bipagem solicitada' where id=c;
+ update public.assurant_triagem set status_atual='Aguardando triagem funcional' where voucher='YBV1900000014';
+ r:=public.assurant_triagem_identificar('YBV1900000014','423456789012345','323456789012345','GALAXY J5 PRIME',null,false);
+ assert (r->>'confere')::boolean and r->>'imei_canonico'='323456789012345','Samsung J não reconheceu contrato no IMEI 2';
+ r:=public.assurant_triagem_identificar('YBV1900000014','423456789012345',null,'GALAXY J5 PRIME',null,true);
+ assert (r->>'divergencia')::boolean and (r->>'caso_id')::uuid<>c,'Retorno autorizou indevidamente o IMEI anterior';
+ assert exists(select 1 from public.assurant_divergencias_imei where id=c and status='reconferencia'),'Histórico do retorno perdido';
 end;
 $test$;

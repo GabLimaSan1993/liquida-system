@@ -49,13 +49,15 @@ test("aparelho bloqueado aceita só um IMEI, sem relaxar os 15 dígitos", () => 
   assert.ok(erroIdentificacao("CELULAR", "123456789012345", null, { modelo: "GALAXY S24" }));
 });
 test("modelos de IMEI único e celulares de dois IMEIs não se confundem", () => {
-  for (const modelo of ["IPHONE 5", "IPHONE 5C", "IPHONE 5S", "IPHONE 6", "IPHONE 6S PLUS", "IPHONE6 PLUS", "SAMSUNG GALAXY J4 PLUS", "GALAXY J7 PRIME", "SAMSUNG J 5"]) {
+  for (const modelo of ["IPHONE 5", "IPHONE 5C", "IPHONE 5S", "IPHONE 6", "IPHONE 6S PLUS", "IPHONE6 PLUS"]) {
     assert.equal(exigeDoisImeis(modelo), false, modelo);
     assert.equal(erroIdentificacao("CELULAR", "123456789012345", null, { modelo }), null, modelo);
   }
-  for (const modelo of ["IPHONE 15", "IPHONE 16", "IPHONE 16 PRO MAX", "GALAXY S24", "GALAXY A06", "MOTO G6", "GALAXY S6"]) {
+  for (const modelo of ["IPHONE 15", "IPHONE 16", "IPHONE 16 PRO MAX", "GALAXY S24", "GALAXY A06", "MOTO G6", "GALAXY S6", "SAMSUNG GALAXY J4 PLUS", "GALAXY J7 PRIME", "SAMSUNG J 5", "GALAXY J5 PRIME"]) {
     assert.equal(exigeDoisImeis(modelo), true, modelo);
     assert.ok(erroIdentificacao("CELULAR", "123456789012345", null, { modelo }), modelo);
+    assert.equal(erroIdentificacao("CELULAR", "123456789012345", "123456789012346", { modelo }), null, modelo);
+    assert.equal(erroIdentificacao("CELULAR", "123456789012345", null, { modelo, aparelhoBloqueado: true }), null, modelo);
   }
   assert.equal(exigeDoisImeis("MODELO ESPECIAL", "SMARTWATCH"), false);
   assert.equal(exigeDoisImeis("MODELO ESPECIAL", "RELOGIO"), false);

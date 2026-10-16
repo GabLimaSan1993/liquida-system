@@ -139,6 +139,7 @@ export default function DivergenciasImeiV2Page() {
             <option value="pendente">Pendente</option>
             <option value="autorizado">Autorizado</option>
             <option value="devolver">Devolver</option>
+            <option value="reconferencia">Retornado para triagem</option>
           </select>
         </label>
       </div>
@@ -148,7 +149,7 @@ export default function DivergenciasImeiV2Page() {
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <div className="font-black text-rose-700">
-                  {c.voucher} · {PROBLEMAS[problema(c)]} · {c.status}
+                  {c.voucher} · {PROBLEMAS[problema(c)]} · {c.status === "reconferencia" ? "Retornado para triagem" : c.status}
                 </div>
                 <p className="mt-1 text-sm font-bold">{c.modelo || "Modelo ainda não identificado"}</p>
                 {c.motivo && <p className="mt-2 text-sm text-slate-600">{c.motivo}</p>}
@@ -199,7 +200,7 @@ export default function DivergenciasImeiV2Page() {
             </p>
             {c.diretriz && (
               <div className="mt-3 rounded-xl bg-slate-50 p-3 text-sm">
-                <strong>Diretriz Assurant:</strong> {c.diretriz}
+                <strong>{c.status === "reconferencia" ? "Motivo do retorno:" : "Diretriz Assurant:"}</strong> {c.diretriz}
                 <div className="mt-1 text-xs text-slate-400">
                   {hora(c.decidido_em)}
                 </div>
