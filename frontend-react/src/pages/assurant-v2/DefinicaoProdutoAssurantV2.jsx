@@ -606,7 +606,7 @@ export default function DefinicaoProdutoAssurantV2({ etapa = "liquida" }) {
                         Opções por cor e grade
                       </div>
                       <div className="text-xs text-slate-400">
-                        {consulta.modelo || consulta.skuBase} · itens livres e vínculos operacionais elegíveis
+                        {consulta.modelo || consulta.skuBase} · opções com data de Sub_Inv registrada
                       </div>
                     </div>
                     <div className="text-xs font-bold text-slate-500">

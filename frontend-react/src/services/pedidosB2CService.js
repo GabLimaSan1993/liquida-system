@@ -1945,7 +1945,8 @@ export async function buscarOpcoesDefinicao(skuDigitado, pedidoOuGrade) {
   if (error) throw new Error(`Falha ao consultar opções do WMS: ${error.message}`);
   if (erroVinculos) throw new Error(`Falha ao consultar vínculos do SKU: ${erroVinculos.message}`);
 
-  const base = candidatos || [];
+  // Data deve vir do estoque atual, antes das quantidades e da escolha FIFO.
+  const base = (candidatos || []).filter((item) => Boolean(item.data_subinv));
   const vinculos = vinculosSku || [];
   if (!base.length) {
     const { data: catalogo } = await supabase

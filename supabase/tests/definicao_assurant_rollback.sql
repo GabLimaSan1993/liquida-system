@@ -10,6 +10,8 @@ declare
  v_tests text[]:='{}'; v_sku text; v_grade text; v_imei text; i integer; v_dia date:=(now() at time zone 'America/Sao_Paulo')::date;
 begin
  begin
+  -- Permissões do cenário controladas só dentro da transação revertida.
+  update public.user_profiles set telas_permitidas=array_remove(telas_permitidas,'/v2/assurant/b2c/definicao-assurant') where id=v_rafa;
   perform set_config('request.jwt.claims',jsonb_build_object('sub',v_admin,'role','authenticated')::text,true);
   select array_agg(id) into v_e from(select id from public.wms_enderecos where ativo and status='livre' order by id limit 5 for update)t;
   if array_length(v_e,1)<>5 then raise exception 'Sem cinco posições livres para QA.'; end if;
@@ -30,6 +32,22 @@ begin
   insert into public.pedidos_b2c(id,id_anymarket,sku_marketplace,sku_produto,grade_produto,titulo_produto,marketplace,status,status_anymarket,criado_por,definicao_status,definicao_solicitada_em)
    values(v_p,-710700101,'QA-DEF-BLACK-CC3','QA-DEF-BLACK-CC3','BOM','QA DEFINICAO 256GB BLACK - Bom','Mercado Livre','aguardando_definicao_produto','Pago',v_admin,'pendente',now());
   insert into public.pedidos_b2c(id,id_anymarket,sku_marketplace,sku_produto,grade_produto,titulo_produto,marketplace,status,status_anymarket,criado_por) values(v_outro_p,-710700102,'QA-DEF-WHITE-CC3','QA-DEF-WHITE-CC3','BOM','QA outro pedido','Outro','aguardando_alocacao','Pago',v_admin);
+  -- Oracle finalizado não substitui a data do estoque Sub_Inv atual.
+  insert into public.entrada_oracle_ap(imei,status_sefaz) values('000000000071101','FINALIZADO'),('000000000071102','FINALIZADO');
+  begin
+   delete from public.estoque_subinv where imei='000000000071101';
+   delete from public.estoque_subinv where imei='000000000071102';
+   perform set_config('role','authenticated',true);
+   if exists(select 1 from public.assurant_definicao_candidatos('QA-DEF-BLACK')) then raise exception 'Oracle sem data atual apareceu como alternativa.'; end if;
+   if exists(select 1 from jsonb_array_elements(public.b2c_definicao_opcoes(v_p)->'opcoes') o where o->>'cor'='BLACK') then raise exception 'Opções da Furb incluíram produto sem data.'; end if;
+   v_falhou:=false;
+   begin
+    update public.pedidos_b2c set status='alocado',imei_alocado='000000000071101',definicao_status='concluido' where id=v_p;
+   exception when others then if sqlerrm not like 'Produto sem data de Sub_Inv%' then raise; end if; v_falhou:=true; end;
+   if not v_falhou then raise exception 'Confirmação direta Furb permitiu item sem data.'; end if;
+   raise exception using errcode='PZ010',message='rollback sem datas';
+  exception when sqlstate 'PZ010' then null; end;
+  v_tests:=array_append(v_tests,'Furb: Oracle finalizado com registro ausente não é viável; confirmação direta bloqueada');
   perform set_config('role','authenticated',true);
   insert into public.meli_validacoes(pedido_id,id_anymarket,imei,sistema,resultado,respostas,motivo,operador_id,operador_nome)
    values(v_p,-710700101,'000000000071105','android','reprovado','{"sem_linhas":false}','QA bloqueio MELI',v_admin,'QA') returning id into v_id;
@@ -55,6 +73,24 @@ begin
   if not exists(select 1 from jsonb_array_elements(v_ops->'opcoes') o where o->>'cor'='WHITE' and o->>'grade'='Bom') then raise exception 'Variante de outra cor não exibida.'; end if;
   if not exists(select 1 from jsonb_array_elements(v_ops->'opcoes') o where o->>'cor'='BLACK' and (o->>'quantidade')::integer=2 and o->'fifo'->>'imei'='000000000071101') then raise exception 'FIFO/quantidade incorretos.'; end if;
   v_tests:=array_append(v_tests,'alternativas por cor e grade; capacidade diferente e bloqueio MELI excluídos; FIFO por alternativa');
+  begin
+   perform set_config('role','postgres',true);
+   delete from public.estoque_subinv where imei='000000000071101';
+   perform set_config('role','authenticated',true);
+   v_ops:=public.b2c_definicao_opcoes(v_p);
+   if not exists(select 1 from jsonb_array_elements(v_ops->'opcoes') o where o->>'cor'='BLACK' and (o->>'quantidade')::integer=1 and o->'fifo'->>'imei'='000000000071102') then raise exception 'Sem data entrou na quantidade ou FIFO Assurant.'; end if;
+   v_falhou:=false;
+   begin perform public.b2c_registrar_aprovacao_upgrade(v_p,'000000000071101','QA-DEF-BLACK','Excelente','BLACK'); exception when others then if sqlerrm not like 'Produto sem data de Sub_Inv%' then raise; end if; v_falhou:=true; end;
+   if not v_falhou then raise exception 'Upgrade sem data permitido.'; end if;
+   perform set_config('role','postgres',true);
+   delete from public.estoque_subinv where imei='000000000071102';
+   perform set_config('role','authenticated',true);
+   v_falhou:=false;
+   begin perform public.b2c_assurant_aprovar_definicao(v_p,'QA-DEF-BLACK','Excelente','BLACK',null,null,true,null); exception when others then if sqlerrm not like 'A opção escolhida mudou%' then raise; end if; v_falhou:=true; end;
+   if not v_falhou then raise exception 'Opção antiga sem data aprovada pela Assurant.'; end if;
+   raise exception using errcode='PZ011',message='rollback FIFO';
+  exception when sqlstate 'PZ011' then null; end;
+  v_tests:=array_append(v_tests,'Assurant: quantidade e FIFO só com data atual; upgrade e opção antiga sem data recusados');
   v_falhou:=false;
   begin perform public.b2c_assurant_aprovar_definicao(v_p,'QA-DEF-BLACK','Excelente','BLACK',null,null,false,null); exception when others then if sqlerrm not like 'Confirme a aprovação%' then raise; end if; v_falhou:=true; end;
   if not v_falhou then raise exception 'Upgrade sem ciência permitido.'; end if;
@@ -66,6 +102,21 @@ begin
    if not (v_res->>'aguardandoDesvinculacao')::boolean then raise exception 'Vinculado não gerou fila da Liquida: %',v_res; end if;
    if (select estado from public.b2c_definicao_assurant_casos where pedido_id=v_p)<>'aguardando_desvinculacao' then raise exception 'Caso não atualizou aguardando transferência.'; end if;
    perform set_config('request.jwt.claims',jsonb_build_object('sub',v_rafa,'role','authenticated')::text,true);
+   begin
+    perform set_config('role','postgres',true);
+    delete from public.estoque_subinv where imei='000000000071103';
+    perform set_config('role','authenticated',true);
+    if exists(select 1 from public.assurant_definicao_candidatos('QA-DEF-WHITE') where imei='000000000071103') then raise exception 'Vínculo B2C substituiu a data Sub_Inv.'; end if;
+    if not exists(select 1 from public.assurant_definicao_vinculos_sku('QA-DEF-WHITE',v_p) where imei='000000000071103') then raise exception 'Histórico de vínculo foi ocultado.'; end if;
+    v_ops:=public.assurant_processar_solicitacao_desvinculacao((v_res->>'solicitacao_id')::uuid,'QA transferência sem data');
+    if coalesce((v_ops->>'ok')::boolean,true) or v_ops->>'erro' not like 'Produto sem data de Sub_Inv%' then raise exception 'Transferência sem data aceita: %',v_ops; end if;
+    if not exists(select 1 from public.pedidos_b2c where id=v_outro_p and imei_alocado='000000000071103') then raise exception 'Falha desfez vínculo de origem.'; end if;
+    perform set_config('role','postgres',true);
+    if not exists(select 1 from public.assurant_solicitacoes_desvinculacao where id=(v_res->>'solicitacao_id')::uuid and status='pendente') then raise exception 'Falha mudou a pendência.'; end if;
+    perform set_config('role','authenticated',true);
+    raise exception using errcode='PZ012',message='rollback transferência sem data';
+   exception when sqlstate 'PZ012' then null; end;
+   v_tests:=array_append(v_tests,'sem data: vínculo permanece visível para consulta; não é viável e transferência preserva origem e pendência');
    v_res:=public.assurant_processar_solicitacao_desvinculacao((v_res->>'solicitacao_id')::uuid,'QA: transferência autorizada pela Liquida');
    if not (v_res->>'ok')::boolean then raise exception 'Transferência da Liquida falhou: %',v_res; end if;
    if (select estado from public.b2c_definicao_assurant_casos where pedido_id=v_p)<>'concluido' then raise exception 'Transferência não concluiu o caso.'; end if;
@@ -77,11 +128,12 @@ begin
   if not exists(select 1 from public.pedidos_b2c where id=v_p and status='em_picking' and upgrade_aprovado and upgrade_aprovado_por=v_assurant) then raise exception 'Upgrade/picking não persistidos.'; end if;
   if not exists(select 1 from public.wms_localizar_saida(array['000000000071101']) where reserva_referencia=v_p::text and reserva_canal='B2C') then raise exception 'Reserva WMS não pertence ao pedido.'; end if;
   v_tests:=array_append(v_tests,'aprovação atômica → IMEI FIFO reservado, upgrade auditado e grupo no picking');
-  v_res:=public.b2c_definicao_assurant_relatorio(v_dia,v_dia);
-  if (v_res->>'total')::integer<>1 or v_res->'rows'->0->>'estado'<>'concluido' or jsonb_array_length(v_res->'rows'->0->'eventos')<>2 then raise exception 'Relatório/histórico incorretos: %',v_res; end if;
-  if v_res->'rows'->0->'pedido_original'->>'grade_produto'<>'BOM' or v_res->'rows'->0->'pedido_atual'->>'grade_definida'<>'Excelente' then raise exception 'Snapshot original/atual incorreto.'; end if;
-  if (public.b2c_definicao_assurant_relatorio(v_dia-1,v_dia-1)->>'total')::integer<>0 then raise exception 'Filtro vazou fora do período.'; end if;
-  if (public.b2c_definicao_assurant_relatorio(v_dia,v_dia,'decidido')->>'total')::integer<>1 then raise exception 'Filtro por decisão incorreto.'; end if;
+  v_ops:=public.b2c_definicao_assurant_relatorio(v_dia,v_dia);
+  select o into v_res from jsonb_array_elements(v_ops->'rows') o where o->>'pedido_id'=v_p::text;
+  if v_res is null or v_res->>'estado'<>'concluido' or jsonb_array_length(v_res->'eventos')<>2 then raise exception 'Relatório/histórico QA incorretos.'; end if;
+  if v_res->'pedido_original'->>'grade_produto'<>'BOM' or v_res->'pedido_atual'->>'grade_definida'<>'Excelente' then raise exception 'Snapshot original/atual incorreto.'; end if;
+  if exists(select 1 from jsonb_array_elements(public.b2c_definicao_assurant_relatorio(v_dia-1,v_dia-1)->'rows') o where o->>'pedido_id'=v_p::text) then raise exception 'Filtro vazou fora do período.'; end if;
+  if not exists(select 1 from jsonb_array_elements(public.b2c_definicao_assurant_relatorio(v_dia,v_dia,'decidido')->'rows') o where o->>'pedido_id'=v_p::text) then raise exception 'Filtro por decisão incorreto.'; end if;
   v_tests:=array_append(v_tests,'relatório com período inclusivo de Brasília, decisão, snapshots e histórico');
   update public.pedidos_b2c set status='embalado',imei_bipado='000000000071101',bipado_em=clock_timestamp(),bipado_por=v_assurant where id=v_p;
   if (select status from public.pedidos_b2c where id=v_p)<>'aguardando_validacao_meli' then raise exception 'Upgrade pulou validação MELI.'; end if;
