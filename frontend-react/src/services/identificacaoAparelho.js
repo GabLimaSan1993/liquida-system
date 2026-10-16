@@ -11,19 +11,21 @@ export function tipoDoAparelho(modelo = "", tipoCatalogo = "") {
   return "CELULAR";
 }
 
-export function exigeDoisImeis(modelo = "", tipoCatalogo = "", aparelhoBloqueado = false) {
-  if (aparelhoBloqueado || tipoDoAparelho(modelo, tipoCatalogo) !== "CELULAR") return false;
+export function exigeDoisImeis(modelo = "", tipoCatalogo = "", aparelhoBloqueado = false, danosTela = false) {
+  if (danosTela || aparelhoBloqueado || tipoDoAparelho(modelo, tipoCatalogo) !== "CELULAR") return false;
   const nome = String(modelo).toUpperCase();
   return !(/\bIPHONE\s*[567](?:S|C)?(?:\b|(?=PLUS))/.test(nome) || /\b(?:MOTO(?:ROLA)?\s+)?ONE\s+(?:MICRO|MACRO)\b/.test(nome));
 }
 
-export function erroIdentificacao(tipo, codigo, imei2 = "", { modelo = "", aparelhoBloqueado = false } = {}) {
+export function erroIdentificacao(tipo, codigo, imei2 = "", { modelo = "", aparelhoBloqueado = false, danosTela = false } = {}) {
   const primeiro = String(codigo || "").trim();
   const segundo = String(imei2 || "").trim();
+  if (danosTela && segundo) return "Danos da tela permite informar apenas um código.";
+  if (danosTela && !primeiro) return null;
   if (tipo === "CELULAR") {
     if (!/^\d{15}$/.test(primeiro))
       return "O IMEI 1 deve ter exatamente 15 dígitos numéricos.";
-    if (exigeDoisImeis(modelo, tipo, aparelhoBloqueado) && !/^\d{15}$/.test(segundo))
+    if (exigeDoisImeis(modelo, tipo, aparelhoBloqueado, danosTela) && !/^\d{15}$/.test(segundo))
       return "Bipe o IMEI 2 com exatamente 15 dígitos numéricos.";
     if (segundo && !/^\d{15}$/.test(segundo))
       return "O IMEI 2 deve ter exatamente 15 dígitos numéricos.";

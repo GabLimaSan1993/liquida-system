@@ -664,7 +664,9 @@ export default function TriagemFuncionalV2Page() {
   ] = useState("");
 
   const [imei2Digitado, setImei2Digitado] = useState("");
-  const [aparelhoBloqueado, setAparelhoBloqueado] = useState(false);
+  const [condicaoInicial, setCondicaoInicial] = useState("");
+  const aparelhoBloqueado = condicaoInicial === "bloqueado";
+  const danosTela = condicaoInicial === "danos_tela";
 
 
   const [
@@ -893,8 +895,8 @@ export default function TriagemFuncionalV2Page() {
     );
 
   const tipoAparelho = tipoDoAparelho(produto.modelo, catalogo.produtos.find(p => p.modelo === produto.modelo && p.marca === produto.marca)?.tipo);
-  const doisImeis = exigeDoisImeis(produto.modelo, tipoAparelho, aparelhoBloqueado);
-  const erroCodigo = erroIdentificacao(tipoAparelho, imeiDigitado, doisImeis ? imei2Digitado : null, { modelo: produto.modelo, aparelhoBloqueado });
+  const doisImeis = exigeDoisImeis(produto.modelo, tipoAparelho, aparelhoBloqueado, danosTela);
+  const erroCodigo = erroIdentificacao(tipoAparelho, imeiDigitado, doisImeis ? imei2Digitado : null, { modelo: produto.modelo, aparelhoBloqueado, danosTela });
 
   const produtoCompleto =
     Boolean(
@@ -1012,7 +1014,7 @@ export default function TriagemFuncionalV2Page() {
 
     setImeiDigitado("");
     setImei2Digitado("");
-    setAparelhoBloqueado(false);
+    setCondicaoInicial("");
 
     setPerguntas(
       []
@@ -1100,7 +1102,7 @@ export default function TriagemFuncionalV2Page() {
       setCtx(
         resposta
       );
-      setAparelhoBloqueado(false);
+      setCondicaoInicial("");
       setImeiDigitado("");
       setImei2Digitado("");
       setValidacao(null);
@@ -1164,7 +1166,7 @@ export default function TriagemFuncionalV2Page() {
       setCtx(
         resposta
       );
-      setAparelhoBloqueado(false);
+      setCondicaoInicial("");
       setImeiDigitado("");
       setImei2Digitado("");
       setValidacao(null);
@@ -1258,7 +1260,7 @@ export default function TriagemFuncionalV2Page() {
 
     setImeiDigitado("");
     setImei2Digitado("");
-    setAparelhoBloqueado(false);
+    setCondicaoInicial("");
 
     setValorBateria(
       ultima.bateriaPercentual == null
@@ -1303,6 +1305,7 @@ export default function TriagemFuncionalV2Page() {
   }
 
   async function handleSalvarProduto() {
+    if (condicaoInicial === "nao_liga") { await handleNaoLiga(); return; }
     if (
       modeloLivre &&
       produto.marca &&
@@ -1349,13 +1352,13 @@ export default function TriagemFuncionalV2Page() {
     setCarregando(true);
     try {
       const resposta = await identificarAparelho({
-        voucher: ctx.voucher, imei1: imeiDigitado, imei2: doisImeis ? imei2Digitado : null, aparelhoBloqueado,
+        voucher: ctx.voucher, imei1: imeiDigitado, imei2: doisImeis ? imei2Digitado : null, aparelhoBloqueado, danosTela,
         modelo: produto.modelo, sku: resolverSku(catalogo.produtos, { marca:produto.marca,modelo:produto.modelo,capacidade:produto.armazenamento,cor:produto.cor }).sku,
       });
       setValidacao(resposta);
       if (resposta.divergencia) {
         exibirDivergencia(resposta);
-      } else if (resposta.confere) await iniciarPerguntas();
+      } else if (resposta.confere || resposta.prosseguir) await iniciarPerguntas();
     } catch (error) { mostrarErro(error.message); }
     finally { setCarregando(false); }
   }
@@ -1670,6 +1673,7 @@ export default function TriagemFuncionalV2Page() {
 
     if (
       exigeDefeitoFinal &&
+      !danosTela &&
       !defeitosTodos.length
     ) {
       mostrarErro(
@@ -1725,6 +1729,7 @@ export default function TriagemFuncionalV2Page() {
           imei1: imeiDigitado.trim(),
           imei2: doisImeis ? imei2Digitado.trim() : null,
           aparelhoBloqueado,
+          danosTela,
 
           canal:
             ctx.canal,
@@ -2101,25 +2106,17 @@ export default function TriagemFuncionalV2Page() {
                     }
                   >
                     <div className="space-y-5 p-5">
-                      <fieldset className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-                        <legend className="px-1 text-sm font-bold text-slate-800">Aparelho bloqueado?</legend>
-                        <div className="flex gap-3">
-                          {[false, true].map(valor => <button key={String(valor)} type="button" aria-pressed={aparelhoBloqueado === valor}
-                            onClick={() => { setAparelhoBloqueado(valor); setImei2Digitado(""); setValidacao(null); }}
-                            className={`rounded-lg border px-5 py-2 text-sm font-bold ${aparelhoBloqueado === valor ? "border-violet-700 bg-violet-700 text-white" : "bg-white text-slate-700"}`}>
-                            {valor ? "Sim" : "Não"}
-                          </button>)}
-                        </div>
-                        <p className="mt-2 text-xs text-slate-600">Se o bloqueio permite acessar apenas um IMEI, marque Sim. Responda às perguntas normalmente; ao concluir, o aparelho bloqueado seguirá para laudo.</p>
-                      </fieldset>
-                      <fieldset className="rounded-xl border border-rose-200 bg-rose-50 p-4">
-                        <legend className="px-1 text-sm font-bold text-slate-800">Aparelho não liga?</legend>
-                        <button type="button" disabled={carregando} onClick={handleNaoLiga}
-                          className="rounded-lg bg-rose-700 px-5 py-2 text-sm font-bold text-white disabled:opacity-40">
-                          Sim, não liga — encaminhar à Assurant
-                        </button>
-                        <p className="mt-2 text-xs text-slate-600">O aparelho será segregado em Divergências, sem exigir IMEI, aguardando decisão da Assurant.</p>
-                      </fieldset>
+                      <Campo label="Condição inicial do aparelho">
+                        <select value={condicaoInicial} disabled={carregando} onChange={e => { const valor = e.target.value; setCondicaoInicial(valor); if (valor === "danos_tela") setDefeitosTodos(atual => [...new Set([...atual, "Danos da tela"])]); setImeiDigitado(""); setImei2Digitado(""); setValidacao(null); }} className={inputClass}>
+                          <option value="">Sem ocorrência</option>
+                          <option value="nao_liga">Produto não liga</option>
+                          <option value="bloqueado">Bloqueado</option>
+                          <option value="danos_tela">Danos da tela</option>
+                        </select>
+                        <p className="mt-2 text-xs text-slate-600">
+                          {condicaoInicial === "nao_liga" ? "Ao continuar, o produto será encaminhado para Divergências, aguardando decisão da Assurant." : aparelhoBloqueado ? "Bipe o único IMEI disponível e responda às perguntas. Ao concluir, o aparelho seguirá para laudo." : danosTela ? "Continue a triagem com um IMEI opcional. Se a tela impedir a leitura, deixe o campo vazio. Danos da tela será registrado como defeito adicional, sem encaminhamento para Divergências." : "Preencha os dados físicos e siga para a identificação do aparelho."}
+                        </p>
+                      </Campo>
                       {modoRetriagem && (
                         <Aviso tipo="aviso">
                           <div>
@@ -2375,11 +2372,11 @@ export default function TriagemFuncionalV2Page() {
                             handleSalvarProduto
                           }
                           disabled={
-                            !produtoCompleto
+                            carregando || (condicaoInicial !== "nao_liga" && !produtoCompleto)
                           }
                           className="inline-flex h-10 items-center gap-2 rounded-xl bg-violet-700 px-5 text-xs font-bold text-white shadow-sm transition hover:bg-violet-800 disabled:cursor-not-allowed disabled:opacity-40"
                         >
-                          Salvar e continuar
+                          {condicaoInicial === "nao_liga" ? "Encaminhar à Assurant" : "Salvar e continuar"}
 
                           <ChevronRight className="h-4 w-4" />
                         </button>
@@ -2418,9 +2415,9 @@ export default function TriagemFuncionalV2Page() {
                   </button>
 
                   <div className="max-w-[760px] space-y-4 rounded-2xl border border-violet-100 bg-violet-50/40 p-5">
-                    <div className="text-xs font-black text-violet-700">{tipoAparelho === "CELULAR" ? (doisImeis ? "Celular · dois IMEIs obrigatórios" : "Celular · um IMEI obrigatório") : `${tipoAparelho === "TABLET" ? "Tablet" : "Relógio"} · referência / serial`}</div>
-                    <p className="text-xs text-slate-600">{tipoAparelho === "CELULAR" ? (doisImeis ? "Digite *#06# no aparelho e bipe os dois códigos. Cada IMEI deve ter exatamente 15 dígitos e ser diferente do outro." : "Bipe o único IMEI disponível, com exatamente 15 dígitos. As perguntas da triagem continuam normalmente.") : "Bipe o código de referência ou número de série. Letras, números, ponto, hífen e barra são aceitos."}</p>
-                    <label className="block text-xs font-bold text-slate-700">{tipoAparelho === "CELULAR" ? "IMEI 1" : "Referência / serial"}
+                    <div className="text-xs font-black text-violet-700">{danosTela ? "Danos da tela · identificação opcional" : tipoAparelho === "CELULAR" ? (doisImeis ? "Celular · dois IMEIs obrigatórios" : "Celular · um IMEI obrigatório") : `${tipoAparelho === "TABLET" ? "Tablet" : "Relógio"} · referência / serial`}</div>
+                    <p className="text-xs text-slate-600">{danosTela ? "Informe somente um código, se conseguir lê-lo. Se não for possível, continue sem preencher. A ausência da bipagem ficará registrada na triagem." : tipoAparelho === "CELULAR" ? (doisImeis ? "Digite *#06# no aparelho e bipe os dois códigos. Cada IMEI deve ter exatamente 15 dígitos e ser diferente do outro." : "Bipe o único IMEI disponível, com exatamente 15 dígitos. As perguntas da triagem continuam normalmente.") : "Bipe o código de referência ou número de série. Letras, números, ponto, hífen e barra são aceitos."}</p>
+                    <label className="block text-xs font-bold text-slate-700">{tipoAparelho === "CELULAR" ? (danosTela ? "IMEI (opcional)" : "IMEI 1") : `Referência / serial${danosTela ? " (opcional)" : ""}`}
                       <input autoFocus value={imeiDigitado} inputMode={tipoAparelho === "CELULAR" ? "numeric" : "text"}
                         maxLength={tipoAparelho === "CELULAR" ? 15 : 64}
                         autoComplete="off" spellCheck={false}
@@ -2436,12 +2433,12 @@ export default function TriagemFuncionalV2Page() {
                     </label>}
                     {erroCodigo && (imeiDigitado || imei2Digitado) && <p role="alert" className="text-xs font-bold text-rose-700">{erroCodigo}</p>}
                     <button type="button" onClick={handleValidarImei} disabled={!!erroCodigo || carregando}
-                      className="h-12 rounded-xl bg-violet-700 px-6 text-sm font-bold text-white disabled:opacity-40">{carregando ? "Validando..." : "Validar identificação"}</button>
-                    <p className="text-xs text-slate-500">Uma identificação divergente será segregada automaticamente e receberá etiqueta IMEI DIVERGENTE.</p>
+                      className="h-12 rounded-xl bg-violet-700 px-6 text-sm font-bold text-white disabled:opacity-40">{carregando ? "Validando..." : danosTela ? (imeiDigitado ? "Continuar triagem" : "Continuar sem IMEI") : "Validar identificação"}</button>
+                    <p className="text-xs text-slate-500">{danosTela ? "A exceção por danos da tela será registrada e as perguntas da triagem continuarão normalmente." : "Uma identificação divergente será segregada automaticamente e receberá etiqueta IMEI DIVERGENTE."}</p>
                   </div>
 
                   {validacao &&
-                    !validacao.confere && (
+                    !validacao.confere && !validacao.prosseguir && (
                       <div className="max-w-[760px] rounded-2xl border border-rose-200 bg-rose-50 p-5">
                         <div className="flex items-start gap-3">
                           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-rose-100 text-rose-600">
@@ -2960,6 +2957,7 @@ export default function TriagemFuncionalV2Page() {
                       disabled={
                         carregando ||
                         (exigeDefeitoFinal &&
+                          !danosTela &&
                           !defeitosTodos.length)
                       }
                       className="inline-flex h-11 items-center gap-2 rounded-xl bg-violet-700 px-5 text-xs font-bold text-white transition hover:bg-violet-800 disabled:cursor-not-allowed disabled:opacity-40"

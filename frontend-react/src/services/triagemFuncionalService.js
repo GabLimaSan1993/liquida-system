@@ -266,15 +266,17 @@ export async function registrarDivergenciaImei(voucher, imeiBipado, userId, imei
 // Toda resposta negativa segue para laudo; defeitos adicionais definem BAD.
 // ══════════════════════════════════════════════════════════
 export async function salvarTriagemFuncional({
-  voucher, imei, imei1, imei2, aparelhoBloqueado = false, canal, produto, respostas, bateria, bateriaPercentual,
+  voucher, imei, imei1, imei2, aparelhoBloqueado = false, danosTela = false, canal, produto, respostas, bateria, bateriaPercentual,
   defeitos, userId, tradein, retriagem = false, motivoRetriagem = null,
 }) {
   const v = String(voucher || "").trim().toUpperCase();
   if (!v)    return { ok: false, erro: "Voucher ausente." };
-  if (!imei) return { ok: false, erro: "IMEI ausente." };
+  if (!imei && !danosTela) return { ok: false, erro: "IMEI ausente." };
 
-  const erroCodigo = erroIdentificacao(tipoDoAparelho(produto?.modelo, produto?.tipo), imei1 || imei, imei2, { modelo: produto?.modelo, aparelhoBloqueado });
+  const codigoBipado = danosTela ? (imei1 || null) : (imei1 || imei);
+  const erroCodigo = erroIdentificacao(tipoDoAparelho(produto?.modelo, produto?.tipo), codigoBipado, imei2, { modelo: produto?.modelo, aparelhoBloqueado, danosTela });
   if (erroCodigo) return { ok: false, erro: erroCodigo };
+  const defeitosRegistrados = [...new Set([...(Array.isArray(defeitos) ? defeitos : String(defeitos || "").split(";")), ...(danosTela ? ["Danos da tela"] : [])].map(d => String(d).trim()).filter(Boolean))];
 
   const lista = Array.isArray(respostas) ? respostas : [];
   const negativas = lista.filter(respostaFuncionalNegativa);
@@ -282,7 +284,7 @@ export async function salvarTriagemFuncional({
     condicaoDeclarada: tradein?.condicao_aparelho,
     respostas: lista,
     aparelhoBloqueado,
-    defeitos,
+    defeitos: defeitosRegistrados,
   });
   // Respostas negativas também seguem para laudo nas devoluções.
   const ehDevolucao = String(canal || "").toUpperCase() === "DEV";
@@ -293,7 +295,7 @@ export async function salvarTriagemFuncional({
 
   const registro = {
     voucher:        v,
-    imei:           String(imei).trim(),
+    imei:           String(imei || "").trim() || null,
     sku:            produto?.sku    || null,
     modelo:         produto?.modelo || null,
     origem_triagem: ehDevolucao ? "devolucao_b2c" : "liquida",
@@ -302,11 +304,11 @@ export async function salvarTriagemFuncional({
     atualizado_em:  agora,
 
     status_atual: temLaudo ? STATUS_LAUDO : STATUS_APOS_FUNCIONAL,
-    resultado_triagem_funcional: resultadoFuncional(lista, defeitos, aparelhoBloqueado),
+    resultado_triagem_funcional: resultadoFuncional(lista, defeitosRegistrados, aparelhoBloqueado),
 
     respostas_funcional: JSON.stringify({
       versao: 3,
-      identificacao: { imei1: imei1 || imei, imei2: imei2 || null, aparelho_bloqueado: aparelhoBloqueado, tipo: tipoDoAparelho(produto?.modelo, produto?.tipo) },
+      identificacao: { imei1: codigoBipado, imei2: imei2 || null, aparelho_bloqueado: aparelhoBloqueado, danos_tela: danosTela, tipo: tipoDoAparelho(produto?.modelo, produto?.tipo) },
       canal,
       respondido_em: agora,
       produto: {
@@ -328,7 +330,7 @@ export async function salvarTriagemFuncional({
 
     status_bateria:      bateria || null,
     bateria_percentual:  Number.isFinite(Number(bateriaPercentual)) ? Number(bateriaPercentual) : null,
-    defeitos_adicionais: (defeitos || []).length ? defeitos.join("; ") : null,
+    defeitos_adicionais: defeitosRegistrados.length ? defeitosRegistrados.join("; ") : null,
   };
 
   let data;

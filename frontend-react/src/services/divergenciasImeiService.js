@@ -7,16 +7,18 @@ export async function identificarAparelho({
   modelo,
   sku,
   aparelhoBloqueado = false,
+  danosTela = false,
 }) {
-  const erro = erroIdentificacao(tipoDoAparelho(modelo), imei1, imei2, { modelo, aparelhoBloqueado });
+  const erro = erroIdentificacao(tipoDoAparelho(modelo), imei1, imei2, { modelo, aparelhoBloqueado, danosTela });
   if (erro) throw new Error(erro);
   const { data, error } = await supabase.rpc("assurant_triagem_identificar", {
     p_voucher: voucher,
-    p_imei1: imei1.trim(),
+    p_imei1: imei1?.trim() || null,
     p_imei2: imei2?.trim() || null,
     p_modelo: modelo,
     p_sku: sku || null,
     p_bloqueado: aparelhoBloqueado,
+    p_danos_tela: danosTela,
   });
   if (error) throw new Error(error.message);
   return data;

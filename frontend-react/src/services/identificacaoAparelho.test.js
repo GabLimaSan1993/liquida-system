@@ -1,6 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { tipoDoAparelho, erroIdentificacao, exigeDoisImeis } from "./identificacaoAparelho.js";
+test("danos da tela permite um IMEI opcional sem aceitar código malformado ou segundo código", () => {
+  assert.equal(exigeDoisImeis("GALAXY S24", "", false, true), false);
+  assert.equal(erroIdentificacao("CELULAR", "", null, { modelo: "GALAXY S24", danosTela: true }), null);
+  assert.equal(erroIdentificacao("CELULAR", "123456789012345", null, { modelo: "GALAXY S24", danosTela: true }), null);
+  assert.ok(erroIdentificacao("CELULAR", "12345678901234", null, { danosTela: true }));
+  assert.ok(erroIdentificacao("CELULAR", "", "123456789012345", { danosTela: true }));
+  assert.equal(erroIdentificacao("RELOGIO", "", null, { danosTela: true }), null);
+  assert.ok(erroIdentificacao("CELULAR", "", null, { aparelhoBloqueado: true }));
+});
 test("celular exige dois IMEIs distintos e de exatamente 15 dígitos", () => {
   assert.equal(
     erroIdentificacao("CELULAR", "123456789012345", "123456789012346"),
