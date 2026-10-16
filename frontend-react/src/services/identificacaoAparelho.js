@@ -14,7 +14,7 @@ export function tipoDoAparelho(modelo = "", tipoCatalogo = "") {
 export function exigeDoisImeis(modelo = "", tipoCatalogo = "", aparelhoBloqueado = false) {
   if (aparelhoBloqueado || tipoDoAparelho(modelo, tipoCatalogo) !== "CELULAR") return false;
   const nome = String(modelo).toUpperCase();
-  return !(/\bIPHONE\s*[56](?:S|C)?(?:\b|(?=PLUS))/.test(nome) || /\b(?:GALAXY\s*)?J\s*\d/.test(nome));
+  return !(/\bIPHONE\s*[567](?:S|C)?(?:\b|(?=PLUS))/.test(nome) || /\b(?:GALAXY\s*)?J\s*\d/.test(nome) || /\b(?:MOTO(?:ROLA)?\s+)?ONE\s+(?:MICRO|MACRO)\b/.test(nome));
 }
 
 export function erroIdentificacao(tipo, codigo, imei2 = "", { modelo = "", aparelhoBloqueado = false } = {}) {

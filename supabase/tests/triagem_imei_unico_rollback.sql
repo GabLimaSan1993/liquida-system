@@ -5,7 +5,7 @@ declare u uuid; r jsonb; c uuid; tok uuid; modelo text; rejeitou boolean;
 begin
  select id into u from public.user_profiles where is_master limit 1;
  perform set_config('request.jwt.claim.sub',u::text,true);
- foreach modelo in array array['IPHONE 5','IPHONE 5C','IPHONE 5S','IPHONE 6','IPHONE 6S PLUS','IPHONE6 PLUS','SAMSUNG GALAXY J4 PLUS','GALAXY J7 PRIME','SAMSUNG J 5'] loop
+ foreach modelo in array array['IPHONE 5','IPHONE 5C','IPHONE 5S','IPHONE 6','IPHONE 6S PLUS','IPHONE6 PLUS','IPHONE 7','IPHONE 7 PLUS','MOTO ONE MACRO','MOTOROLA ONE MICRO','SAMSUNG GALAXY J4 PLUS','GALAXY J7 PRIME','SAMSUNG J 5'] loop
   r:=public.assurant_triagem_identificar('YBV1900000010','123456789012345',null,modelo,null,false);
   assert (r->>'confere')::boolean,'Modelo de um IMEI bloqueado: '||modelo;
   insert into public.assurant_triagem(voucher,imei,modelo,origem_triagem,data_funcional,status_atual,respostas_funcional)
@@ -13,7 +13,7 @@ begin
     jsonb_build_object('produto',jsonb_build_object('modelo',modelo),'identificacao',jsonb_build_object('imei1','123456789012345','aparelho_bloqueado',false))::text)
    on conflict(voucher) do update set modelo=excluded.modelo,respostas_funcional=excluded.respostas_funcional;
  end loop;
- foreach modelo in array array['IPHONE 15','IPHONE 16','IPHONE 16 PRO MAX','GALAXY S24','GALAXY S6','MOTO G6','IPHONE 7'] loop
+ foreach modelo in array array['IPHONE 15','IPHONE 16','IPHONE 16 PRO MAX','GALAXY S24','GALAXY S6','MOTO G6'] loop
   rejeitou:=false;
   begin perform public.assurant_triagem_identificar('YBV1900000011','123456789012345',null,modelo,null,false);
   exception when others then rejeitou:=true; end;

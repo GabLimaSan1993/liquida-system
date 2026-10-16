@@ -53,10 +53,23 @@ test("modelos de IMEI único e celulares de dois IMEIs não se confundem", () =>
     assert.equal(exigeDoisImeis(modelo), false, modelo);
     assert.equal(erroIdentificacao("CELULAR", "123456789012345", null, { modelo }), null, modelo);
   }
-  for (const modelo of ["IPHONE 15", "IPHONE 16", "IPHONE 16 PRO MAX", "GALAXY S24", "GALAXY A06", "MOTO G6", "GALAXY S6", "IPHONE 7"]) {
+  for (const modelo of ["IPHONE 15", "IPHONE 16", "IPHONE 16 PRO MAX", "GALAXY S24", "GALAXY A06", "MOTO G6", "GALAXY S6"]) {
     assert.equal(exigeDoisImeis(modelo), true, modelo);
     assert.ok(erroIdentificacao("CELULAR", "123456789012345", null, { modelo }), modelo);
   }
   assert.equal(exigeDoisImeis("MODELO ESPECIAL", "SMARTWATCH"), false);
   assert.equal(exigeDoisImeis("MODELO ESPECIAL", "RELOGIO"), false);
+});
+
+
+test("iPhones 7 e Motorola One Micro/Macro aceitam um IMEI, sem afetar iPhone 17 e outros One", () => {
+  for (const modelo of ["IPHONE 7", "IPHONE 7 PLUS", "IPHONE 7 INT", "IPHONE 7 PLUS INT", "MOTO ONE MACRO", "MOTOROLA ONE MICRO", "MOTOROLA ONE MACRO", "ONE MICRO"]) {
+    assert.equal(exigeDoisImeis(modelo), false, modelo);
+    assert.equal(erroIdentificacao("CELULAR", "123456789012345", null, { modelo }), null, modelo);
+    assert.ok(erroIdentificacao("CELULAR", "12345678901234", null, { modelo }), modelo);
+  }
+  for (const modelo of ["IPHONE 17", "IPHONE 17 PRO MAX", "MOTO ONE VISION", "MOTO ONE ACTION", "MOTO G7"]) {
+    assert.equal(exigeDoisImeis(modelo), true, modelo);
+    assert.ok(erroIdentificacao("CELULAR", "123456789012345", null, { modelo }), modelo);
+  }
 });
