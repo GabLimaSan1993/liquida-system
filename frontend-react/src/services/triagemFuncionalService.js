@@ -281,6 +281,8 @@ export async function salvarTriagemFuncional({
   const decisao   = decidirDestino({
     condicaoDeclarada: tradein?.condicao_aparelho,
     respostas: lista,
+    aparelhoBloqueado,
+    defeitos,
   });
   // Respostas negativas também seguem para laudo nas devoluções.
   const ehDevolucao = String(canal || "").toUpperCase() === "DEV";
@@ -300,7 +302,7 @@ export async function salvarTriagemFuncional({
     atualizado_em:  agora,
 
     status_atual: temLaudo ? STATUS_LAUDO : STATUS_APOS_FUNCIONAL,
-    resultado_triagem_funcional: resultadoFuncional(lista, defeitos),
+    resultado_triagem_funcional: resultadoFuncional(lista, defeitos, aparelhoBloqueado),
 
     respostas_funcional: JSON.stringify({
       versao: 3,

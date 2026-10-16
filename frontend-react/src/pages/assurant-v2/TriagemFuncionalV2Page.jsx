@@ -2110,7 +2110,7 @@ export default function TriagemFuncionalV2Page() {
                             {valor ? "Sim" : "Não"}
                           </button>)}
                         </div>
-                        <p className="mt-2 text-xs text-slate-600">Se o bloqueio permite acessar apenas um IMEI, marque Sim. A triagem seguirá com todas as perguntas.</p>
+                        <p className="mt-2 text-xs text-slate-600">Se o bloqueio permite acessar apenas um IMEI, marque Sim. Responda às perguntas normalmente; ao concluir, o aparelho bloqueado seguirá para laudo.</p>
                       </fieldset>
                       <fieldset className="rounded-xl border border-rose-200 bg-rose-50 p-4">
                         <legend className="px-1 text-sm font-bold text-slate-800">Aparelho não liga?</legend>
@@ -2829,7 +2829,7 @@ export default function TriagemFuncionalV2Page() {
                         </h3>
 
                         <p className="mt-1 text-[10px] leading-4 text-slate-400">
-                          Qualquer defeito adicional selecionado classifica o aparelho como QUEBRADO. Qualquer resposta negativa nas perguntas encaminha para laudo.
+                          Qualquer defeito adicional selecionado classifica o aparelho como QUEBRADO. Aparelho bloqueado, defeito de bloqueio ou qualquer resposta negativa nas perguntas encaminha para laudo.
                         </p>
                       </div>
 
