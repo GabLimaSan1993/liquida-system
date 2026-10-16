@@ -1,3 +1,5 @@
+import { tipoDoAparelho, erroIdentificacao } from "../../services/identificacaoAparelho";
+import { identificarAparelho, etiquetaDivergencia } from "../../services/divergenciasImeiService";
 import {
   useEffect,
   useMemo,
@@ -25,9 +27,6 @@ import { useAuth } from "../../AuthContext.jsx";
 
 import {
   consultarVoucher,
-  validarImeiTradein,
-  registrarDivergenciaImei,
-  registrarDivergenciaImeiDevolucao,
   buscarPerguntas,
   listarDefeitos,
   salvarTriagemFuncional,
@@ -664,6 +663,9 @@ export default function TriagemFuncionalV2Page() {
     setImeiDigitado,
   ] = useState("");
 
+  const [imei2Digitado, setImei2Digitado] = useState("");
+
+
   const [
     validacao,
     setValidacao,
@@ -868,7 +870,7 @@ export default function TriagemFuncionalV2Page() {
                     produto.marca &&
                   item.modelo ===
                     produto.modelo &&
-                  item.capacidade ===
+                  (item.capacidade || "") ===
                     produto.armazenamento
               )
               .map(
@@ -889,11 +891,14 @@ export default function TriagemFuncionalV2Page() {
       ]
     );
 
+  const tipoAparelho = tipoDoAparelho(produto.modelo, catalogo.produtos.find(p => p.modelo === produto.modelo && p.marca === produto.marca)?.tipo);
+  const erroCodigo = erroIdentificacao(tipoAparelho, imeiDigitado, imei2Digitado);
+
   const produtoCompleto =
     Boolean(
       produto.marca &&
         produto.modelo &&
-        produto.armazenamento &&
+        (produto.armazenamento || (tipoAparelho !== "CELULAR" && capacidades.length === 0)) &&
         produto.cor
     );
 
@@ -1003,9 +1008,8 @@ export default function TriagemFuncionalV2Page() {
       null
     );
 
-    setImeiDigitado(
-      ""
-    );
+    setImeiDigitado("");
+    setImei2Digitado("");
 
     setPerguntas(
       []
@@ -1233,10 +1237,8 @@ export default function TriagemFuncionalV2Page() {
         ).toUpperCase(),
     });
 
-    setImeiDigitado(
-      ultima.imei ||
-        ""
-    );
+    setImeiDigitado("");
+    setImei2Digitado("");
 
     setValorBateria(
       ultima.bateriaPercentual == null
@@ -1307,119 +1309,23 @@ export default function TriagemFuncionalV2Page() {
   }
 
   async function handleValidarImei() {
-    if (
-      !imeiDigitado.trim()
-    ) {
-      return;
-    }
-
-    setCarregando(
-      true
-    );
-
+    if (carregando) return;
+    if (erroCodigo) { mostrarErro(erroCodigo); return; }
+    setCarregando(true);
     try {
-      if (
-        ctx.devolucao
-      ) {
-        const imeiAutorizado =
-          ctx.devolucao
-            .definicao_assurant_status ===
-          "autorizado";
-
-        const imeiEsperado =
-          String(
-            imeiAutorizado
-              ? ctx.devolucao
-                  .imei_recebido
-              : ctx.devolucao
-                  .imei_vendido
-          ).replace(
-            /\D/g,
-            ""
-          );
-
-        const imeiBipado =
-          String(
-            imeiDigitado ||
-              ""
-          ).replace(
-            /\D/g,
-            ""
-          );
-
-        if (
-          imeiEsperado.length !==
-          15
-        ) {
-          throw new Error(
-            "A solicitação de devolução não possui um IMEI vendido válido."
-          );
-        }
-
-        const resposta = {
-          ok: true,
-          confere:
-            imeiBipado ===
-            imeiEsperado,
-          tipoBase:
-            "devolucao",
-          imeiEsperado,
-        };
-
-        setValidacao(
-          resposta
-        );
-
-        if (
-          resposta.confere
-        ) {
-          await iniciarPerguntas();
-        }
-
-        return;
-      }
-
-      if (
-        ctx.canal !==
-          "YBV" ||
-        !ctx.temTradein
-      ) {
-        setValidacao({
-          ok: true,
-          confere: true,
-          semBase: true,
-        });
-
-        await iniciarPerguntas();
-
-        return;
-      }
-
-      const resposta =
-        await validarImeiTradein(
-          ctx.voucher,
-          imeiDigitado
-        );
-
-      setValidacao(
-        resposta
-      );
-
-      if (
-        resposta.ok &&
-        resposta.confere
-      ) {
-        await iniciarPerguntas();
-      }
-    } catch (error) {
-      mostrarErro(
-        error.message
-      );
-    } finally {
-      setCarregando(
-        false
-      );
-    }
+      const resposta = await identificarAparelho({
+        voucher: ctx.voucher, imei1: imeiDigitado, imei2: tipoAparelho === "CELULAR" ? imei2Digitado : null,
+        modelo: produto.modelo, sku: resolverSku(catalogo.produtos, { marca:produto.marca,modelo:produto.modelo,capacidade:produto.armazenamento,cor:produto.cor }).sku,
+      });
+      setValidacao(resposta);
+      if (resposta.divergencia) {
+        setResultado({ ...resposta, divergencia: true });
+        setEtapa("fim");
+        try { etiquetaDivergencia(resposta); } catch { mostrarErro("Divergência registrada. Use o botão para baixar ou reimprimir a etiqueta."); }
+        carregarFila();
+      } else if (resposta.confere) await iniciarPerguntas();
+    } catch (error) { mostrarErro(error.message); }
+    finally { setCarregando(false); }
   }
 
   async function iniciarPerguntas() {
@@ -1541,52 +1447,7 @@ export default function TriagemFuncionalV2Page() {
     );
   }
 
-  async function handleConfirmarDivergencia() {
-    setCarregando(
-      true
-    );
-
-    try {
-      if (
-        ctx.devolucao
-      ) {
-        await registrarDivergenciaImeiDevolucao(
-          ctx.devolucao.id,
-          imeiDigitado,
-          user.id
-        );
-
-        setResultado({
-          divergencia: true,
-          devolucao: true,
-        });
-      } else {
-        await registrarDivergenciaImei(
-          ctx.voucher,
-          imeiDigitado,
-          user.id,
-          validacao?.imeiTradein
-        );
-
-        setResultado({
-          divergencia: true,
-          devolucao: false,
-        });
-      }
-
-      setEtapa(
-        "fim"
-      );
-    } catch (error) {
-      mostrarErro(
-        error.message
-      );
-    } finally {
-      setCarregando(
-        false
-      );
-    }
-  }
+  async function handleConfirmarDivergencia() { await handleValidarImei(); }
 
   function responder(
     valor
@@ -1827,13 +1688,17 @@ export default function TriagemFuncionalV2Page() {
             ctx.voucher,
 
           imei:
-            imeiDigitado.trim(),
+            validacao?.imei_canonico || imeiDigitado.trim(),
+
+          imei1: imeiDigitado.trim(),
+          imei2: tipoAparelho === "CELULAR" ? imei2Digitado.trim() : null,
 
           canal:
             ctx.canal,
 
           produto: {
             ...produto,
+            tipo: catalogo.produtos.find(p => p.modelo === produto.modelo && p.marca === produto.marca)?.tipo,
 
             sku:
               resolucaoSku.sku ||
@@ -2351,7 +2216,7 @@ export default function TriagemFuncionalV2Page() {
                         </Campo>
 
                         <Campo
-                          label="Armazenamento"
+                          label={tipoAparelho === "RELOGIO" ? "Tamanho / capacidade" : "Armazenamento"}
                           helper="Digite para pesquisar"
                         >
                           <input
@@ -2411,12 +2276,12 @@ export default function TriagemFuncionalV2Page() {
                               produto.cor
                             }
                             disabled={
-                              !produto.armazenamento
+                              !produto.modelo
                             }
                             placeholder={
-                              produto.armazenamento
+                              produto.modelo
                                 ? "Pesquise ou digite a cor"
-                                : "Informe o armazenamento primeiro"
+                                : "Informe o modelo primeiro"
                             }
                             onChange={(
                               event
@@ -2482,8 +2347,8 @@ export default function TriagemFuncionalV2Page() {
             "imei" &&
             ctx && (
               <Panel
-                title="Validação de IMEI"
-                subtitle="Bipe o IMEI físico do aparelho."
+                title="Identificação do aparelho"
+                subtitle="Confira os códigos físicos antes dos testes."
                 icon={
                   ScanLine
                 }
@@ -2502,85 +2367,27 @@ export default function TriagemFuncionalV2Page() {
                     Voltar para produto
                   </button>
 
-                  <div className="max-w-[760px] rounded-2xl border border-violet-100 bg-violet-50/40 p-5">
-                    <div className="text-[10px] font-black uppercase tracking-[0.14em] text-violet-500">
-                      Identificação física
-                    </div>
-
-                    <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                      <div className="relative flex-1">
-                        <ScanLine className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-violet-500" />
-
-                        <input
-                          autoFocus
-                          value={
-                            imeiDigitado
-                          }
-                          maxLength={
-                            15
-                          }
-                          placeholder="000000000000000"
-                          onChange={(
-                            event
-                          ) => {
-                            setImeiDigitado(
-                              event.target.value.replace(
-                                /\D/g,
-                                ""
-                              )
-                            );
-
-                            setValidacao(
-                              null
-                            );
-                          }}
-                          onKeyDown={(
-                            event
-                          ) => {
-                            if (
-                              event.key ===
-                              "Enter"
-                            ) {
-                              handleValidarImei();
-                            }
-                          }}
-                          className="h-14 w-full rounded-xl border border-violet-200 bg-white pl-12 pr-4 font-mono text-lg font-black tracking-[0.08em] text-slate-800 outline-none transition placeholder:text-slate-300 focus:border-violet-400 focus:ring-4 focus:ring-violet-100"
-                        />
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={
-                          handleValidarImei
-                        }
-                        disabled={
-                          imeiDigitado.length <
-                            14 ||
-                          carregando
-                        }
-                        className="inline-flex h-14 items-center justify-center gap-2 rounded-xl bg-violet-700 px-6 text-sm font-bold text-white transition hover:bg-violet-800 disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        {carregando ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <CheckCircle2 className="h-4 w-4" />
-                        )}
-
-                        {carregando
-                          ? "Validando..."
-                          : "Validar IMEI"}
-                      </button>
-                    </div>
-
-                    <div className="mt-3 text-[10px] text-slate-400">
-                      {ctx.devolucao
-                        ? "O IMEI será confrontado com a solicitação de devolução."
-                        : ctx.canal ===
-                            "YBV" &&
-                          ctx.temTradein
-                        ? "O IMEI será confrontado com a base TradeIn."
-                        : "Não há base de comparação de IMEI para este fluxo."}
-                    </div>
+                  <div className="max-w-[760px] space-y-4 rounded-2xl border border-violet-100 bg-violet-50/40 p-5">
+                    <div className="text-xs font-black text-violet-700">{tipoAparelho === "CELULAR" ? "Celular · dois IMEIs obrigatórios" : `${tipoAparelho === "TABLET" ? "Tablet" : "Relógio"} · referência / serial`}</div>
+                    <p className="text-xs text-slate-600">{tipoAparelho === "CELULAR" ? "Digite *#06# no aparelho e bipe os dois códigos. Cada IMEI deve ter exatamente 15 dígitos e ser diferente do outro." : "Bipe o código de referência ou número de série. Letras, números, ponto, hífen e barra são aceitos."}</p>
+                    <label className="block text-xs font-bold text-slate-700">{tipoAparelho === "CELULAR" ? "IMEI 1" : "Referência / serial"}
+                      <input autoFocus value={imeiDigitado} inputMode={tipoAparelho === "CELULAR" ? "numeric" : "text"}
+                        maxLength={tipoAparelho === "CELULAR" ? undefined : 64}
+                        autoComplete="off" spellCheck={false}
+                        onChange={e=>{setImeiDigitado(e.target.value.trim());setValidacao(null);}}
+                        onKeyDown={e=>{if(e.key === "Enter") {e.preventDefault();if(tipoAparelho === "CELULAR") document.getElementById("triagem-imei2")?.focus();else handleValidarImei();}}}
+                        className="mt-2 h-12 w-full rounded-xl border border-violet-200 bg-white px-4 font-mono text-lg" />
+                    </label>
+                    {tipoAparelho === "CELULAR" && <label className="block text-xs font-bold text-slate-700">IMEI 2
+                      <input id="triagem-imei2" value={imei2Digitado} inputMode="numeric" autoComplete="off" spellCheck={false}
+                        onChange={e=>{setImei2Digitado(e.target.value.trim());setValidacao(null);}}
+                        onKeyDown={e=>{if(e.key === "Enter") {e.preventDefault();handleValidarImei();}}}
+                        className="mt-2 h-12 w-full rounded-xl border border-violet-200 bg-white px-4 font-mono text-lg" />
+                    </label>}
+                    {erroCodigo && (imeiDigitado || imei2Digitado) && <p role="alert" className="text-xs font-bold text-rose-700">{erroCodigo}</p>}
+                    <button type="button" onClick={handleValidarImei} disabled={!!erroCodigo || carregando}
+                      className="h-12 rounded-xl bg-violet-700 px-6 text-sm font-bold text-white disabled:opacity-40">{carregando ? "Validando..." : "Validar identificação"}</button>
+                    <p className="text-xs text-slate-500">Uma identificação divergente será segregada automaticamente e receberá etiqueta IMEI DIVERGENTE.</p>
                   </div>
 
                   {validacao &&
@@ -3138,12 +2945,14 @@ export default function TriagemFuncionalV2Page() {
                       <div>
                         <div className="font-black">
                           Divergência de IMEI registrada.
+                          <div className="mt-3 flex gap-2">
+                            <button className="rounded-lg border px-3 py-2" onClick={() => etiquetaDivergencia(resultado)}>Reimprimir etiqueta</button>
+                            <button className="rounded-lg border px-3 py-2" onClick={() => etiquetaDivergencia(resultado,{baixar:true})}>Baixar etiqueta PDF</button>
+                          </div>
                         </div>
 
                         <div className="mt-1 font-medium">
-                          {resultado.devolucao
-                            ? "O processo foi bloqueado e encaminhado para definição da Assurant."
-                            : "O aparelho foi encaminhado para Aguardando análise Assurant."}
+                          O aparelho está segregado e bloqueado até a decisão da Assurant. Cole a etiqueta IMEI DIVERGENTE.
                         </div>
                       </div>
                     </Aviso>

@@ -1,0 +1,45 @@
+import { supabase } from "../lib/supabase";
+import { erroIdentificacao, tipoDoAparelho } from "./identificacaoAparelho";
+export async function identificarAparelho({
+  voucher,
+  imei1,
+  imei2,
+  modelo,
+  sku,
+}) {
+  const erro = erroIdentificacao(tipoDoAparelho(modelo), imei1, imei2);
+  if (erro) throw new Error(erro);
+  const { data, error } = await supabase.rpc("assurant_triagem_identificar", {
+    p_voucher: voucher,
+    p_imei1: imei1.trim(),
+    p_imei2: imei2?.trim() || null,
+    p_modelo: modelo,
+    p_sku: sku || null,
+  });
+  if (error) throw new Error(error.message);
+  return data;
+}
+export { etiquetaDivergencia } from "./etiquetaDivergencia";
+
+export async function listarDivergencias() {
+  const { data, error } = await supabase.rpc("assurant_divergencias_listar");
+  if (error) throw new Error(error.message);
+  return data;
+}
+export async function decidirDivergencia(caso, decisao, diretriz) {
+  const { data, error } = await supabase.rpc("assurant_divergencias_decidir", {
+    p_caso: caso,
+    p_decisao: decisao,
+    p_diretriz: diretriz,
+  });
+  if (error) throw new Error(error.message);
+  return data;
+}
+export async function configurarDestinatarios(destinatarios) {
+  const { data, error } = await supabase.rpc(
+    "assurant_divergencias_configurar",
+    { p_destinatarios: destinatarios },
+  );
+  if (error) throw new Error(error.message);
+  return data;
+}

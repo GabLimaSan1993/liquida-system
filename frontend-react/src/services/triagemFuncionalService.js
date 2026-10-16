@@ -1,6 +1,6 @@
+import { erroIdentificacao, tipoDoAparelho } from "./identificacaoAparelho";
 import { supabase } from "../lib/supabase";
 import { buscarTradeinPorVoucher, validarImeiTradein } from "./tradeinService";
-import { resolverVoucherCanonico } from "./voucherNormalizationService";
 
 // ══════════════════════════════════════════════════════════
 // TRIAGEM FUNCIONAL
@@ -292,12 +292,15 @@ export function decidirDestino({ condicaoDeclarada, respostas }) {
 }
 
 export async function salvarTriagemFuncional({
-  voucher, imei, canal, produto, respostas, bateria, bateriaPercentual,
+  voucher, imei, imei1, imei2, canal, produto, respostas, bateria, bateriaPercentual,
   defeitos, userId, tradein, retriagem = false, motivoRetriagem = null,
 }) {
   const v = String(voucher || "").trim().toUpperCase();
   if (!v)    return { ok: false, erro: "Voucher ausente." };
   if (!imei) return { ok: false, erro: "IMEI ausente." };
+
+  const erroCodigo = erroIdentificacao(tipoDoAparelho(produto?.modelo, produto?.tipo), imei1 || imei, imei2);
+  if (erroCodigo) return { ok: false, erro: erroCodigo };
 
   const lista = Array.isArray(respostas) ? respostas : [];
   const negativas = lista.filter(r => r.divergente);
@@ -327,7 +330,8 @@ export async function salvarTriagemFuncional({
     resultado_triagem_funcional: negativas.length ? "BAD" : "GOOD",
 
     respostas_funcional: JSON.stringify({
-      versao: 2,
+      versao: 3,
+      identificacao: { imei1: imei1 || imei, imei2: imei2 || null, tipo: tipoDoAparelho(produto?.modelo, produto?.tipo) },
       canal,
       respondido_em: agora,
       produto: {
@@ -414,18 +418,18 @@ export async function salvarTriagemFuncional({
 // na tela. Evita uma consulta a cada dropdown aberto na bancada.
 // ══════════════════════════════════════════════════════════
 
-export async function carregarCatalogo(tipo = "APARELHO") {
+export async function carregarCatalogo(tipo = null) {
   // Traz o catálogo inteiro de aparelhos (~3.6 mil linhas) numa consulta só.
   // A cor vem daqui, em inglês, porque é parte da chave que resolve o SKU.
   const { data, error } = await supabase
     .from("produtos_catalogo")
-    .select("marca, modelo, capacidade, cor, sku_als, sku_oracle, pendente")
-    .eq("tipo", tipo)
+    .select("tipo, marca, modelo, capacidade, tamanho, cor, sku_als, sku_oracle, pendente")
+    .in("tipo", tipo ? [tipo] : ["APARELHO", "TABLET", "SMARTWATCH"])
     .eq("ativo", true)
     .order("marca").order("modelo")
     .limit(10000);
   if (error) throw new Error(error.message);
-  return { produtos: data || [] };
+  return { produtos: (data || []).map(p => ({ ...p, capacidade: p.capacidade || p.tamanho || null })) };
 }
 
 // Resolve o SKU a partir dos quatro campos escolhidos. Se houver mais de um

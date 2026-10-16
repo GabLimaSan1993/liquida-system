@@ -1,3 +1,4 @@
+import DivergenciasImeiV2Page from "./pages/assurant-v2/DivergenciasImeiV2Page.jsx";
 import ProducaoEsteiraV2Page from './pages/assurant-v2/ProducaoEsteiraV2Page.jsx';
 import RelatorioEstoqueV2Page from "./pages/assurant-v2/RelatorioEstoqueV2Page";
 import FechamentoLojasV2Page from "./pages/assurant-v2/FechamentoLojasV2Page";
@@ -627,6 +628,7 @@ export default function App() {
 
 
         {/* B2C */}
+        <Route path="triagens/divergencias-imei" element={<ProtectedRoute tela="/v2/assurant/triagens/divergencias-imei"><DivergenciasImeiV2Page /></ProtectedRoute>} />
         <Route path="b2c/definicao-assurant" element={<ProtectedRoute tela="/v2/assurant/b2c/definicao-assurant"><DefinicaoAssurantV2Page /></ProtectedRoute>} />
         <Route path="b2c/validacao-meli" element={<ProtectedRoute tela="/v2/assurant/b2c/validacao-meli"><ValidacaoMeliV2Page /></ProtectedRoute>} />
 

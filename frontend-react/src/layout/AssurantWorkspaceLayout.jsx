@@ -127,6 +127,8 @@ const MENU_GROUPS = [
             exact: true,
           },
 
+          { label: "Divergências de IMEI", icon: ShieldCheck, to: "/v2/assurant/triagens/divergencias-imei", exact: true },
+
           {
             label: "Triagem Automática — LAB",
             icon: Activity,

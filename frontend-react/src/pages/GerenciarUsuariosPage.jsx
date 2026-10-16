@@ -15,6 +15,7 @@ const TELAS = [
   { id: "/v2/assurant/recebimento/gestao", label: "Recebimento — Gestão", grupo: "Assurant V2 — Operação" },
 
   { id: "/v2/assurant/triagens/funcional", label: "Triagem Funcional", grupo: "Assurant V2 — Triagens" },
+  { id: "/v2/assurant/triagens/divergencias-imei", label: "Divergências de IMEI — Assurant", grupo: "Assurant V2 — Triagens" },
   { id: "/v2/assurant/triagens/laudo", label: "Laudo", grupo: "Assurant V2 — Triagens" },
   { id: "/v2/assurant/triagens/cosmetica", label: "Triagem Cosmética", grupo: "Assurant V2 — Triagens" },
   { id: "/v2/assurant/triagens/oracle", label: "Entrada Oracle", grupo: "Assurant V2 — Triagens" },

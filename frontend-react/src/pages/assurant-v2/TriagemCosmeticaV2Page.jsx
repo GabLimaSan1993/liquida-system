@@ -1449,6 +1449,12 @@ export default function TriagemCosmeticaV2Page() {
             "perguntas" &&
             dados && (
               <div className="space-y-5">
+                {!!dados.defeitos?.length && (
+                  <Aviso tipo="aviso"><div><div className="font-black">Defeitos adicionais da triagem funcional</div>
+                    <ul className="mt-2 list-disc pl-5">{dados.defeitos.map(defeito => <li key={defeito}>{defeito}</li>)}</ul>
+                    <p className="mt-2 text-xs">Informações registradas na funcional para conferência durante a cosmética.</p>
+                  </div></Aviso>
+                )}
                 {dados.temDefeitoFuncional && (
                   <Aviso tipo="aviso">
                     <div>
