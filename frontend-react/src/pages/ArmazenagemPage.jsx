@@ -24,6 +24,7 @@ import {
   MODO_SEM_BIPAGEM_LOCALIZACAO,
   baixarEtiquetaArmazenagem,
   cancelarReserva,
+  completarCadastroCaixa,
   confirmarArmazenagemSemBipagem,
   enderecoExibicao,
   listarAguardandoArmazenagem,
@@ -580,6 +581,9 @@ export default function ArmazenagemPage() {
     useAuth();
 
 
+  const [cadastroCaixa, setCadastroCaixa] = useState(null);
+  const [cadastro, setCadastro] = useState({});
+
   const [voucher, setVoucher] =
     useState("");
 
@@ -688,6 +692,12 @@ export default function ArmazenagemPage() {
     }
 
 
+    const itemCaixa = fila.find((item) => item.pendente_cadastro && (item.voucher === voucherInformado || item.imei === voucherInformado));
+    if (itemCaixa) {
+      setCadastroCaixa(itemCaixa);
+      setCadastro({voucher: itemCaixa.voucher || "", imei: itemCaixa.imei || "", sku: itemCaixa.sku || "", modelo: itemCaixa.modelo || "", grade: itemCaixa.grade_cosmetica || itemCaixa.grade || ""});
+      return;
+    }
     setCarregando(true);
     setFeedback(null);
 
@@ -1016,8 +1026,53 @@ export default function ArmazenagemPage() {
     dados?.endereco;
 
 
+  function selecionarItem(item) {
+    if (!item.pendente_cadastro) { abrirVoucher(item.voucher); return; }
+    setCadastroCaixa(item);
+    setCadastro({ voucher: item.voucher || "", imei: item.imei || "", sku: item.sku || "", modelo: item.modelo || "", grade: item.grade_cosmetica || item.grade || "" });
+  }
+
+  async function salvarCadastroCaixa(event) {
+    event.preventDefault();
+    if (carregando) return;
+    setCarregando(true); setFeedback(null);
+    try {
+      const resultado = await completarCadastroCaixa(cadastroCaixa, cadastro);
+      setCadastroCaixa(null); setVoucher(resultado.voucher);
+      await carregarFila();
+      setFeedback({tipo: "ok", msg: "Cadastro confirmado. Selecione o aparelho para reservar o endereço."});
+    } catch (erro) { setFeedback({tipo: "erro", msg: erro.message}); }
+    finally { setCarregando(false); }
+  }
+
   return (
     <div className="space-y-5">
+      {cadastroCaixa && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="cadastro-caixa-titulo">
+          <form onSubmit={salvarCadastroCaixa} className="w-full max-w-lg space-y-3 rounded-2xl bg-white p-6 shadow-xl">
+            <h2 id="cadastro-caixa-titulo" className="text-lg font-bold">Completar cadastro para armazenagem</h2>
+            <p className="text-sm text-slate-600">{cadastroCaixa.caixa_codigo} · Confira os dados na etiqueta e no aparelho.</p>
+            {[["voucher", "Voucher"], ["imei", "IMEI ou serial físico"], ["sku", "SKU"], ["modelo", "Modelo"]].map(([campo, rotulo]) => (
+              <label key={campo} className="block text-sm font-semibold">{rotulo}
+                <input required value={cadastro[campo] || ""} readOnly={campo === "voucher" && Boolean(cadastroCaixa.voucher)}
+                  onChange={(e) => setCadastro((atual) => ({...atual, [campo]: e.target.value}))} className="mt-1 w-full rounded-lg border p-2" />
+              </label>
+            ))}
+            <label className="block text-sm font-semibold">Grade física
+              <select required value={cadastro.grade || ""} onChange={(e) => setCadastro((atual) => ({...atual, grade: e.target.value}))} className="mt-1 w-full rounded-lg border p-2">
+                <option value="">Selecione</option>
+                {["QUEBRADO", "REGULAR", "BOM", "MUITO BOM", "EXCELENTE", "LIKE NEW"].map((grade) => <option key={grade}>{grade}</option>)}
+              </select>
+            </label>
+            {feedback?.tipo === "erro" && <p className="text-sm text-red-700">{feedback.msg}</p>}
+            <div className="flex justify-end gap-2">
+              <button type="button" disabled={carregando} onClick={() => setCadastroCaixa(null)} className="rounded-lg border px-4 py-2">Cancelar</button>
+              <button disabled={carregando} className="rounded-lg bg-purple-800 px-4 py-2 font-semibold text-white">{carregando ? "Salvando…" : "Confirmar cadastro"}</button>
+            </div>
+          </form>
+        </div>
+      )}
+
 
       <div
         className="
@@ -1351,15 +1406,10 @@ export default function ArmazenagemPage() {
                 fila.map(
                   (item) => (
                     <button
-                      key={
-                        item.voucher
-                      }
+                      key={item.voucher || item.referencia_caixa}
 
                       onClick={
-                        () =>
-                          abrirVoucher(
-                            item.voucher
-                          )
+                        () => selecionarItem(item)
                       }
 
                       className="
@@ -1391,7 +1441,8 @@ export default function ArmazenagemPage() {
                             text-[#6B1F87]
                           "
                         >
-                          {item.voucher}
+                          {item.voucher || `Sem voucher · ${item.imei}`}
+                          {item.caixa_codigo && <span className="ml-2 text-amber-700">{item.caixa_codigo}{item.pendente_cadastro ? " · Completar cadastro" : ""}</span>}
                         </span>
 
                         <span

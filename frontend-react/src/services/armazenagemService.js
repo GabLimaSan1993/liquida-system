@@ -1,7 +1,6 @@
 import JsBarcode from "jsbarcode";
 import { jsPDF } from "jspdf";
 import { supabase } from "../lib/supabase";
-import { resolverVoucherCanonico } from "./voucherNormalizationService";
 
 
 export const ETAPAS_BIPAGEM = [
@@ -125,57 +124,27 @@ function normalizarTriagem(
  * a etapa de armazenagem.
  */
 export async function listarAguardandoArmazenagem() {
-  const STATUS_FILA = [
-    "Aguardando armazenagem",
-    "Aguardando alocação",
-    "Aguardando alocacao",
-    "Aguardando locação",
-    "Aguardando locacao",
-  ];
-
-
-  const { data, error } = await supabase
-
-    .from("assurant_triagem")
-
-    .select(`
-      voucher,
-      imei,
-      sku,
-      modelo,
-      grade,
-      grade_cosmetica,
-      respostas_funcional,
-      data_cosmetico
-    `)
-
-    .in(
-      "status_atual",
-      STATUS_FILA
-    )
-
-    .order(
-      "data_cosmetico",
-      {
-        ascending: true,
-        nullsFirst: false,
-      }
-    )
-
-    .limit(100);
-
-
-  if (error) {
-    throw new Error(error.message);
+  const itens = [];
+  for (let offset = 0; ; offset += 200) {
+    const { data, error } = await supabase.rpc("assurant_armazenagem_fila", { p_offset: offset, p_limite: 200 });
+    if (error) throw new Error(error.message);
+    const pagina = data || [];
+    itens.push(...pagina);
+    if (pagina.length < 200) break;
   }
-
-
-  return (data || []).map(
-    (triagem) =>
-      normalizarTriagem(triagem)
-  );
+  return itens.map((triagem) => normalizarTriagem(triagem));
 }
 
+
+export async function completarCadastroCaixa(item, cadastro) {
+  const { data, error } = await supabase.rpc("assurant_caixas_completar_cadastro", {
+    p_referencia: item.referencia_caixa,
+    p_imei: cadastro.imei.trim(), p_voucher: cadastro.voucher.trim(),
+    p_sku: cadastro.sku.trim(), p_modelo: cadastro.modelo.trim(), p_grade: cadastro.grade,
+  });
+  if (error) throw new Error(error.message);
+  return data;
+}
 
 /*
  * Busca todas as informações do produto
