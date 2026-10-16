@@ -158,13 +158,14 @@ export default function DefinicaoProdutoAssurantV2({ etapa = "liquida" }) {
 
     const requestId = ++consultaId.current;
     setBuscando(true);
+    setConsulta(null);
     setFiltroCor(""); setFiltroGrade("");
     setErro("");
     setOpcao(null);
     setCienteUpgrade(false);
 
     try {
-      const data = etapa === "assurant" ? await consultarOpcoesAssurant(pedidoAtual.id) : await buscarOpcoesDefinicao(q, pedidoAtual);
+      const data = etapa === "assurant" ? await consultarOpcoesAssurant(pedidoAtual.id, q) : await buscarOpcoesDefinicao(q, pedidoAtual);
       if (requestId === consultaId.current) setConsulta(data);
     } catch (e) {
       if (requestId === consultaId.current) { setConsulta(null); setErro(e.message || "Falha ao consultar opções."); }
@@ -499,21 +500,28 @@ export default function DefinicaoProdutoAssurantV2({ etapa = "liquida" }) {
                   <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" />
                   <input
                     value={sku}
-                    readOnly={etapa === "assurant"}
                     disabled={salvando || buscando}
                     aria-label="SKU do produto"
-                    onChange={(e) => setSku(e.target.value)}
+                    onChange={(e) => {
+                      consultaId.current += 1;
+                      setSku(e.target.value);
+                      setConsulta(null);
+                      setOpcao(null);
+                      setCienteUpgrade(false);
+                      setFiltroCor("");
+                      setFiltroGrade("");
+                    }}
                     placeholder="Digite o SKU substituto"
                     className="h-10 w-full rounded-xl border border-slate-200 pl-9 pr-3 text-sm font-semibold outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-100"
                   />
                 </div>
                 <button
                   type="submit"
-                  disabled={buscando || !sku.trim()}
+                  disabled={salvando || buscando || !sku.trim()}
                   className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 text-xs font-black text-white disabled:opacity-40"
                 >
                   {buscando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-                  {etapa === "assurant" ? "Atualizar alternativas" : "Consultar estoque"}
+                  Consultar estoque
                 </button>
               </form>
 
@@ -529,7 +537,6 @@ export default function DefinicaoProdutoAssurantV2({ etapa = "liquida" }) {
                 </div>
               )}
 
-              {etapa === "assurant" && <p className="text-xs text-slate-500">O modelo e a capacidade do pedido são preservados. As variantes de cor do catálogo aparecem com seu próprio SKU.</p>}
               {consulta?.existe && (
                 <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-2">

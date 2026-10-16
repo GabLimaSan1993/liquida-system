@@ -19,7 +19,7 @@ begin
   insert into public.produtos_catalogo(sku_als,sku_oracle,marca,modelo,capacidade,cor) values
    ('QA-DEF-BLACK','QA-DEF-BLACK','QA','QA DEFINICAO','256GB','BLACK'),
    ('QA-DEF-WHITE','QA-DEF-WHITE','QA','QA DEFINICAO','256GB','WHITE'),
-   ('QA-DEF-128','QA-DEF-128','QA','QA DEFINICAO','128GB','WHITE');
+   ('QA-DEF-128','QA-DEF-128','QA','QA OUTRO MODELO','128GB','WHITE');
   for i in 1..5 loop
    v_sku:=case when i in(1,2) then 'QA-DEF-BLACK' when i=4 then 'QA-DEF-128' else 'QA-DEF-WHITE' end;
    v_grade:=case when i=3 then 'BOM' when i=4 then 'LIKE NEW' else 'EXCELENTE' end;
@@ -91,6 +91,31 @@ begin
    raise exception using errcode='PZ011',message='rollback FIFO';
   exception when sqlstate 'PZ011' then null; end;
   v_tests:=array_append(v_tests,'Assurant: quantidade e FIFO só com data atual; upgrade e opção antiga sem data recusados');
+  -- SKU substituto pode ter outro modelo/capacidade; a grade segue o pedido original.
+  v_ops:=public.b2c_definicao_opcoes(v_p,'QA-DEF-128-CC0');
+  if v_ops->>'skuBase'<>'QA-DEF-128' or v_ops->>'modelo'<>'QA OUTRO MODELO' or v_ops->>'gradeOrigem'<>'Bom' or jsonb_array_length(v_ops->'opcoes')<>1 then raise exception 'Consulta não carregou o novo SKU preservando a grade vendida.'; end if;
+  if v_ops->'opcoes'->0->>'capacidade'<>'128GB' or v_ops->'opcoes'->0->>'cor'<>'WHITE' or v_ops->'opcoes'->0->'fifo'->>'imei'<>'000000000071104' then raise exception 'Metadados/FIFO não pertencem ao novo SKU.'; end if;
+  v_ops:=public.b2c_definicao_opcoes(v_p,'QA-SKU-INEXISTENTE');
+  if (v_ops->>'existe')::boolean or jsonb_array_length(v_ops->'opcoes')<>0 or jsonb_array_length(v_ops->'vinculosSku')<>0 then raise exception 'SKU inexistente reutilizou dados anteriores.'; end if;
+  begin
+   perform set_config('role','postgres',true);
+   delete from public.estoque_subinv where imei='000000000071104';
+   perform set_config('role','authenticated',true);
+   v_ops:=public.b2c_definicao_opcoes(v_p,'QA-DEF-128');
+   if jsonb_array_length(v_ops->'opcoes')<>0 then raise exception 'SKU substituto sem SubInv tornou-se viável.'; end if;
+   v_falhou:=false;
+   begin perform public.b2c_assurant_aprovar_definicao(v_p,'QA-DEF-128','Like New','WHITE',null,null,true,null); exception when others then if sqlerrm not like 'A opção escolhida mudou%' then raise; end if; v_falhou:=true; end;
+   if not v_falhou then raise exception 'Aprovou SKU substituto sem data atual.'; end if;
+   raise exception using errcode='PZ013',message='rollback novo SKU sem data';
+  exception when sqlstate 'PZ013' then null; end;
+  begin
+   v_res:=public.b2c_assurant_aprovar_definicao(v_p,'QA-DEF-128','Like New','WHITE',null,null,true,'QA novo modelo e capacidade');
+   if not coalesce((v_res->>'ok')::boolean,false) or v_res->>'sku'<>'QA-DEF-128' or v_res->>'imei'<>'000000000071104' then raise exception 'Aprovação do novo SKU falhou.'; end if;
+   if not exists(select 1 from public.pedidos_b2c where id=v_p and sku_produto='QA-DEF-BLACK-CC3' and sku_definido='QA-DEF-128' and sku_alocado='QA-DEF-128' and grade_produto='BOM' and upgrade_aprovado) then raise exception 'SKU original alterado ou substituto não reservado.'; end if;
+   if not exists(select 1 from public.b2c_definicao_assurant_casos where pedido_id=v_p and selecao->>'sku'='QA-DEF-128' and selecao->>'modelo'='QA OUTRO MODELO' and pedido_original->>'sku_produto'='QA-DEF-BLACK-CC3') then raise exception 'Histórico não preservou a troca de SKU.'; end if;
+   raise exception using errcode='PZ014',message='rollback aprovação de outro SKU';
+  exception when sqlstate 'PZ014' then null; end;
+  v_tests:=array_append(v_tests,'Assurant consulta e aprova outro SKU/modelo/capacidade; mantém grade e histórico originais; inexistente e sem SubInv não reutilizam opções');
   v_falhou:=false;
   begin perform public.b2c_assurant_aprovar_definicao(v_p,'QA-DEF-BLACK','Excelente','BLACK',null,null,false,null); exception when others then if sqlerrm not like 'Confirme a aprovação%' then raise; end if; v_falhou:=true; end;
   if not v_falhou then raise exception 'Upgrade sem ciência permitido.'; end if;

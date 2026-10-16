@@ -10,7 +10,9 @@ async function rpc(nome, parametros) {
 }
 
 export const encaminharDefinicaoAssurant = (pedidoId, motivo) => rpc('b2c_encaminhar_definicao_assurant', { p_pedido_id: pedidoId, p_motivo: motivo.trim() });
-export const consultarOpcoesAssurant = pedidoId => rpc('b2c_definicao_opcoes', { p_pedido_id: pedidoId });
+export const consultarOpcoesAssurant = (pedidoId, sku) => rpc('b2c_definicao_opcoes', {
+  p_pedido_id: pedidoId, p_sku: String(sku || '').trim() || null,
+});
 export const aprovarDefinicaoAssurant = (pedidoId, opcao, upgrade, observacoes) => rpc('b2c_assurant_aprovar_definicao', {
   p_pedido_id: pedidoId, p_sku: opcao.sku, p_grade: opcao.grade, p_cor: opcao.cor,
   p_vinculo_tipo: opcao.vinculo_tipo || null, p_vinculo_referencia: opcao.vinculo_referencia || null,
