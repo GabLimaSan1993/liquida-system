@@ -26,7 +26,7 @@ export default function LinhaBrancaWorkspaceLayout() {
   return (
     <div className="min-h-screen bg-[#F5F5F6]">
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex h-[72px] max-w-[1600px] items-center gap-5 px-5 sm:px-8">
+        <div className="mx-auto flex h-[72px] max-w-[1600px] items-center gap-3 px-4 sm:gap-5 sm:px-8">
           <button
             type="button"
             onClick={() => navigate("/sistemas")}
@@ -47,7 +47,7 @@ export default function LinhaBrancaWorkspaceLayout() {
               className="h-10 w-10 shrink-0 object-contain"
             />
 
-            <div className="min-w-0">
+            <div className="hidden min-w-0 sm:block">
               <div className="truncate text-sm font-black text-slate-900">
                 Linha Branca
               </div>
@@ -59,13 +59,13 @@ export default function LinhaBrancaWorkspaceLayout() {
           </div>
 
           <div className="ml-auto flex items-center gap-3">
-            <div className="hidden items-center gap-2.5 sm:flex">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#F2EEF4] text-[#43284F]">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#F2EEF4] text-[#43284F]">
                 <User className="h-[17px] w-[17px]" />
               </div>
 
-              <div className="hidden lg:block">
-                <div className="max-w-[170px] truncate text-xs font-bold text-slate-800">
+              <div className="min-w-0">
+                <div title={profile?.nome || "Usuário"} className="max-w-[24vw] truncate text-xs font-bold text-slate-800 sm:max-w-[220px]">
                   {profile?.nome || "Usuário"}
                 </div>
 

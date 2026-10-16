@@ -300,12 +300,12 @@ export default function RefrigeracaoWorkspaceLayout() {
             </div>
 
             <div className="ml-auto flex items-center gap-2.5">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#F3EFF5] text-[#43284F]">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#F3EFF5] text-[#43284F]">
                 <User className="h-[17px] w-[17px]" />
               </div>
 
-              <div className="hidden lg:block">
-                <div className="max-w-[160px] truncate text-xs font-bold text-slate-800">
+              <div className="min-w-0">
+                <div title={profile?.nome || "Usuário"} className="max-w-[24vw] truncate text-xs font-bold text-slate-800 sm:max-w-[220px]">
                   {profile?.nome || "Usuário"}
                 </div>
               </div>

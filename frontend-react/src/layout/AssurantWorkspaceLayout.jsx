@@ -1271,12 +1271,12 @@ function Topbar({
           <div className="hidden h-8 w-px bg-slate-200 sm:block" />
 
           <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-100 text-violet-700">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-700">
               <User className="h-[17px] w-[17px]" />
             </div>
 
-            <div className="hidden min-w-0 lg:block">
-              <div className="max-w-[150px] truncate text-xs font-bold text-slate-800">
+            <div className="min-w-0">
+              <div title={profile?.nome || "Usuário"} className="max-w-[24vw] truncate text-xs font-bold text-slate-800 sm:max-w-[220px]">
                 {profile?.nome ||
                   "Usuário"}
               </div>
