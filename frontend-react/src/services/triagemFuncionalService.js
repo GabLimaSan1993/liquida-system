@@ -1,3 +1,5 @@
+import { decidirDestino, resultadoFuncional, respostaFuncionalNegativa } from "./regrasTriagemFuncional.js";
+export { decidirDestino } from "./regrasTriagemFuncional.js";
 import { erroIdentificacao, tipoDoAparelho } from "./identificacaoAparelho";
 import { supabase } from "../lib/supabase";
 import { buscarTradeinPorVoucher, validarImeiTradein } from "./tradeinService";
@@ -256,41 +258,8 @@ export async function registrarDivergenciaImei(voucher, imeiBipado, userId, imei
 
 // ══════════════════════════════════════════════════════════
 // DESTINO APÓS A FUNCIONAL
-// O laudo existe para sustentar divergência: a loja declarou uma condição
-// e o aparelho chegou em outra. Se a loja já declarou "Defeituoso", achar
-// defeito é o esperado e não precisa de laudo.
-// Exceção: pergunta marcada como bloqueante (aparelho que não liga) manda
-// para laudo sempre — não se compra aparelho que não liga, em nenhuma condição.
+// Toda resposta negativa segue para laudo; defeitos adicionais definem BAD.
 // ══════════════════════════════════════════════════════════
-export function decidirDestino({ condicaoDeclarada, respostas }) {
-  const lista = Array.isArray(respostas) ? respostas.filter(Boolean) : [];
-  const negativas = lista.filter(r => r.divergente);
-  const bloqueio  = negativas.find(r => r.bloqueante);
-
-  if (bloqueio) {
-    return { laudo: true, motivo: `Reprovou em pergunta eliminatória: ${bloqueio.pergunta}` };
-  }
-
-  const cond = String(condicaoDeclarada || "").toUpperCase().trim();
-  const declaradoDefeituoso = cond.startsWith("DEFEIT");
-
-  if (!negativas.length) {
-    return { laudo: false, motivo: declaradoDefeituoso
-      ? "Sem divergências, embora a loja tenha declarado defeituoso"
-      : "Sem divergências" };
-  }
-
-  if (declaradoDefeituoso) {
-    return { laudo: false, motivo: `Defeito esperado — loja declarou ${condicaoDeclarada}` };
-  }
-
-  // Sem condição declarada (canal fora da TradeIn) cai aqui de propósito:
-  // na dúvida, exige laudo em vez de deixar passar.
-  return { laudo: true, motivo: condicaoDeclarada
-    ? `Loja declarou ${condicaoDeclarada}, mas foram encontradas ${negativas.length} divergência(s)`
-    : `Sem condição declarada e ${negativas.length} divergência(s)` };
-}
-
 export async function salvarTriagemFuncional({
   voucher, imei, imei1, imei2, aparelhoBloqueado = false, canal, produto, respostas, bateria, bateriaPercentual,
   defeitos, userId, tradein, retriagem = false, motivoRetriagem = null,
@@ -303,15 +272,14 @@ export async function salvarTriagemFuncional({
   if (erroCodigo) return { ok: false, erro: erroCodigo };
 
   const lista = Array.isArray(respostas) ? respostas : [];
-  const negativas = lista.filter(r => r.divergente);
+  const negativas = lista.filter(respostaFuncionalNegativa);
   const decisao   = decidirDestino({
     condicaoDeclarada: tradein?.condicao_aparelho,
     respostas: lista,
   });
-  // Na devolução, a etapa imediatamente seguinte é sempre a Cosmética.
-  // A análise consolidada da Furbtech usa os dois resultados depois.
+  // Respostas negativas também seguem para laudo nas devoluções.
   const ehDevolucao = String(canal || "").toUpperCase() === "DEV";
-  const temLaudo  = ehDevolucao ? false : decisao.laudo;
+  const temLaudo  = decisao.laudo;
   const conferencia = conferirComTradein(produto, tradein);
 
   const agora = new Date().toISOString();
@@ -327,7 +295,7 @@ export async function salvarTriagemFuncional({
     atualizado_em:  agora,
 
     status_atual: temLaudo ? STATUS_LAUDO : STATUS_APOS_FUNCIONAL,
-    resultado_triagem_funcional: negativas.length ? "BAD" : "GOOD",
+    resultado_triagem_funcional: resultadoFuncional(lista, defeitos),
 
     respostas_funcional: JSON.stringify({
       versao: 3,
@@ -341,7 +309,7 @@ export async function salvarTriagemFuncional({
         cor:           produto?.cor           || null,
       },
       conferencia_tradein: conferencia,
-      destino: { laudo: temLaudo, motivo: ehDevolucao ? "Devolução segue para triagem cosmética" : decisao.motivo, condicao_declarada: tradein?.condicao_aparelho || null },
+      destino: { laudo: temLaudo, motivo: ehDevolucao && !temLaudo ? "Devolução segue para triagem cosmética" : decisao.motivo, condicao_declarada: tradein?.condicao_aparelho || null },
       bateria: { percentual: bateriaPercentual ?? null, faixa: bateria || null },
       respostas: lista.map(r => ({
         pergunta_id: r.perguntaId,
@@ -407,7 +375,7 @@ export async function salvarTriagemFuncional({
     ajusteId: data.ajuste_id || null,
     statusPreservado: !!data.status_preservado,
     precisaLaudo: temLaudo,
-    motivoDestino: ehDevolucao ? "Devolução segue para triagem cosmética" : decisao.motivo,
+    motivoDestino: ehDevolucao && !temLaudo ? "Devolução segue para triagem cosmética" : decisao.motivo,
     divergencias: negativas.length,
     conferencia,
   };

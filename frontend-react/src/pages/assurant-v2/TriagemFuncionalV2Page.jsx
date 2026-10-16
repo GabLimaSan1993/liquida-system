@@ -2791,7 +2791,7 @@ export default function TriagemFuncionalV2Page() {
                     >
                       {exigeDefeitoFinal
                         ? "Selecione ao menos um defeito para concluir."
-                        : "A inclusão de defeito é opcional neste caso."}
+                        : "Se houver defeito adicional, selecione abaixo. O aparelho será classificado como QUEBRADO."}
                     </div>
                   </div>
 
@@ -2803,7 +2803,7 @@ export default function TriagemFuncionalV2Page() {
                         </h3>
 
                         <p className="mt-1 text-[10px] leading-4 text-slate-400">
-                          Pesquise pelo nome ou categoria e selecione todos os defeitos aplicáveis.
+                          Qualquer defeito adicional selecionado classifica o aparelho como QUEBRADO. Qualquer resposta negativa nas perguntas encaminha para laudo.
                         </p>
                       </div>
 

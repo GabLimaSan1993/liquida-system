@@ -1,5 +1,5 @@
+import { defeitoExigeQuebrado } from "./defeitosGrade";
 import { supabase } from "../lib/supabase";
-import { resolverVoucherCanonico } from "./voucherNormalizationService";
 
 // ══════════════════════════════════════════════════════════
 // TRIAGEM COSMÉTICA
@@ -113,7 +113,7 @@ export async function listarAguardandoCosmetica() {
       marca:    r?.produto?.marca || null,
       modelo:   r?.produto?.modelo || t.modelo || null,
       bateria:  t.status_bateria,
-      defeito:  t.resultado_triagem_funcional === "BAD",
+      defeito:  t.resultado_triagem_funcional === "BAD" || defeitoExigeQuebrado(t.defeitos_adicionais),
       desde:    t.data_funcional,
     };
   });
@@ -146,7 +146,7 @@ export async function carregarParaCosmetica(voucher) {
     produto: r?.produto || null,
     bateria: t.status_bateria,
     bateriaPercentual: t.bateria_percentual,
-    temDefeitoFuncional: t.resultado_triagem_funcional === "BAD",
+    temDefeitoFuncional: t.resultado_triagem_funcional === "BAD" || defeitoExigeQuebrado(t.defeitos_adicionais),
     defeitos: t.defeitos_adicionais
       ? t.defeitos_adicionais.split(";").map(s => s.trim()).filter(Boolean)
       : [],
