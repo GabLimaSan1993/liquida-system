@@ -692,7 +692,7 @@ export default function ArmazenagemPage() {
     }
 
 
-    const itemCaixa = fila.find((item) => item.pendente_cadastro && (item.voucher === voucherInformado || item.imei === voucherInformado));
+    const itemCaixa = fila.find((item) => item.pendente_cadastro && (item.voucher === voucherInformado || item.voucher_solicitado === voucherInformado || item.imei === voucherInformado));
     if (itemCaixa) {
       setCadastroCaixa(itemCaixa);
       setCadastro({voucher: itemCaixa.voucher || "", imei: itemCaixa.imei || "", sku: itemCaixa.sku || "", modelo: itemCaixa.modelo || "", grade: itemCaixa.grade_cosmetica || itemCaixa.grade || ""});
@@ -1051,7 +1051,7 @@ export default function ArmazenagemPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="cadastro-caixa-titulo">
           <form onSubmit={salvarCadastroCaixa} className="w-full max-w-lg space-y-3 rounded-2xl bg-white p-6 shadow-xl">
             <h2 id="cadastro-caixa-titulo" className="text-lg font-bold">Completar cadastro para armazenagem</h2>
-            <p className="text-sm text-slate-600">{cadastroCaixa.caixa_codigo} · Confira os dados na etiqueta e no aparelho.</p>
+            <p className="text-sm text-slate-600">{cadastroCaixa.caixa_codigo || "Retorno físico"} · Confira os dados na etiqueta e no aparelho.</p>
             {[["voucher", "Voucher"], ["imei", "IMEI ou serial físico"], ["sku", "SKU"], ["modelo", "Modelo"]].map(([campo, rotulo]) => (
               <label key={campo} className="block text-sm font-semibold">{rotulo}
                 <input required value={cadastro[campo] || ""} readOnly={campo === "voucher" && Boolean(cadastroCaixa.voucher)}

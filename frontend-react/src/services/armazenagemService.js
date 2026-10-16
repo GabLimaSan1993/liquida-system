@@ -138,7 +138,7 @@ export async function listarAguardandoArmazenagem() {
 
 export async function completarCadastroCaixa(item, cadastro) {
   const { data, error } = await supabase.rpc("assurant_caixas_completar_cadastro", {
-    p_referencia: item.referencia_caixa,
+    p_referencia: item.referencia_caixa || item.referencia_retorno,
     p_imei: cadastro.imei.trim(), p_voucher: cadastro.voucher.trim(),
     p_sku: cadastro.sku.trim(), p_modelo: cadastro.modelo.trim(), p_grade: cadastro.grade,
   });
@@ -339,7 +339,7 @@ export async function reservarEndereco(
   voucher,
   userId
 ) {
-  const voucherNormalizado =
+  const voucherInformado =
     String(voucher || "")
       .trim()
       .toUpperCase();
@@ -358,7 +358,7 @@ export async function reservarEndereco(
     "wms_preparar_status_armazenagem",
     {
       p_voucher:
-        voucherNormalizado,
+        voucherInformado,
     }
   );
 
@@ -377,6 +377,8 @@ export async function reservarEndereco(
     );
   }
 
+
+  const voucherNormalizado = preparacao.voucher || voucherInformado;
 
   const detalhes =
     await buscarDetalhesArmazenagem(
