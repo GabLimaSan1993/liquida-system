@@ -4,10 +4,9 @@ import { supabase } from "../lib/supabase";
 // ══════════════════════════════════════════════════════════
 // IMPORTADOR DA PLANILHA TRADEIN (base diária, só canal YBV)
 //
-// Diferente do Relatório AP, esta tabela NÃO acumula: o arquivo do dia é a
-// base completa e faz upsert por voucher. O que a triagem precisa é a verdade
-// de hoje — se um voucher sumir do arquivo, a linha antiga fica (não apagamos),
-// mas qualquer voucher presente é sobrescrito com o dado mais novo.
+// Atualiza a situação corrente por voucher e guarda cada versão importada
+// no banco, com arquivo, data e usuário autenticado. Vouchers ausentes do
+// arquivo permanecem no cadastro, e o histórico legado é preservado.
 //
 // O voucher vem só numérico (410225). A coluna voucher_ybv é calculada pelo
 // banco como 'YBV' || voucher, que é o formato usado na assurant_triagem.
@@ -136,7 +135,7 @@ export async function previewTradein(file) {
   };
 }
 
-export async function uploadTradein(file, userId, userNome, onProgress) {
+export async function uploadTradein(file, _userId, userNome, onProgress) {
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: "array" });
   const linhas = lerPlanilha(wb.Sheets[wb.SheetNames[0]]);
@@ -156,7 +155,7 @@ export async function uploadTradein(file, userId, userNome, onProgress) {
   let semVoucher = 0, cancelados = 0;
 
   for (const row of linhas) {
-    const r = { importado_por: userId };
+    const r = {};
     for (const [origem, destino] of Object.entries(mapa)) {
       r[destino] = NUMERICAS.has(destino) ? numero(row[origem]) : limpar(row[origem]);
     }
@@ -178,20 +177,33 @@ export async function uploadTradein(file, userId, userNome, onProgress) {
   if (!registros.length) throw new Error("Nenhuma linha com VOUCHER numérico válido.");
 
   const BLOCO = 500;
+  const importacaoId = crypto.randomUUID();
+  const metadados = {
+    tamanho_bytes: file.size,
+    total_linhas: linhas.length,
+    sem_voucher: semVoucher,
+    duplicados_no_arquivo: linhas.length - semVoucher - registros.length,
+  };
   let gravadas = 0;
   for (let i = 0; i < registros.length; i += BLOCO) {
     const bloco = registros.slice(i, i + BLOCO);
-    const { error } = await supabase
-      .from("tradein_geral")
-      .upsert(bloco, { onConflict: "voucher" });
-    if (error) throw new Error(`Erro ao gravar o bloco ${i / BLOCO + 1}: ${error.message}`);
-    gravadas += bloco.length;
+    const { data, error } = await supabase.rpc("tradein_importar_bloco", {
+      p_importacao: importacaoId,
+      p_arquivo: file.name,
+      p_total: registros.length,
+      p_bloco: i / BLOCO + 1,
+      p_registros: bloco,
+      p_metadados: metadados,
+    });
+    if (error) throw new Error(`Erro ao gravar o bloco ${i / BLOCO + 1}: ${error.message}. ${gravadas} vouchers anteriores desta carga já foram salvos com histórico.`);
+    gravadas = data.total_gravado;
     if (onProgress) {
       onProgress({ fase: "TradeIn", pct: Math.round((gravadas / registros.length) * 100) });
     }
   }
 
   return {
+    importacaoId,
     gravadas,
     totalLinhas: linhas.length,
     duplicadosNoArquivo: linhas.length - semVoucher - registros.length,
