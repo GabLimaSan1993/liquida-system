@@ -36,7 +36,7 @@ const TELAS_V2 = [
     grupo: "TRIAGENS",
     telas: [
       { id: "/v2/assurant/triagens/funcional", label: "Triagem Funcional" },
-      { id: "/v2/assurant/triagens/divergencias-imei", label: "Divergências de IMEI — decisão Assurant" },
+      { id: "/v2/assurant/triagens/divergencias-imei", label: "Divergências — decisão Assurant" },
       { id: "/v2/assurant/triagens/laudo", label: "Laudo" },
       { id: "/v2/assurant/triagens/cosmetica", label: "Triagem Cosmética" },
       { id: "/v2/assurant/triagens/oracle", label: "Entrada Oracle" },

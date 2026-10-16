@@ -37,3 +37,14 @@ export async function decidirDivergencia(caso, decisao, diretriz) {
   if (error) throw new Error(error.message);
   return data;
 }
+
+export async function checarOrdem(voucher) {
+  const { data, error } = await supabase.rpc("assurant_triagem_checar_ordem", { p_voucher: voucher });
+  if (error) throw new Error(error.message);
+  return data;
+}
+export async function registrarNaoLiga(voucher) {
+  const { data, error } = await supabase.rpc("assurant_triagem_nao_liga", { p_voucher: voucher });
+  if (error) throw new Error(error.message);
+  return data;
+}

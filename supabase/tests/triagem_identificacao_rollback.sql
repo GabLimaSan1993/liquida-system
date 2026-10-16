@@ -7,7 +7,9 @@ begin
  perform set_config('request.jwt.claim.sub',u::text,true);
  assert not exists(select 1 from public.tradein_historico where voucher_original='YBV1900000001'),'Fixture em uso';
  insert into public.tradein_historico(voucher_original,imei_serial,aparelho,source_file,source_row)
- values('YBV1900000001','123456789012345','GALAXY S24','teste_transacional',1);
+ values('YBV1900000001','123456789012345','GALAXY S24','teste_transacional',1),
+ ('YBV1900000002','R58M-123ABC','WATCH 6','teste_transacional',2),
+ ('YBV1900000003','F4K123ABCDEF','IPAD 10','teste_transacional',3);
  r:=public.assurant_triagem_identificar('YBV1900000001','123456789012346','123456789012345','GALAXY S24',null);
  assert (r->>'confere')::boolean and r->>'imei_canonico'='123456789012345','Contrato deve conferir com IMEI 2';
  foreach ident in array array['12345678901234','1234567890123456','ABC456789012345',''] loop

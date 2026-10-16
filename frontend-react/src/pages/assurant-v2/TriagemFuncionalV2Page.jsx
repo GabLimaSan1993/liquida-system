@@ -1,5 +1,5 @@
 import { tipoDoAparelho, erroIdentificacao, exigeDoisImeis } from "../../services/identificacaoAparelho";
-import { identificarAparelho, etiquetaDivergencia } from "../../services/divergenciasImeiService";
+import { identificarAparelho, etiquetaDivergencia, registrarNaoLiga } from "../../services/divergenciasImeiService";
 import {
   useEffect,
   useMemo,
@@ -1093,6 +1093,10 @@ export default function TriagemFuncionalV2Page() {
         return;
       }
 
+      if (resposta.divergencia) {
+        exibirDivergencia(resposta);
+        return;
+      }
       setCtx(
         resposta
       );
@@ -1153,6 +1157,10 @@ export default function TriagemFuncionalV2Page() {
         return;
       }
 
+      if (resposta.divergencia) {
+        exibirDivergencia(resposta);
+        return;
+      }
       setCtx(
         resposta
       );
@@ -1320,6 +1328,21 @@ export default function TriagemFuncionalV2Page() {
     );
   }
 
+  function exibirDivergencia(resposta) {
+    setResultado({ ...resposta, divergencia: true });
+    setEtapa("fim");
+    try { etiquetaDivergencia(resposta); } catch { mostrarErro("Divergência registrada. Use o botão para baixar ou reimprimir a etiqueta."); }
+    carregarFila();
+  }
+
+  async function handleNaoLiga() {
+    if (carregando || !ctx?.voucher) return;
+    setCarregando(true);
+    try { exibirDivergencia(await registrarNaoLiga(ctx.voucher)); }
+    catch (error) { mostrarErro(error.message); }
+    finally { setCarregando(false); }
+  }
+
   async function handleValidarImei() {
     if (carregando) return;
     if (erroCodigo) { mostrarErro(erroCodigo); return; }
@@ -1331,10 +1354,7 @@ export default function TriagemFuncionalV2Page() {
       });
       setValidacao(resposta);
       if (resposta.divergencia) {
-        setResultado({ ...resposta, divergencia: true });
-        setEtapa("fim");
-        try { etiquetaDivergencia(resposta); } catch { mostrarErro("Divergência registrada. Use o botão para baixar ou reimprimir a etiqueta."); }
-        carregarFila();
+        exibirDivergencia(resposta);
       } else if (resposta.confere) await iniciarPerguntas();
     } catch (error) { mostrarErro(error.message); }
     finally { setCarregando(false); }
@@ -2092,6 +2112,14 @@ export default function TriagemFuncionalV2Page() {
                         </div>
                         <p className="mt-2 text-xs text-slate-600">Se o bloqueio permite acessar apenas um IMEI, marque Sim. A triagem seguirá com todas as perguntas.</p>
                       </fieldset>
+                      <fieldset className="rounded-xl border border-rose-200 bg-rose-50 p-4">
+                        <legend className="px-1 text-sm font-bold text-slate-800">Aparelho não liga?</legend>
+                        <button type="button" disabled={carregando} onClick={handleNaoLiga}
+                          className="rounded-lg bg-rose-700 px-5 py-2 text-sm font-bold text-white disabled:opacity-40">
+                          Sim, não liga — encaminhar à Assurant
+                        </button>
+                        <p className="mt-2 text-xs text-slate-600">O aparelho será segregado em Divergências, sem exigir IMEI, aguardando decisão da Assurant.</p>
+                      </fieldset>
                       {modoRetriagem && (
                         <Aviso tipo="aviso">
                           <div>
@@ -2108,11 +2136,9 @@ export default function TriagemFuncionalV2Page() {
                         </Aviso>
                       )}
 
-                      {!ctx.temTradein &&
-                        ctx.canal ===
-                          "YBV" && (
+                      {ctx.semOrdemAutorizado && (
                           <Aviso tipo="aviso">
-                            Voucher não encontrado na base TradeIn. A validação de IMEI será pulada conforme a regra atual.
+                            Triagem sem referência de trade-in autorizada pela Assurant. Confira o aparelho físico e registre sua identificação.
                           </Aviso>
                         )}
 
@@ -2968,7 +2994,7 @@ export default function TriagemFuncionalV2Page() {
                     <Aviso tipo="aviso">
                       <div>
                         <div className="font-black">
-                          Divergência de IMEI registrada.
+                          {resultado.tipo_problema === "nao_liga" ? "Aparelho não liga" : resultado.tipo_problema === "sem_ordem" ? "Sem Ordem" : "IMEI divergente"} — aguardando decisão da Assurant.
                           <div className="mt-3 flex gap-2">
                             <button className="rounded-lg border px-3 py-2" onClick={() => etiquetaDivergencia(resultado)}>Reimprimir etiqueta</button>
                             <button className="rounded-lg border px-3 py-2" onClick={() => etiquetaDivergencia(resultado,{baixar:true})}>Baixar etiqueta PDF</button>
@@ -2976,7 +3002,8 @@ export default function TriagemFuncionalV2Page() {
                         </div>
 
                         <div className="mt-1 font-medium">
-                          O aparelho está segregado e bloqueado até a decisão da Assurant. Cole a etiqueta IMEI DIVERGENTE.
+                          O aparelho está segregado e bloqueado até a decisão da Assurant. Cole a etiqueta de divergência.
+                          {resultado.motivo && <p className="mt-2">{resultado.motivo}</p>}
                         </div>
                       </div>
                     </Aviso>

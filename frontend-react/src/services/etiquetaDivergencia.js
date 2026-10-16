@@ -10,7 +10,7 @@ export function criarEtiquetaDivergencia(caso) {
   doc.rect(2, 2, 101, 46);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(17);
-  doc.text("IMEI DIVERGENTE", 52.5, 10, { align: "center" });
+  doc.text(caso.tipo_problema === "nao_liga" ? "APARELHO NAO LIGA" : caso.tipo_problema === "sem_ordem" ? "SEM ORDEM" : "IMEI DIVERGENTE", 52.5, 10, { align: "center" });
   doc.setFontSize(8);
   doc.text("SEGREGAR - AGUARDANDO DECISAO ASSURANT", 52.5, 15, { align: "center" });
   const linha = (texto, y, tamanho = 8) => {
@@ -24,7 +24,7 @@ export function criarEtiquetaDivergencia(caso) {
   doc.setFont("helvetica", "normal");
   linha(String(caso.modelo || ""), 26);
   doc.setFont("courier", "normal");
-  linha(`1: ${caso.imei1 || ""}`, 31, 9);
+  linha(`1: ${caso.imei1 || "Nao bipado"}`, 31, 9);
   linha(`2: ${caso.imei2 || "Nao se aplica"}`, 35, 9);
   doc.setFont("helvetica", "normal");
   linha(`Usuario: ${caso.criado_por_nome || "Nao informado"}`, 40);
@@ -35,7 +35,7 @@ export function criarEtiquetaDivergencia(caso) {
 export function etiquetaDivergencia(caso, { baixar = false } = {}) {
   const doc = criarEtiquetaDivergencia(caso);
   if (baixar) {
-    doc.save(`IMEI_DIVERGENTE_${caso.voucher}.pdf`);
+    doc.save(`DIVERGENCIA_${caso.voucher}.pdf`);
     return;
   }
   doc.autoPrint();
@@ -43,7 +43,7 @@ export function etiquetaDivergencia(caso, { baixar = false } = {}) {
   const frame = document.createElement("iframe");
   frame.style.cssText =
     "position:fixed;width:1px;height:1px;bottom:0;right:0;border:0";
-  frame.title = "Etiqueta IMEI DIVERGENTE";
+  frame.title = "Etiqueta de divergência";
   frame.src = String(url);
   document.body.appendChild(frame);
   setTimeout(() => {

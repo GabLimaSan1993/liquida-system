@@ -4,11 +4,14 @@ import {
   decidirDivergencia,
   etiquetaDivergencia,
 } from "../../services/divergenciasImeiService";
+const PROBLEMAS = { nao_liga: "Aparelhos não ligam", imei_divergente: "IMEI divergente", sem_ordem: "Sem Ordem" };
+const problema = c => c.tipo_problema || "imei_divergente";
 const hora = (x) => (x ? new Date(x).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "—");
 export default function DivergenciasImeiV2Page() {
   const [casos, setCasos] = useState([]),
     [filtro, setFiltro] = useState("pendente"),
-    [busca, setBusca] = useState("");
+    [busca, setBusca] = useState(""),
+    [tipo, setTipo] = useState("");
   const [loading, setLoading] = useState(true),
     [erro, setErro] = useState(""),
     [aviso, setAviso] = useState(""),
@@ -63,6 +66,7 @@ export default function DivergenciasImeiV2Page() {
   const lista = casos.filter(
     (c) =>
       (!filtro || c.status === filtro) &&
+      (!tipo || problema(c) === tipo) &&
       `${c.voucher} ${c.imei1} ${c.imei2 || ""} ${c.modelo}`
         .toLowerCase()
         .includes(busca.toLowerCase()),
@@ -72,11 +76,10 @@ export default function DivergenciasImeiV2Page() {
       <header className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-black text-slate-900">
-            Divergências de IMEI — Assurant
+            Divergências — Assurant
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            Aparelhos segregados aguardando diretriz sobre a identificação
-            física.
+            Aparelhos que não ligam, com IMEI divergente ou Sem Ordem, aguardando diretriz da Assurant.
           </p>
         </div>
         <button
@@ -103,23 +106,15 @@ export default function DivergenciasImeiV2Page() {
           {aviso}
         </p>
       )}
-      <div className="grid gap-3 sm:grid-cols-3">
-        {[
-          ["pendente", "Aguardando decisão"],
-          ["autorizado", "Triagem autorizada"],
-          ["devolver", "Devolução à origem"],
-        ].map(([s, t]) => (
-          <button
-            key={s}
-            onClick={() => setFiltro(s)}
-            className={`rounded-2xl border p-4 text-left ${filtro === s ? "border-violet-300 bg-violet-50" : "bg-white"}`}
-          >
-            <div className="text-xs font-bold text-slate-500">{t}</div>
-            <div className="mt-2 text-2xl font-black">
-              {casos.filter((c) => c.status === s).length}
-            </div>
-          </button>
-        ))}
+      <div className="space-y-3">
+        <button type="button" onClick={() => setTipo("")} aria-pressed={!tipo} className="rounded-lg border bg-white px-4 py-2 text-sm font-bold">Todos os problemas</button>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {Object.entries(PROBLEMAS).map(([chave, titulo]) => <button key={chave} type="button" onClick={() => setTipo(chave)} aria-pressed={tipo === chave}
+            className={`rounded-2xl border p-4 text-left ${tipo === chave ? "border-violet-300 bg-violet-50" : "bg-white"}`}>
+            <div className="text-xs font-bold text-slate-500">{titulo}</div>
+            <div className="mt-2 text-2xl font-black">{casos.filter(c => problema(c) === chave && (!filtro || c.status === filtro)).length}</div>
+          </button>)}
+        </div>
       </div>
       <p className="rounded-xl border bg-white p-4 text-sm text-slate-600">
         O sistema envia os avisos automaticamente para Luiz Affonso, Edyelves Bezerra e Alex Feliciano, com Jhonatan Nascimento e Gabriel Lima em cópia.
@@ -153,9 +148,10 @@ export default function DivergenciasImeiV2Page() {
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <div className="font-black text-rose-700">
-                  {c.voucher} · {c.status}
+                  {c.voucher} · {PROBLEMAS[problema(c)]} · {c.status}
                 </div>
-                <p className="mt-1 text-sm font-bold">{c.modelo}</p>
+                <p className="mt-1 text-sm font-bold">{c.modelo || "Modelo ainda não identificado"}</p>
+                {c.motivo && <p className="mt-2 text-sm text-slate-600">{c.motivo}</p>}
                 <p className="mt-1 text-xs text-slate-500">
                   Registrado por {c.criado_por_nome || c.criado_por} em {hora(c.criado_em)}
                 </p>
@@ -190,7 +186,7 @@ export default function DivergenciasImeiV2Page() {
                 <div key={t}>
                   <dt className="font-bold text-slate-400">{t}</dt>
                   <dd className="mt-1 break-all font-mono font-bold">
-                    {v || "Não se aplica"}
+                    {v || (t.startsWith("Bipado") ? "Não bipado" : "Sem referência")}
                   </dd>
                 </div>
               ))}
@@ -230,8 +226,7 @@ export default function DivergenciasImeiV2Page() {
               Diretriz — {caso.voucher}
             </h2>
             <p className="text-sm text-slate-600">
-              Autorizar devolve o aparelho à triagem funcional. A bipagem será
-              exigida novamente e o contrato original será preservado.
+              {problema(caso) === "nao_liga" ? "Encaminhar para laudo libera a avaliação do aparelho que não liga. A diretriz ficará registrada." : problema(caso) === "sem_ordem" ? "Autorizar libera a triagem sem ordem ativa. A referência consultada e a justificativa serão preservadas." : "Autorizar devolve o aparelho à triagem funcional, com nova bipagem e preservação do contrato original."}
             </p>
             <label className="block text-sm font-bold">
               Decisão
@@ -243,7 +238,7 @@ export default function DivergenciasImeiV2Page() {
               >
                 <option value="">Selecione</option>
                 <option value="autorizado">
-                  Autorizar triagem com o aparelho recebido
+                  {problema(caso) === "nao_liga" ? "Encaminhar para laudo" : problema(caso) === "sem_ordem" ? "Autorizar triagem sem ordem" : "Autorizar triagem com o aparelho recebido"}
                 </option>
                 <option value="devolver">
                   Manter segregado para devolução à origem

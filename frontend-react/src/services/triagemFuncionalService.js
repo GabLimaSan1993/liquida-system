@@ -1,3 +1,4 @@
+import { checarOrdem } from "./divergenciasImeiService";
 import { decidirDestino, resultadoFuncional, respostaFuncionalNegativa } from "./regrasTriagemFuncional.js";
 export { decidirDestino } from "./regrasTriagemFuncional.js";
 import { erroIdentificacao, tipoDoAparelho } from "./identificacaoAparelho";
@@ -85,6 +86,8 @@ export async function consultarVoucher(voucher) {
   if (!v) return { ok: false, erro: "Informe o voucher." };
 
   const canal = canalDoVoucher(v);
+  const entrada = await checarOrdem(v);
+  if (entrada.divergencia) return { ...entrada, voucher: v, canal };
 
   const { data: existente, error: errT } = await supabase
     .from("assurant_triagem")
@@ -164,6 +167,7 @@ export async function consultarVoucher(voucher) {
     canal,
     tradein,
     temTradein: !!tradein,
+    semOrdemAutorizado: !!entrada.sem_ordem_autorizado,
     devolucao,
     tipoPerguntas: canal === "DEV"
       ? (canalDoVoucher(devolucao?.voucher_origem) || "YBV")
@@ -181,6 +185,7 @@ export async function consultarVoucher(voucher) {
 // de liberar a triagem por engano.
 const ETAPAS = {
   "Aguardando análise Assurant":      { nome: "Análise Assurant",      onde: "Aguardando tratativa da Assurant" },
+  "Aguardando definição Assurant - Divergência": { nome: "Divergências", onde: "Aguardando decisão da Assurant" },
   "Aguardando definição Assurant - IMEI divergente": { nome: "Definição de IMEI", onde: "Aguardando decisão da Assurant" },
   "Aguardando laudo":                 { nome: "Laudo",                 onde: "Tela de Laudo" },
   "Aguardando triagem cosmética":     { nome: "Triagem Cosmética",     onde: "Tela de Triagem Cosmética" },

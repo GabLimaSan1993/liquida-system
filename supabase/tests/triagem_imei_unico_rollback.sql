@@ -5,6 +5,11 @@ declare u uuid; r jsonb; c uuid; tok uuid; modelo text; rejeitou boolean;
 begin
  select id into u from public.user_profiles where is_master limit 1;
  perform set_config('request.jwt.claim.sub',u::text,true);
+ insert into public.tradein_historico(voucher_original,imei_serial,aparelho,source_file,source_row) values
+ ('YBV1900000010','123456789012345','IPHONE 5','teste_imei_unico_transacional',10),
+ ('YBV1900000011','123456789012345','GALAXY S24','teste_imei_unico_transacional',11),
+ ('YBV1900000012','R7AX60XHHLR','FIT 3','teste_imei_unico_transacional',12),
+ ('YBV1900000013','F4K123ABCDEF','IPAD 10','teste_imei_unico_transacional',13);
  foreach modelo in array array['IPHONE 5','IPHONE 5C','IPHONE 5S','IPHONE 6','IPHONE 6S PLUS','IPHONE6 PLUS','IPHONE 7','IPHONE 7 PLUS','MOTO ONE MACRO','MOTOROLA ONE MICRO','SAMSUNG GALAXY J4 PLUS','GALAXY J7 PRIME','SAMSUNG J 5'] loop
   r:=public.assurant_triagem_identificar('YBV1900000010','123456789012345',null,modelo,null,false);
   assert (r->>'confere')::boolean,'Modelo de um IMEI bloqueado: '||modelo;
@@ -24,11 +29,11 @@ begin
  r:=public.assurant_triagem_identificar('YBV1900000011','123456789012345','123456789012346','GALAXY S24',null,false);
  assert (r->>'confere')::boolean,'Dois IMEIs válidos rejeitados';
  insert into public.assurant_triagem(voucher,imei,modelo,origem_triagem,data_funcional,status_atual,respostas_funcional)
- values('YBV1900000011','223456789012345','GALAXY S24','liquida',now(),'Aguardando triagem cosmética',
- '{"produto":{"modelo":"GALAXY S24"},"identificacao":{"imei1":"223456789012345","aparelho_bloqueado":true}}');
+ values('YBV1900000011','123456789012345','GALAXY S24','liquida',now(),'Aguardando triagem cosmética',
+ '{"produto":{"modelo":"GALAXY S24"},"identificacao":{"imei1":"123456789012345","aparelho_bloqueado":true}}');
  assert (select aparelho_bloqueado and imei2 is null from public.assurant_triagem where voucher='YBV1900000011'),'Bloqueio não auditado';
  rejeitou:=false;
- begin update public.assurant_triagem set respostas_funcional='{"produto":{"modelo":"GALAXY S24"},"identificacao":{"imei1":"223456789012345","aparelho_bloqueado":false}}' where voucher='YBV1900000011';
+ begin update public.assurant_triagem set respostas_funcional='{"produto":{"modelo":"GALAXY S24"},"identificacao":{"imei1":"123456789012345","aparelho_bloqueado":false}}' where voucher='YBV1900000011';
  exception when others then rejeitou:=true; end;
  assert rejeitou,'Conclusão de dois IMEIs burlada';
  rejeitou:=false;
