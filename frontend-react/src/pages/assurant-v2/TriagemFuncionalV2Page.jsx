@@ -1,4 +1,4 @@
-import { tipoDoAparelho, erroIdentificacao } from "../../services/identificacaoAparelho";
+import { tipoDoAparelho, erroIdentificacao, exigeDoisImeis } from "../../services/identificacaoAparelho";
 import { identificarAparelho, etiquetaDivergencia } from "../../services/divergenciasImeiService";
 import {
   useEffect,
@@ -664,6 +664,7 @@ export default function TriagemFuncionalV2Page() {
   ] = useState("");
 
   const [imei2Digitado, setImei2Digitado] = useState("");
+  const [aparelhoBloqueado, setAparelhoBloqueado] = useState(false);
 
 
   const [
@@ -892,7 +893,8 @@ export default function TriagemFuncionalV2Page() {
     );
 
   const tipoAparelho = tipoDoAparelho(produto.modelo, catalogo.produtos.find(p => p.modelo === produto.modelo && p.marca === produto.marca)?.tipo);
-  const erroCodigo = erroIdentificacao(tipoAparelho, imeiDigitado, imei2Digitado);
+  const doisImeis = exigeDoisImeis(produto.modelo, tipoAparelho, aparelhoBloqueado);
+  const erroCodigo = erroIdentificacao(tipoAparelho, imeiDigitado, doisImeis ? imei2Digitado : null, { modelo: produto.modelo, aparelhoBloqueado });
 
   const produtoCompleto =
     Boolean(
@@ -1010,6 +1012,7 @@ export default function TriagemFuncionalV2Page() {
 
     setImeiDigitado("");
     setImei2Digitado("");
+    setAparelhoBloqueado(false);
 
     setPerguntas(
       []
@@ -1093,6 +1096,10 @@ export default function TriagemFuncionalV2Page() {
       setCtx(
         resposta
       );
+      setAparelhoBloqueado(false);
+      setImeiDigitado("");
+      setImei2Digitado("");
+      setValidacao(null);
 
       setProduto({
         marca: "",
@@ -1149,6 +1156,10 @@ export default function TriagemFuncionalV2Page() {
       setCtx(
         resposta
       );
+      setAparelhoBloqueado(false);
+      setImeiDigitado("");
+      setImei2Digitado("");
+      setValidacao(null);
 
       /*
        * Mantido propositalmente:
@@ -1239,6 +1250,7 @@ export default function TriagemFuncionalV2Page() {
 
     setImeiDigitado("");
     setImei2Digitado("");
+    setAparelhoBloqueado(false);
 
     setValorBateria(
       ultima.bateriaPercentual == null
@@ -1314,7 +1326,7 @@ export default function TriagemFuncionalV2Page() {
     setCarregando(true);
     try {
       const resposta = await identificarAparelho({
-        voucher: ctx.voucher, imei1: imeiDigitado, imei2: tipoAparelho === "CELULAR" ? imei2Digitado : null,
+        voucher: ctx.voucher, imei1: imeiDigitado, imei2: doisImeis ? imei2Digitado : null, aparelhoBloqueado,
         modelo: produto.modelo, sku: resolverSku(catalogo.produtos, { marca:produto.marca,modelo:produto.modelo,capacidade:produto.armazenamento,cor:produto.cor }).sku,
       });
       setValidacao(resposta);
@@ -1691,7 +1703,8 @@ export default function TriagemFuncionalV2Page() {
             validacao?.imei_canonico || imeiDigitado.trim(),
 
           imei1: imeiDigitado.trim(),
-          imei2: tipoAparelho === "CELULAR" ? imei2Digitado.trim() : null,
+          imei2: doisImeis ? imei2Digitado.trim() : null,
+          aparelhoBloqueado,
 
           canal:
             ctx.canal,
@@ -2068,6 +2081,17 @@ export default function TriagemFuncionalV2Page() {
                     }
                   >
                     <div className="space-y-5 p-5">
+                      <fieldset className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                        <legend className="px-1 text-sm font-bold text-slate-800">Aparelho bloqueado?</legend>
+                        <div className="flex gap-3">
+                          {[false, true].map(valor => <button key={String(valor)} type="button" aria-pressed={aparelhoBloqueado === valor}
+                            onClick={() => { setAparelhoBloqueado(valor); setImei2Digitado(""); setValidacao(null); }}
+                            className={`rounded-lg border px-5 py-2 text-sm font-bold ${aparelhoBloqueado === valor ? "border-violet-700 bg-violet-700 text-white" : "bg-white text-slate-700"}`}>
+                            {valor ? "Sim" : "Não"}
+                          </button>)}
+                        </div>
+                        <p className="mt-2 text-xs text-slate-600">Se o bloqueio permite acessar apenas um IMEI, marque Sim. A triagem seguirá com todas as perguntas.</p>
+                      </fieldset>
                       {modoRetriagem && (
                         <Aviso tipo="aviso">
                           <div>
@@ -2368,18 +2392,18 @@ export default function TriagemFuncionalV2Page() {
                   </button>
 
                   <div className="max-w-[760px] space-y-4 rounded-2xl border border-violet-100 bg-violet-50/40 p-5">
-                    <div className="text-xs font-black text-violet-700">{tipoAparelho === "CELULAR" ? "Celular · dois IMEIs obrigatórios" : `${tipoAparelho === "TABLET" ? "Tablet" : "Relógio"} · referência / serial`}</div>
-                    <p className="text-xs text-slate-600">{tipoAparelho === "CELULAR" ? "Digite *#06# no aparelho e bipe os dois códigos. Cada IMEI deve ter exatamente 15 dígitos e ser diferente do outro." : "Bipe o código de referência ou número de série. Letras, números, ponto, hífen e barra são aceitos."}</p>
+                    <div className="text-xs font-black text-violet-700">{tipoAparelho === "CELULAR" ? (doisImeis ? "Celular · dois IMEIs obrigatórios" : "Celular · um IMEI obrigatório") : `${tipoAparelho === "TABLET" ? "Tablet" : "Relógio"} · referência / serial`}</div>
+                    <p className="text-xs text-slate-600">{tipoAparelho === "CELULAR" ? (doisImeis ? "Digite *#06# no aparelho e bipe os dois códigos. Cada IMEI deve ter exatamente 15 dígitos e ser diferente do outro." : "Bipe o único IMEI disponível, com exatamente 15 dígitos. As perguntas da triagem continuam normalmente.") : "Bipe o código de referência ou número de série. Letras, números, ponto, hífen e barra são aceitos."}</p>
                     <label className="block text-xs font-bold text-slate-700">{tipoAparelho === "CELULAR" ? "IMEI 1" : "Referência / serial"}
                       <input autoFocus value={imeiDigitado} inputMode={tipoAparelho === "CELULAR" ? "numeric" : "text"}
-                        maxLength={tipoAparelho === "CELULAR" ? undefined : 64}
+                        maxLength={tipoAparelho === "CELULAR" ? 15 : 64}
                         autoComplete="off" spellCheck={false}
                         onChange={e=>{setImeiDigitado(e.target.value.trim());setValidacao(null);}}
-                        onKeyDown={e=>{if(e.key === "Enter") {e.preventDefault();if(tipoAparelho === "CELULAR") document.getElementById("triagem-imei2")?.focus();else handleValidarImei();}}}
+                        onKeyDown={e=>{if(e.key === "Enter") {e.preventDefault();if(doisImeis) document.getElementById("triagem-imei2")?.focus();else handleValidarImei();}}}
                         className="mt-2 h-12 w-full rounded-xl border border-violet-200 bg-white px-4 font-mono text-lg" />
                     </label>
-                    {tipoAparelho === "CELULAR" && <label className="block text-xs font-bold text-slate-700">IMEI 2
-                      <input id="triagem-imei2" value={imei2Digitado} inputMode="numeric" autoComplete="off" spellCheck={false}
+                    {doisImeis && <label className="block text-xs font-bold text-slate-700">IMEI 2
+                      <input id="triagem-imei2" maxLength={15} value={imei2Digitado} inputMode="numeric" autoComplete="off" spellCheck={false}
                         onChange={e=>{setImei2Digitado(e.target.value.trim());setValidacao(null);}}
                         onKeyDown={e=>{if(e.key === "Enter") {e.preventDefault();handleValidarImei();}}}
                         className="mt-2 h-12 w-full rounded-xl border border-violet-200 bg-white px-4 font-mono text-lg" />

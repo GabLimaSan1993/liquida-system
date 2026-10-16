@@ -292,14 +292,14 @@ export function decidirDestino({ condicaoDeclarada, respostas }) {
 }
 
 export async function salvarTriagemFuncional({
-  voucher, imei, imei1, imei2, canal, produto, respostas, bateria, bateriaPercentual,
+  voucher, imei, imei1, imei2, aparelhoBloqueado = false, canal, produto, respostas, bateria, bateriaPercentual,
   defeitos, userId, tradein, retriagem = false, motivoRetriagem = null,
 }) {
   const v = String(voucher || "").trim().toUpperCase();
   if (!v)    return { ok: false, erro: "Voucher ausente." };
   if (!imei) return { ok: false, erro: "IMEI ausente." };
 
-  const erroCodigo = erroIdentificacao(tipoDoAparelho(produto?.modelo, produto?.tipo), imei1 || imei, imei2);
+  const erroCodigo = erroIdentificacao(tipoDoAparelho(produto?.modelo, produto?.tipo), imei1 || imei, imei2, { modelo: produto?.modelo, aparelhoBloqueado });
   if (erroCodigo) return { ok: false, erro: erroCodigo };
 
   const lista = Array.isArray(respostas) ? respostas : [];
@@ -331,7 +331,7 @@ export async function salvarTriagemFuncional({
 
     respostas_funcional: JSON.stringify({
       versao: 3,
-      identificacao: { imei1: imei1 || imei, imei2: imei2 || null, tipo: tipoDoAparelho(produto?.modelo, produto?.tipo) },
+      identificacao: { imei1: imei1 || imei, imei2: imei2 || null, aparelho_bloqueado: aparelhoBloqueado, tipo: tipoDoAparelho(produto?.modelo, produto?.tipo) },
       canal,
       respondido_em: agora,
       produto: {

@@ -9,25 +9,27 @@ export function criarEtiquetaDivergencia(caso) {
   doc.setLineWidth(0.7);
   doc.rect(2, 2, 101, 46);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
-  doc.text("IMEI DIVERGENTE", 52.5, 11, { align: "center" });
-  doc.setFontSize(9);
-  doc.text("SEGREGAR - AGUARDANDO DECISAO ASSURANT", 52.5, 17, {
-    align: "center",
-  });
-  doc.setFontSize(11);
-  doc.text(String(caso.voucher || ""), 5, 24);
-  doc.setFont("courier", "normal");
-  doc.setFontSize(9);
-  doc.text(`1: ${caso.imei1 || ""}`, 5, 30);
-  doc.text(`2: ${caso.imei2 || "Nao se aplica"}`, 5, 35);
-  doc.setFont("helvetica", "normal");
+  doc.setFontSize(17);
+  doc.text("IMEI DIVERGENTE", 52.5, 10, { align: "center" });
   doc.setFontSize(8);
-  doc.text(
-    doc.splitTextToSize(String(caso.modelo || ""), 94).slice(0, 2),
-    5,
-    41,
-  );
+  doc.text("SEGREGAR - AGUARDANDO DECISAO ASSURANT", 52.5, 15, { align: "center" });
+  const linha = (texto, y, tamanho = 8) => {
+    doc.setFontSize(tamanho);
+    const largura = doc.getTextWidth(texto);
+    if (largura > 94) doc.setFontSize(tamanho * 94 / largura);
+    doc.text(texto, 5, y);
+  };
+  doc.setFont("helvetica", "bold");
+  linha(String(caso.voucher || ""), 21, 10);
+  doc.setFont("helvetica", "normal");
+  linha(String(caso.modelo || ""), 26);
+  doc.setFont("courier", "normal");
+  linha(`1: ${caso.imei1 || ""}`, 31, 9);
+  linha(`2: ${caso.imei2 || "Nao se aplica"}`, 35, 9);
+  doc.setFont("helvetica", "normal");
+  linha(`Usuario: ${caso.criado_por_nome || "Nao informado"}`, 40);
+  const data = caso.criado_em ? new Date(caso.criado_em) : null;
+  linha(`Data: ${data && !Number.isNaN(data.getTime()) ? data.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "Nao informada"}`, 45);
   return doc;
 }
 export function etiquetaDivergencia(caso, { baixar = false } = {}) {

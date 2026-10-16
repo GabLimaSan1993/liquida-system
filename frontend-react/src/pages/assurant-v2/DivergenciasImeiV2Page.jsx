@@ -2,13 +2,11 @@ import { useEffect, useState } from "react";
 import {
   listarDivergencias,
   decidirDivergencia,
-  configurarDestinatarios,
   etiquetaDivergencia,
 } from "../../services/divergenciasImeiService";
-const hora = (x) => (x ? new Date(x).toLocaleString("pt-BR") : "—");
+const hora = (x) => (x ? new Date(x).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "—");
 export default function DivergenciasImeiV2Page() {
   const [casos, setCasos] = useState([]),
-    [emails, setEmails] = useState(""),
     [filtro, setFiltro] = useState("pendente"),
     [busca, setBusca] = useState("");
   const [loading, setLoading] = useState(true),
@@ -23,7 +21,6 @@ export default function DivergenciasImeiV2Page() {
     try {
       const r = await listarDivergencias();
       setCasos(r.casos || []);
-      setEmails((r.destinatarios || []).join("; "));
     } catch (e) {
       setErro(e.message);
     } finally {
@@ -36,7 +33,6 @@ export default function DivergenciasImeiV2Page() {
       .then((r) => {
         if (ativo) {
           setCasos(r.casos || []);
-          setEmails((r.destinatarios || []).join("; "));
         }
       })
       .catch((e) => {
@@ -49,25 +45,6 @@ export default function DivergenciasImeiV2Page() {
       ativo = false;
     };
   }, []);
-  async function salvarEmails(e) {
-    e.preventDefault();
-    setLoading(true);
-    setErro("");
-    try {
-      await configurarDestinatarios(
-        emails
-          .split(/[;,\n]+/)
-          .map((x) => x.trim())
-          .filter(Boolean),
-      );
-      setAviso("Destinatários salvos. Os avisos pendentes serão processados.");
-      await carregar();
-    } catch (e) {
-      setErro(e.message);
-    } finally {
-      setLoading(false);
-    }
-  }
   async function decidir(e) {
     e.preventDefault();
     setLoading(true);
@@ -144,32 +121,9 @@ export default function DivergenciasImeiV2Page() {
           </button>
         ))}
       </div>
-      <details className="rounded-2xl border bg-white p-4">
-        <summary className="cursor-pointer text-sm font-bold">
-          Destinatários dos avisos por e-mail
-        </summary>
-        <form onSubmit={salvarEmails} className="mt-4 space-y-3">
-          <label className="block text-xs font-bold">
-            E-mails separados por ponto e vírgula
-            <textarea
-              value={emails}
-              onChange={(e) => setEmails(e.target.value)}
-              className="mt-2 w-full rounded-xl border p-3"
-              placeholder="Informe os destinatários autorizados"
-            />
-          </label>
-          <p className="text-xs text-slate-500">
-            Sem destinatários cadastrados, os avisos permanecem pendentes. A
-            segregação e a etiqueta funcionam normalmente.
-          </p>
-          <button
-            disabled={loading}
-            className="rounded-xl bg-violet-700 px-4 py-2 text-sm font-bold text-white"
-          >
-            Salvar destinatários
-          </button>
-        </form>
-      </details>
+      <p className="rounded-xl border bg-white p-4 text-sm text-slate-600">
+        O sistema envia os avisos automaticamente para Luiz Affonso, Edyelves Bezerra e Alex Feliciano, com Jhonatan Nascimento e Gabriel Lima em cópia.
+      </p>
       <div className="flex flex-wrap gap-3">
         <label className="flex-1 text-xs font-bold">
           Buscar voucher, código ou modelo
@@ -203,7 +157,7 @@ export default function DivergenciasImeiV2Page() {
                 </div>
                 <p className="mt-1 text-sm font-bold">{c.modelo}</p>
                 <p className="mt-1 text-xs text-slate-500">
-                  Registrado em {hora(c.criado_em)}
+                  Registrado por {c.criado_por_nome || c.criado_por} em {hora(c.criado_em)}
                 </p>
               </div>
               <div className="flex gap-2">
