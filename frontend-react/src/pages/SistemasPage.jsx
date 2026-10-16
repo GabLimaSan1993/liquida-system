@@ -11,6 +11,7 @@ import {
   Store,
   Truck,
   Warehouse,
+  Users,
 } from "lucide-react";
 
 import { useAuth } from "../AuthContext.jsx";
@@ -119,9 +120,19 @@ function ModuloIndisponivel({
   );
 }
 
+function LinkGestaoUsuarios({ onClick }) {
+  return (
+    <button type="button" onClick={onClick} className="mb-6 flex w-full items-center gap-4 rounded-2xl border border-[#43284F]/15 bg-white px-5 py-4 text-left shadow-sm transition hover:border-[#43284F]/40">
+      <Users className="h-6 w-6 shrink-0 text-[#43284F]" />
+      <span className="flex-1"><span className="block text-sm font-black text-slate-900">Gestão de usuários</span><span className="mt-1 block text-xs text-slate-500">Cadastro e permissões de todos os ambientes</span></span>
+      <ArrowRight className="h-4 w-4 text-[#43284F]" />
+    </button>
+  );
+}
+
 export default function SistemasPage() {
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { profile, hasAccess } = useAuth();
 
   const telas = profile?.telas_permitidas || [];
   const areaTecnica = profile?.area_tecnica;
@@ -141,21 +152,7 @@ export default function SistemasPage() {
     );
   }, [profile, areaTecnica, telas]);
 
-  const acessoLinhaBranca = useMemo(() => {
-    if (profile?.is_master) return true;
-
-    return (
-      [
-        "refrigeracao",
-        "climatizacao",
-        "lavadoras",
-        "diversos",
-      ].includes(areaTecnica) ||
-      telas.some((rota) =>
-        rota.startsWith("/linha-branca")
-      )
-    );
-  }, [profile, areaTecnica, telas]);
+  const acessoLinhaBranca = hasAccess("/v2/linha-branca");
 
   function abrirLinhaBranca() {
   navigate("/v2/linha-branca");
@@ -215,6 +212,10 @@ export default function SistemasPage() {
             Selecione o ambiente que deseja acessar.
           </p>
         </div>
+
+        {hasAccess("/gerenciar-usuarios") && (
+          <LinkGestaoUsuarios onClick={() => navigate("/usuarios")} />
+        )}
 
         <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
           {acessoAssurant ? (

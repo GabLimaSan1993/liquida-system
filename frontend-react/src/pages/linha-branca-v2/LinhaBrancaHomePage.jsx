@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../AuthContext.jsx";
 
 const AREAS = [
   {
@@ -127,6 +128,7 @@ function AreaCard({
 
 export default function LinhaBrancaHomePage() {
   const navigate = useNavigate();
+  const { hasAccess } = useAuth();
 
   return (
     <div>
@@ -145,7 +147,7 @@ export default function LinhaBrancaHomePage() {
       </div>
 
       <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-        {AREAS.map((area) => (
+        {AREAS.filter(area => !area.disponivel || hasAccess(area.rota)).map((area) => (
           <AreaCard
             key={area.nome}
             {...area}

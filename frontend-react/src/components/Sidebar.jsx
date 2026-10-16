@@ -4,7 +4,7 @@ import {
   Upload, BarChart3, Bell, DollarSign, ClipboardList,
   ClipboardCheck, Wrench, Zap, Sparkles, FlaskConical,
   Camera, ShieldCheck, ChevronDown, ChevronRight, Layers,
-  Truck, TrendingUp, Users, LogOut, X, ShoppingCart,
+  Truck, TrendingUp, LogOut, X, ShoppingCart,
   Landmark, BarChart2, Lock, TrendingDown, Database,
   Package, Clock, LayoutDashboard, ScanLine, RefreshCw,
   Box, Store, Send, FileText, Tag, Warehouse,
@@ -387,7 +387,6 @@ function SidebarContent({ profile, onClose, handleLogout }) {
             <div className="pt-2">
               <div className="px-4 text-xs font-bold text-white/50 uppercase">Sistema</div>
             </div>
-            <NavItem to="/gerenciar-usuarios" icon={Users} label="Gerenciar Usuários" onClick={onClose} />
             <button className="w-full flex items-center gap-3 rounded-2xl px-4 py-3 text-white/60 cursor-default">
               <Bell className="h-4 w-4" />
               <span>Alertas</span>

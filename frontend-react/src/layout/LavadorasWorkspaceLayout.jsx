@@ -91,7 +91,7 @@ function MenuItem({
 
 export default function LavadorasWorkspaceLayout() {
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { profile, hasAccess } = useAuth();
 
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -202,7 +202,7 @@ export default function LavadorasWorkspaceLayout() {
               : "mt-4 flex-1 space-y-1 px-4"
           }
         >
-          {MENU.map((item) => (
+          {MENU.filter(item => hasAccess(item.to)).map((item) => (
             <MenuItem
               key={item.label}
               item={item}
@@ -352,7 +352,7 @@ export default function LavadorasWorkspaceLayout() {
             </button>
 
             <nav className="space-y-1">
-              {MENU.map((item) => {
+              {MENU.filter(item => hasAccess(item.to)).map((item) => {
                 const Icon = item.icon;
 
                 return (

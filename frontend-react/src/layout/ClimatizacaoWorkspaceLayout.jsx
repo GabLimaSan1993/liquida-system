@@ -41,7 +41,7 @@ function MenuItem({ item, collapsed }) {
 
 export default function ClimatizacaoWorkspaceLayout() {
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { profile, hasAccess } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -81,7 +81,7 @@ export default function ClimatizacaoWorkspaceLayout() {
         </div>
 
         <nav className={collapsed ? "mt-4 flex-1 space-y-1 px-3" : "mt-4 flex-1 space-y-1 px-4"}>
-          {MENU.map((item) => <MenuItem key={item.label} item={item} collapsed={collapsed} />)}
+          {MENU.filter(item => hasAccess(item.to)).map((item) => <MenuItem key={item.label} item={item} collapsed={collapsed} />)}
         </nav>
 
         <div className={collapsed ? "border-t border-white/10 px-3 py-3" : "border-t border-white/10 px-4 py-3"}>
@@ -113,7 +113,7 @@ export default function ClimatizacaoWorkspaceLayout() {
             <div className="-mx-4 -mt-4 mb-5 flex h-[72px] items-center bg-white px-5"><img src="/brand/liquida-logo-full.png" alt="LiquidaPreço" className="h-10 max-w-[180px] object-contain" /></div>
             <button type="button" onClick={() => { setMobileOpen(false); navigate("/v2/linha-branca"); }} className="mb-5 flex w-full items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-xs font-semibold text-white/75"><ArrowLeft className="h-4 w-4" />Linha Branca</button>
             <nav className="space-y-1">
-              {MENU.map((item) => { const Icon = item.icon; return <NavLink key={item.label} to={item.to} end={item.exact} onClick={() => setMobileOpen(false)} className={({ isActive }) => `flex h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold ${isActive ? "bg-white text-[#4C1D95]" : "text-white/70"}`}><Icon className="h-[18px] w-[18px]" />{item.label}</NavLink>; })}
+              {MENU.filter(item => hasAccess(item.to)).map((item) => { const Icon = item.icon; return <NavLink key={item.label} to={item.to} end={item.exact} onClick={() => setMobileOpen(false)} className={({ isActive }) => `flex h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold ${isActive ? "bg-white text-[#4C1D95]" : "text-white/70"}`}><Icon className="h-[18px] w-[18px]" />{item.label}</NavLink>; })}
             </nav>
           </aside>
         </>

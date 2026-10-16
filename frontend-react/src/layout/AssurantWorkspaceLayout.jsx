@@ -338,13 +338,6 @@ const MENU_GROUPS = [
     { label: "Fechamento de Lojas", icon: FileText, to: "/v2/assurant/gestao/fechamento-lojas", exact: true, enabled: true },
     { label: "Produção da Esteira", icon: Activity, to: "/v2/assurant/gestao/producao", exact: true, enabled: true },
     { label: "Gestão da Esteira", icon: Activity, to: "/v2/assurant/gestao/esteira", exact: true, enabled: true },
-    {
-      label: "Usuários",
-      icon: User,
-      to: "/v2/assurant/usuarios",
-      exact: true,
-      enabled: true,
-    },
 
     {
   label: "Indicadores",

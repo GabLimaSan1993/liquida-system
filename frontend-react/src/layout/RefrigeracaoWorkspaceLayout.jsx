@@ -90,7 +90,7 @@ function MenuItem({
 
 export default function RefrigeracaoWorkspaceLayout() {
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { profile, hasAccess } = useAuth();
 
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -200,7 +200,7 @@ export default function RefrigeracaoWorkspaceLayout() {
               : "mt-4 flex-1 space-y-1 px-4"
           }
         >
-          {MENU.map((item) => (
+          {MENU.filter(item => hasAccess(item.to)).map((item) => (
             <MenuItem
               key={item.label}
               item={item}
@@ -350,7 +350,7 @@ export default function RefrigeracaoWorkspaceLayout() {
             </button>
 
             <nav className="space-y-1">
-              {MENU.map((item) => (
+              {MENU.filter(item => hasAccess(item.to)).map((item) => (
                 <NavLink
                   key={item.label}
                   to={item.to}

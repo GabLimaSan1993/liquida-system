@@ -18,7 +18,7 @@ import AssurantWorkspaceLayout from "./layout/AssurantWorkspaceLayout.jsx";
 import LinhaBrancaWorkspaceLayout from "./layout/LinhaBrancaWorkspaceLayout.jsx";
 
 import LoginPage from "./pages/LoginPage.jsx";
-import GerenciarUsuariosPage from "./pages/GerenciarUsuariosPage.jsx";
+
 
 import UploadPage from "./pages/UploadPage.jsx";
 import AnalysisEntryPage from "./pages/AnalysisEntryPage.jsx";
@@ -76,7 +76,7 @@ import B2BV2Page from "./pages/assurant-v2/B2BV2Page.jsx";
 import B2CV2Page from "./pages/assurant-v2/B2CV2Page.jsx";
 import B2CFluxoComplementarV2Page from "./pages/assurant-v2/B2CFluxoComplementarV2Page.jsx";
 import UploadsV2Page from "./pages/assurant-v2/UploadsV2Page.jsx";
-import UsuariosV2Page from "./pages/assurant-v2/UsuariosV2Page.jsx";
+import GestaoUsuariosPage from "./pages/GestaoUsuariosPage.jsx";
 import IndicadoresExecutivosV2Page from "./pages/assurant-v2/IndicadoresExecutivosV2Page.jsx";
 import EstoqueAgingDetalheV2Page from "./pages/assurant-v2/EstoqueAgingDetalheV2Page.jsx";
 import EstoqueInteligenciaSkuV2Page from "./pages/assurant-v2/EstoqueInteligenciaSkuV2Page.jsx";
@@ -100,6 +100,7 @@ import ReparosClimatizacaoV2Page from "./pages/linha-branca-v2/ReparosClimatizac
 import BancadaTestesClimatizacaoV2Page from "./pages/linha-branca-v2/BancadaTestesClimatizacaoV2Page.jsx";
 
 import SistemasPage from "./pages/SistemasPage.jsx";
+import { getUserLanding } from "./services/userLanding.js";
 import DefinicaoAssurantV2Page from "./pages/assurant-v2/DefinicaoAssurantV2Page.jsx";
 import ValidacaoMeliV2Page from "./pages/assurant-v2/ValidacaoMeliV2Page.jsx";
 
@@ -258,7 +259,7 @@ function DefaultRedirect() {
 
   return (
     <Navigate
-      to="/sistemas"
+      to={getUserLanding(profile)}
       replace
     />
   );
@@ -289,6 +290,7 @@ function SemAcessoPage() {
 export default function App() {
   const {
     user,
+    profile,
     loading,
   } =
     useAuth();
@@ -318,7 +320,7 @@ export default function App() {
             <LoginPage />
           ) : (
             <Navigate
-              to="/sistemas"
+              to={getUserLanding(profile)}
               replace
             />
           )
@@ -342,6 +344,10 @@ export default function App() {
       />
 
 
+      <Route path="/v2/assurant/usuarios" element={<ProtectedRoute tela="/gerenciar-usuarios"><Navigate to="/usuarios" replace /></ProtectedRoute>} />
+      <Route path="/usuarios" element={<ProtectedRoute tela="/gerenciar-usuarios"><GestaoUsuariosPage /></ProtectedRoute>} />
+      <Route path="/gerenciar-usuarios" element={<ProtectedRoute tela="/gerenciar-usuarios"><Navigate to="/usuarios" replace /></ProtectedRoute>} />
+
       {/* =====================================================
           LINHA BRANCA V2
       ====================================================== */}
@@ -349,7 +355,7 @@ export default function App() {
       <Route
         path="/v2/linha-branca"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute tela="/v2/linha-branca">
             <LinhaBrancaWorkspaceLayout />
           </ProtectedRoute>
         }
@@ -366,7 +372,7 @@ export default function App() {
       <Route
         path="/v2/linha-branca/refrigeracao"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute tela="/v2/linha-branca/refrigeracao">
             <RefrigeracaoWorkspaceLayout />
           </ProtectedRoute>
         }
@@ -381,21 +387,21 @@ export default function App() {
         <Route
           path="triagem"
           element={
-            <TriagemRefrigeracaoV2Page />
+            <ProtectedRoute tela="/v2/linha-branca/refrigeracao/triagem"><TriagemRefrigeracaoV2Page /></ProtectedRoute>
           }
         />
 
         <Route
           path="reparos"
           element={
-            <ReparosRefrigeracaoV2Page />
+            <ProtectedRoute tela="/v2/linha-branca/refrigeracao/reparos"><ReparosRefrigeracaoV2Page /></ProtectedRoute>
           }
         />
 
         <Route
           path="testes"
           element={
-            <BancadaTestesRefrigeracaoV2Page />
+            <ProtectedRoute tela="/v2/linha-branca/refrigeracao/testes"><BancadaTestesRefrigeracaoV2Page /></ProtectedRoute>
           }
         />
       </Route>
@@ -404,7 +410,7 @@ export default function App() {
       <Route
         path="/v2/linha-branca/climatizacao"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute tela="/v2/linha-branca/climatizacao">
             <ClimatizacaoWorkspaceLayout />
           </ProtectedRoute>
         }
@@ -419,21 +425,21 @@ export default function App() {
         <Route
           path="triagem"
           element={
-            <TriagemClimatizacaoV2Page />
+            <ProtectedRoute tela="/v2/linha-branca/climatizacao/triagem"><TriagemClimatizacaoV2Page /></ProtectedRoute>
           }
         />
 
         <Route
           path="reparos"
           element={
-            <ReparosClimatizacaoV2Page />
+            <ProtectedRoute tela="/v2/linha-branca/climatizacao/reparos"><ReparosClimatizacaoV2Page /></ProtectedRoute>
           }
         />
 
         <Route
           path="testes"
           element={
-            <BancadaTestesClimatizacaoV2Page />
+            <ProtectedRoute tela="/v2/linha-branca/climatizacao/testes"><BancadaTestesClimatizacaoV2Page /></ProtectedRoute>
           }
         />
       </Route>
@@ -442,7 +448,7 @@ export default function App() {
       <Route
         path="/v2/linha-branca/lavadoras"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute tela="/v2/linha-branca/lavadoras">
             <LavadorasWorkspaceLayout />
           </ProtectedRoute>
         }
@@ -457,21 +463,21 @@ export default function App() {
         <Route
           path="triagem"
           element={
-            <TriagemLavadorasV2Page />
+            <ProtectedRoute tela="/v2/linha-branca/lavadoras/triagem"><TriagemLavadorasV2Page /></ProtectedRoute>
           }
         />
 
         <Route
           path="reparos"
           element={
-            <ReparosLavadorasV2Page />
+            <ProtectedRoute tela="/v2/linha-branca/lavadoras/reparos"><ReparosLavadorasV2Page /></ProtectedRoute>
           }
         />
 
         <Route
           path="testes"
           element={
-            <BancadaTestesLavadorasV2Page />
+            <ProtectedRoute tela="/v2/linha-branca/lavadoras/testes"><BancadaTestesLavadorasV2Page /></ProtectedRoute>
           }
         />
       </Route>
@@ -702,12 +708,7 @@ export default function App() {
         <Route path="gestao/producao" element={<ProtectedRoute tela="/v2/assurant/gestao/producao"><ProducaoEsteiraV2Page /></ProtectedRoute>} />
         <Route path="gestao/esteira" element={<ProtectedRoute tela="/v2/assurant/gestao/esteira"><GestaoEsteiraV2Page /></ProtectedRoute>} />
 
-        <Route
-          path="usuarios"
-          element={
-            <UsuariosV2Page />
-          }
-        />
+
 
         <Route
           path="indicadores"
@@ -932,14 +933,7 @@ export default function App() {
 
         {/* Usuários */}
 
-        <Route
-          path="/gerenciar-usuarios"
-          element={
-            <ProtectedRoute tela="/gerenciar-usuarios">
-              <GerenciarUsuariosPage />
-            </ProtectedRoute>
-          }
-        />
+
 
 
         {/* Assurant legado */}

@@ -3,41 +3,56 @@ import { Plus, X, Shield } from "lucide-react";
 import { fetchAllProfiles, createUser, updateUserPermissions } from "../services/authService";
 
 const TELAS = [
-  { id: "/v2/assurant/b2c/definicao-assurant", label: "B2C — Definição Assurant e relatório", grupo: "Assurant V2 — B2C" },
-  { id: "/v2/assurant/b2c/validacao-meli", label: "B2C — Validação e Testes MELI", grupo: "Assurant V2 — B2C" },
-  { id: "/v2/assurant/gestao/relatorio-estoque", label: "Relatório de Estoque", grupo: "Assurant V2 — Gestão" },
-  { id: "/v2/assurant/gestao/fechamento-lojas", label: "Fechamento de Lojas — Cosmética", grupo: "Assurant V2 — Gestão" },
-  { id: "/v2/assurant/gestao/producao", label: "Produção da Esteira e Ranking", grupo: "Assurant V2 — Gestão" },
-  { id: "/v2/assurant/gestao/esteira", label: "Gestão da Esteira — Trade-in até Armazenagem", grupo: "Assurant V2 — Gestão" },
-    { id: "/v2/assurant", label: "Assurant V2 — Acesso ao Workspace", grupo: "Assurant V2" },
+  { id: "/v2/linha-branca", label: "Acesso à Linha Branca", grupo: "Linha Branca" },
+  { id: "/v2/linha-branca/lavadoras", label: "Visão Geral", grupo: "Linha Branca — Lavadoras" },
+  { id: "/v2/linha-branca/lavadoras/triagem", label: "Triagem", grupo: "Linha Branca — Lavadoras" },
+  { id: "/v2/linha-branca/lavadoras/reparos", label: "Reparos", grupo: "Linha Branca — Lavadoras" },
+  { id: "/v2/linha-branca/lavadoras/testes", label: "Bancada de Testes", grupo: "Linha Branca — Lavadoras" },
+  { id: "/v2/linha-branca/refrigeracao", label: "Visão Geral", grupo: "Linha Branca — Refrigeração" },
+  { id: "/v2/linha-branca/refrigeracao/triagem", label: "Triagem", grupo: "Linha Branca — Refrigeração" },
+  { id: "/v2/linha-branca/refrigeracao/reparos", label: "Reparos", grupo: "Linha Branca — Refrigeração" },
+  { id: "/v2/linha-branca/refrigeracao/testes", label: "Bancada de Testes", grupo: "Linha Branca — Refrigeração" },
+  { id: "/v2/linha-branca/climatizacao", label: "Visão Geral", grupo: "Linha Branca — Climatização" },
+  { id: "/v2/linha-branca/climatizacao/triagem", label: "Triagem", grupo: "Linha Branca — Climatização" },
+  { id: "/v2/linha-branca/climatizacao/reparos", label: "Reparos", grupo: "Linha Branca — Climatização" },
+  { id: "/v2/linha-branca/climatizacao/testes", label: "Bancada de Testes", grupo: "Linha Branca — Climatização" },
+  { id: "/v2/assurant/estoque/rastreabilidade", label: "Rastreabilidade", grupo: "Assurant — Gestão" },
+  { id: "/v2/assurant/indicadores", label: "Indicadores Executivos", grupo: "Assurant — Gestão" },
+  { id: "/v2/assurant/b2c/definicao-assurant", label: "B2C — Definição Assurant e relatório", grupo: "Assurant — B2C" },
+  { id: "/v2/assurant/b2c/validacao-meli", label: "B2C — Validação e Testes MELI", grupo: "Assurant — B2C" },
+  { id: "/v2/assurant/gestao/relatorio-estoque", label: "Relatório de Estoque", grupo: "Assurant — Gestão" },
+  { id: "/v2/assurant/gestao/fechamento-lojas", label: "Fechamento de Lojas — Cosmética", grupo: "Assurant — Gestão" },
+  { id: "/v2/assurant/gestao/producao", label: "Produção da Esteira e Ranking", grupo: "Assurant — Gestão" },
+  { id: "/v2/assurant/gestao/esteira", label: "Gestão da Esteira — Trade-in até Armazenagem", grupo: "Assurant — Gestão" },
+    { id: "/v2/assurant", label: "Assurant — Acesso ao Workspace", grupo: "Assurant" },
 
-  { id: "/v2/assurant/recebimento", label: "Recebimento — Lojas", grupo: "Assurant V2 — Operação" },
-  { id: "/v2/assurant/recebimento/gestao", label: "Recebimento — Gestão", grupo: "Assurant V2 — Operação" },
+  { id: "/v2/assurant/recebimento", label: "Recebimento — Lojas", grupo: "Assurant — Operação" },
+  { id: "/v2/assurant/recebimento/gestao", label: "Recebimento — Gestão", grupo: "Assurant — Operação" },
 
-  { id: "/v2/assurant/triagens/funcional", label: "Triagem Funcional", grupo: "Assurant V2 — Triagens" },
-  { id: "/v2/assurant/triagens/divergencias-imei", label: "Divergências — Assurant", grupo: "Assurant V2 — Triagens" },
-  { id: "/v2/assurant/triagens/laudo", label: "Laudo", grupo: "Assurant V2 — Triagens" },
-  { id: "/v2/assurant/triagens/cosmetica", label: "Triagem Cosmética", grupo: "Assurant V2 — Triagens" },
-  { id: "/v2/assurant/triagens/oracle", label: "Entrada Oracle", grupo: "Assurant V2 — Triagens" },
+  { id: "/v2/assurant/triagens/funcional", label: "Triagem Funcional", grupo: "Assurant — Triagens" },
+  { id: "/v2/assurant/triagens/divergencias-imei", label: "Divergências — Assurant", grupo: "Assurant — Triagens" },
+  { id: "/v2/assurant/triagens/laudo", label: "Laudo", grupo: "Assurant — Triagens" },
+  { id: "/v2/assurant/triagens/cosmetica", label: "Triagem Cosmética", grupo: "Assurant — Triagens" },
+  { id: "/v2/assurant/triagens/oracle", label: "Entrada Oracle", grupo: "Assurant — Triagens" },
 
-  { id: "/v2/assurant/b2b/picking", label: "B2B — Picking", grupo: "Assurant V2 — B2B" },
-  { id: "/v2/assurant/b2b/embalagem", label: "B2B — Embalagem", grupo: "Assurant V2 — B2B" },
-  { id: "/v2/assurant/b2b/faturamento", label: "B2B — Faturamento", grupo: "Assurant V2 — B2B" },
-  { id: "/v2/assurant/b2b/gestao", label: "B2B — Gestão", grupo: "Assurant V2 — B2B" },
+  { id: "/v2/assurant/b2b/picking", label: "B2B — Picking", grupo: "Assurant — B2B" },
+  { id: "/v2/assurant/b2b/embalagem", label: "B2B — Embalagem", grupo: "Assurant — B2B" },
+  { id: "/v2/assurant/b2b/faturamento", label: "B2B — Faturamento", grupo: "Assurant — B2B" },
+  { id: "/v2/assurant/b2b/gestao", label: "B2B — Gestão", grupo: "Assurant — B2B" },
 
-  { id: "/v2/assurant/b2c", label: "B2C — Pedidos", grupo: "Assurant V2 — B2C" },
-  { id: "/v2/assurant/b2c/embalagem", label: "B2C — Embalagem", grupo: "Assurant V2 — B2C" },
-  { id: "/v2/assurant/b2c/expedicao", label: "B2C — Expedição", grupo: "Assurant V2 — B2C" },
-  { id: "/v2/assurant/b2c/etiquetas", label: "B2C — Etiquetas", grupo: "Assurant V2 — B2C" },
-  { id: "/v2/assurant/b2c/gestao", label: "B2C — Gestão", grupo: "Assurant V2 — B2C" },
-  { id: "/v2/assurant/b2c/desvinculacoes", label: "B2C — Desvinculações (Liquida Preço)", grupo: "Assurant V2 — B2C" },
+  { id: "/v2/assurant/b2c", label: "B2C — Pedidos", grupo: "Assurant — B2C" },
+  { id: "/v2/assurant/b2c/embalagem", label: "B2C — Embalagem", grupo: "Assurant — B2C" },
+  { id: "/v2/assurant/b2c/expedicao", label: "B2C — Expedição", grupo: "Assurant — B2C" },
+  { id: "/v2/assurant/b2c/etiquetas", label: "B2C — Etiquetas", grupo: "Assurant — B2C" },
+  { id: "/v2/assurant/b2c/gestao", label: "B2C — Gestão", grupo: "Assurant — B2C" },
+  { id: "/v2/assurant/b2c/desvinculacoes", label: "B2C — Desvinculações (Liquida Preço)", grupo: "Assurant — B2C" },
 
-  { id: "/v2/assurant/estoque/armazenagem", label: "Estoque — Armazenagem", grupo: "Assurant V2 — Estoque" },
-  { id: "/v2/assurant/estoque/consulta", label: "Estoque — Consulta", grupo: "Assurant V2 — Estoque" },
-  { id: "/v2/assurant/estoque/inventario", label: "Estoque — Inventário", grupo: "Assurant V2 — Estoque" },
-  { id: "/v2/assurant/estoque/carga-inicial", label: "Estoque — Carga Inicial", grupo: "Assurant V2 — Estoque" },
+  { id: "/v2/assurant/estoque/armazenagem", label: "Estoque — Armazenagem", grupo: "Assurant — Estoque" },
+  { id: "/v2/assurant/estoque/consulta", label: "Estoque — Consulta", grupo: "Assurant — Estoque" },
+  { id: "/v2/assurant/estoque/inventario", label: "Estoque — Inventário", grupo: "Assurant — Estoque" },
+  { id: "/v2/assurant/estoque/carga-inicial", label: "Estoque — Carga Inicial", grupo: "Assurant — Estoque" },
 
-  { id: "/v2/assurant/uploads", label: "Dados — Uploads", grupo: "Assurant V2 — Dados" },
+  { id: "/v2/assurant/uploads", label: "Dados — Uploads", grupo: "Assurant — Dados" },
   { id: "/upload",                        label: "Uploads",                          grupo: "Geral" },
   { id: "/analise-entrada",               label: "Análise de Entrada",               grupo: "Geral" },
   { id: "/faturamento",                   label: "Faturamento",                      grupo: "Geral" },
@@ -83,7 +98,7 @@ const TELAS = [
 ];
 
 const AREAS_TECNICAS = [
-  { value: "",                label: "Nenhuma (não é técnico)"  },
+  { value: "",                label: "Sem área técnica"  },
   { value: "assurant",        label: "Operador Assurant"        },
   { value: "assurant_trocas", label: "Assurant — Trocas e Devoluções" },
   { value: "refrigeracao",    label: "Refrigeração"             },
@@ -92,7 +107,14 @@ const AREAS_TECNICAS = [
   { value: "diversos",        label: "Diversos"                 },
 ];
 
-const TELAS_ASSURANT_PADRAO = [];
+function normalizarTelas(telas, areaTecnica) {
+  const novas = new Set(telas);
+  if (telas.some(tela => tela.startsWith("/v2/assurant/"))) novas.add("/v2/assurant");
+  if (["lavadoras", "refrigeracao", "climatizacao", "diversos"].includes(areaTecnica) ||
+      telas.some(tela => tela.startsWith("/v2/linha-branca/"))) novas.add("/v2/linha-branca");
+  return [...novas];
+}
+
 const GRUPOS = [...new Set(TELAS.map(t => t.grupo))];
 
 function SectionCard({ children }) {
@@ -217,7 +239,6 @@ function ModalNovoUsuario({ onSave, onCancel }) {
 
   function handleAreaChange(value) {
     setAreaTecnica(value);
-    setTelas([]);
   }
 
   async function handleSave() {
@@ -229,7 +250,7 @@ function ModalNovoUsuario({ onSave, onCancel }) {
 
     try {
       setSaving(true);
-      await onSave(email.trim(), senha, nome.trim(), isMaster, telas, areaTecnica);
+      await onSave(email.trim(), senha, nome.trim(), isMaster, normalizarTelas(telas, areaTecnica), areaTecnica);
     } catch (err) {
       setError(
         typeof err === "string" ? err : err?.message ? err.message : "Erro ao criar usuário. Tente novamente."
@@ -283,7 +304,7 @@ function ModalNovoUsuario({ onSave, onCancel }) {
           {!isMaster && (
             <>
               <div>
-                <span className="text-sm font-semibold text-slate-600">Perfil / Área</span>
+                <span className="text-sm font-semibold text-slate-600">Área técnica (opcional)</span>
                 <select value={areaTecnica} onChange={e => handleAreaChange(e.target.value)}
                   className={inputClass()}>
                   {AREAS_TECNICAS.map(a => (
@@ -336,7 +357,7 @@ function ModalPermissoes({ usuario, onSave, onCancel }) {
     try {
       setSaving(true);
       setError("");
-      await onSave(usuario.id, telas, isMaster, areaTecnica);
+      await onSave(usuario.id, normalizarTelas(telas, areaTecnica), isMaster, areaTecnica);
     } catch (err) {
       setError(
         typeof err === "string" ? err : err?.message ? err.message : "Erro ao salvar permissões."
@@ -372,7 +393,7 @@ function ModalPermissoes({ usuario, onSave, onCancel }) {
           {!isMaster && (
             <>
               <div>
-                <span className="text-sm font-semibold text-slate-600">Perfil / Área</span>
+                <span className="text-sm font-semibold text-slate-600">Área técnica (opcional)</span>
                 <select value={areaTecnica} onChange={e => handleAreaChange(e.target.value)}
                   className={inputClass()}>
                   {AREAS_TECNICAS.map(a => (
@@ -416,6 +437,8 @@ export default function GerenciarUsuariosPage() {
   const [showNovo, setShowNovo] = useState(false);
   const [editando, setEditando] = useState(null);
   const [status, setStatus]     = useState("");
+  const [busca, setBusca] = useState("");
+  const [operacao, setOperacao] = useState("todas");
 
   async function loadUsuarios() {
     try {
@@ -460,20 +483,30 @@ export default function GerenciarUsuariosPage() {
     await loadUsuarios();
   }
 
+  const usuariosVisiveis = usuarios.filter(usuario => {
+    const termo = busca.trim().toLocaleLowerCase("pt-BR");
+    const corresponde = !termo || `${usuario.nome || ""} ${usuario.email || ""}`.toLocaleLowerCase("pt-BR").includes(termo);
+    const telas = usuario.telas_permitidas || [];
+    const branca = ["lavadoras", "refrigeracao", "climatizacao", "diversos"].includes(usuario.area_tecnica) || telas.some(tela => tela.startsWith("/v2/linha-branca") || tela.startsWith("/linha-branca/"));
+    const assurant = ["assurant", "assurant_trocas"].includes(usuario.area_tecnica) || telas.some(tela => tela.startsWith("/v2/assurant") || tela.startsWith("/assurant/") || tela.startsWith("/b2b/") || tela.startsWith("/b2c/"));
+    return corresponde && (operacao === "todas" || (operacao === "master" && usuario.is_master) || (operacao === "linha-branca" && (branca || usuario.is_master)) || (operacao === "assurant" && (assurant || usuario.is_master)) || (operacao === "outras" && !branca && !assurant && !usuario.is_master));
+  });
+
   const gruposUsuarios = {
-    master:          usuarios.filter(u => u.is_master),
-    assurant:        usuarios.filter(u => !u.is_master && u.area_tecnica === "assurant"),
-    assurantTrocas:  usuarios.filter(u => !u.is_master && u.area_tecnica === "assurant_trocas"),
-    outros:          usuarios.filter(u => !u.is_master && u.area_tecnica !== "assurant" && u.area_tecnica !== "assurant_trocas"),
+    master:          usuariosVisiveis.filter(u => u.is_master),
+    assurant:        usuariosVisiveis.filter(u => !u.is_master && u.area_tecnica === "assurant"),
+    assurantTrocas:  usuariosVisiveis.filter(u => !u.is_master && u.area_tecnica === "assurant_trocas"),
+    linhaBranca:     usuariosVisiveis.filter(u => !u.is_master && ["refrigeracao", "lavadoras", "climatizacao", "diversos"].includes(u.area_tecnica)),
+    outros:          usuariosVisiveis.filter(u => !u.is_master && !["assurant", "assurant_trocas", "refrigeracao", "lavadoras", "climatizacao", "diversos"].includes(u.area_tecnica)),
   };
 
   function renderUsuario(u) {
     return (
       <div key={u.id}
-        className="flex items-center justify-between rounded-2xl bg-[#FCFAFF] px-5 py-4 ring-1 ring-[#E9D5FF]">
+        className="flex flex-col gap-3 rounded-2xl bg-[#FCFAFF] px-5 py-4 ring-1 ring-[#E9D5FF] sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="font-bold text-[#6B1F87]">{u.nome}</div>
-          <div className="text-xs text-slate-400">{u.email}</div>
+          <div className="break-all text-xs text-slate-400">{u.email}</div>
           <div className="mt-1 flex items-center gap-2 flex-wrap">
             {u.is_master ? (
               <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-semibold text-purple-700">
@@ -512,9 +545,9 @@ export default function GerenciarUsuariosPage() {
         <SectionCard>
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h2 className="text-2xl font-black text-[#6B1F87]">Gerenciar Usuários</h2>
+              <h2 className="text-2xl font-black text-[#6B1F87]">Cadastro central de usuários</h2>
               <p className="mt-1 text-sm text-slate-500">
-                Crie e gerencie os acessos dos usuários ao sistema.
+                Todos os usuários e operações em um único cadastro. Selecione as telas de uma ou mais operações para cada pessoa.
               </p>
             </div>
             <Button primary onClick={() => setShowNovo(true)}>
@@ -531,9 +564,26 @@ export default function GerenciarUsuariosPage() {
         )}
 
         <SectionCard>
+          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <label className="flex-1">
+              <span className="mb-1 block text-xs font-bold text-slate-600">Buscar usuário</span>
+              <input className={inputClass()} value={busca} onChange={event => setBusca(event.target.value)} placeholder="Nome ou e-mail" />
+            </label>
+            <label>
+              <span className="mb-1 block text-xs font-bold text-slate-600">Operação</span>
+              <select className={inputClass()} value={operacao} onChange={event => setOperacao(event.target.value)}>
+                <option value="todas">Todas as operações</option>
+                <option value="assurant">Assurant</option>
+                <option value="linha-branca">Linha Branca</option>
+                <option value="outras">Outras operações</option>
+                <option value="master">Administradores</option>
+              </select>
+            </label>
+          </div>
+          <p className="mb-4 text-xs text-slate-500">{usuariosVisiveis.length} de {usuarios.length} usuários cadastrados</p>
           {loading ? (
             <p className="text-sm text-slate-400">Carregando usuários...</p>
-          ) : usuarios.length === 0 ? (
+          ) : usuariosVisiveis.length === 0 ? (
             <p className="text-sm text-slate-400">Nenhum usuário cadastrado.</p>
           ) : (
             <div className="space-y-6">
@@ -553,6 +603,12 @@ export default function GerenciarUsuariosPage() {
                 <div>
                   <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Assurant — Trocas</p>
                   <div className="space-y-3">{gruposUsuarios.assurantTrocas.map(renderUsuario)}</div>
+                </div>
+              )}
+              {gruposUsuarios.linhaBranca.length > 0 && (
+                <div>
+                  <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">Linha Branca</p>
+                  <div className="space-y-3">{gruposUsuarios.linhaBranca.map(renderUsuario)}</div>
                 </div>
               )}
               {gruposUsuarios.outros.length > 0 && (

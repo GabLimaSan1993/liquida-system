@@ -27,12 +27,19 @@ export async function fetchProfile(userId) {
 }
 
 export async function fetchAllProfiles() {
-  const { data, error } = await supabase
-    .from("user_profiles")
-    .select("*")
-    .order("nome");
-  if (error) throw error;
-  return data || [];
+  const profiles = [];
+  const pageSize = 1000;
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase
+      .from("user_profiles")
+      .select("*")
+      .order("nome")
+      .order("id")
+      .range(offset, offset + pageSize - 1);
+    if (error) throw error;
+    profiles.push(...(data || []));
+    if (!data || data.length < pageSize) return profiles;
+  }
 }
 
 export async function createUser(email, password, nome, isMaster, telasPermitidas, areaTecnica) {

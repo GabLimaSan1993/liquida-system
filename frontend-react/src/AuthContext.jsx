@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { supabase } from "./lib/supabase";
 import { fetchProfile } from "./services/authService";
 
+import { hasLinhaBrancaAccess } from "./services/linhaBrancaAccess.js";
+
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
@@ -48,6 +50,7 @@ export function AuthProvider({ children }) {
 
   function hasAccess(tela) {
     if (!profile) return false;
+    if (tela === "/v2/linha-branca" || tela.startsWith("/v2/linha-branca/")) return hasLinhaBrancaAccess(profile, tela);
     if (["/v2/assurant/gestao/producao", "/v2/assurant/b2c/validacao-meli", "/v2/assurant/gestao/esteira", "/v2/assurant/gestao/fechamento-lojas", "/v2/assurant/gestao/relatorio-estoque"].includes(tela)) return profile.telas_permitidas?.includes(tela) === true;
     if (profile.is_master) return true;
     return profile.telas_permitidas?.includes(tela);
