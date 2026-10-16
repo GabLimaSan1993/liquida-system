@@ -5,7 +5,7 @@ export function tipoDoAparelho(modelo = "", tipoCatalogo = "") {
     .toUpperCase();
   if (tipoCatalogo === "SMARTWATCH") return "RELOGIO";
   if (tipoCatalogo === "TABLET") return "TABLET";
-  if (/WATCH|RELOGIO|SMARTWATCH|\bBAND\b/.test(nome)) return "RELOGIO";
+  if (/WATCH|RELOGIO|SMARTWATCH|\bBAND\b|\bFIT\s*\d/.test(nome)) return "RELOGIO";
   if (/IPAD|TABLET|\bTAB\b|MATEPAD|XIAOMI PAD|REDMI PAD|LENOVO.*PAD/.test(nome))
     return "TABLET";
   return "CELULAR";
