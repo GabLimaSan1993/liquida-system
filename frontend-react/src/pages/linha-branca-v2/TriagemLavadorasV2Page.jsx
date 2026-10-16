@@ -11,6 +11,7 @@ import {
   Play,
   RefreshCw,
   RotateCcw,
+  ScanLine,
   Search,
   Settings2,
   TimerReset,
@@ -22,6 +23,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "../../AuthContext.jsx";
+import OsBarcodeScanner from "../../components/OsBarcodeScanner.jsx";
 import {
   REPAROS_ELETRICOS_LAVADORAS,
   REPAROS_ESTETICOS_LAVADORAS,
@@ -209,6 +211,7 @@ export default function TriagemLavadorasV2Page() {
   const [validacao, setValidacao] = useState({ ...EMPTY_VALIDACAO });
   const [posicaoNova, setPosicaoNova] = useState("");
   const [buscaOs, setBuscaOs] = useState("");
+  const [scannerAberto, setScannerAberto] = useState(false);
   const [eventos, setEventos] = useState([]);
   const [erroCiclo, setErroCiclo] = useState(null);
   const [erroForm, setErroForm] = useState({ ...EMPTY_ERRO });
@@ -389,6 +392,29 @@ export default function TriagemLavadorasV2Page() {
         .some((valor) => String(valor).toLocaleLowerCase("pt-BR").includes(termo))
     );
   }, [painel.aguardando, buscaOs]);
+
+  function selecionarOsPorCodigo(codigo) {
+    const normalizar = (valor) =>
+      String(valor || "")
+        .trim()
+        .toLocaleUpperCase("pt-BR")
+        .replace(/[^A-Z0-9]/g, "")
+        .replace(/^OS/, "");
+    const codigoNormalizado = normalizar(codigo);
+    const osEncontrada = painel.aguardando.find((os) =>
+      [os.numero_os, os.serial_number].some(
+        (valor) => normalizar(valor) && normalizar(valor) === codigoNormalizado
+      )
+    );
+
+    if (!osEncontrada) return false;
+
+    setSelectedOsId(String(osEncontrada.id));
+    setBuscaOs("");
+    setScannerAberto(false);
+    setMensagem(`OS ${osEncontrada.numero_os} identificada pela câmera.`);
+    return true;
+  }
 
   const metricas = useMemo(() => {
     const emCiclo = painel.ciclos.filter((item) => item.status === "em_ciclo").length;
@@ -616,14 +642,19 @@ export default function TriagemLavadorasV2Page() {
           <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
             <div>
               <h2 className="text-sm font-black text-slate-900">Validação do Produto</h2>
-              <p className="mt-0.5 text-[11px] text-slate-400">Confira sistema x equipamento físico.</p>
+              <p className="mt-0.5 text-[11px] text-slate-400">Digite os dados encontrados no equipamento físico.</p>
             </div>
             <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black text-slate-500">{painel.aguardando.length} OS</span>
           </div>
           <div className="p-5">
-            <div className="relative">
-              <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input value={buscaOs} onChange={(event) => setBuscaOs(event.target.value)} placeholder="Buscar OS, modelo ou serial" className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-3 text-sm outline-none focus:border-[#765D81]" />
+            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+              <div className="relative">
+                <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input value={buscaOs} onChange={(event) => setBuscaOs(event.target.value)} placeholder="Buscar OS, modelo ou serial" className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-3 text-sm outline-none focus:border-[#765D81]" />
+              </div>
+              <button type="button" onClick={() => setScannerAberto(true)} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#5B35C9] px-4 text-xs font-black text-white hover:bg-[#4C2AB2]">
+                <ScanLine className="h-4 w-4" /> Bipar etiqueta
+              </button>
             </div>
             <select value={selectedOsId} onChange={(event) => setSelectedOsId(event.target.value)} className="mt-3 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 outline-none focus:border-[#765D81]">
               <option value="">Selecione uma OS</option>
@@ -643,14 +674,13 @@ export default function TriagemLavadorasV2Page() {
                   </div>
                 </div>
                 <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
-                  <div className="grid grid-cols-[96px_1fr_1fr] border-b border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-slate-400"><div>Característica</div><div>Sistema</div><div>Físico</div></div>
+                  <div className="grid grid-cols-[112px_1fr] border-b border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-slate-400"><div>Característica</div><div>Conferência física</div></div>
                   {linhasValidacao.map((item) => {
                     const status = statusValidacao(item.sistema, validacao[item.key], item.obrigatorio);
                     return (
                       <div key={item.key} className="border-b border-slate-100 px-3 py-3 last:border-b-0">
-                        <div className="grid grid-cols-[96px_1fr_1fr] items-start gap-2">
+                        <div className="grid grid-cols-[112px_1fr] items-start gap-2">
                           <div className="pt-2 text-[11px] font-black text-slate-600">{item.label}{item.obrigatorio ? <span className="ml-1 text-rose-500">*</span> : null}</div>
-                          <div className="pt-2 text-[11px] font-semibold text-slate-500">{item.sistema || "—"}</div>
                           {item.key === "descricao" ? (
                             <textarea rows={2} value={validacao[item.key]} onChange={(event) => setValidacao((atual) => ({ ...atual, [item.key]: event.target.value }))} className="min-h-[54px] w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[11px] outline-none focus:border-[#765D81]" />
                           ) : (
@@ -768,6 +798,13 @@ export default function TriagemLavadorasV2Page() {
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4"><div><h2 className="flex items-center gap-2 text-sm font-black text-slate-900"><History className="h-4 w-4 text-[#5B35C9]" /> Histórico do Ciclo / Eventos</h2><p className="mt-0.5 text-[11px] text-slate-400">Histórico da tentativa selecionada.</p></div>{selectedCiclo ? <div className="rounded-xl bg-slate-50 px-3 py-2 text-[10px] font-black text-slate-600">{selectedCiclo.os?.numero_os || `OS #${selectedCiclo.os_id}`} · Ciclo {selectedCiclo.numero_ciclo || 1}</div> : null}</div>
         <div className="overflow-x-auto"><table className="min-w-full text-left"><thead className="bg-slate-50 text-[10px] font-black uppercase tracking-wide text-slate-400"><tr><th className="px-5 py-3">Data e hora</th><th className="px-5 py-3">Evento</th><th className="px-5 py-3">Detalhes</th><th className="px-5 py-3">Tempo executado</th><th className="px-5 py-3">Operador</th></tr></thead><tbody className="divide-y divide-slate-100 text-xs text-slate-600">{eventos.length === 0 ? <tr><td colSpan={5} className="px-5 py-10 text-center text-slate-400">Selecione uma lavadora da bancada.</td></tr> : eventos.map((evento) => <tr key={evento.id}><td className="whitespace-nowrap px-5 py-3 font-semibold text-slate-500">{formatarDataHora(evento.created_at)}</td><td className="whitespace-nowrap px-5 py-3 font-black text-slate-700">{evento.tipo_evento}</td><td className="min-w-[280px] px-5 py-3">{evento.detalhes || "—"}</td><td className="whitespace-nowrap px-5 py-3 font-black">{evento.tempo_executado_segundos == null ? "—" : formatarSegundos(evento.tempo_executado_segundos)}</td><td className="whitespace-nowrap px-5 py-3">{evento.operador || "Sistema"}</td></tr>)}</tbody></table></div>
       </section>
+
+      {scannerAberto ? (
+        <OsBarcodeScanner
+          onClose={() => setScannerAberto(false)}
+          onDetected={selecionarOsPorCodigo}
+        />
+      ) : null}
     </div>
   );
 }
