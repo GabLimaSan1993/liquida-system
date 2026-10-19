@@ -15,6 +15,7 @@ import {
   FileText,
   FlaskConical,
   HelpCircle,
+  Ticket,
   History,
   LayoutDashboard,
   LogOut,
@@ -79,6 +80,7 @@ const MENU_GROUPS = [
   {
     label: null,
     items: [
+      { label: "Chamados e solicitações", icon: Ticket, to: "/chamados", exact: true, enabled: true },
       {
         label: "Visão Geral",
         icon: LayoutDashboard,
@@ -937,6 +939,7 @@ function SidebarContent({
   mobile = false,
 }) {
   const podeVerRota = (to, allowedUserIds, liquidaOnly = false) => {
+    if (to === "/chamados") return profile?.telas_permitidas?.includes(to) === true;
     if (["/v2/assurant/gestao/producao", "/v2/assurant/b2c/validacao-meli", "/v2/assurant/gestao/esteira", "/v2/assurant/gestao/fechamento-lojas", "/v2/assurant/gestao/relatorio-estoque"].includes(to)) return profile?.telas_permitidas?.includes(to) === true;
     if (liquidaOnly) {
       const email = String(profile?.email || "").toLowerCase();
