@@ -1,0 +1,50 @@
+begin;
+set local request.jwt.claims='{"sub":"b517d70a-56be-4b4f-8b9e-a03c769dd3c3","role":"authenticated"}';
+set local role authenticated;
+do $$ begin if not private.chamados_pode_gerir() then raise exception 'Gabriel sem gestão'; end if; end $$;
+insert into public.sistema_chamados(id,titulo,tipo,prioridade,tela_nome,descricao) values('00000000-0000-4000-8000-000000000021','Teste sem SLA','melhoria','normal','Chamados','Teste de SLA sem regra inicial.');
+do $$ begin if (select prazo_resolucao_em from public.sistema_chamados where id='00000000-0000-4000-8000-000000000021') is not null then raise exception 'Prazo inventado'; end if; end $$;
+select public.chamados_configurar_sla('[{"prioridade":"baixa","primeira_resposta_h":48,"resolucao_h":240},{"prioridade":"normal","primeira_resposta_h":24,"resolucao_h":120},{"prioridade":"alta","primeira_resposta_h":8,"resolucao_h":48},{"prioridade":"urgente","primeira_resposta_h":4,"resolucao_h":24}]'::jsonb,true);
+insert into public.sistema_chamados(id,titulo,tipo,prioridade,tela_nome,descricao) values('00000000-0000-4000-8000-000000000022','Teste SLA alta','correcao','alta','Chamados','Teste de contagem do prazo de atendimento.');
+do $$ begin
+ if (select prazo_resolucao_em-criado_em from public.sistema_chamados where id='00000000-0000-4000-8000-000000000022')<>interval '48 hours' then raise exception 'SLA de resolução incorreto'; end if;
+ if (select prazo_primeira_resposta_em-criado_em from public.sistema_chamados where id='00000000-0000-4000-8000-000000000022')<>interval '8 hours' then raise exception 'SLA de resposta incorreto'; end if;
+ if (select prazo_resolucao_em-criado_em from public.sistema_chamados where id='00000000-0000-4000-8000-000000000021')<>interval '120 hours' then raise exception 'SLA não aplicado ao aberto'; end if;
+ begin
+ update public.user_profiles set telas_permitidas=array_append(telas_permitidas,'/chamados/gestao') where id='8549de55-3657-4042-86c6-822cd3d49941';
+ raise exception 'Gestão liberada a terceiro'; exception when insufficient_privilege then null; end;
+end $$;
+reset role;
+set local request.jwt.claims='{"sub":"8549de55-3657-4042-86c6-822cd3d49941","role":"authenticated"}';
+set local role authenticated;
+do $$ begin
+ if private.chamados_pode_gerir() then raise exception 'Fernando com gestão'; end if;
+ if exists(select 1 from public.sistema_chamados_sla) then raise exception 'Configuração exposta'; end if;
+ begin update public.sistema_chamados set prazo_planejado_em=now()+interval '1 day' where id='00000000-0000-4000-8000-000000000022'; raise exception 'Fernando alterou planejamento'; exception when insufficient_privilege then null; end;
+ begin perform public.chamados_configurar_sla('[]'::jsonb,false); raise exception 'Fernando configurou SLA'; exception when insufficient_privilege then null; end;
+end $$;
+insert into public.sistema_chamado_eventos(chamado_id,texto) values('00000000-0000-4000-8000-000000000022','Comentário do solicitante não é primeiro retorno da gestão.');
+do $$ begin if (select primeira_resposta_em from public.sistema_chamados where id='00000000-0000-4000-8000-000000000022') is not null then raise exception 'Primeiro retorno indevido'; end if; end $$;
+reset role;
+set local request.jwt.claims='{"sub":"6e0ac557-93a2-42ae-8595-12648b2ac0de","role":"authenticated"}';
+set local role authenticated;
+do $$ begin if private.chamados_pode_gerir() then raise exception 'Jhonatan com gestão'; end if; end $$;
+reset role;
+set local request.jwt.claims='{"sub":"b517d70a-56be-4b4f-8b9e-a03c769dd3c3","role":"authenticated"}';
+set local role authenticated;
+update public.sistema_chamados set responsavel_id=auth.uid(),prazo_planejado_em=now()+interval '2 days',esforco_estimado_h=2.5,proxima_acao='Investigar e corrigir' where id='00000000-0000-4000-8000-000000000022';
+update public.sistema_chamados set prioridade='urgente' where id='00000000-0000-4000-8000-000000000022';
+do $$ begin
+ if (select responsavel_nome from public.sistema_chamados where id='00000000-0000-4000-8000-000000000022')<>'Gabriel Lima' then raise exception 'Responsável incorreto'; end if;
+ if (select primeira_resposta_em from public.sistema_chamados where id='00000000-0000-4000-8000-000000000022') is null then raise exception 'Primeiro retorno não registrado'; end if;
+ if (select prazo_resolucao_em-criado_em from public.sistema_chamados where id='00000000-0000-4000-8000-000000000022')<>interval '48 hours' then raise exception 'SLA mudou retroativamente'; end if;
+ if not exists(select 1 from public.sistema_chamado_eventos where chamado_id='00000000-0000-4000-8000-000000000022' and tipo='planejamento') then raise exception 'Planejamento sem histórico'; end if;
+end $$;
+update public.sistema_chamados set status='concluido' where id='00000000-0000-4000-8000-000000000022';
+do $$ begin if (select resolvido_em from public.sistema_chamados where id='00000000-0000-4000-8000-000000000022') is null then raise exception 'Conclusão não registrada'; end if; end $$;
+update public.sistema_chamados set status='em_analise' where id='00000000-0000-4000-8000-000000000022';
+do $$ begin if (select resolvido_em from public.sistema_chamados where id='00000000-0000-4000-8000-000000000022') is not null then raise exception 'Reabertura manteve conclusão ativa'; end if; end $$;
+insert into public.sistema_chamado_eventos(chamado_id,texto) values('00000000-0000-4000-8000-000000000021','Primeiro retorno por comentário.');
+do $$ begin if (select primeira_resposta_em from public.sistema_chamados where id='00000000-0000-4000-8000-000000000021') is null then raise exception 'Comentário não registrou retorno'; end if; end $$;
+reset role;
+rollback;

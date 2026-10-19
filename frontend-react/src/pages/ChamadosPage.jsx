@@ -22,7 +22,7 @@ function Aviso({ children, erro = false }) {
 function Campo({ titulo, children }) {
   return <label className="block space-y-1.5"><span className="text-xs font-bold text-slate-600">{titulo}</span>{children}</label>;
 }
-function Modal({ titulo, onClose, ocupado, children }) {
+export function Modal({ titulo, onClose, ocupado, children }) {
   const ref = useRef(null);
   useEffect(() => { ref.current?.showModal(); }, []);
   return <dialog ref={ref} aria-label={titulo} onCancel={event => { event.preventDefault(); if (!ocupado) onClose(); }} className="m-auto max-h-[92dvh] w-[min(960px,96vw)] rounded-2xl border-0 bg-white p-0 shadow-2xl backdrop:bg-slate-900/50">
@@ -98,7 +98,7 @@ function NovoChamado({ onClose, onCreated }) {
     <SeletorAnexos files={files} setFiles={setFiles} ocupado={ocupado} />
   </fieldset><Aviso erro>{erro}</Aviso><div className="flex justify-end gap-3 border-t border-slate-100 pt-4"><button type="button" disabled={ocupado} onClick={onClose} className={secondary}>Cancelar</button><button disabled={ocupado} className={primary}><Send className="h-4 w-4" />{ocupado ? "Salvando chamado e anexos…" : "Abrir chamado"}</button></div></form></Modal>;
 }
-function DetalheChamado({ item, onClose, onUpdate }) {
+export function DetalheChamado({ item, onClose, onUpdate }) {
   const [detalhes, setDetalhes] = useState(null);
   const [comentario, setComentario] = useState("");
   const [files, setFiles] = useState([]);
@@ -132,7 +132,7 @@ function DetalheChamado({ item, onClose, onUpdate }) {
   </div></Modal>;
 }
 export default function ChamadosPage() {
-  const { profile } = useAuth();
+  const { profile, hasAccess } = useAuth();
   const [items, setItems] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
@@ -151,7 +151,7 @@ export default function ChamadosPage() {
   return <div className="min-h-screen bg-[#F5F5F6] text-slate-800">
     <header className="border-b border-slate-200 bg-white"><div className="mx-auto flex min-h-[76px] max-w-[1440px] flex-wrap items-center justify-between gap-3 px-5 py-3 sm:px-8"><Link to="/sistemas" aria-label="Sistemas"><img src="/brand/liquida-logo-full.png" alt="LiquidaPreço" className="h-10 w-auto" /></Link><div className="flex items-center gap-4"><span className="hidden text-xs font-bold text-slate-600 sm:block">{profile?.nome}</span><Link to="/sistemas" className={secondary}><ArrowLeft className="h-4 w-4" />Sistemas</Link></div></div></header>
     <main className="mx-auto max-w-[1440px] space-y-6 px-5 py-8 sm:px-8">
-      <div className="flex flex-wrap items-center justify-between gap-4"><div><div className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-[#765D81]">Liquida System</div><h1 className="flex items-center gap-3 text-2xl font-black tracking-tight text-[#43284F] sm:text-3xl"><Ticket className="h-7 w-7" />Chamados e solicitações</h1><p className="mt-2 text-sm text-slate-500">Registre melhorias, correções e ajustes e acompanhe o andamento.</p></div><button type="button" onClick={() => setNovo(true)} className={primary}><Plus className="h-4 w-4" />Novo chamado</button></div>
+      <div className="flex flex-wrap items-center justify-between gap-4"><div><div className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-[#765D81]">Liquida System</div><h1 className="flex items-center gap-3 text-2xl font-black tracking-tight text-[#43284F] sm:text-3xl"><Ticket className="h-7 w-7" />Chamados e solicitações</h1><p className="mt-2 text-sm text-slate-500">Registre melhorias, correções e ajustes e acompanhe o andamento.</p></div><div className="flex flex-wrap gap-2">{hasAccess("/chamados/gestao") && <Link to="/chamados/gestao" className={secondary}>Gestão e SLAs</Link>}<button type="button" onClick={() => setNovo(true)} className={primary}><Plus className="h-4 w-4" />Novo chamado</button></div></div>
       <Aviso erro>{erro}</Aviso><Aviso>{aviso}</Aviso>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{cards.map(([label, value]) => <div key={label} className="rounded-2xl border border-slate-200 bg-white p-5"><p className="text-xs font-semibold text-slate-500">{label}</p><p className="mt-2 text-3xl font-black text-[#43284F]">{carregando ? "—" : value}</p></div>)}</div>
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">

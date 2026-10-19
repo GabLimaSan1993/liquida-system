@@ -1,0 +1,11 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { atrasoPlanejado, dataLocalIso, diaBrasilia, entradaDataLocal, metricasGestao, ordenarFila, situacaoSla } from './chamadosGestaoUtils.js';
+const agora = Date.parse('2026-10-19T15:00:00Z');
+const item = { id: 'a', status: 'aberto', prioridade: 'normal', criado_em: '2026-10-18T15:00:00Z' };
+test('Sem configuração não inventa SLA nem atraso', () => { assert.equal(situacaoSla(item, agora).geral, 'sem_sla'); assert.equal(metricasGestao([item], agora).taxaSla, null); });
+test('Primeiro retorno atrasado permanece violado mesmo com resolução em prazo', () => { const c = { ...item, prazo_primeira_resposta_em: '2026-10-18T18:00:00Z', primeira_resposta_em: '2026-10-19T10:00:00Z', prazo_resolucao_em: '2026-10-22T15:00:00Z' }; assert.equal(situacaoSla(c, agora).geral, 'violado'); });
+test('SLA vencido, atenção em 24h e conclusão usam datas reais', () => { assert.equal(situacaoSla({ ...item, prazo_resolucao_em: '2026-10-19T10:00:00Z' }, agora).resolucao, 'atrasado'); assert.equal(situacaoSla({ ...item, prazo_resolucao_em: '2026-10-20T10:00:00Z' }, agora).resolucao, 'atencao'); assert.equal(situacaoSla({ ...item, status: 'concluido', prazo_resolucao_em: '2026-10-18T17:00:00Z', resolvido_em: '2026-10-18T16:00:00Z' }, agora).geral, 'cumprido'); });
+test('Cancelados não contaminam atrasos e taxa considera só concluídos com SLA', () => { const c = { ...item, status: 'cancelado', prazo_resolucao_em: '2026-10-18T10:00:00Z' }; const done = { ...item, id:'d', status:'concluido', prazo_resolucao_em:'2026-10-18T17:00:00Z', resolvido_em:'2026-10-18T16:00:00Z' }; const m=metricasGestao([c, done, item], agora); assert.equal(m.abertos,1); assert.equal(m.slaAtrasado,0); assert.equal(m.taxaSla,100); assert.equal(m.baseTaxa,1); });
+test('Prazo planejado atrasado independe de SLA e sobe na fila', () => { const c={ ...item, id:'b', prioridade:'baixa', prazo_planejado_em:'2026-10-19T14:00:00Z' }; assert.equal(atrasoPlanejado(c, agora),true); assert.equal(ordenarFila([item,c],agora)[0].id,'b'); });
+test('Agenda mantém o dia e horário de Brasília na conversão UTC', () => { assert.equal(diaBrasilia('2026-10-20T01:30:00Z'),'2026-10-19'); assert.equal(entradaDataLocal('2026-10-19T15:00:00Z'),'2026-10-19T12:00'); assert.equal(dataLocalIso('2026-10-19T12:00'),'2026-10-19T15:00:00.000Z'); });

@@ -80,6 +80,7 @@ const MENU_GROUPS = [
   {
     label: null,
     items: [
+      { label: "Gestão de chamados e SLAs", icon: Ticket, to: "/chamados/gestao", exact: true, enabled: true },
       { label: "Chamados e solicitações", icon: Ticket, to: "/chamados", exact: true, enabled: true },
       {
         label: "Visão Geral",
@@ -939,6 +940,7 @@ function SidebarContent({
   mobile = false,
 }) {
   const podeVerRota = (to, allowedUserIds, liquidaOnly = false) => {
+    if (to === "/chamados/gestao") return profile?.id === "b517d70a-56be-4b4f-8b9e-a03c769dd3c3" && profile?.telas_permitidas?.includes(to) === true && profile?.telas_permitidas?.includes("/chamados") === true;
     if (to === "/chamados") return profile?.telas_permitidas?.includes(to) === true;
     if (["/v2/assurant/gestao/producao", "/v2/assurant/b2c/validacao-meli", "/v2/assurant/gestao/esteira", "/v2/assurant/gestao/fechamento-lojas", "/v2/assurant/gestao/relatorio-estoque"].includes(to)) return profile?.telas_permitidas?.includes(to) === true;
     if (liquidaOnly) {

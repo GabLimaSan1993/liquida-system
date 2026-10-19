@@ -17,6 +17,7 @@ const AREAS_TECNICAS = [
 
 function normalizarTelas(telas, areaTecnica) {
   const novas = new Set(telas);
+  if (telas.includes("/chamados/gestao")) novas.add("/chamados");
   if (telas.some(tela => tela.startsWith("/v2/assurant/"))) novas.add("/v2/assurant");
   if (["lavadoras", "refrigeracao", "climatizacao", "diversos"].includes(areaTecnica) ||
       telas.some(tela => tela.startsWith("/v2/linha-branca/"))) novas.add("/v2/linha-branca");

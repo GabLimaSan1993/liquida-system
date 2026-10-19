@@ -219,6 +219,7 @@ export default function SistemasPage() {
         )}
 
         <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+          {hasAccess("/chamados/gestao") && <ModuloDisponivel nome="Gestão de chamados e SLAs" descricao="Planejamento, fila de prioridades e prazos" icon={Ticket} onClick={() => navigate("/chamados/gestao")} />}
           {hasAccess("/chamados") && <ModuloDisponivel nome="Chamados e solicitações" descricao="Solicite ajustes, melhorias e correções no sistema" icon={Ticket} onClick={() => navigate("/chamados")} />}
           {acessoAssurant ? (
             <ModuloDisponivel
