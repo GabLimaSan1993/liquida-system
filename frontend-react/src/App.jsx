@@ -76,6 +76,7 @@ import B2BV2Page from "./pages/assurant-v2/B2BV2Page.jsx";
 import B2CV2Page from "./pages/assurant-v2/B2CV2Page.jsx";
 import B2CFluxoComplementarV2Page from "./pages/assurant-v2/B2CFluxoComplementarV2Page.jsx";
 import UploadsV2Page from "./pages/assurant-v2/UploadsV2Page.jsx";
+import ChamadosPage from "./pages/ChamadosPage.jsx";
 import GestaoUsuariosPage from "./pages/GestaoUsuariosPage.jsx";
 import IndicadoresExecutivosV2Page from "./pages/assurant-v2/IndicadoresExecutivosV2Page.jsx";
 import EstoqueAgingDetalheV2Page from "./pages/assurant-v2/EstoqueAgingDetalheV2Page.jsx";
@@ -345,6 +346,7 @@ export default function App() {
 
 
       <Route path="/v2/assurant/usuarios" element={<ProtectedRoute tela="/gerenciar-usuarios"><Navigate to="/usuarios" replace /></ProtectedRoute>} />
+      <Route path="/chamados" element={<ProtectedRoute tela="/chamados"><ChamadosPage /></ProtectedRoute>} />
       <Route path="/usuarios" element={<ProtectedRoute tela="/gerenciar-usuarios"><GestaoUsuariosPage /></ProtectedRoute>} />
       <Route path="/gerenciar-usuarios" element={<ProtectedRoute tela="/gerenciar-usuarios"><Navigate to="/usuarios" replace /></ProtectedRoute>} />
 
