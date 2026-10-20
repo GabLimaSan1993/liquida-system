@@ -1,4 +1,8 @@
 import { supabase } from "../lib/supabase.js";
+import {
+  CATEGORIAS_LAVADORAS, dadosHistoricosOs, duracaoTesteLavadora,
+  normalizarConferencia,
+} from "./lavadorasConferencia.js";
 
 export const DURACAO_CICLO_LAVADORA = 25 * 60;
 export const POSICOES_BANCADA_LAVADORAS = Array.from(
@@ -156,11 +160,11 @@ export async function fetchHistoricoLavadora(osId) {
 export async function fetchIndicadoresLavadoras() {
   const [{ data: osData, error: osError }, { data: ciclosData, error: ciclosError }] =
     await Promise.all([
-      supabase
+      lerHistoricoCompleto(() => supabase
         .from("ordens_servico")
         .select("id,status_atual,etapa_atual,area_destino,updated_at")
         .eq("linha_produto", "Linha Branca")
-        .eq("categoria", "Lavadora"),
+        .in("categoria", CATEGORIAS_LAVADORAS)).then((data) => ({ data })),
       supabase
         .from("linha_branca_lavadora_ciclos")
         .select("id,os_id,status,etapa_teste,updated_at")
@@ -194,12 +198,12 @@ export async function fetchIndicadoresLavadoras() {
 export async function fetchPainelTriagemLavadoras() {
   const [{ data: osData, error: osError }, { data: ciclosData, error: ciclosError }] =
     await Promise.all([
-      supabase
+      lerHistoricoCompleto(() => supabase
         .from("ordens_servico")
         .select("*")
         .eq("linha_produto", "Linha Branca")
-        .eq("categoria", "Lavadora")
-        .order("dt_entrada", { ascending: true }),
+        .in("categoria", CATEGORIAS_LAVADORAS)
+        .order("dt_entrada", { ascending: true })).then((data) => ({ data })),
       supabase
         .from("linha_branca_lavadora_ciclos")
         .select("*")
@@ -239,7 +243,7 @@ export async function fetchPainelBancadaPosReparo() {
         .from("ordens_servico")
         .select("*")
         .eq("linha_produto", "Linha Branca")
-        .eq("categoria", "Lavadora")
+        .in("categoria", CATEGORIAS_LAVADORAS)
         .eq("area_destino", "Bancada de Testes")
         .order("dt_entrada", { ascending: true }),
       supabase
@@ -268,6 +272,36 @@ export async function fetchPainelBancadaPosReparo() {
     aguardando: osList.filter((os) => !reservadas.has(String(os.id))),
     ciclos,
   };
+}
+
+async function lerHistoricoCompleto(criarQuery) {
+  const registros = [];
+  const tamanho = 500;
+  for (let inicio = 0; ; inicio += tamanho) {
+    const { data, error } = await criarQuery().order("id", { ascending: true }).range(inicio, inicio + tamanho - 1);
+    if (error) throw error;
+    registros.push(...(data || []));
+    if (!data || data.length < tamanho) return registros;
+  }
+}
+
+export async function fetchHistoricoConferenciaLavadoras() {
+  const [ordens, catalogo, ciclos] = await Promise.all([
+    lerHistoricoCompleto(() => supabase.from("ordens_servico")
+      .select("id,marca,modelo,observacoes_logistica").eq("linha_produto", "Linha Branca")
+      .in("categoria", CATEGORIAS_LAVADORAS)),
+    lerHistoricoCompleto(() => supabase.from("produtos_catalogo")
+      .select("id,marca,modelo,capacidade").eq("ativo", true)),
+    lerHistoricoCompleto(() => supabase.from("linha_branca_lavadora_ciclos")
+      .select("id,validacao_produto").eq("etapa_teste", "triagem")),
+  ]);
+  const chave = (item) => `${normalizarConferencia(item.marca)}|${normalizarConferencia(item.modelo)}`;
+  const modelos = new Set(ordens.map(chave));
+  return [
+    ...ordens.map(dadosHistoricosOs),
+    ...catalogo.filter((item) => modelos.has(chave(item))),
+    ...ciclos.map((ciclo) => Object.fromEntries(["marca", "modelo", "capacidade"].map((campo) => [campo, ciclo.validacao_produto?.[campo]?.fisico || ""]))),
+  ];
 }
 
 export async function buscarReferenciaProduto(os) {
@@ -313,6 +347,7 @@ async function criarCiclo({
   posicao,
   etapaTeste,
   numeroCiclo,
+  duracaoAlvo,
 }) {
   const ocupadas = await posicoesOcupadas(etapaTeste);
   if (ocupadas.some((item) => String(item.os_id) === String(os.id))) {
@@ -325,6 +360,9 @@ async function criarCiclo({
   if (!posicaoEscolhida) throw new Error("Não há posição de bancada disponível.");
   if (setOcupadas.has(posicaoEscolhida)) throw new Error(`A posição ${posicaoEscolhida} já está ocupada.`);
 
+  const duracao = duracaoAlvo || (etapaTeste === "triagem"
+    ? duracaoTesteLavadora(validacaoProduto?.tipo?.fisico || os.categoria)
+    : DURACAO_CICLO_LAVADORA);
   const instante = nowIso();
   const tentativa = await proximaTentativa(os.id, etapaTeste);
   const { data, error } = await supabase
@@ -336,7 +374,7 @@ async function criarCiclo({
       status: "em_ciclo",
       etapa_teste: etapaTeste,
       numero_ciclo: numeroCiclo,
-      duracao_alvo_segundos: DURACAO_CICLO_LAVADORA,
+      duracao_alvo_segundos: duracao,
       tempo_executado_segundos: 0,
       iniciado_em: instante,
       ultimo_inicio_em: instante,
@@ -351,7 +389,7 @@ async function criarCiclo({
     cicloId: data.id,
     osId: os.id,
     tipoEvento: "Ciclo iniciado",
-    detalhes: `${etapaTeste === "pos_reparo" ? "Teste pós-reparo" : `Ciclo ${numeroCiclo} da triagem`} iniciado · Posição ${posicaoEscolhida} · 25:00`,
+    detalhes: `${etapaTeste === "pos_reparo" ? "Teste pós-reparo" : `Ciclo ${numeroCiclo} da triagem`} iniciado · Posição ${posicaoEscolhida} · ${duracao / 60} minutos`,
     tempoExecutado: 0,
     operador,
   });
@@ -403,6 +441,7 @@ export async function iniciarSegundoCicloLavadora(cicloAnterior, operador) {
       posicao: cicloAnterior.posicao,
       etapaTeste: "triagem",
       numeroCiclo: 2,
+      duracaoAlvo: Number(cicloAnterior.duracao_alvo_segundos) || duracaoTesteLavadora(cicloAnterior.validacao_produto?.tipo?.fisico),
     });
     await registrarEventoLavadora({
       cicloId: ciclo.id,
@@ -762,7 +801,7 @@ export async function concluirCicloLavadora(ciclo, operador) {
     cicloId: data.id,
     osId: data.os_id,
     tipoEvento: evento,
-    detalhes: "25 minutos efetivos concluídos sem falhas.",
+    detalhes: `${alvo / 60} minutos efetivos concluídos sem falhas.`,
     tempoExecutado: alvo,
     operador: operador || data.operador,
   });

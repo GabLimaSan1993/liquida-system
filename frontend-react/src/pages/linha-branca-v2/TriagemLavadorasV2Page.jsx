@@ -40,14 +40,20 @@ import {
   enviarCicloParaReparo,
   enviarTriagemParaHigienizacao,
   fetchEventosCicloLavadora,
+  fetchHistoricoConferenciaLavadoras,
   fetchPainelTriagemLavadoras,
   iniciarCicloLavadora,
   iniciarSegundoCicloLavadora,
   pausarCicloLavadora,
   registrarErroCicloLavadora,
   retomarCicloLavadora,
-  valoresIguais,
 } from "../../services/lavadorasTriagemService.js";
+
+import {
+  CORES_LAVADORAS, TENSOES_LAVADORAS, TIPOS_LAVADORAS,
+  atualizarConferencia, duracaoTesteLavadora, sugestoesConferencia,
+  tipoReferenciaLavadora, valoresConferenciaIguais,
+} from "../../services/lavadorasConferencia.js";
 
 const EMPTY_VALIDACAO = {
   marca: "",
@@ -56,7 +62,6 @@ const EMPTY_VALIDACAO = {
   tipo: "",
   capacidade: "",
   cor: "",
-  descricao: "",
 };
 
 const EMPTY_ERRO = {
@@ -114,14 +119,14 @@ function hoje(valor) {
   );
 }
 
-function statusValidacao(esperado, fisico, obrigatorio = false) {
-  if (!String(esperado || "").trim()) {
-    return { label: "Sem referência", tone: "neutral", ok: !obrigatorio };
-  }
+function statusValidacao(esperado, fisico, obrigatorio = false, campo) {
   if (!String(fisico || "").trim()) {
-    return { label: "Não identificado", tone: "neutral", ok: false };
+    return { label: "Não identificado", tone: "neutral", ok: !obrigatorio };
   }
-  if (valoresIguais(esperado, fisico)) {
+  if (!String(esperado || "").trim()) {
+    return { label: "Sem referência", tone: "neutral", ok: true };
+  }
+  if (valoresConferenciaIguais(campo, esperado, fisico)) {
     return { label: "Confirmado", tone: "success", ok: true };
   }
   return { label: "Divergente", tone: "danger", ok: false };
@@ -208,6 +213,7 @@ export default function TriagemLavadorasV2Page() {
   const [selectedOsId, setSelectedOsId] = useState("");
   const [selectedCicloId, setSelectedCicloId] = useState("");
   const [referenciaProduto, setReferenciaProduto] = useState(null);
+  const [historicoConferencia, setHistoricoConferencia] = useState([]);
   const [validacao, setValidacao] = useState({ ...EMPTY_VALIDACAO });
   const [posicaoNova, setPosicaoNova] = useState("");
   const [buscaOs, setBuscaOs] = useState("");
@@ -218,7 +224,7 @@ export default function TriagemLavadorasV2Page() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [mensagem, setMensagem] = useState("");
-  const [tick, setTick] = useState(Date.now());
+  const [tick, setTick] = useState(() => Date.now());
   const finalizandoRef = useRef(new Set());
 
   const carregarPainel = useCallback(async ({ silencioso = false } = {}) => {
@@ -251,6 +257,14 @@ export default function TriagemLavadorasV2Page() {
     return () => window.clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    let cancelado = false;
+    fetchHistoricoConferenciaLavadoras()
+      .then((historico) => { if (!cancelado) setHistoricoConferencia(historico); })
+      .catch((error) => { if (!cancelado) setMensagem(`Erro ao carregar sugestões: ${error.message}`); });
+    return () => { cancelado = true; };
+  }, []);
+
   const selectedOs = useMemo(
     () => painel.aguardando.find((item) => String(item.id) === String(selectedOsId)) || null,
     [painel.aguardando, selectedOsId]
@@ -261,16 +275,21 @@ export default function TriagemLavadorasV2Page() {
     [painel.ciclos, selectedCicloId]
   );
 
+  const referenciaId = selectedOs?.id;
+  const referenciaMarca = selectedOs?.marca;
+  const referenciaModelo = selectedOs?.modelo;
+  const referenciaOs = useMemo(() => referenciaId ? {
+    id: referenciaId, marca: referenciaMarca, modelo: referenciaModelo,
+  } : null, [referenciaId, referenciaMarca, referenciaModelo]);
+
   useEffect(() => {
     let cancelado = false;
     async function carregarReferencia() {
-      if (!selectedOs) {
-        setReferenciaProduto(null);
-        setValidacao({ ...EMPTY_VALIDACAO });
-        return;
-      }
+      setReferenciaProduto(null);
+      setValidacao({ ...EMPTY_VALIDACAO });
+      if (!referenciaOs) return;
       try {
-        const referencia = await buscarReferenciaProduto(selectedOs);
+        const referencia = await buscarReferenciaProduto(referenciaOs);
         if (!cancelado) {
           setReferenciaProduto(referencia);
           setValidacao({ ...EMPTY_VALIDACAO });
@@ -286,7 +305,7 @@ export default function TriagemLavadorasV2Page() {
     return () => {
       cancelado = true;
     };
-  }, [selectedOs]);
+  }, [referenciaOs]);
 
   useEffect(() => {
     let cancelado = false;
@@ -330,7 +349,7 @@ export default function TriagemLavadorasV2Page() {
       { key: "marca", label: "Marca", sistema: selectedOs.marca, obrigatorio: true },
       { key: "modelo", label: "Modelo", sistema: selectedOs.modelo, obrigatorio: true },
       { key: "tensao", label: "Tensão", sistema: selectedOs.voltagem, obrigatorio: true },
-      { key: "tipo", label: "Tipo", sistema: selectedOs.categoria, obrigatorio: true },
+      { key: "tipo", label: "Tipo", sistema: tipoReferenciaLavadora(selectedOs, referenciaProduto), obrigatorio: true },
       {
         key: "capacidade",
         label: "Capacidade",
@@ -343,14 +362,6 @@ export default function TriagemLavadorasV2Page() {
         sistema: referenciaProduto?.cor || "",
         obrigatorio: Boolean(referenciaProduto?.cor),
       },
-      {
-        key: "descricao",
-        label: "Descrição / características",
-        sistema:
-          referenciaProduto?.descricao ||
-          [selectedOs.marca, selectedOs.modelo, selectedOs.voltagem].filter(Boolean).join(" "),
-        obrigatorio: false,
-      },
     ];
   }, [selectedOs, referenciaProduto]);
 
@@ -358,9 +369,15 @@ export default function TriagemLavadorasV2Page() {
     () =>
       linhasValidacao
         .filter((item) => item.obrigatorio)
-        .every((item) => statusValidacao(item.sistema, validacao[item.key], true).ok),
+        .every((item) => statusValidacao(item.sistema, validacao[item.key], true, item.key).ok),
     [linhasValidacao, validacao]
   );
+
+  const sugestoes = useMemo(() => Object.fromEntries(
+    ["marca", "modelo", "capacidade"].map((campo) => [campo, sugestoesConferencia(historicoConferencia, campo, validacao)])
+  ), [historicoConferencia, validacao]);
+  const selecoes = { tensao: TENSOES_LAVADORAS, tipo: TIPOS_LAVADORAS, cor: CORES_LAVADORAS };
+  const duracaoSelecionada = validacao.tipo ? duracaoTesteLavadora(validacao.tipo) / 60 : null;
 
   const posicoesOcupadas = useMemo(
     () =>
@@ -476,7 +493,7 @@ export default function TriagemLavadorasV2Page() {
         {
           sistema: item.sistema || null,
           fisico: validacao[item.key] || null,
-          status: statusValidacao(item.sistema, validacao[item.key], item.obrigatorio).label,
+          status: statusValidacao(item.sistema, validacao[item.key], item.obrigatorio, item.key).label,
           obrigatorio: item.obrigatorio,
         },
       ])
@@ -496,6 +513,9 @@ export default function TriagemLavadorasV2Page() {
         validacaoProduto: payloadValidacao(),
         posicao: posicaoNova,
       });
+      setHistoricoConferencia((historico) => [...historico, {
+        marca: validacao.marca, modelo: validacao.modelo, capacidade: validacao.capacidade,
+      }]);
       setSelectedCicloId(String(ciclo.id));
       setMensagem(`OS ${selectedOs.numero_os}: 1º ciclo iniciado na posição ${posicaoNova}.`);
     });
@@ -613,7 +633,7 @@ export default function TriagemLavadorasV2Page() {
             </div>
             <div>
               <h1 className="text-3xl font-black tracking-[-0.035em] text-slate-900">Triagem de Lavadoras</h1>
-              <p className="mt-1 max-w-3xl text-sm text-slate-500">Validação do produto + dois ciclos obrigatórios de 25 minutos sem falhas.</p>
+              <p className="mt-1 max-w-3xl text-sm text-slate-500">Validação do produto + dois testes obrigatórios, com duração conforme o tipo de equipamento.</p>
             </div>
           </div>
         </div>
@@ -642,7 +662,7 @@ export default function TriagemLavadorasV2Page() {
           <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
             <div>
               <h2 className="text-sm font-black text-slate-900">Validação do Produto</h2>
-              <p className="mt-0.5 text-[11px] text-slate-400">Digite os dados encontrados no equipamento físico.</p>
+              <p className="mt-0.5 text-[11px] text-slate-400">Digite ou selecione os dados encontrados no equipamento físico.</p>
             </div>
             <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black text-slate-500">{painel.aguardando.length} OS</span>
           </div>
@@ -676,15 +696,23 @@ export default function TriagemLavadorasV2Page() {
                 <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
                   <div className="grid grid-cols-[112px_1fr] border-b border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-slate-400"><div>Característica</div><div>Conferência física</div></div>
                   {linhasValidacao.map((item) => {
-                    const status = statusValidacao(item.sistema, validacao[item.key], item.obrigatorio);
+                    const status = statusValidacao(item.sistema, validacao[item.key], item.obrigatorio, item.key);
                     return (
                       <div key={item.key} className="border-b border-slate-100 px-3 py-3 last:border-b-0">
                         <div className="grid grid-cols-[112px_1fr] items-start gap-2">
                           <div className="pt-2 text-[11px] font-black text-slate-600">{item.label}{item.obrigatorio ? <span className="ml-1 text-rose-500">*</span> : null}</div>
-                          {item.key === "descricao" ? (
-                            <textarea rows={2} value={validacao[item.key]} onChange={(event) => setValidacao((atual) => ({ ...atual, [item.key]: event.target.value }))} className="min-h-[54px] w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[11px] outline-none focus:border-[#765D81]" />
+                          {selecoes[item.key] ? (
+                            <select id={`conferencia-${item.key}`} aria-label={item.label} value={validacao[item.key]} onChange={(event) => setValidacao((atual) => atualizarConferencia(atual, item.key, event.target.value))} className="h-9 w-full min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 text-[11px] outline-none focus:border-[#765D81]">
+                              <option value="">Selecione</option>
+                              {selecoes[item.key].map((valor) => <option key={valor} value={valor}>{valor}</option>)}
+                            </select>
                           ) : (
-                            <input value={validacao[item.key]} onChange={(event) => setValidacao((atual) => ({ ...atual, [item.key]: event.target.value }))} className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-[11px] outline-none focus:border-[#765D81]" />
+                            <div className="min-w-0">
+                              <input id={`conferencia-${item.key}`} aria-label={item.label} list={`historico-${item.key}`} autoComplete="off" value={validacao[item.key]} onChange={(event) => setValidacao((atual) => atualizarConferencia(atual, item.key, event.target.value))} placeholder="Digite ou selecione" className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-[11px] outline-none focus:border-[#765D81]" />
+                              <datalist id={`historico-${item.key}`}>
+                                {sugestoes[item.key].map((valor) => <option key={valor} value={valor} />)}
+                              </datalist>
+                            </div>
                           )}
                         </div>
                         <div className="mt-2 flex justify-end"><StatusPill status={status} /></div>
@@ -692,6 +720,7 @@ export default function TriagemLavadorasV2Page() {
                     );
                   })}
                 </div>
+                {duracaoSelecionada ? <p className="mt-3 text-xs font-bold text-slate-600">{validacao.tipo}: 2 testes de {duracaoSelecionada === 74 ? "1h14min" : `${duracaoSelecionada} minutos`} cada.</p> : null}
                 <div className="mt-4 grid grid-cols-[1fr_auto] gap-3">
                   <select value={posicaoNova} onChange={(event) => setPosicaoNova(event.target.value)} className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 outline-none focus:border-[#765D81]">
                     {posicoesDisponiveis.length === 0 ? <option value="">Sem posição disponível</option> : null}
@@ -753,7 +782,7 @@ export default function TriagemLavadorasV2Page() {
                     </div>
                     <div className="mt-4 flex items-center gap-3">
                       <RingProgress percent={progresso} tone={tone}>{tone === "green" ? <Check className="h-5 w-5 text-emerald-600" /> : pausadoErro ? <CircleAlert className="h-5 w-5 text-rose-600" /> : <span className="text-[9px] font-black text-slate-500">{progresso}%</span>}</RingProgress>
-                      <div><div className="text-base font-black text-slate-900">{formatarSegundos(executado)} <span className="text-xs text-slate-400">/ 25:00</span></div><div className={`text-[10px] font-semibold ${pausadoErro ? "text-rose-500" : tone === "green" ? "text-emerald-600" : "text-slate-400"}`}>{pausadoErro ? "Cronômetro parado por falha" : aguardandoSegundo ? "Pronto para o 2º ciclo" : aguardandoHigienizacao ? "Laudo sem falhas gerado" : pausado ? "Ciclo pausado" : "Ciclo de lavagem"}</div></div>
+                      <div><div className="text-base font-black text-slate-900">{formatarSegundos(executado)} <span className="text-xs text-slate-400">/ {formatarSegundos(alvo)}</span></div><div className={`text-[10px] font-semibold ${pausadoErro ? "text-rose-500" : tone === "green" ? "text-emerald-600" : "text-slate-400"}`}>{pausadoErro ? "Cronômetro parado por falha" : aguardandoSegundo ? "Pronto para o 2º ciclo" : aguardandoHigienizacao ? "Laudo sem falhas gerado" : pausado ? "Ciclo pausado" : "Ciclo de lavagem"}</div></div>
                     </div>
                     <div className="mt-4 flex gap-2">
                       {ciclo.status === "em_ciclo" ? (
