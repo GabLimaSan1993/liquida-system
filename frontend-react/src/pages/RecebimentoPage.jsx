@@ -4,7 +4,7 @@ import {
   ArrowLeft, ArrowRight, Lock, FileText, Package, Tag, Loader, Trash2,
   Truck, X, Printer, FileSpreadsheet, Plus, PlayCircle, RefreshCw,
 } from "lucide-react";
-import JsBarcode from "jsbarcode";
+import { imprimirEtiquetaRecebimento as imprimirEtiqueta } from "../services/etiquetaRecebimento.js";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
@@ -42,42 +42,7 @@ function fmtHora(d) {
 }
 
 // Gera o SVG do código de barras (Code 128) para um voucher
-function gerarBarcodeSVG(voucher) {
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  try {
-    JsBarcode(svg, voucher, {
-      format: "CODE128", width: 2, height: 60, displayValue: true,
-      fontSize: 14, margin: 6, textMargin: 2,
-    });
-  } catch (e) { console.error("Barcode:", e); }
-  return svg.outerHTML;
-}
 
-// Abre uma janela só com a etiqueta e dispara a impressão
-function imprimirEtiqueta(voucher) {
-  const svg = gerarBarcodeSVG(voucher);
-  const win = window.open("", "_blank", "width=420,height=280");
-  if (!win) return;
-  win.document.write(`
-    <html><head><title>Etiqueta ${voucher}</title>
-    <style>
-      @page { size: 50mm 30mm; margin: 0; }
-      body { margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif; }
-      .etq { text-align: center; }
-      svg { max-width: 46mm; }
-    </style></head>
-    <body><div class="etq">${svg}</div>
-    <script>
-      window.onload = function () { window.print(); setTimeout(function(){ window.close(); }, 300); };
-    </script>
-    </body></html>
-  `);
-  win.document.close();
-}
-
-// ══════════════════════════════════════════════════════════
-// TELA 0 — LISTA DE CARGAS EM ANDAMENTO (retomar / novo)
-// ══════════════════════════════════════════════════════════
 function TelaLista({ onNovo, onContinuar }) {
   const { user, profile } = useAuth();
   const [cargas, setCargas]   = useState([]);

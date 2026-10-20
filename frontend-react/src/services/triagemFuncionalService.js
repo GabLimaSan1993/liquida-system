@@ -263,7 +263,7 @@ export async function registrarDivergenciaImei(voucher, imeiBipado, userId, imei
 
 // ══════════════════════════════════════════════════════════
 // DESTINO APÓS A FUNCIONAL
-// Toda resposta negativa segue para laudo; defeitos adicionais definem BAD.
+// Laudo depende da condição de compra; defeitos adicionais continuam definindo BAD.
 // ══════════════════════════════════════════════════════════
 export async function salvarTriagemFuncional({
   voucher, imei, imei1, imei2, aparelhoBloqueado = false, danosTela = false, canal, produto, respostas, bateria, bateriaPercentual,
@@ -282,11 +282,12 @@ export async function salvarTriagemFuncional({
   const negativas = lista.filter(respostaFuncionalNegativa);
   const decisao   = decidirDestino({
     condicaoDeclarada: tradein?.condicao_aparelho,
+    condicaoSufixo: tradein?.condicao_sufixo,
     respostas: lista,
     aparelhoBloqueado,
     defeitos: defeitosRegistrados,
   });
-  // Respostas negativas também seguem para laudo nas devoluções.
+  // O canal não substitui a condição original da compra na decisão de laudo.
   const ehDevolucao = String(canal || "").toUpperCase() === "DEV";
   const temLaudo  = decisao.laudo;
   const conferencia = conferirComTradein(produto, tradein);
@@ -318,7 +319,7 @@ export async function salvarTriagemFuncional({
         cor:           produto?.cor           || null,
       },
       conferencia_tradein: conferencia,
-      destino: { laudo: temLaudo, motivo: ehDevolucao && !temLaudo ? "Devolução segue para triagem cosmética" : decisao.motivo, condicao_declarada: tradein?.condicao_aparelho || null },
+      destino: { laudo: temLaudo, motivo: ehDevolucao && !temLaudo ? "Devolução segue para triagem cosmética" : decisao.motivo, condicao_declarada: tradein?.condicao_aparelho || null, condicao_sufixo_declarado: tradein?.condicao_sufixo || null },
       bateria: { percentual: bateriaPercentual ?? null, faixa: bateria || null },
       respostas: lista.map(r => ({
         pergunta_id: r.perguntaId,
@@ -383,7 +384,7 @@ export async function salvarTriagemFuncional({
     retriagem: !!retriagem,
     ajusteId: data.ajuste_id || null,
     statusPreservado: !!data.status_preservado,
-    precisaLaudo: temLaudo,
+    precisaLaudo: data.status_atual === STATUS_LAUDO,
     motivoDestino: ehDevolucao && !temLaudo ? "Devolução segue para triagem cosmética" : decisao.motivo,
     divergencias: negativas.length,
     conferencia,
@@ -481,3 +482,4 @@ export async function registrarDivergenciaImeiDevolucao(devolucaoId, imeiBipado,
   if (data?.ok === false) throw new Error(data.erro || "Não foi possível registrar a divergência.");
   return data;
 }
+
