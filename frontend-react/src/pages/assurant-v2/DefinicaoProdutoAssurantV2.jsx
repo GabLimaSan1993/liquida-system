@@ -232,10 +232,13 @@ export default function DefinicaoProdutoAssurantV2({ etapa = "liquida" }) {
         user.id
       );
 
+      const vinculoTipoResposta = res.vinculoTipo || res.vinculo_tipo;
       setFeedback({
         tipo: "ok",
         msg: res.aguardandoDesvinculacao
-          ? `Produto selecionado. O IMEI ${res.imei} está vinculado a ${res.vinculoDescricao || res.vinculoTipo}. A solicitação foi enviada para a Liquida Preço realizar a transferência para o B2C.`
+          ? vinculoTipoResposta === "WMS_BLOQUEADO"
+            ? `Produto selecionado. O IMEI ${res.imei} está com a posição bloqueada no WMS. A solicitação foi enviada para a Liquida Preço liberar e reservar o aparelho para este pedido.`
+            : `Produto selecionado. O IMEI ${res.imei} está vinculado a ${res.vinculoDescricao || vinculoTipoResposta}. A solicitação foi enviada para a Liquida Preço realizar a transferência para o B2C.`
           : res.relacao === "upgrade"
             ? `Upgrade aprovado e registrado: ${consulta.gradeOrigem} → ${res.grade}. IMEI FIFO ${res.imei} alocado.`
             : `Definição aprovada. IMEI FIFO ${res.imei} alocado em ${res.grade} · ${res.cor}.`,
@@ -661,7 +664,9 @@ export default function DefinicaoProdutoAssurantV2({ etapa = "liquida" }) {
                                       ? "VÍNCULO B2B"
                                       : o.vinculo_tipo === "TROCA"
                                         ? "RESERVADO TROCA"
-                                        : "VENDA FUNCIONÁRIO"}
+                                        : o.vinculo_tipo === "WMS_BLOQUEADO"
+                                          ? "BLOQUEIO WMS"
+                                          : "VENDA FUNCIONÁRIO"}
                                 </span>
                               ) : (
                                 <span className="rounded-lg bg-emerald-50 px-2 py-1 text-[10px] font-black text-emerald-700 ring-1 ring-emerald-200">
@@ -697,7 +702,9 @@ export default function DefinicaoProdutoAssurantV2({ etapa = "liquida" }) {
                                 {o.vinculo_detalhes?.b2b_status ? ` · status ${o.vinculo_detalhes.b2b_status}` : ""}
                                 {o.vinculo_detalhes?.b2b_exportado ? " · já exportado para faturamento" : ""}
                                 <div className="mt-1 font-semibold text-orange-700">
-                                  Se esta opção for escolhida, a Liquida Preço precisará autorizar a desvinculação antes do B2C seguir.
+                                  {o.vinculo_tipo === "WMS_BLOQUEADO"
+                                    ? "A Liquida Preço precisará liberar a posição e reservar o aparelho para este pedido."
+                                    : "Se esta opção for escolhida, a Liquida Preço precisará autorizar a desvinculação antes do B2C seguir."}
                                 </div>
                               </div>
                             )}
@@ -760,7 +767,9 @@ export default function DefinicaoProdutoAssurantV2({ etapa = "liquida" }) {
                   </div>
                   {opcao.vinculo_tipo && (
                     <div className="mt-2 rounded-xl border border-orange-200 bg-orange-50 p-3 text-xs font-bold text-orange-800">
-                      Este aparelho está vinculado a {opcao.vinculo_descricao || opcao.vinculo_tipo}. A escolha gera uma solicitação para a Liquida Preço; a Assurant não executa a desvinculação.
+                      {opcao.vinculo_tipo === "WMS_BLOQUEADO"
+                        ? "A posição deste aparelho está bloqueada no WMS após o encerramento do vínculo anterior. A escolha gera uma solicitação para a Liquida Preço liberar e reservar o aparelho."
+                        : `Este aparelho está vinculado a ${opcao.vinculo_descricao || opcao.vinculo_tipo}. A escolha gera uma solicitação para a Liquida Preço; a Assurant não executa a desvinculação.`}
                     </div>
                   )}
                 </div>
@@ -788,7 +797,11 @@ export default function DefinicaoProdutoAssurantV2({ etapa = "liquida" }) {
                   className="inline-flex items-center gap-2 rounded-xl bg-[#7F2D92] px-5 py-2.5 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                  {opcao?.vinculo_tipo ? "Solicitar desvinculação à Liquida" : "Aprovar e alocar FIFO"}
+                  {opcao?.vinculo_tipo === "WMS_BLOQUEADO"
+                    ? "Solicitar liberação à Liquida"
+                    : opcao?.vinculo_tipo
+                      ? "Solicitar desvinculação à Liquida"
+                      : "Aprovar e alocar FIFO"}
                 </button>
               </div>
             </div>

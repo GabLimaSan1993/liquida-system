@@ -31,6 +31,7 @@ function VinculoBadge({ tipo }) {
     tipo === "B2B" ? "B2B" :
     tipo === "TROCA" ? "TROCA" :
     tipo === "VENDA_FUNCIONARIO" ? "VENDA FUNCIONÁRIO" :
+    tipo === "WMS_BLOQUEADO" ? "BLOQUEIO WMS" :
     tipo || "—";
 
   return (

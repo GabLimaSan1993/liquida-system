@@ -52,3 +52,20 @@ test('Furb retorna zero opções quando todos estão sem data, preservando consu
   assert.equal(r.vinculosSku.length, 1);
   assert.equal(consultados.length, 0);
 });
+test('Furb exibe bloqueio residual do WMS como opção controlada, sem tratá-lo como livre', async () => {
+  const { buscar } = await carregar([
+    item('WMS-BLOQUEADO', '2026-10-09', {
+      disponivel: false,
+      vinculo_tipo: 'WMS_BLOQUEADO',
+      vinculo_referencia: 'alocacao-qa',
+      vinculo_descricao: 'Posição WMS bloqueada após encerramento do vínculo anterior',
+      vinculo_detalhes: { ultima_reserva_status: 'cancelado' },
+    }),
+  ]);
+  const r = await buscar('BRZDEV-QA', { id: 'QA-PEDIDO', grade_produto: 'Bom' });
+  assert.equal(r.opcoes.length, 1);
+  assert.equal(r.opcoes[0].fifo.imei, 'WMS-BLOQUEADO');
+  assert.equal(r.opcoes[0].disponivel, false);
+  assert.equal(r.opcoes[0].vinculo_tipo, 'WMS_BLOQUEADO');
+  assert.equal(r.opcoes[0].vinculo_referencia, 'alocacao-qa');
+});
