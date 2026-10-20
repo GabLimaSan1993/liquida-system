@@ -23,6 +23,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "../../AuthContext.jsx";
+import { painelDoOperador } from "../../services/lavadorasOperador.js";
 import OsBarcodeScanner from "../../components/OsBarcodeScanner.jsx";
 import {
   REPAROS_ELETRICOS_LAVADORAS,
@@ -230,7 +231,7 @@ export default function TriagemLavadorasV2Page() {
   const carregarPainel = useCallback(async ({ silencioso = false } = {}) => {
     try {
       if (!silencioso) setLoading(true);
-      const data = await fetchPainelTriagemLavadoras();
+      const data = painelDoOperador(await fetchPainelTriagemLavadoras(), profile?.nome);
       setPainel(data);
       setSelectedOsId((atual) => {
         if (atual && data.aguardando.some((item) => String(item.id) === String(atual))) return atual;
@@ -246,7 +247,7 @@ export default function TriagemLavadorasV2Page() {
     } finally {
       if (!silencioso) setLoading(false);
     }
-  }, []);
+  }, [profile?.nome]);
 
   useEffect(() => {
     carregarPainel();
@@ -381,12 +382,8 @@ export default function TriagemLavadorasV2Page() {
 
   const posicoesOcupadas = useMemo(
     () =>
-      new Set(
-        painel.ciclos
-          .filter((item) => STATUS_RESERVA_POSICAO.includes(item.status))
-          .map((item) => String(item.posicao))
-      ),
-    [painel.ciclos]
+      new Set(painel.posicoesOcupadas || []),
+    [painel.posicoesOcupadas]
   );
 
   const posicoesDisponiveis = useMemo(
@@ -467,11 +464,14 @@ export default function TriagemLavadorasV2Page() {
         porPosicao.set(posicao, ciclo);
       }
     });
-    return POSICOES_BANCADA_LAVADORAS.map((posicao) => ({
-      posicao,
-      ciclo: porPosicao.get(posicao) || null,
-    }));
-  }, [painel.ciclos]);
+    const posicoesDeOutros = new Set(painel.posicoesDeOutros || []);
+    return POSICOES_BANCADA_LAVADORAS
+      .filter((posicao) => !posicoesDeOutros.has(posicao))
+      .map((posicao) => ({
+        posicao,
+        ciclo: porPosicao.get(posicao) || null,
+      }));
+  }, [painel.ciclos, painel.posicoesDeOutros]);
 
   async function executarAcao(acao) {
     try {
@@ -737,7 +737,7 @@ export default function TriagemLavadorasV2Page() {
 
         <div className="min-w-0 rounded-2xl border border-slate-200 bg-white">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
-            <div><h2 className="flex items-center gap-2 text-sm font-black text-slate-900"><Settings2 className="h-4 w-4 text-[#5B35C9]" /> Bancada de Lavagem</h2><p className="mt-0.5 text-[11px] text-slate-400">20 posições · dois ciclos obrigatórios por produto sem falhas.</p></div>
+            <div><h2 className="flex items-center gap-2 text-sm font-black text-slate-900"><Settings2 className="h-4 w-4 text-[#5B35C9]" /> Minha bancada de lavagem</h2><p className="mt-0.5 text-[11px] text-slate-400">20 posições · dois ciclos obrigatórios por produto sem falhas.</p></div>
             <div className="flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-[10px] font-black text-emerald-700"><span className="h-2 w-2 rounded-full bg-emerald-500" />{metricas.emCiclo} máquinas em operação</div>
           </div>
           <div className="max-h-[1080px] overflow-y-auto p-4">

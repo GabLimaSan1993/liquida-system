@@ -19,6 +19,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "../../AuthContext.jsx";
+import { painelDoOperador } from "../../services/lavadorasOperador.js";
 import {
   REPAROS_ELETRICOS_LAVADORAS,
   REPAROS_ESTETICOS_LAVADORAS,
@@ -127,7 +128,7 @@ export default function BancadaTestesLavadorasV2Page() {
   const carregar = useCallback(async ({ silencioso = false } = {}) => {
     try {
       if (!silencioso) setLoading(true);
-      const data = await fetchPainelBancadaPosReparo();
+      const data = painelDoOperador(await fetchPainelBancadaPosReparo(), profile?.nome);
       setPainel(data);
       setSelectedOsId((atual) => {
         if (atual && data.aguardando.some((item) => String(item.id) === String(atual))) return atual;
@@ -143,7 +144,7 @@ export default function BancadaTestesLavadorasV2Page() {
     } finally {
       if (!silencioso) setLoading(false);
     }
-  }, []);
+  }, [profile?.nome]);
 
   useEffect(() => {
     carregar();
@@ -202,8 +203,8 @@ export default function BancadaTestesLavadorasV2Page() {
   }, [tick, painel.ciclos, carregar, operador]);
 
   const ocupadas = useMemo(
-    () => new Set(painel.ciclos.filter((item) => STATUS_RESERVA_POSICAO.includes(item.status)).map((item) => String(item.posicao))),
-    [painel.ciclos]
+    () => new Set(painel.posicoesOcupadas || []),
+    [painel.posicoesOcupadas]
   );
 
   const disponiveis = useMemo(
@@ -234,8 +235,11 @@ export default function BancadaTestesLavadorasV2Page() {
           mapa.set(String(ciclo.posicao), ciclo);
         }
       });
-    return POSICOES_BANCADA_LAVADORAS.map((posicao) => ({ posicao, ciclo: mapa.get(posicao) || null }));
-  }, [painel.ciclos]);
+    const posicoesDeOutros = new Set(painel.posicoesDeOutros || []);
+    return POSICOES_BANCADA_LAVADORAS
+      .filter((posicao) => !posicoesDeOutros.has(posicao))
+      .map((posicao) => ({ posicao, ciclo: mapa.get(posicao) || null }));
+  }, [painel.ciclos, painel.posicoesDeOutros]);
 
   const metricas = useMemo(() => ({
     aguardando: painel.aguardando.length,
@@ -378,7 +382,7 @@ export default function BancadaTestesLavadorasV2Page() {
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white">
-          <div className="border-b border-slate-100 px-5 py-4"><h2 className="text-sm font-black text-slate-900">Bancada de validação</h2><p className="mt-1 text-[11px] text-slate-400">20 posições · 1 ciclo pós-reparo por passagem.</p></div>
+          <div className="border-b border-slate-100 px-5 py-4"><h2 className="text-sm font-black text-slate-900">Minha bancada de validação</h2><p className="mt-1 text-[11px] text-slate-400">20 posições · 1 ciclo pós-reparo por passagem.</p></div>
           <div className="max-h-[1080px] overflow-y-auto p-4"><div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">{cards.map(({ posicao, ciclo }) => {
             if (!ciclo) return <button key={posicao} type="button" onClick={() => setPosicaoNova(posicao)} className="flex min-h-[215px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50/60 p-4"><WashingMachine className="h-8 w-8 text-slate-300" /><div className="mt-3 text-xs font-black text-slate-600">Posição {posicao}</div><div className="mt-1 text-[10px] text-slate-400">Disponível</div></button>;
             const executado = calcularTempoExecutado(ciclo, tick);
