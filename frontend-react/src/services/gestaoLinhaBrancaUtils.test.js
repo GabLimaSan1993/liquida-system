@@ -6,7 +6,7 @@ const base=extra=>({os:[os(1)],triagens:[],triagensLegado:[],execucoes:[],ciclos
 const filtro={inicio:'2026-10-20',fim:'2026-10-20',sla:'48',grupo:'dia'};
 test('status importado não vira produção e fornecedor nunca é inferido pela marca',()=>{
  const b=base({historico:[{id:1,os_id:1,status_anterior:'Aguardando triagem',status_novo:'Finalizado',created_at:'2026-10-20T14:00:00Z'}],triagens:[{id:2,os_id:1,triado_por:'Carlos',created_at:'2026-10-20T15:00:00Z'}]});
- assert.equal(montarEventosBranca(b).length,1);const r=resumirGestaoBranca(b,filtro);
+ assert.equal(montarEventosBranca(b).filter(e=>e.etapa!=='Recebimento').length,1);const r=resumirGestaoBranca(b,filtro);
  assert.equal(agruparProdutosBranca(r,'fornecedor')[0].nome,'Distribuidor Azul');
  assert.equal(resumirGestaoBranca(b,{...filtro,fornecedor:'LG'}).eventos.length,0);
 });
@@ -45,4 +45,27 @@ test('reexecuções rápidas da mesma fonte continuam sendo retrabalho registrad
 test('decisão pós-reparo não duplica teste que terminou antes',()=>{
  const b=base({ciclos:[{id:1,os_id:1,etapa_teste:'pos_reparo',numero_ciclo:1,resultado:'aprovado',concluido_em:'2026-10-20T14:00:00Z',iniciado_em:'2026-10-20T13:35:00Z',tempo_executado_segundos:1500}],eventos:[{id:1,os_id:1,etapa:'Bancada de Testes',tecnico:'Carlos',resultado:'aprovado',realizado_em:'2026-10-20T15:00:00Z'}]});
  const r=resumirGestaoBranca(b,filtro);assert.equal(r.eventos.length,1);assert.equal(r.eventos[0].hora,'11');
+});
+
+test('recebimento importado acompanha a abertura original da OS, inclusive nos filtros e SLA',()=>{
+ const b=base({os:[os(1,{dt_entrada:'2026-10-05',created_at:'2026-10-16T19:04:43Z'})]});
+ const recebimento=montarEventosBranca(b).find(e=>e.etapa==='Recebimento');
+ assert.equal(recebimento.dia,'2026-10-05');
+ assert.equal(recebimento.hora,null);
+ assert.equal(recebimento.tecnico,'Sem técnico identificado');
+ const r=resumirGestaoBranca(b,{...filtro,inicio:'2026-10-05',fim:'2026-10-05'});
+ assert.equal(r.eventos.length,1);assert.equal(r.semHorario,1);
+ assert.equal(r.horas.reduce((s,h)=>s+h.total,0),0);
+ assert.equal(resumirGestaoBranca(b,{...filtro,inicio:'2026-10-16',fim:'2026-10-16'}).eventos.length,0);
+ assert.equal(r.carteira[0].aging_horas>0,true);
+});
+test('recebimento operacional preserva o horário conhecido e uma única entrada por OS',()=>{
+ const b=base({os:[os(1,{criado_por:'Carlos',dt_entrada:'2026-10-20',created_at:'2026-10-20T14:30:00Z'})]});
+ const r=resumirGestaoBranca(b,filtro);
+ assert.equal(r.eventos.length,1);assert.equal(r.eventos[0].dia,'2026-10-20');
+ assert.equal(r.eventos[0].hora,'11');assert.equal(r.horas[11].total,1);
+});
+test('OS importada sem dia original não assume a data de importação como recebimento',()=>{
+ const b=base({os:[os(1,{dt_entrada:null})]});
+ assert.equal(montarEventosBranca(b).length,0);
 });

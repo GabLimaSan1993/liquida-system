@@ -33,18 +33,29 @@ export function areaLinhaBranca(categoria) {
  if(/ar.condicionado|climatiza/.test(c))return 'Climatização';
  return 'Outros / Portáteis';
 }
+export function referenciaRecebimentoBranca(os) {
+ const criada=Boolean(os.created_at)&&Number.isFinite(Date.parse(os.created_at));
+ // Na base importada, dt_entrada preserva o dia original de abertura da OS.
+ // created_at representa a inclusão no sistema e só fornece horário para cadastros operacionais.
+ const abertura=os.dt_entrada||(!importado(os)&&criada?diaBrasilia(os.created_at):null);
+ if(!abertura||!Number.isFinite(Date.parse(abertura+'T00:00:00-03:00')))return null;
+ const horaConhecida=!importado(os)&&criada&&diaBrasilia(os.created_at)===abertura;
+ return {data:horaConhecida?os.created_at:abertura+'T00:00:00-03:00',horaConhecida};
+}
 function entradaMs(os) {
- if(!os.dt_entrada)return null;
- if(!importado(os)&&os.created_at&&diaBrasilia(os.created_at)===os.dt_entrada)return Date.parse(os.created_at);
- return Date.parse(os.dt_entrada+'T00:00:00-03:00');
+ const referencia=referenciaRecebimentoBranca(os);
+ return referencia?Date.parse(referencia.data):null;
 }
 export function montarEventosBranca(base) {
  const mapa=new Map(base.os.map(o=>[String(o.id),o])), eventos=[];
- function add(row,etapa,data,tecnico,fonte,resultado='concluido',minutos=null,area=etapa) {
+ function add(row,etapa,data,tecnico,fonte,resultado='concluido',minutos=null,area=etapa,horaConhecida=true) {
   const os=mapa.get(String(row.os_id??row.id));if(!os||!data||!Number.isFinite(Date.parse(data)))return;
-  eventos.push({id:`${fonte}:${row.id}`,os_id:os.id,numero_os:os.numero_os,etapa,area,data,tecnico:String(tecnico||'Sem técnico identificado').trim(),resultado,minutos,fonte,os});
+  eventos.push({id:`${fonte}:${row.id}`,os_id:os.id,numero_os:os.numero_os,etapa,area,data,tecnico:String(tecnico||'Sem técnico identificado').trim(),resultado,minutos,fonte,os,horaConhecida});
  }
- base.os.filter(o=>!importado(o)).forEach(o=>add(o,'Recebimento',o.created_at,o.criado_por,'recebimento'));
+ base.os.forEach(os=>{
+  const referencia=referenciaRecebimentoBranca(os);if(!referencia)return;
+  add(os,'Recebimento',referencia.data,importado(os)?null:os.criado_por,'recebimento','Referência: abertura da OS',null,'Recebimento',referencia.horaConhecida);
+ });
  (base.triagens||[]).forEach(t=>add(t,'Triagem',t.created_at,t.triado_por,'triagem',t.precisa_reparo?'reparo':'aprovado'));
  (base.triagensLegado||[]).forEach(t=>add(t,'Triagem',t.dt_triagem||t.created_at,t.triado_por,'triagem_legado'));
  (base.execucoes||[]).filter(t=>t.dt_fim).forEach(t=>add(t,'Reparo',t.dt_fim,t.tecnico,'reparo',t.condenado?'condenado':t.aprovado===false?'reprovado':'concluido',t.dt_inicio?Math.max(0,(Date.parse(t.dt_fim)-Date.parse(t.dt_inicio))/60000):null,t.area_execucao||'Reparo'));
@@ -74,7 +85,7 @@ export function montarEventosBranca(base) {
  return vistos.sort((a,b)=>a.data.localeCompare(b.data)).map(e=>{
   const chave=`${e.os_id}|${e.etapa}|${e.area}`, anterior=repeticoes.get(chave)||0;repeticoes.set(chave,anterior+1);
   const entrada=entradaMs(e.os), horas=entrada===null?null:(Date.parse(e.data)-entrada)/3600000;
-  return {...e,retrabalho:anterior>0,lead_horas:horas!==null&&horas>=0?horas:null,dia:diaBrasilia(e.data),hora:horaBrasilia(e.data)};
+  return {...e,retrabalho:anterior>0,lead_horas:horas!==null&&horas>=0?horas:null,dia:diaBrasilia(e.data),hora:e.horaConhecida?horaBrasilia(e.data):null};
  });
 }
 function corresponde(os,f) {
@@ -94,13 +105,13 @@ export function resumirGestaoBranca(base,f,agora=Date.now()) {
   const periodo=grupoTemporal(iso(d),f.grupo||'dia');if(!series.has(periodo))series.set(periodo,{periodo,total:0,...Object.fromEntries(ETAPAS_BRANCA.map(e=>[e,0]))});
  }
  eventos.forEach(e=>{const linha=series.get(grupoTemporal(e.dia,f.grupo||'dia'));if(linha){linha[e.etapa]=(linha[e.etapa]||0)+1;linha.total++;}});
- const horas=Array.from({length:24},(_,h)=>({hora:String(h).padStart(2,'0')+':00',total:0}));eventos.forEach(e=>horas[Number(e.hora)].total++);
+ const horas=Array.from({length:24},(_,h)=>({hora:String(h).padStart(2,'0')+':00',total:0}));eventos.filter(e=>e.hora!==null).forEach(e=>horas[Number(e.hora)].total++);
  const ranking=new Map();
  for(const e of eventos){const k=normalizar(e.tecnico);if(!ranking.has(k))ranking.set(k,{tecnico:e.tecnico,total:0,os:new Set(),dias:new Set(),retrabalhos:0,minutos:[],etapas:{},custo:0});const r=ranking.get(k);r.total++;r.os.add(e.os_id);r.dias.add(e.dia);r.retrabalhos+=Number(e.retrabalho);if(e.minutos!==null)r.minutos.push(e.minutos);r.etapas[e.etapa]=(r.etapas[e.etapa]||0)+1;}
  for(const c of consumos){const k=normalizar(c.tecnico);if(!ranking.has(k))ranking.set(k,{tecnico:c.tecnico,total:0,os:new Set(),dias:new Set(),retrabalhos:0,minutos:[],etapas:{},custo:0});const r=ranking.get(k);if(c.total!==null)r.custo+=c.total;}
  const etapas=ETAPAS_BRANCA.map(etapa=>{const linhas=eventos.filter(e=>e.etapa===etapa);return {etapa,total:linhas.length,mediaMinutos:media(linhas.filter(e=>e.minutos!==null).map(e=>e.minutos)),reprovadas:linhas.filter(e=>e.resultado==='reprovado'||e.resultado==='condenado').length,retrabalhos:linhas.filter(e=>e.retrabalho).length};});
  const trocasSemLancamento=(base.execucoes||[]).filter(e=>e.peca_trocada&&e.dt_fim&&osMap.has(String(e.os_id))&&corresponde(osMap.get(String(e.os_id)),f)&&noPeriodo(e.dt_fim,f)&&(!f.tecnico||normalizar(e.tecnico)===normalizar(f.tecnico))&&!(base.consumos||[]).some(c=>String(c.os_id)===String(e.os_id)&&c.utilizado_em&&Math.abs(Date.parse(c.utilizado_em)-Date.parse(e.dt_fim))<86400000));
- return {eventos,consumos,carteira,etapas,serie:[...series.values()],horas,concluidas,avaliadas:avaliadas.length,dentro,meta,leadMedio:media(avaliadas.map(e=>e.lead_horas)),qualidadeTotal:qualidade.length,qualidadeAprovadas:qualidade.filter(e=>e.resultado==='aprovado').length,unicas:new Set(eventos.map(e=>e.os_id)).size,custo:totaisCustos.reduce((s,c)=>s+c.total,0),semCusto:semCusto.length,trocasSemLancamento:trocasSemLancamento.length,ranking:[...ranking.values()].map(r=>({...r,os:r.os.size,dias:r.dias.size,media:r.dias.size?r.total/r.dias.size:0,mediaMinutos:media(r.minutos)})).sort((a,b)=>b.total-a.total)};
+ return {eventos,consumos,carteira,etapas,serie:[...series.values()],horas,semHorario:eventos.filter(e=>e.hora===null).length,concluidas,avaliadas:avaliadas.length,dentro,meta,leadMedio:media(avaliadas.map(e=>e.lead_horas)),qualidadeTotal:qualidade.length,qualidadeAprovadas:qualidade.filter(e=>e.resultado==='aprovado').length,unicas:new Set(eventos.map(e=>e.os_id)).size,custo:totaisCustos.reduce((s,c)=>s+c.total,0),semCusto:semCusto.length,trocasSemLancamento:trocasSemLancamento.length,ranking:[...ranking.values()].map(r=>({...r,os:r.os.size,dias:r.dias.size,media:r.dias.size?r.total/r.dias.size:0,mediaMinutos:media(r.minutos)})).sort((a,b)=>b.total-a.total)};
 }
 export function agruparProdutosBranca(resumo,campo) {
  const grupos=new Map(), obter=os=>{const raw=campo==='modelo'?`${os.marca||'Sem marca'} · ${os.modelo||'Sem modelo'}`:os[campo]||'Não informado';const k=normalizar(raw);if(!grupos.has(k))grupos.set(k,{nome:raw,total:0,os:new Set(),concluidas:new Set(),custo:0,semCusto:0});return grupos.get(k);};
