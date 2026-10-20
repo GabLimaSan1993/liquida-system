@@ -26,7 +26,7 @@ async function arquivarReemissao(item){
  const {data:pdfPath,error:archiveError}=await supabase.rpc('assurant_fechamento_laudo_arquivar',{p_laudo_id:item.laudo_id});
  if(archiveError)throw archiveError;return pdfPath;
 }
-export async function linksPdfFechamento(items){
+export async function linksPdfFechamento(items,{tolerarIndisponiveis=false}={}){
  const links=new Map(),paths=new Map();
  const antigos=[];
  for(const item of items){
@@ -38,25 +38,72 @@ export async function linksPdfFechamento(items){
  // Limit concurrent reissues so exports don't overload storage or the database.
  let index=0;
  await Promise.all(Array.from({length:Math.min(4,antigos.length)},async()=>{
-  while(index<antigos.length){const item=antigos[index++];paths.set(item.id,await arquivarReemissao(item));}
+  while(index<antigos.length){
+   const item=antigos[index++];
+   try{paths.set(item.id,await arquivarReemissao(item));}
+   catch(error){if(!tolerarIndisponiveis)throw error;}
+  }
  }));
  const unique=[...new Set(paths.values())],signed=new Map();
  for(let start=0;start<unique.length;start+=100){
   const {data,error}=await supabase.storage.from('triagem-laudos').createSignedUrls(unique.slice(start,start+100),VALIDADE_LINK_LAUDO);
-  if(error)throw new Error(`Não foi possível gerar os links dos PDFs: ${error.message}`);
-  for(const file of data||[]){if(file.error||!file.signedUrl)throw new Error('Não foi possível gerar o link de um laudo. Exporte novamente.');signed.set(file.path,file.signedUrl);}
+  if(error){
+   if(tolerarIndisponiveis)continue;
+   throw new Error(`Não foi possível gerar os links dos PDFs: ${error.message}`);
+  }
+  for(const file of data||[]){
+   if(file.error||!file.signedUrl){
+    if(tolerarIndisponiveis)continue;
+    throw new Error('Não foi possível gerar o link de um laudo. Tente novamente.');
+   }
+   signed.set(file.path,file.signedUrl);
+  }
  }
- for(const [id,path] of paths){if(!signed.has(path))throw new Error('Um laudo ficou sem link PDF. Exporte novamente.');links.set(id,signed.get(path));}
+ for(const [id,path] of paths){
+  if(!signed.has(path)){
+   if(tolerarIndisponiveis)continue;
+   throw new Error('Um laudo ficou sem link PDF. Tente novamente.');
+  }
+  links.set(id,signed.get(path));
+ }
  return links;
+}
+const LOTE_EXPORTACAO=2000;
+const pausa=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+function erroTemporarioExportacao(error){
+ const texto=`${error?.code||''} ${error?.message||''} ${error?.details||''}`.toLowerCase();
+ return texto.includes('57014')||texto.includes('statement timeout')||texto.includes('canceling statement')||texto.includes('timeout')||texto.includes('failed to fetch');
+}
+async function consultarLoteExportacao(filters,offset,limit,resumo,tentativa=0){
+ try{return await consultarFechamento(filters,offset,limit,resumo);}
+ catch(error){
+  if(erroTemporarioExportacao(error)&&tentativa<2){
+   await pausa(400*(tentativa+1));
+   return consultarLoteExportacao(filters,offset,limit,resumo,tentativa+1);
+  }
+  if(erroTemporarioExportacao(error)&&limit>250){
+   const metade=Math.floor(limit/2);
+   const primeiro=await consultarLoteExportacao(filters,offset,metade,resumo);
+   if((primeiro.itens||[]).length<metade)return primeiro;
+   const segundo=await consultarLoteExportacao(filters,offset+metade,limit-metade,false);
+   return {...primeiro,itens:[...(primeiro.itens||[]),...(segundo.itens||[])]};
+  }
+  throw error;
+ }
 }
 export async function exportarFechamento(filters,onProgress){
  const XLSX=await import('xlsx');
- const first=await consultarFechamento(filters,0,5000,true);
+ const first=await consultarLoteExportacao(filters,0,LOTE_EXPORTACAO,true);
  const total=Number(first.resumo.total),items=[...first.itens];onProgress(items.length,total);
- for(let offset=items.length;offset<total;offset+=5000){const next=await consultarFechamento(filters,offset,5000,false);if(!next.itens.length)throw new Error('A fila mudou durante a exportação. Atualize e exporte novamente.');items.push(...next.itens);onProgress(items.length,total);}
+ while(items.length<total){
+  const limite=Math.min(LOTE_EXPORTACAO,total-items.length);
+  const next=await consultarLoteExportacao(filters,items.length,limite,false);
+  if(!next.itens.length)throw new Error('A fila mudou durante a exportação. Atualize e exporte novamente.');
+  items.push(...next.itens);onProgress(items.length,total);
+ }
  if(items.length!==total||new Set(items.map(i=>i.id)).size!==total)throw new Error('A fila mudou durante a exportação. Atualize e exporte novamente.');
  onProgress(items.length,total,'Preparando links diretos dos PDFs…');
- const links=await linksPdfFechamento(items);
+ const links=await linksPdfFechamento(items,{tolerarIndisponiveis:true});
  const sheet=XLSX.utils.aoa_to_sheet([COLUNAS_FECHAMENTO,...items.map(i=>linhaFechamento(i,links.get(i.id)))],{cellDates:true});
  sheet['!autofilter']={ref:sheet['!ref']};sheet['!cols']=COLUNAS_FECHAMENTO.map((h,index)=>({wch:[1,18].includes(index)?20:Math.max(14,Math.min(30,h.length+5))}));
  for(let row=1;row<=items.length;row++){for(const col of [19,20,22]){const cell=sheet[XLSX.utils.encode_cell({r:row,c:col})];if(cell)cell.z='"R$" #,##0.00';}const d=sheet[XLSX.utils.encode_cell({r:row,c:2})];if(d)d.z='dd/mm/yyyy';const link=sheet[XLSX.utils.encode_cell({r:row,c:25})];if(link&&typeof link.v==='string'&&link.v.startsWith('https://'))link.l={Target:link.v,Tooltip:'Abrir o laudo em PDF'};}
