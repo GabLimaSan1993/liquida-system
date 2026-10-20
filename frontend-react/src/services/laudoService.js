@@ -68,15 +68,17 @@ export async function carregarParaLaudo(voucher) {
     };
   }
 
-  // Use the exact voucher; numeric matching could mix GRV/YBV registrations.
-  // Historical triage keeps customer/store data when TradeIn has no registration.
+  // Preserve the triage voucher so photos, history and saving keep the same record.
+  // Legacy imports may repeat YBV; use the canonical contract only with the same IMEI.
+  const voucherCadastro = v.replace(/^(?:YBV){2,}(?=\d+$)/, "YBV");
   let tradein = null;
-  if (/^YBV\d+$/.test(v)) {
-    const { data, error: erroTradein } = await supabase
+  if (/^YBV\d+$/.test(voucherCadastro) && (voucherCadastro === v || primeiroTexto(t.imei))) {
+    let consulta = supabase
       .from("tradein_geral")
       .select("cliente, loja, marca, aparelho, condicao_aparelho")
-      .eq("voucher_ybv", v)
-      .maybeSingle();
+      .eq("voucher_ybv", voucherCadastro);
+    if (voucherCadastro !== v) consulta = consulta.eq("imei", String(t.imei).trim());
+    const { data, error: erroTradein } = await consulta.maybeSingle();
     if (erroTradein) throw new Error(`Não foi possível carregar o cadastro do cliente: ${erroTradein.message}`);
     tradein = data || null;
   }
