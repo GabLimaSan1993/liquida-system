@@ -1,4 +1,5 @@
 export const TELAS = [
+  { id: "/v2/linha-branca/gestao/producao", label: "Gestão da produção, peças e SLA", grupo: "Linha Branca — Gestão" },
   { id: "/chamados/gestao", label: "Gestão de chamados e SLAs — exclusivo Gabriel", grupo: "Sistema" },
   { id: "/chamados", label: "Chamados e solicitações", grupo: "Sistema" },
   { id: "/v2/linha-branca", label: "Acesso à Linha Branca", grupo: "Linha Branca" },

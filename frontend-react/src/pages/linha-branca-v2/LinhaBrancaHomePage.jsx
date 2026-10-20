@@ -1,5 +1,6 @@
 import {
   ArrowRight,
+  BarChart3,
   ClipboardCheck,
   Droplets,
   Snowflake,
@@ -12,6 +13,13 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../AuthContext.jsx";
 
 const AREAS = [
+  {
+    nome: "Gestão da Produção",
+    descricao: "Produção por técnico, marca, modelo e fornecedor, peças e SLA.",
+    icon: BarChart3,
+    rota: "/v2/linha-branca/gestao/producao",
+    disponivel: true,
+  },
   {
     nome: "QCC",
     descricao: "Qualidade, conferência e controle.",

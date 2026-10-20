@@ -87,6 +87,7 @@ import AuditoriaFifoV2Page from "./pages/assurant-v2/AuditoriaFifoV2Page.jsx";
 import MargemB2CV2Page from "./pages/assurant-v2/MargemB2CV2Page.jsx";
 import DesvinculacoesLiquidaV2Page from "./pages/assurant-v2/DesvinculacoesLiquidaV2Page.jsx";
 
+import GestaoProducaoLinhaBrancaPage from "./pages/linha-branca-v2/GestaoProducaoLinhaBrancaPage.jsx";
 import LinhaBrancaHomePage from "./pages/linha-branca-v2/LinhaBrancaHomePage.jsx";
 import RefrigeracaoV2Page from "./pages/linha-branca-v2/RefrigeracaoV2Page.jsx";
 import TriagemRefrigeracaoV2Page from "./pages/linha-branca-v2/TriagemRefrigeracaoV2Page.jsx";
@@ -370,6 +371,7 @@ export default function App() {
             <LinhaBrancaHomePage />
           }
         />
+        <Route path="gestao/producao" element={<ProtectedRoute tela="/v2/linha-branca/gestao/producao"><GestaoProducaoLinhaBrancaPage /></ProtectedRoute>} />
       </Route>
 
 
