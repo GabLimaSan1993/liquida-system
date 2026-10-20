@@ -68,40 +68,62 @@ export async function linksPdfFechamento(items,{tolerarIndisponiveis=false}={}){
  }
  return links;
 }
-const LOTE_EXPORTACAO=2000;
+const LOTE_EXPORTACAO=5000;
 const pausa=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 function erroTemporarioExportacao(error){
  const texto=`${error?.code||''} ${error?.message||''} ${error?.details||''}`.toLowerCase();
  return texto.includes('57014')||texto.includes('statement timeout')||texto.includes('canceling statement')||texto.includes('timeout')||texto.includes('failed to fetch');
 }
-async function consultarLoteExportacao(filters,offset,limit,resumo,tentativa=0){
- try{return await consultarFechamento(filters,offset,limit,resumo);}
+async function consultarFechamentoExportacao(filters,cursor,limit){
+ const {data,error}=await supabase.rpc('assurant_fechamento_lojas_exportar_lote',{
+  p_situacao:filters.situacao,p_laudo:filters.laudo,p_busca:filters.busca.trim(),p_rede:filters.rede,
+  p_limite:limit,p_tem_cursor:Boolean(cursor),p_cursor_data:cursor?.data||null,
+  p_cursor_voucher:cursor?.voucher||null,p_cursor_id:cursor?.id||null,
+  p_data_inicial:filters.dataInicial||null,p_data_final:filters.dataFinal||null
+ });
+ if(error)throw error;
+ return data;
+}
+async function consultarLoteExportacao(filters,cursor,limit,tentativa=0){
+ try{return await consultarFechamentoExportacao(filters,cursor,limit);}
  catch(error){
-  if(erroTemporarioExportacao(error)&&tentativa<2){
-   await pausa(400*(tentativa+1));
-   return consultarLoteExportacao(filters,offset,limit,resumo,tentativa+1);
+  if(erroTemporarioExportacao(error)&&tentativa<1){
+   await pausa(500);
+   return consultarLoteExportacao(filters,cursor,limit,tentativa+1);
   }
   if(erroTemporarioExportacao(error)&&limit>250){
    const metade=Math.floor(limit/2);
-   const primeiro=await consultarLoteExportacao(filters,offset,metade,resumo);
-   if((primeiro.itens||[]).length<metade)return primeiro;
-   const segundo=await consultarLoteExportacao(filters,offset+metade,limit-metade,false);
-   return {...primeiro,itens:[...(primeiro.itens||[]),...(segundo.itens||[])]};
+   const primeiro=await consultarLoteExportacao(filters,cursor,metade);
+   if(primeiro.fim||!primeiro.cursor)return primeiro;
+   const segundo=await consultarLoteExportacao(filters,primeiro.cursor,limit-metade);
+   return {
+    itens:[...(primeiro.itens||[]),...(segundo.itens||[])],
+    cursor:segundo.cursor||primeiro.cursor,
+    fim:Boolean(segundo.fim),
+    lidos:Number(primeiro.lidos||0)+Number(segundo.lidos||0)
+   };
   }
   throw error;
  }
 }
 export async function exportarFechamento(filters,onProgress){
  const XLSX=await import('xlsx');
- const first=await consultarLoteExportacao(filters,0,LOTE_EXPORTACAO,true);
- const total=Number(first.resumo.total),items=[...first.itens];onProgress(items.length,total);
- while(items.length<total){
-  const limite=Math.min(LOTE_EXPORTACAO,total-items.length);
-  const next=await consultarLoteExportacao(filters,items.length,limite,false);
-  if(!next.itens.length)throw new Error('A fila mudou durante a exportação. Atualize e exporte novamente.');
-  items.push(...next.itens);onProgress(items.length,total);
+ const summary=await consultarFechamento(filters,0,1,true);
+ const total=Number(summary.resumo.total),items=[],ids=new Set();
+ let cursor=null,lidos=0,ultimoCursor='';
+ while(true){
+  const next=await consultarLoteExportacao(filters,cursor,LOTE_EXPORTACAO);
+  for(const item of next.itens||[]){
+   if(!ids.has(item.id)){ids.add(item.id);items.push(item);}
+  }
+  lidos+=Number(next.lidos||(next.itens||[]).length);
+  onProgress(Math.min(lidos,total),total);
+  if(next.fim||!next.cursor)break;
+  const chave=`${next.cursor.data||'null'}|${next.cursor.voucher||''}|${next.cursor.id||''}`;
+  if(chave===ultimoCursor)throw new Error('A exportação não conseguiu avançar. Atualize e tente novamente.');
+  ultimoCursor=chave;cursor=next.cursor;
  }
- if(items.length!==total||new Set(items.map(i=>i.id)).size!==total)throw new Error('A fila mudou durante a exportação. Atualize e exporte novamente.');
+ if(total>0&&!items.length)throw new Error('Não foi possível carregar os registros do fechamento.');
  onProgress(items.length,total,'Preparando links diretos dos PDFs…');
  const links=await linksPdfFechamento(items,{tolerarIndisponiveis:true});
  const sheet=XLSX.utils.aoa_to_sheet([COLUNAS_FECHAMENTO,...items.map(i=>linhaFechamento(i,links.get(i.id)))],{cellDates:true});
