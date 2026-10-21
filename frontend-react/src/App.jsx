@@ -1,3 +1,4 @@
+import UploadAgingLinhaBrancaPage from "./pages/linha-branca-v2/UploadAgingLinhaBrancaPage.jsx";
 import DivergenciasImeiV2Page from "./pages/assurant-v2/DivergenciasImeiV2Page.jsx";
 import ProducaoEsteiraV2Page from './pages/assurant-v2/ProducaoEsteiraV2Page.jsx';
 import RelatorioEstoqueV2Page from "./pages/assurant-v2/RelatorioEstoqueV2Page";
@@ -371,6 +372,7 @@ export default function App() {
             <LinhaBrancaHomePage />
           }
         />
+        <Route path="uploads" element={<ProtectedRoute tela="/v2/linha-branca/uploads"><UploadAgingLinhaBrancaPage /></ProtectedRoute>} />
         <Route path="gestao/producao" element={<ProtectedRoute tela="/v2/linha-branca/gestao/producao"><GestaoProducaoLinhaBrancaPage /></ProtectedRoute>} />
       </Route>
 
