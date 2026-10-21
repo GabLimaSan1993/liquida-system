@@ -38,6 +38,7 @@ import {
 } from "../../services/recebimentoService.js";
 
 import { useAuth } from "../../AuthContext.jsx";
+import { validarVoucherRecebimento } from "../../services/voucherRecebimento.js";
 
 function fmtDataHora(value) {
   if (!value) return "—";
@@ -764,10 +765,14 @@ function TelaBipagem({
   ) {
     event.preventDefault();
 
-    const voucher =
-      voucherInput.trim();
-
-    if (!voucher || proc) return;
+    if (proc) return;
+    const validacao = validarVoucherRecebimento(voucherInput);
+    if (!validacao.ok) {
+      setFeedback({ tipo: "erro", msg: validacao.erro });
+      inputRef.current?.focus();
+      return;
+    }
+    const { voucher } = validacao;
 
     setVoucherInput("");
     setProc(true);
@@ -932,14 +937,21 @@ function TelaBipagem({
                   value={voucherInput}
                   onChange={(event) =>
                     setVoucherInput(
-                      event.target.value
+                      event.target.value.toUpperCase()
                     )
                   }
-                  placeholder="Bipe ou digite o voucher YBV..."
+                  placeholder="YBV123456"
+                  aria-label="Voucher de recebimento"
+                  aria-describedby="formato-voucher-recebimento"
+                  autoCapitalize="characters"
+                  spellCheck={false}
                   autoComplete="off"
                   className="h-14 w-full rounded-xl border border-violet-200 bg-violet-50/30 pl-12 pr-4 font-mono text-base font-bold text-slate-800 outline-none transition focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100"
                 />
               </div>
+              <p id="formato-voucher-recebimento" className="mt-2 text-xs font-semibold text-slate-500">
+                Obrigatório: YBV seguido de exatamente 6 números. Exemplo: YBV123456.
+              </p>
             </form>
 
             <div className="mt-3 flex items-center gap-2 text-[11px] text-slate-400">
@@ -949,6 +961,7 @@ function TelaBipagem({
 
             {feedback && (
               <div
+                role={feedback.tipo === "ok" ? "status" : "alert"}
                 className={`mt-4 flex items-center gap-2 rounded-xl border px-4 py-3 text-xs font-semibold ${
                   feedback.tipo ===
                   "ok"

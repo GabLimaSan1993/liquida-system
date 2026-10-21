@@ -1,4 +1,5 @@
-import { supabase } from "../lib/supabase";
+import { supabase } from "../lib/supabase.js";
+import { validarVoucherRecebimento } from "./voucherRecebimento.js";
 
 // ══════════════════════════════════════════════════════════
 // RECEBIMENTO YBV — carga, bipagem de vouchers e romaneio
@@ -30,13 +31,11 @@ export async function criarRecebimento({ transportadora, motorista_nome, motoris
 }
 
 // ── Bipar um voucher (tela 2) ──
-// Regras: precisa começar com YBV; não duplica na mesma carga.
+// Regras: YBV seguido de exatamente seis números; não duplica na mesma carga.
 export async function biparVoucher(recebimentoId, voucherDigitado, userId, userNome) {
-  const voucher = String(voucherDigitado || "").trim().toUpperCase();
-  if (!voucher) return { ok: false, erro: "Bipe um voucher." };
-  if (!voucher.startsWith("YBV")) {
-    return { ok: false, erro: `"${voucher}" não inicia com YBV — ignorado.`, ignorado: true };
-  }
+  const validacao = validarVoucherRecebimento(voucherDigitado);
+  if (!validacao.ok) return { ok: false, erro: validacao.erro, ignorado: true };
+  const { voucher } = validacao;
 
   const { data, error } = await supabase
     .from("recebimento_vouchers")
