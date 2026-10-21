@@ -13,7 +13,11 @@ export function variaveisChamado(p) {
 export function corpoMensagem(job) {
   const c = job.config;
   const body = new URLSearchParams({ To: `whatsapp:${c.destinatario}`, From: `whatsapp:${c.remetente}` });
-  if (job.teste) {
+  if (job.teste && c.modo === "teste") {
+    const modelo = c.content_sid;
+    if (!/^HX[0-9a-f]{32}$/i.test(modelo)) throw new Error("Modelo de teste inválido.");
+    body.set("ContentSid", modelo);
+  } else if (job.teste) {
     body.set("Body", "Liquida System: teste de conexão do WhatsApp. Os avisos automáticos só serão ativados após configurar o remetente de produção e o modelo aprovado.");
   } else {
     if (c.modo !== "producao" || !/^HX[0-9a-f]{32}$/i.test(c.content_sid || "")) throw new Error("Modelo de produção não configurado.");
@@ -30,6 +34,8 @@ export function resultadoTwilio(data) {
 export function erroTwilio(code) {
   const textos = {
     20003: "Credenciais da Twilio inválidas. Confira o Account SID e o Auth Token.",
+    21654: "A conta de teste da Twilio exige um modelo pronto (Content SID); mensagens livres não são permitidas.",
+    21655: "Este modelo não está disponível nesta conta Twilio. Use o Content SID exibido no teste de WhatsApp da sua conta.",
     63007: "Remetente de WhatsApp não encontrado na Twilio.",
     63015: "Vincule seu WhatsApp ao ambiente de teste da Twilio antes de enviar.",
     63016: "A janela de conversa expirou. Use um modelo aprovado em produção ou reconecte o teste.",

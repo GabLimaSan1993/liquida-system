@@ -11,7 +11,16 @@ test('notificação usa modelo aprovado, protocolo e horário de Brasília, sem 
 test('não usa mensagens livres nem remetente de teste para avisos automáticos',()=>{
  assert.throws(()=>corpoMensagem({config:{...config,modo:'teste'},payload}));
  assert.throws(()=>corpoMensagem({config:{...config,content_sid:null},payload}));
- assert(corpoMensagem({config:{...config,modo:'teste'},teste:true}).has('Body'));
+ assert(corpoMensagem({config,teste:true}).has('Body'));
+});
+test('trial usa modelo pronto, sem mensagem livre nem variáveis personalizadas',()=>{
+ const body=corpoMensagem({config:{...config,modo:'teste'},teste:true});
+ assert.equal(body.get('ContentSid'),config.content_sid);
+ assert(!body.has('Body'));assert(!body.has('ContentVariables'));
+ const escolhido=corpoMensagem({config:{...config,modo:'teste'},teste:true});
+ assert.equal(escolhido.get('ContentSid'),config.content_sid);
+ assert.throws(()=>corpoMensagem({config:{...config,modo:'teste',content_sid:'invalido'},teste:true}));
+ assert.throws(()=>corpoMensagem({config:{...config,modo:'teste',content_sid:null},teste:true}));
 });
 test('aceitação pelo provedor é diferente de entrega ao celular',()=>{
  assert.equal(resultadoTwilio({status:'queued'}),'aceito');assert.equal(resultadoTwilio({status:'sent'}),'aceito');

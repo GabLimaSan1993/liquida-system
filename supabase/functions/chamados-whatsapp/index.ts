@@ -21,6 +21,10 @@ Deno.serve(async req => {
     if (!/^AC[0-9a-f]{32}$/i.test(c.account_sid || '')) throw new Error('Conta inválida.');
     const consultar = job.acao === 'consultar';
     if (consultar && !/^SM[0-9a-f]{32}$/i.test(job.message_sid || '')) throw new Error('Mensagem inválida.');
+    if (!consultar && job.teste && c.modo === 'teste' && !/^HX[0-9a-f]{32}$/i.test(c.content_sid || '')) {
+      await finalizar('erro', undefined, 'Falta o modelo de teste da sua conta Twilio. Copie o Content SID (HX...) exibido em Try out WhatsApp, salve a configuração e envie outro teste.');
+      return Response.json({ ok: false });
+    }
     if (!consultar && !job.teste) {
       const accountResponse = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${c.account_sid}.json`, {
         headers: { Authorization: `Basic ${btoa(`${c.account_sid}:${c.auth_token}`)}` }, signal: AbortSignal.timeout(10000),
