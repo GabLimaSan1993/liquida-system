@@ -209,6 +209,8 @@ function RepairGroup({ title, items, selected, onToggle }) {
 export default function TriagemLavadorasV2Page() {
   const { profile } = useAuth();
   const operador = profile?.nome || "Operação";
+  const nomeOperador = profile?.nome;
+  const verTodos = profile?.is_master === true;
 
   const [painel, setPainel] = useState({ aguardando: [], ciclos: [], osList: [] });
   const [selectedOsId, setSelectedOsId] = useState("");
@@ -231,7 +233,7 @@ export default function TriagemLavadorasV2Page() {
   const carregarPainel = useCallback(async ({ silencioso = false } = {}) => {
     try {
       if (!silencioso) setLoading(true);
-      const data = painelDoOperador(await fetchPainelTriagemLavadoras(), profile?.nome);
+      const data = painelDoOperador(await fetchPainelTriagemLavadoras(), nomeOperador, { verTodos });
       setPainel(data);
       setSelectedOsId((atual) => {
         if (atual && data.aguardando.some((item) => String(item.id) === String(atual))) return atual;
@@ -247,7 +249,7 @@ export default function TriagemLavadorasV2Page() {
     } finally {
       if (!silencioso) setLoading(false);
     }
-  }, [profile?.nome]);
+  }, [nomeOperador, verTodos]);
 
   useEffect(() => {
     carregarPainel();

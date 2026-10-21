@@ -4,7 +4,7 @@ function normalizarOperador(valor) {
   return String(valor || "").trim().toLocaleLowerCase("pt-BR").replace(/\s+/g, " ");
 }
 
-export function painelDoOperador(painel, operador) {
+export function painelDoOperador(painel, operador, { verTodos = false } = {}) {
   const nome = normalizarOperador(operador);
   const ciclos = painel.ciclos || [];
   const pertenceAoOperador = (ciclo) =>
@@ -13,9 +13,9 @@ export function painelDoOperador(painel, operador) {
 
   return {
     ...painel,
-    ciclos: ciclos.filter(pertenceAoOperador),
+    ciclos: verTodos === true ? ciclos : ciclos.filter(pertenceAoOperador),
     posicoesOcupadas: [...new Set(reservados.map((ciclo) => String(ciclo.posicao)))],
-    posicoesDeOutros: [...new Set(reservados
+    posicoesDeOutros: verTodos === true ? [] : [...new Set(reservados
       .filter((ciclo) => !pertenceAoOperador(ciclo))
       .map((ciclo) => String(ciclo.posicao)))],
   };
