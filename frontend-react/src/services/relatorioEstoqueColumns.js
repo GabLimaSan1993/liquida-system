@@ -3,9 +3,9 @@ export const COLUNAS_ESTOQUE = [
   'Status_atual', 'Condicao', 'Triagem_funcional', 'Grade', 'Criado_em', 'Atualizado_em',
   'Tela', 'Laterais', 'Traseira', 'Defeitos_Adicionais', 'Resultado_Triagem_Funcional',
   'Data_Recebimento', 'Data_Funcional', 'Data_Cosmetico', 'Data_Laudo', 'Data_Alocacao', 'Data_Oracle',
-  'Respostas_Funcional', 'status_bateria', 'Reanalise', 'Aging',
+  'Respostas_Funcional', 'status_bateria', 'Reanalise', 'Saúde da bateria (%)',
 ];
-export const CAMPOS_ESTOQUE = COLUNAS_ESTOQUE.map(c => c.toLowerCase());
+export const CAMPOS_ESTOQUE = COLUNAS_ESTOQUE.map(c => c === 'Saúde da bateria (%)' ? 'bateria_percentual' : c.toLowerCase());
 export const DATAS_ESTOQUE = new Set([14, 15, 21, 22, 23, 24, 25, 26]);
 const formatter = new Intl.DateTimeFormat('en-CA', {
   timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
@@ -25,6 +25,7 @@ export function linhaEstoque(item) {
     const value = item[key];
     if (DATAS_ESTOQUE.has(index)) return excelDate(value);
     if (value == null || value === '') return null;
+    if (key === 'bateria_percentual') return Number(value);
     // Identifiers remain text, including long IMEIs and SKUs with leading zeros.
     const text = typeof value === 'object' ? JSON.stringify(value) : String(value);
     if (text.length > 32767) throw new Error(`O campo ${COLUNAS_ESTOQUE[index]} do voucher ${item.voucher} excede o limite de uma célula do Excel.`);
