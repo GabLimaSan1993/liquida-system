@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Download, RefreshCw, Wrench, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { Download, Upload, RefreshCw, Wrench, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { operarReparo, exportarReparo } from '../services/reparoPickingService.js';
+import { lerUploadReparo } from '../services/reparoUpload.js';
+import { useAuth } from '../AuthContext.jsx';
 
 const labels = { pendente: 'Aguardando bipagem', bloqueado: 'Pendência', bipado: 'Bipado', em_reparo: 'Em reparo' };
 const number = n => Number(n || 0).toLocaleString('pt-BR');
 const date = d => d ? new Date(d).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '—';
 
 export default function ReparoOperacaoPanel({ modo = 'picking' }) {
+  const { profile } = useAuth();
   const [pedidos, setPedidos] = useState([]);
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -20,7 +23,37 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
   const [destino, setDestino] = useState('');
   const [referencia, setReferencia] = useState('');
   const inputRef = useRef(null);
+  const arquivoRef = useRef(null);
+  const [upload, setUpload] = useState(null);
   const oracle = modo === 'oracle';
+
+  async function selecionarArquivo(event) {
+    const arquivo = event.target.files?.[0];
+    event.target.value = '';
+    if (!arquivo || busy) return;
+    setBusy(true); setError(''); setMessage(''); setUpload(null);
+    try { setUpload({ nome: arquivo.name, imeis: await lerUploadReparo(arquivo) }); }
+    catch (err) { setError(err.message); }
+    finally { setBusy(false); }
+  }
+
+  async function importarReparo() {
+    if (!upload || busy) return;
+    setBusy(true); setError(''); setMessage('');
+    try {
+      const data = await operarReparo('criar', null, { p_imeis: upload.imeis });
+      setUpload(null);
+      await carregar();
+      if (data.pedido.status === 'picking') {
+        setDetail(data); setImei(''); setBusca(''); setFiltro('');
+        setMessage(`Lote ${data.pedido.lote} disponível para separação: ${number(data.pedido.total)} aparelhos, ${number(data.pedido.bloqueados)} com pendência. Confira a lista e faça a bipagem.`);
+      } else {
+        setDetail(null);
+        setMessage(`Esta lista já foi importada no lote ${data.pedido.lote}. Consulte Integração Oracle → Reparos para acompanhar a movimentação.`);
+      }
+    } catch (err) { setError(err.message); }
+    finally { setBusy(false); }
+  }
 
   const carregar = useCallback(async signal => {
     setLoading(true);
@@ -89,6 +122,11 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
           <p className="text-xs text-slate-500">Pedido interno • sem faturamento</p></div>
       </div>
       <div className="flex flex-wrap gap-2">
+        {!oracle && profile?.is_master && <>
+          <a href="/modelos/Modelo_Upload_Envio_Reparo.xlsx" download className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs"><Download size={14} />Baixar modelo</a>
+          <input ref={arquivoRef} type="file" accept=".xlsx,.xls,.csv" aria-label="Planilha de IMEIs para reparo" className="hidden" onChange={selecionarArquivo} disabled={busy} />
+          <button disabled={busy || loading} onClick={() => arquivoRef.current?.click()} className="flex items-center gap-2 rounded-xl bg-purple-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"><Upload size={14} />Importar para reparo</button>
+        </>}
         {detail && <button disabled={busy} onClick={() => { setDetail(null); carregar(); }} className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs"><ArrowLeft size={14} />Pedidos</button>}
         {detail && <button disabled={busy} onClick={exportar} className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs"><Download size={14} />{oracle ? 'Exportar movimentação' : 'Exportar picking'}</button>}
         <button disabled={busy || loading} onClick={() => detail && !oracle ? executar('atualizar') : detail ? abrir(detail.pedido.id) : carregar()} className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs disabled:opacity-50"><RefreshCw size={14} />{detail && !oracle ? 'Atualizar posições' : 'Atualizar'}</button>
@@ -96,6 +134,12 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
     </div>
     {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
     {message && <p role="status" className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">{message}</p>}
+    {!oracle && upload && <div className="space-y-3 rounded-xl border border-purple-200 bg-purple-50 p-4">
+      <p className="text-sm font-semibold text-slate-800">{upload.nome} • {number(upload.imeis.length)} IMEIs para reparo</p>
+      <p className="text-xs text-slate-600">A importação cria o pedido de separação. Produtos sem posição WMS ou com vínculo ativo ficam com pendência; a retirada física é registrada na bipagem.</p>
+      <details className="text-xs text-slate-600"><summary className="cursor-pointer font-semibold">Conferir IMEIs do arquivo</summary><div className="mt-2 max-h-40 overflow-auto rounded-lg border bg-white p-3 font-mono">{upload.imeis.map(codigo => <div key={codigo}>{codigo}</div>)}</div></details>
+      <div className="flex gap-2"><button disabled={busy} onClick={importarReparo} className="rounded-lg bg-purple-700 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{busy ? 'Importando…' : 'Importar e criar lote'}</button><button disabled={busy} onClick={() => setUpload(null)} className="rounded-lg border bg-white px-4 py-2 text-xs disabled:opacity-50">Cancelar</button></div>
+    </div>}
     {loading && !detail && <p className="text-sm text-slate-500">Consultando reparos…</p>}
     {!detail && <>
       {oracle && <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={historico} onChange={e => setHistorico(e.target.checked)} />Mostrar movimentações concluídas</label>}
