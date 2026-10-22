@@ -4,6 +4,7 @@ export { decidirDestino } from "./regrasTriagemFuncional.js";
 import { erroIdentificacao, tipoDoAparelho } from "./identificacaoAparelho";
 import { supabase } from "../lib/supabase";
 import { buscarTradeinPorVoucher, validarImeiTradein } from "./tradeinService";
+import { ehFaixaBateriaSemDefeito, filtrarDefeitosAdicionais } from "./defeitosGrade.js";
 
 // ══════════════════════════════════════════════════════════
 // TRIAGEM FUNCIONAL
@@ -78,7 +79,7 @@ export async function listarDefeitos() {
     .order("categoria")
     .order("nome");
   if (error) throw new Error(error.message);
-  return data || [];
+  return (data || []).filter(defeito => !ehFaixaBateriaSemDefeito(defeito.nome));
 }
 
 export async function consultarVoucher(voucher) {
@@ -154,10 +155,7 @@ export async function consultarVoucher(voucher) {
       respostasAnteriores?.bateria?.faixa ||
       existente.status_bateria ||
       null,
-    defeitos: String(existente.defeitos_adicionais || "")
-      .split(";")
-      .map((x) => x.trim())
-      .filter(Boolean),
+    defeitos: filtrarDefeitosAdicionais(existente.defeitos_adicionais),
     bruto: respostasAnteriores,
   } : null;
 
@@ -276,7 +274,7 @@ export async function salvarTriagemFuncional({
   const codigoBipado = danosTela ? (imei1 || null) : (imei1 || imei);
   const erroCodigo = erroIdentificacao(tipoDoAparelho(produto?.modelo, produto?.tipo), codigoBipado, imei2, { modelo: produto?.modelo, aparelhoBloqueado, danosTela });
   if (erroCodigo) return { ok: false, erro: erroCodigo };
-  const defeitosRegistrados = [...new Set([...(Array.isArray(defeitos) ? defeitos : String(defeitos || "").split(";")), ...(danosTela ? ["Danos da tela"] : [])].map(d => String(d).trim()).filter(Boolean))];
+  const defeitosRegistrados = [...new Set([...filtrarDefeitosAdicionais(defeitos), ...(danosTela ? ["Danos da tela"] : [])])];
 
   const lista = Array.isArray(respostas) ? respostas : [];
   const negativas = lista.filter(respostaFuncionalNegativa);
