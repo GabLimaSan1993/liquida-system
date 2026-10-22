@@ -446,57 +446,9 @@ export async function fecharContagem(contagemId) {
 // PAINEL — as duas acuracidades
 // ══════════════════════════════════════════════════════════
 export async function painelCiclo(cicloId) {
-  const { data: contagens } = await supabase
-    .from("inventario_contagens")
-    .select("id, status")
-    .eq("ciclo_id", cicloId);
-
-  const { data: itens } = await supabase
-    .from("inventario_itens")
-    .select("contagem_id, veredito, reconciliado_em")
-    .eq("ciclo_id", cicloId);
-
-  const todas       = contagens || [];
-  const concluidas  = todas.filter(c => c.status === "concluida");
-  const evs         = itens || [];
-
-  const conferidos    = evs.filter(i => i.veredito === "conferido").length;
-  const sobras        = evs.filter(i => i.veredito === "sobra").length;
-  const conflitos     = evs.filter(i => i.veredito === "conflito").length;
-  const faltasTotais  = evs.filter(i => i.veredito === "falta");
-  const reconciliadas = faltasTotais.filter(i => i.reconciliado_em).length;
-  const fantasmas     = faltasTotais.length - reconciliadas;
-
-  // Acuracidade por peça: das contadas, quantas estavam onde deviam.
-  const denominadorPeca = conferidos + sobras + conflitos + fantasmas;
-  const acuraciaPeca = denominadorPeca > 0
-    ? (conferidos / denominadorPeca) * 100
-    : null;
-
-  // Acuracidade por endereço: um endereço só é perfeito se tudo que era esperado
-  // estava lá e nada estranho apareceu. Uma falta reconciliada depois continua
-  // sendo um erro deste endereço — a peça não estava onde o sistema dizia.
-  const problemasPorContagem = {};
-  evs.forEach(i => {
-    if (i.veredito !== "conferido") problemasPorContagem[i.contagem_id] = true;
-  });
-  const perfeitos = concluidas.filter(c => !problemasPorContagem[c.id]).length;
-  const acuraciaEndereco = concluidas.length > 0
-    ? (perfeitos / concluidas.length) * 100
-    : null;
-
-  return {
-    totalEnderecos:   todas.length,
-    concluidas:       concluidas.length,
-    conferidos,
-    sobras,
-    conflitos,
-    reconciliadas,
-    fantasmas,
-    acuraciaPeca,
-    acuraciaEndereco,
-    perfeitos,
-  };
+  const {data,error}=await supabase.rpc('assurant_inventario_acuracidade',{p_ciclo:cicloId});
+  if(error)throw new Error(error.message);
+  return data;
 }
 
 // ══════════════════════════════════════════════════════════

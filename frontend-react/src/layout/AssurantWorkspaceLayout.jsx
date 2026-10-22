@@ -211,6 +211,7 @@ const MENU_GROUPS = [
       to: "/v2/assurant/b2c",
       exact: true,
     },
+    { label: "Baixas manuais com aprovação", icon: ShieldCheck, to: "/v2/assurant/b2c/baixas", exact: true, liquidaOnly: true },
     { label: "Definição — Assurant", icon: ShieldCheck, to: "/v2/assurant/b2c/definicao-assurant", exact: true },
     { label: "Validação e Testes MELI", icon: ShieldCheck, to: "/v2/assurant/b2c/validacao-meli", exact: true },
 
@@ -942,7 +943,7 @@ function SidebarContent({
   const podeVerRota = (to, allowedUserIds, liquidaOnly = false) => {
     if (to === "/chamados/gestao") return profile?.id === "b517d70a-56be-4b4f-8b9e-a03c769dd3c3" && profile?.telas_permitidas?.includes(to) === true && profile?.telas_permitidas?.includes("/chamados") === true;
     if (to === "/chamados") return profile?.telas_permitidas?.includes(to) === true;
-    if (["/v2/assurant/gestao/producao", "/v2/assurant/b2c/validacao-meli", "/v2/assurant/gestao/esteira", "/v2/assurant/gestao/fechamento-lojas", "/v2/assurant/gestao/relatorio-estoque"].includes(to)) return profile?.telas_permitidas?.includes(to) === true;
+    if (["/v2/assurant/b2c/baixas", "/v2/assurant/gestao/producao", "/v2/assurant/b2c/validacao-meli", "/v2/assurant/gestao/esteira", "/v2/assurant/gestao/fechamento-lojas", "/v2/assurant/gestao/relatorio-estoque"].includes(to)) return profile?.telas_permitidas?.includes(to) === true;
     if (liquidaOnly) {
       const email = String(profile?.email || "").toLowerCase();
       const identidadeLiquida =

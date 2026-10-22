@@ -1,4 +1,7 @@
 export const TELAS = [
+  { id: "/v2/assurant/gestao/producao/configurar", label: "Configurar metas e efetivo diário", grupo: "Assurant — Gestão" },
+  { id: "/v2/assurant/b2c/baixas", label: "B2C — Solicitar e consultar baixas manuais", grupo: "Assurant — B2C" },
+  { id: "/v2/assurant/b2c/baixas/aprovar", label: "B2C — Aprovar baixas manuais", grupo: "Assurant — B2C" },
   { id: "/v2/linha-branca/uploads", label: "Upload diário de Aging", grupo: "Linha Branca — Gestão" },
   { id: "/v2/linha-branca/gestao/producao", label: "Gestão da produção, peças e SLA", grupo: "Linha Branca — Gestão" },
   { id: "/chamados/gestao", label: "Gestão de chamados e SLAs — exclusivo Gabriel", grupo: "Sistema" },

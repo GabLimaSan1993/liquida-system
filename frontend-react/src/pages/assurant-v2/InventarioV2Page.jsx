@@ -1,3 +1,4 @@
+import AcuracidadeInventarioPanel from '../../components/assurant/AcuracidadeInventarioPanel.jsx';
 import {
   useEffect,
   useRef,
@@ -2992,7 +2993,7 @@ function corAcuracidadeInventario(
 
 
   if (
-    acuracidade >= 95
+    acuracidade >= 97
   ) {
     return {
       dot: "bg-emerald-600",
@@ -3198,9 +3199,10 @@ function corAcuracidadeInventario(
       ) : (
         painel && (
           <>
+            <AcuracidadeInventarioPanel painel={painel} />
             <div className="grid gap-3 sm:grid-cols-2">
               <KpiCard
-                label="Acuracidade por peça"
+                label="Acuracidade ajustada por peça"
                 value={fmtPct(
                   painel.acuraciaPeca
                 )}
@@ -3259,12 +3261,12 @@ function corAcuracidadeInventario(
 
   <span className="flex items-center gap-1.5 text-emerald-700">
     <span className="h-2.5 w-2.5 rounded-full bg-emerald-600" />
-    95–99,9%
+    97–99,9%
   </span>
 
   <span className="flex items-center gap-1.5 text-lime-700">
     <span className="h-2.5 w-2.5 rounded-full bg-lime-600" />
-    80–94,9%
+    80–96,9%
   </span>
 
   <span className="flex items-center gap-1.5 text-amber-700">

@@ -1,3 +1,4 @@
+import InventarioGeralPanel from '../../components/assurant/InventarioGeralPanel.jsx';
 import {
   useEffect,
   useMemo,
@@ -881,6 +882,7 @@ const andarResumo =
 
   return (
     <div className="space-y-5">
+      <details><summary className="mb-3 cursor-pointer text-sm font-bold text-violet-700">Inventário geral · saldos, reservas e divergências</summary><InventarioGeralPanel /></details>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-lg font-black text-slate-900">

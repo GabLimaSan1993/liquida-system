@@ -53,7 +53,7 @@ export function AuthProvider({ children }) {
     if (tela === "/chamados/gestao") return profile.id === "b517d70a-56be-4b4f-8b9e-a03c769dd3c3" && profile.telas_permitidas?.includes(tela) === true && profile.telas_permitidas?.includes("/chamados") === true;
     if (tela === "/chamados") return profile.telas_permitidas?.includes(tela) === true;
     if (tela === "/v2/linha-branca" || tela.startsWith("/v2/linha-branca/")) return hasLinhaBrancaAccess(profile, tela);
-    if (["/v2/assurant/gestao/producao", "/v2/assurant/b2c/validacao-meli", "/v2/assurant/gestao/esteira", "/v2/assurant/gestao/fechamento-lojas", "/v2/assurant/gestao/relatorio-estoque"].includes(tela)) return profile.telas_permitidas?.includes(tela) === true;
+    if (["/v2/assurant/b2c/baixas", "/v2/assurant/b2c/baixas/aprovar", "/v2/assurant/gestao/producao", "/v2/assurant/b2c/validacao-meli", "/v2/assurant/gestao/esteira", "/v2/assurant/gestao/fechamento-lojas", "/v2/assurant/gestao/relatorio-estoque"].includes(tela)) return profile.telas_permitidas?.includes(tela) === true;
     if (profile.is_master) return true;
     return profile.telas_permitidas?.includes(tela);
   }

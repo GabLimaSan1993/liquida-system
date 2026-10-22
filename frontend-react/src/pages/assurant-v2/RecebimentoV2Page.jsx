@@ -1,3 +1,4 @@
+import CorreiosPanel from '../../components/assurant/CorreiosPanel.jsx';
 import { useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
@@ -322,7 +323,7 @@ function TelaLista({
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <span className="inline-flex rounded-lg bg-violet-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-violet-700">
-                      {carga.transportadora}
+                      {carga.transportadora}{carga.codigo_rastreio&&` · ${carga.codigo_rastreio}`}
                     </span>
 
                     <div className="mt-3 text-sm font-black text-slate-800">
@@ -428,6 +429,7 @@ function TelaCarga({
     setTransportadora,
   ] = useState("");
 
+  const [rastreio,setRastreio] = useState('');
   const [motorista, setMotorista] =
     useState("");
 
@@ -504,6 +506,7 @@ function TelaCarga({
         await criarRecebimento(
           {
             transportadora,
+            codigo_rastreio: rastreio,
             motorista_nome:
               motorista,
             motorista_cpf: cpf,
@@ -549,6 +552,7 @@ function TelaCarga({
         icon={Truck}
       >
         <div className="space-y-6 p-5">
+          {transportadora==='Correios'&&<label className="block text-xs font-bold">Código do objeto dos Correios<input aria-label="Código do objeto dos Correios" required maxLength={13} value={rastreio} onChange={e=>setRastreio(e.target.value.toUpperCase().replace(/\s/g,''))} className="mt-2 block w-full rounded-xl border border-slate-200 px-3 py-2" placeholder="AA123456789BR"/><span className="mt-2 block font-normal text-slate-500">Um objeto por recebimento. Depois, bipe os vouchers contidos nele.</span></label>}
           <div>
             <label className="text-xs font-black uppercase tracking-wide text-slate-500">
               Transportadora
@@ -882,7 +886,7 @@ function TelaBipagem({
 
         <div className="flex flex-1 flex-wrap items-center gap-2">
           <span className="rounded-lg bg-violet-50 px-2.5 py-1 text-xs font-bold text-violet-700">
-            {recebimento.transportadora}
+            {recebimento.transportadora}{recebimento.codigo_rastreio&&` · ${recebimento.codigo_rastreio}`}
           </span>
 
           {recebimento.motorista_nome && (
@@ -1501,6 +1505,7 @@ export default function RecebimentoV2Page() {
   return (
     <div className="mx-auto max-w-[1680px] space-y-6">
       <PageHeader etapa={etapa} />
+      <CorreiosPanel />
 
       {carregandoCarga ? (
         <div className="flex h-48 items-center justify-center">

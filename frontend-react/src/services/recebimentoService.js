@@ -5,17 +5,20 @@ import { validarVoucherRecebimento } from "./voucherRecebimento.js";
 // RECEBIMENTO YBV — carga, bipagem de vouchers e romaneio
 // ══════════════════════════════════════════════════════════
 
-const TRANSPORTADORAS = ["DHL", "Safe", "ViCargo"];
+const TRANSPORTADORAS = ["DHL", "Safe", "ViCargo", "Correios"];
 
 // ── Criar a carga (tela 1) ──
-export async function criarRecebimento({ transportadora, motorista_nome, motorista_cpf, placa, lacres }, userId, userNome) {
+export async function criarRecebimento({ transportadora, motorista_nome, motorista_cpf, placa, lacres, codigo_rastreio }, userId, userNome) {
   if (!TRANSPORTADORAS.includes(transportadora)) {
     return { ok: false, erro: "Selecione uma transportadora válida." };
   }
+  const rastreio=String(codigo_rastreio||'').trim().toUpperCase();
+  if(transportadora==='Correios'&&!/^[A-Z]{2}[0-9]{9}[A-Z]{2}$/.test(rastreio)) return {ok:false,erro:'Informe um código de objeto dos Correios válido (13 caracteres).'};
   const { data, error } = await supabase
     .from("recebimentos")
     .insert({
       transportadora,
+      codigo_rastreio: transportadora==='Correios'?rastreio:null,
       motorista_nome:    motorista_nome?.trim() || null,
       motorista_cpf:     motorista_cpf?.trim() || null,
       placa:             placa?.trim().toUpperCase() || null,
@@ -195,7 +198,7 @@ export async function buscarRomaneio(recebimentoId) {
 export async function listarRecebimentos(limite = 30) {
   const { data, error } = await supabase
     .from("recebimentos")
-    .select("id, transportadora, motorista_nome, placa, status, iniciado_em, concluido_em, total_vouchers, iniciado_por_nome")
+    .select("id, transportadora, codigo_rastreio, motorista_nome, placa, status, iniciado_em, concluido_em, total_vouchers, iniciado_por_nome")
     .order("iniciado_em", { ascending: false })
     .limit(limite);
   if (error) return [];
@@ -207,7 +210,7 @@ export async function listarRecebimentos(limite = 30) {
 export async function listarEmAndamento() {
   const { data, error } = await supabase
     .from("recebimentos")
-    .select("id, transportadora, motorista_nome, placa, lacres, status, iniciado_em, total_vouchers, iniciado_por, iniciado_por_nome")
+    .select("id, transportadora, codigo_rastreio, motorista_nome, placa, lacres, status, iniciado_em, total_vouchers, iniciado_por, iniciado_por_nome")
     .eq("status", "em_andamento")
     .order("iniciado_em", { ascending: false });
   if (error) return [];

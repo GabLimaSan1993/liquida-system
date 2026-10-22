@@ -1,3 +1,4 @@
+import BaixasManuaisB2CV2Page from './pages/assurant-v2/BaixasManuaisB2CV2Page.jsx';
 import UploadAgingLinhaBrancaPage from "./pages/linha-branca-v2/UploadAgingLinhaBrancaPage.jsx";
 import DivergenciasImeiV2Page from "./pages/assurant-v2/DivergenciasImeiV2Page.jsx";
 import ProducaoEsteiraV2Page from './pages/assurant-v2/ProducaoEsteiraV2Page.jsx';
@@ -699,6 +700,8 @@ export default function App() {
           }
         />
 
+
+        <Route path="b2c/baixas" element={<LiquidaOnlyRoute tela="/v2/assurant/b2c/baixas"><BaixasManuaisB2CV2Page /></LiquidaOnlyRoute>} />
 
         {/* Dados */}
 
