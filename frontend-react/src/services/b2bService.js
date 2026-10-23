@@ -341,7 +341,8 @@ export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
   const { data: pedido, error: errPedido } = await supabase.from("b2b_pedidos").select("*").eq("id", pedidoId).single();
   if (errPedido || !pedido) throw new Error(errPedido?.message || "Pedido não encontrado.");
   const { data: clienteData } = await supabase.from("b2b_clientes").select("cnpj").eq("nome", pedido.cliente).single();
-  const cnpj = clienteData?.cnpj || "";
+  // Prioriza o CNPJ informado no upload; pedidos antigos usam o cadastro do cliente.
+  const cnpj = String(pedido.cnpj_agregado || clienteData?.cnpj || "");
 
   const { data: novaExportacao, error: errExp } = await supabase.from("b2b_exportacoes")
     .insert({ pedido_id: pedidoId, exportado_por: userId, nome_usuario: nomeUsuario, total_itens: itensBipados.length })
@@ -360,6 +361,7 @@ export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
     "LOTE":      pedido.lote,
     "CLIENTE":   pedido.cliente,
     "CNPJ":      cnpj,
+    "CONDIÇÃO DE PAGAMENTO": pedido.condicao_pagamento || "",
     "VOUCHER":   i.voucher,
     "IMEI":      i.imei,
     "MODELO":    i.modelo,
