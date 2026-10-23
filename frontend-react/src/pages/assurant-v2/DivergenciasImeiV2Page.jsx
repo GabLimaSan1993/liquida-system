@@ -2,11 +2,14 @@ import { useEffect, useState } from "react";
 import {
   listarDivergencias,
   decidirDivergencia,
+  enviarEmailDivergencia,
   etiquetaDivergencia,
 } from "../../services/divergenciasImeiService";
 const PROBLEMAS = { nao_liga: "Aparelhos não ligam", imei_divergente: "IMEI divergente", sem_ordem: "Sem Ordem" };
 const problema = c => c.tipo_problema || "imei_divergente";
 const hora = (x) => (x ? new Date(x).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "—");
+const envioEmAndamento = c => c.email_validado_em && ["pendente", "enviando"].includes(c.email_status)
+  && Date.now() - new Date(c.email_atualizado_em).getTime() < (c.email_status === "enviando" ? 300000 : 120000);
 export default function DivergenciasImeiV2Page() {
   const [casos, setCasos] = useState([]),
     [filtro, setFiltro] = useState("pendente"),
@@ -18,12 +21,17 @@ export default function DivergenciasImeiV2Page() {
     [caso, setCaso] = useState(null),
     [decisao, setDecisao] = useState(""),
     [diretriz, setDiretriz] = useState("");
+  const [podeEnviarEmail, setPodeEnviarEmail] = useState(false);
+  const [casoEmail, setCasoEmail] = useState(null);
+  const [conferido, setConferido] = useState(false);
+  const [enviandoEmail, setEnviandoEmail] = useState(false);
   async function carregar() {
     setLoading(true);
     setErro("");
     try {
       const r = await listarDivergencias();
       setCasos(r.casos || []);
+      setPodeEnviarEmail(r.pode_enviar_email === true);
     } catch (e) {
       setErro(e.message);
     } finally {
@@ -36,6 +44,7 @@ export default function DivergenciasImeiV2Page() {
       .then((r) => {
         if (ativo) {
           setCasos(r.casos || []);
+          setPodeEnviarEmail(r.pode_enviar_email === true);
         }
       })
       .catch((e) => {
@@ -48,6 +57,25 @@ export default function DivergenciasImeiV2Page() {
       ativo = false;
     };
   }, []);
+  async function enviarEmail(e) {
+    e.preventDefault();
+    if (!conferido || enviandoEmail) return;
+    setEnviandoEmail(true);
+    setErro("");
+    setAviso("");
+    try {
+      const r = await enviarEmailDivergencia(casoEmail.id, conferido);
+      setCasoEmail(null);
+      setAviso(r.ja_enviado ? "O e-mail deste caso já foi enviado." : r.em_andamento
+        ? "O envio deste caso já está em andamento. Atualize para consultar o resultado."
+        : "Divergência validada. Envio do e-mail solicitado; atualize para acompanhar a confirmação.");
+      await carregar();
+    } catch (e) {
+      setErro(e.message);
+    } finally {
+      setEnviandoEmail(false);
+    }
+  }
   async function decidir(e) {
     e.preventDefault();
     setLoading(true);
@@ -79,7 +107,7 @@ export default function DivergenciasImeiV2Page() {
             Divergências — Assurant
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            Aparelhos que não ligam, com IMEI divergente ou Sem Ordem, aguardando diretriz da Assurant.
+            Aparelhos que não ligam, com IMEI divergente ou Sem Ordem. Validação do Leandro antes do envio à Assurant.
           </p>
         </div>
         <button
@@ -117,7 +145,7 @@ export default function DivergenciasImeiV2Page() {
         </div>
       </div>
       <p className="rounded-xl border bg-white p-4 text-sm text-slate-600">
-        O sistema envia os avisos automaticamente para Luiz Affonso, Edyelves Bezerra e Alex Feliciano, com Jhonatan Nascimento e Gabriel Lima em cópia.
+        Cada caso aguarda a conferência do Leandro. Após validar, use o botão de envio do caso para avisar Luiz Affonso, Edyelves Bezerra e Alex Feliciano, com Jhonatan Nascimento e Gabriel Lima em cópia.
       </p>
       <div className="flex flex-wrap gap-3">
         <label className="flex-1 text-xs font-bold">
@@ -157,13 +185,27 @@ export default function DivergenciasImeiV2Page() {
                   Registrado por {c.criado_por_nome || c.criado_por} em {hora(c.criado_em)}
                 </p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => etiquetaDivergencia(c)}
                   className="rounded-xl border p-3 text-xs font-bold"
                 >
                   Etiqueta
                 </button>
+                {podeEnviarEmail && c.status === "pendente" && !c.email_enviado_em && (
+                  <button
+                    disabled={loading || enviandoEmail || envioEmAndamento(c)}
+                    onClick={() => {
+                      setCasoEmail(c);
+                      setConferido(false);
+                      setErro("");
+                      setAviso("");
+                    }}
+                    className="rounded-xl bg-emerald-700 p-3 text-xs font-bold text-white disabled:opacity-40"
+                  >
+                    {envioEmAndamento(c) ? "Envio em andamento" : c.email_validado_em ? "Tentar envio novamente" : "Validar e enviar e-mail"}
+                  </button>
+                )}
                 {c.status === "pendente" && (
                   <button
                     onClick={() => {
@@ -196,8 +238,13 @@ export default function DivergenciasImeiV2Page() {
               Aviso:{" "}
               {c.email_enviado_em
                 ? `enviado em ${hora(c.email_enviado_em)}`
-                : c.email_erro || "Pendente de envio"}
+                : c.email_erro || (c.email_validado_em ? "Envio solicitado" : "Aguardando validação do Leandro")}
             </p>
+            {c.email_validado_em && (
+              <p className="mt-1 text-xs text-slate-500">
+                Validado por {c.email_validado_por_nome || "Gestão"} em {hora(c.email_validado_em)}
+              </p>
+            )}
             {c.diretriz && (
               <div className="mt-3 rounded-xl bg-slate-50 p-3 text-sm">
                 <strong>{c.status === "reconferencia" ? "Motivo do retorno:" : "Diretriz Assurant:"}</strong> {c.diretriz}
@@ -214,6 +261,31 @@ export default function DivergenciasImeiV2Page() {
           </p>
         )}
       </div>
+      {casoEmail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+          <form onSubmit={enviarEmail} role="dialog" aria-modal="true" aria-labelledby="email-titulo"
+            className="w-full max-w-lg space-y-4 rounded-2xl bg-white p-6">
+            <h2 id="email-titulo" className="text-lg font-black">Validar e enviar e-mail — {casoEmail.voucher}</h2>
+            <p className="text-sm text-slate-600">Confira o aparelho e os dados registrados antes de confirmar a divergência para a Assurant.</p>
+            <dl className="space-y-2 rounded-xl bg-slate-50 p-4 text-sm">
+              {[["Problema", PROBLEMAS[problema(casoEmail)]], ["Modelo", casoEmail.modelo], ["Contrato", casoEmail.imei_esperado], ["Bipado 1", casoEmail.imei1], ["Bipado 2", casoEmail.imei2]].map(([titulo, valor]) => (
+                <div key={titulo} className="flex justify-between gap-3"><dt className="font-bold">{titulo}</dt><dd className="break-all text-right">{valor || "Não informado"}</dd></div>
+              ))}
+            </dl>
+            <label className="flex items-start gap-3 text-sm">
+              <input type="checkbox" required checked={conferido} onChange={e => setConferido(e.target.checked)} className="mt-1" />
+              Conferi o aparelho e confirmo que a divergência é real, sem erro de digitação ou da operação.
+            </label>
+            {erro && <p role="alert" className="text-sm text-rose-700">{erro}</p>}
+            <div className="flex justify-end gap-3">
+              <button type="button" disabled={enviandoEmail} onClick={() => setCasoEmail(null)} className="rounded-xl border px-4 py-3">Cancelar</button>
+              <button disabled={!conferido || enviandoEmail} className="rounded-xl bg-emerald-700 px-4 py-3 font-bold text-white disabled:opacity-40">
+                {enviandoEmail ? "Solicitando envio…" : "Confirmar divergência e enviar e-mail"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
       {caso && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
           <form

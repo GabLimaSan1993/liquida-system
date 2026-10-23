@@ -30,6 +30,14 @@ export async function listarDivergencias() {
   if (error) throw new Error(error.message);
   return data;
 }
+export async function enviarEmailDivergencia(caso, confirmada) {
+  const { data, error } = await supabase.rpc("assurant_divergencia_enviar_email", {
+    p_caso: caso,
+    p_confirmada: confirmada === true,
+  });
+  if (error) throw new Error(error.message);
+  return data;
+}
 export async function decidirDivergencia(caso, decisao, diretriz) {
   const { data, error } = await supabase.rpc("assurant_divergencias_decidir", {
     p_caso: caso,
