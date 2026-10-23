@@ -29,7 +29,7 @@ const importado=os=>/import|carga|aging/i.test(os.criado_por||'');
 export function areaLinhaBranca(categoria) {
  const c=normalizar(categoria);
  if(/lav|secadora/.test(c))return 'Lavadoras';
- if(/refriger|freezer|adega|cervejeira|frigobar|expositor/.test(c))return 'Refrigeração';
+ if(/refriger|geladeira|freezer|adega|cervejeira|frigobar|expositor/.test(c))return 'Refrigeração';
  if(/ar.condicionado|climatiza/.test(c))return 'Climatização';
  return 'Outros / Portáteis';
 }
@@ -56,14 +56,19 @@ export function montarEventosBranca(base) {
   const referencia=referenciaRecebimentoBranca(os);if(!referencia)return;
   add(os,'Recebimento',referencia.data,importado(os)?null:os.criado_por,'recebimento','Referência: abertura da OS',null,'Recebimento',referencia.horaConhecida);
  });
- (base.triagens||[]).forEach(t=>add(t,'Triagem',t.created_at,t.triado_por,'triagem',t.precisa_reparo?'reparo':'aprovado'));
- (base.triagensLegado||[]).forEach(t=>add(t,'Triagem',t.dt_triagem||t.created_at,t.triado_por,'triagem_legado'));
- (base.execucoes||[]).filter(t=>t.dt_fim).forEach(t=>add(t,'Reparo',t.dt_fim,t.tecnico,'reparo',t.condenado?'condenado':t.aprovado===false?'reprovado':'concluido',t.dt_inicio?Math.max(0,(Date.parse(t.dt_fim)-Date.parse(t.dt_inicio))/60000):null,t.area_execucao||'Reparo'));
  const ciclos=base.ciclos||[];
- ciclos.filter(c=>c.concluido_em && (c.etapa_teste==='pos_reparo'||(Number(c.numero_ciclo)===2&&c.resultado==='aprovado'))).forEach(c=>{
+ const falhaPosReparo=t=>ciclos.some(c=>String(c.os_id)===String(t.os_id)&&c.etapa_teste==='pos_reparo'&&c.status==='enviado_reparo'&&c.concluido_em&&Math.abs(Date.parse(c.concluido_em)-Date.parse(t.created_at))<=120000);
+ (base.triagens||[]).forEach(t=>add(t,falhaPosReparo(t)?'Bancada de Testes':'Triagem',t.created_at,t.triado_por,'triagem',falhaPosReparo(t)?'reprovado':t.precisa_reparo===true?'reparo':t.precisa_reparo===false?'aprovado':'sem_resultado'));
+ (base.triagensLegado||[]).forEach(t=>{const destino=normalizar(t.destino_pos_triagem);add(t,'Triagem',t.dt_triagem||t.created_at,t.triado_por,'triagem_legado',/reparo/.test(destino)?'reparo':/scrap|conden/.test(destino)?'condenado':/limpeza|higien|aprov/.test(destino)?'aprovado':'sem_resultado');});
+ (base.execucoes||[]).filter(t=>t.dt_fim).forEach(t=>{
+  const area=normalizar(t.area_execucao),etapa=/triagem/.test(area)?'Triagem':/bancada|teste final/.test(area)?'Bancada de Testes':/limpeza|higien/.test(area)?'Higienização':/qualidade/.test(area)?'Qualidade':'Reparo';
+  add(t,etapa,t.dt_fim,t.tecnico,'reparo',t.condenado?'condenado':t.aprovado===false?'reprovado':'concluido',t.dt_inicio?Math.max(0,(Date.parse(t.dt_fim)-Date.parse(t.dt_inicio))/60000):null,etapa==='Reparo'?(t.area_execucao||'Reparo'):etapa);
+ });
+ ciclos.filter(c=>c.concluido_em && (c.etapa_teste==='pos_reparo'||c.status==='enviado_reparo'||c.status==='reprovado'||(Number(c.numero_ciclo)===2&&c.resultado==='aprovado'))).forEach(c=>{
   const anteriores=c.etapa_teste==='triagem'?ciclos.filter(a=>String(a.os_id)===String(c.os_id)&&a.etapa_teste==='triagem'&&Number(a.numero_ciclo)===1&&a.concluido_em&&a.concluido_em<=c.iniciado_em).sort((a,b)=>b.concluido_em.localeCompare(a.concluido_em)):[];
   const segundos=Number(c.tempo_executado_segundos||0)+Number(anteriores[0]?.tempo_executado_segundos||0);
-  add(c,c.etapa_teste==='triagem'?'Triagem':'Bancada de Testes',c.concluido_em,c.operador,'ciclo',c.resultado||'concluido',segundos/60);
+  const resultado=c.status==='enviado_reparo'?(c.etapa_teste==='triagem'?'reparo':'reprovado'):c.status==='reprovado'?'condenado':c.resultado||'concluido';
+  add(c,c.etapa_teste==='triagem'?'Triagem':'Bancada de Testes',c.concluido_em,c.operador,'ciclo',resultado,segundos/60);
  });
  const testeComCiclo=(osId,data)=>ciclos.some(c=>String(c.os_id)===String(osId)&&c.etapa_teste==='pos_reparo'&&c.concluido_em&&c.concluido_em<=data&& !ciclos.some(proximo=>String(proximo.os_id)===String(osId)&&proximo.etapa_teste==='pos_reparo'&&proximo.iniciado_em>c.iniciado_em&&proximo.iniciado_em<=data));
  (base.eventos||[]).filter(e=>e.etapa!=='Bancada de Testes'||!testeComCiclo(e.os_id,e.realizado_em)).forEach(e=>add(e,e.etapa,e.realizado_em,e.tecnico,'evento',e.resultado));
@@ -118,4 +123,42 @@ export function agruparProdutosBranca(resumo,campo) {
  resumo.eventos.forEach(e=>{const g=obter(e.os);g.total++;g.os.add(e.os_id);if(e.etapa==='Qualidade'&&e.resultado==='aprovado')g.concluidas.add(e.os_id);});
  resumo.consumos.forEach(c=>{const g=obter(c.os);if(c.total===null)g.semCusto++;else g.custo+=c.total;});
  return [...grupos.values()].map(g=>({...g,os:g.os.size,concluidas:g.concluidas.size})).sort((a,b)=>b.total-a.total||b.custo-a.custo);
+}
+
+// Equipamentos únicos para os destinos; atividades para comparar a produção por pessoa.
+export function resumirPainelBranca(resumo) {
+ const operacionais=resumo.eventos.filter(e=>e.etapa!=='Recebimento');
+ const destinos=new Map(),prioridade={sem_resultado:0,aprovado:1,condenado:2,reparo:3};
+ for(const e of operacionais.filter(e=>e.etapa==='Triagem')) {
+  const resultado=Object.hasOwn(prioridade,e.resultado)?e.resultado:'sem_resultado';
+  const chave=String(e.os_id),anterior=destinos.get(chave);
+  if(!anterior||prioridade[resultado]>prioridade[anterior])destinos.set(chave,resultado);
+ }
+ const distribuicao=[
+  {id:'reparo',nome:'Encaminhados para reparo',cor:'#f59e0b'},
+  {id:'aprovado',nome:'Aprovados sem reparo',cor:'#10b981'},
+  {id:'condenado',nome:'Condenados / scrap',cor:'#f43f5e'},
+  {id:'sem_resultado',nome:'Destino não informado',cor:'#94a3b8'},
+ ].map(d=>({...d,total:[...destinos.values()].filter(v=>v===d.id).length}));
+ const pessoas=new Map(),custos=new Map(resumo.ranking.map(r=>[normalizar(r.tecnico),r.custo]));
+ for(const e of operacionais) {
+  const chave=normalizar(e.tecnico);
+  if(!chave||chave==='sem tecnico identificado')continue;
+  if(!pessoas.has(chave))pessoas.set(chave,{tecnico:e.tecnico,total:0,os:new Set(),dias:new Set(),etapas:{},retrabalhos:0,minutos:[],custo:custos.get(chave)||0});
+  const pessoa=pessoas.get(chave);pessoa.total++;pessoa.os.add(String(e.os_id));
+  pessoa.dias.add(e.dia);pessoa.retrabalhos+=Number(e.retrabalho);if(e.minutos!==null)pessoa.minutos.push(e.minutos);
+  pessoa.etapas[e.etapa]=(pessoa.etapas[e.etapa]||0)+1;
+ }
+ const ranking=[...pessoas.values()].map(p=>({...p,os:p.os.size,dias:p.dias.size,media:p.dias.size?p.total/p.dias.size:0,mediaMinutos:media(p.minutos)})).sort((a,b)=>b.total-a.total||a.tecnico.localeCompare(b.tecnico,'pt-BR'));
+ const unicas=etapa=>new Set(operacionais.filter(e=>e.etapa===etapa).map(e=>String(e.os_id))).size;
+ const categorias=['Lavadoras','Refrigeração','Climatização','Outros / Portáteis'].map(nome=>{
+  const eventos=operacionais.filter(e=>areaLinhaBranca(e.os.categoria)===nome);
+  return {nome,equipamentos:new Set(eventos.map(e=>String(e.os_id))).size,triados:new Set(eventos.filter(e=>e.etapa==='Triagem').map(e=>String(e.os_id))).size,atividades:eventos.length};
+ });
+ const triados=destinos.size,reparo=distribuicao[0].total;
+ return {triados,reparo,taxaReparo:triados?reparo/triados*100:null,distribuicao,ranking,categorias,
+  reparados:new Set(operacionais.filter(e=>e.etapa==='Reparo'&&['concluido','aprovado'].includes(e.resultado)).map(e=>String(e.os_id))).size,
+  higienizados:unicas('Higienização'),finalizados:resumo.concluidas.length,
+  equipamentos:new Set(operacionais.map(e=>String(e.os_id))).size,atividades:operacionais.length,
+  semTecnico:operacionais.filter(e=>!normalizar(e.tecnico)||normalizar(e.tecnico)==='sem tecnico identificado').length};
 }

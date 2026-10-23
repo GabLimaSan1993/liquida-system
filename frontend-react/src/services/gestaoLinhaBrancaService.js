@@ -14,9 +14,9 @@ export async function fetchGestaoLinhaBranca(signal) {
  const resultados=await Promise.all([
   carregarTudo('ordens_servico',campos,signal,true),
   carregarTudo('linha_branca_triagens','id,os_id,triado_por,precisa_reparo,created_at',signal),
-  carregarTudo('ordens_servico_triagem','id,os_id,triado_por,dt_triagem,created_at',signal),
+  carregarTudo('ordens_servico_triagem','id,os_id,triado_por,dt_triagem,created_at,destino_pos_triagem',signal),
   carregarTudo('ordens_servico_execucao','id,os_id,area_execucao,tecnico,dt_inicio,dt_fim,peca_trocada,descricao_peca_trocada,aprovado,condenado',signal),
-  carregarTudo('linha_branca_lavadora_ciclos','id,os_id,etapa_teste,numero_ciclo,resultado,operador,iniciado_em,concluido_em,tempo_executado_segundos',signal),
+  carregarTudo('linha_branca_lavadora_ciclos','id,os_id,etapa_teste,numero_ciclo,status,resultado,operador,iniciado_em,concluido_em,tempo_executado_segundos',signal),
   carregarTudo('ordens_servico_historico','id,os_id,status_anterior,status_novo,etapa_anterior,etapa_nova,responsavel,created_at',signal),
   carregarTudo('linha_branca_producao_eventos','*',signal),
   carregarTudo('linha_branca_pecas_consumos','*',signal),
