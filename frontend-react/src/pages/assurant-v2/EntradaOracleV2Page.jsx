@@ -1,3 +1,4 @@
+import ReparoRetornoPanel from "../../components/ReparoRetornoPanel.jsx";
 import ReparoOperacaoPanel from "../../components/ReparoOperacaoPanel.jsx";
 import DevolucaoOraclePanel from "../../components/DevolucaoOraclePanel.jsx";
 import {
@@ -1898,7 +1899,7 @@ export default function EntradaOracleV2Page() {
         </div>
       </div>
 
-      {aba === "reparo" && <ReparoOperacaoPanel modo="oracle" />}
+      {aba === "reparo" && <><ReparoOperacaoPanel modo="oracle" /><ReparoRetornoPanel modo="oracle" /></>}
       {aba ===
         "entrada" && (
         <TabEntrada />
