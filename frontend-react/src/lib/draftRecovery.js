@@ -62,7 +62,7 @@ function record(event) {
 }
 
 function restore(el, fields) {
-  if (!eligible(el)) return;
+  if (!eligible(el) || el.closest('[aria-hidden="true"]')) return;
   const value = fields[fingerprint(el)];
   if (value === undefined || el.dataset.liquidaDraftRestored === currentRoute) return;
   el.dataset.liquidaDraftRestored = currentRoute;
