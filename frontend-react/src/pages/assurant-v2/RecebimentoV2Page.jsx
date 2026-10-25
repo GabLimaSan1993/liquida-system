@@ -1461,6 +1461,28 @@ function TelaRomaneio({
   );
 }
 
+
+function RetornoVoucherIncorretoPanel() {
+  const [itens,setItens] = useState([]);
+  useEffect(() => {
+    let ativo=true;
+    import("../../lib/supabase.js").then(({supabase})=>supabase.rpc("assurant_vouchers_retorno_recebimento"))
+      .then(({data,error})=>{if(ativo && !error)setItens(data || []);})
+      .catch(()=>{});
+    return ()=>{ativo=false;};
+  },[]);
+  if(!itens.length) return null;
+  return <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+    <h3 className="text-sm font-black text-amber-900">Vouchers corrigidos — aguardando novo recebimento</h3>
+    <p className="mt-1 text-xs text-amber-800">Os vouchers abaixo foram desvinculados de uma triagem por erro de identificação. O recebimento original continua no histórico. Realize uma nova bipagem quando o voucher retornar à operação.</p>
+    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+      {itens.map(x=><div key={x.id} className="rounded-xl bg-white p-3 text-xs">
+        <strong>{x.voucher_incorreto}</strong><span className="text-slate-500"> → corrigido para {x.voucher_corrigido}</span>
+      </div>)}
+    </div>
+  </section>;
+}
+
 export default function RecebimentoV2Page() {
   const [etapa, setEtapa] =
     useState("lista");
@@ -1505,6 +1527,7 @@ export default function RecebimentoV2Page() {
   return (
     <div className="mx-auto max-w-[1680px] space-y-6">
       <PageHeader etapa={etapa} />
+      {etapa === "lista" && <RetornoVoucherIncorretoPanel />}
       <CorreiosPanel />
 
       {carregandoCarga ? (
