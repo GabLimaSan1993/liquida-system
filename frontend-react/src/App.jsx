@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import BaixasManuaisB2CV2Page from './pages/assurant-v2/BaixasManuaisB2CV2Page.jsx';
 import UploadAgingLinhaBrancaPage from "./pages/linha-branca-v2/UploadAgingLinhaBrancaPage.jsx";
 import DivergenciasImeiV2Page from "./pages/assurant-v2/DivergenciasImeiV2Page.jsx";
@@ -9,6 +10,7 @@ import {
   Navigate,
   Route,
   Routes,
+  useLocation,
 } from "react-router-dom";
 
 import {
@@ -311,8 +313,34 @@ export default function App() {
   }
 
 
-  return (
-    <Routes>
+  return <PersistentRoutes userId={user?.id} />;
+}
+
+// Mantém cada rota visitada montada durante a sessão para preservar
+// formulários, filtros e tarefas ao alternar entre os menus.
+function PersistentRoutes({ userId }) {
+  const location = useLocation();
+  const [visited, setVisited] = useState(() => [location.pathname + location.search]);
+  const previousUser = useRef(userId);
+
+  useEffect(() => {
+    if (previousUser.current !== userId) {
+      previousUser.current = userId;
+      setVisited([location.pathname + location.search]);
+      return;
+    }
+    const route = location.pathname + location.search;
+    setVisited((items) => items.includes(route) ? items : [...items, route]);
+  }, [location.pathname, location.search, userId]);
+
+  const active = location.pathname + location.search;
+  const pages = visited.includes(active) ? visited : [...visited, active];
+  return pages.map((route) => {
+    const url = new URL(route, window.location.origin);
+    const visible = route === active;
+    return (
+      <div key={userId + ':' + route} style={visible ? undefined : { display: "none" }} aria-hidden={!visible}>
+        <Routes location={{ ...location, pathname: url.pathname, search: url.search }}>
 
       {/* =====================================================
           LOGIN
@@ -1230,6 +1258,8 @@ export default function App() {
 
       </Route>
 
-    </Routes>
-  );
+        </Routes>
+      </div>
+    );
+  });
 }
