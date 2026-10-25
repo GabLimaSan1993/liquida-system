@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   listarDivergencias,
   decidirDivergencia,
+  regularizarDivergencia,
   enviarEmailDivergencia,
   etiquetaDivergencia,
 } from "../../services/divergenciasImeiService";
@@ -21,6 +22,9 @@ export default function DivergenciasImeiV2Page() {
     [caso, setCaso] = useState(null),
     [decisao, setDecisao] = useState(""),
     [diretriz, setDiretriz] = useState("");
+  const [correcao, setCorrecao] = useState(null);
+  const [novoValor, setNovoValor] = useState("");
+  const [justificativa, setJustificativa] = useState("");
   const [podeEnviarEmail, setPodeEnviarEmail] = useState(false);
   const [casoEmail, setCasoEmail] = useState(null);
   const [conferido, setConferido] = useState(false);
@@ -57,6 +61,17 @@ export default function DivergenciasImeiV2Page() {
       ativo = false;
     };
   }, []);
+  async function salvarCorrecao(e) {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await regularizarDivergencia(correcao.id, correcao.acao, novoValor, justificativa);
+      setCorrecao(null);
+      setAviso("Correção registrada. Produto encaminhado à triagem funcional.");
+      await carregar();
+    } catch (e) { setErro(e.message); }
+    finally { setLoading(false); }
+  }
   async function enviarEmail(e) {
     e.preventDefault();
     if (!conferido || enviandoEmail) return;
@@ -206,6 +221,8 @@ export default function DivergenciasImeiV2Page() {
                     {envioEmAndamento(c) ? "Envio em andamento" : c.email_validado_em ? "Tentar envio novamente" : "Validar e enviar e-mail"}
                   </button>
                 )}
+                {c.status === "pendente" && <button onClick={() => {setCorrecao({...c,acao:"voucher"});setNovoValor("");setJustificativa("");}} className="rounded-xl border p-3 text-xs font-bold">Corrigir voucher</button>}
+                {c.status === "pendente" && problema(c)==="imei_divergente" && <button onClick={() => {setCorrecao({...c,acao:"imei"});setNovoValor(c.imei1||"");setJustificativa("");}} className="rounded-xl border p-3 text-xs font-bold">Corrigir IMEI</button>}
                 {c.status === "pendente" && (
                   <button
                     onClick={() => {
@@ -261,6 +278,14 @@ export default function DivergenciasImeiV2Page() {
           </p>
         )}
       </div>
+      {correcao && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <form onSubmit={salvarCorrecao} className="w-full max-w-lg space-y-4 rounded-xl bg-white p-6">
+          <h2 className="font-black">Regularizar {correcao.acao==="voucher"?"voucher":"IMEI"} — {correcao.voucher}</h2>
+          <input aria-label="Identificador correto" required value={novoValor} onChange={e=>setNovoValor(e.target.value)} placeholder="Identificador correto" className="w-full rounded border p-3" />
+          <textarea aria-label="Justificativa" required minLength={8} value={justificativa} onChange={e=>setJustificativa(e.target.value)} placeholder="Justificativa da correção" className="w-full rounded border p-3" />
+          <div className="flex gap-3"><button type="button" onClick={()=>setCorrecao(null)}>Cancelar</button><button disabled={loading} className="rounded bg-violet-700 px-4 py-2 text-white">Confirmar correção</button></div>
+        </form>
+      </div>}
       {casoEmail && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
           <form onSubmit={enviarEmail} role="dialog" aria-modal="true" aria-labelledby="email-titulo"
