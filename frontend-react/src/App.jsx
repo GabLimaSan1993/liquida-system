@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { updateDraftRoute } from "./lib/draftRecovery.js";
 import BaixasManuaisB2CV2Page from './pages/assurant-v2/BaixasManuaisB2CV2Page.jsx';
 import UploadAgingLinhaBrancaPage from "./pages/linha-branca-v2/UploadAgingLinhaBrancaPage.jsx";
 import DivergenciasImeiV2Page from "./pages/assurant-v2/DivergenciasImeiV2Page.jsx";
@@ -333,13 +334,17 @@ function PersistentRoutes({ userId }) {
     setVisited((items) => items.includes(route) ? items : [...items, route]);
   }, [location.pathname, location.search, userId]);
 
+  useEffect(() => {
+    updateDraftRoute(location.pathname + location.search, userId);
+  }, [location.pathname, location.search, userId]);
+
   const active = location.pathname + location.search;
   const pages = visited.includes(active) ? visited : [...visited, active];
   return pages.map((route) => {
     const url = new URL(route, window.location.origin);
     const visible = route === active;
     return (
-      <div key={userId + ':' + route} style={visible ? undefined : { display: "none" }} aria-hidden={!visible}>
+      <div data-liquida-route={route} key={userId + ':' + route} style={visible ? undefined : { display: "none" }} aria-hidden={!visible}>
         <Routes location={{ ...location, pathname: url.pathname, search: url.search }}>
 
       {/* =====================================================
