@@ -1,4 +1,5 @@
 import ReparoOperacaoPanel from "../../components/ReparoOperacaoPanel.jsx";
+import DevolucaoOraclePanel from "../../components/DevolucaoOraclePanel.jsx";
 import {
   useEffect,
   useMemo,
@@ -1910,7 +1911,7 @@ export default function EntradaOracleV2Page() {
 
       {aba ===
         "devolucao" && (
-        <AbaEmBreve nome="Devolução aguardando RI" />
+        <DevolucaoOraclePanel />
       )}
     </div>
   );
