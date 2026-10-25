@@ -1,3 +1,4 @@
+import ReparoRetornoPanel from "../../components/ReparoRetornoPanel.jsx";
 import {
   useEffect,
   useRef,
@@ -1108,6 +1109,7 @@ export default function ArmazenagemV2Page() {
 
   return (
     <div className="space-y-5">
+      <ReparoRetornoPanel modo="armazenagem" />
       <Processo
         etapa={
           etapaProcesso
