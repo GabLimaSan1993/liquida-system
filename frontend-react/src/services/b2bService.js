@@ -18,6 +18,33 @@ function limparImei(v) {
   return String(v ?? "").trim();
 }
 
+// Somente identificadores numéricos de aparelhos podem ocupar a coluna IMEI.
+// O Excel pode retornar números, strings com separadores ou notação científica.
+function validarImei(v) {
+  if (v === null || v === undefined || v === "") return "";
+  const bruto = String(v).trim().replace(/\\.0$/, "");
+  if (/^\\d+(?:\\.\\d+)?e\\+?\\d+$/i.test(bruto)) {
+    const inteiro = Number(bruto);
+    if (!Number.isSafeInteger(inteiro)) return "";
+    return String(inteiro);
+  }
+  const limpo = bruto.replace(/[\\s.-]/g, "");
+  return /^\\d{14,16}$/.test(limpo) ? limpo : "";
+}
+
+function acharImeiLinha(linha) {
+  const entradas = Object.entries(linha || {});
+  const aliases = ["IMEI", "NUM_IMEI", "IMEI1", "IMEI_1", "IMEI 1", "IMEI PRINCIPAL", "SERIAL/IMEI", "SERIAL_IMEI"];
+  for (const alias of aliases) {
+    const achado = entradas.find(([chave]) => String(chave).trim().toUpperCase() === alias);
+    const imei = validarImei(achado?.[1]);
+    if (imei) return imei;
+  }
+  // Arquivos com cabeçalhos deslocados: só usar campo identificado pelo cabeçalho,
+  // nunca inferir pelo texto de modelo ou escolher número de outra coluna.
+  return "";
+}
+
 // O novo WMS e a unica fonte operacional de endereco. Gaia continua apenas
 // como historico/diagnostico e nunca completa um endereco ausente no WMS.
 async function localizarImeisWms(imeis) {
@@ -66,6 +93,14 @@ export async function importarPedidoB2B(file, userId, extras = {}) {
         const rows = XLSX.utils.sheet_to_json(ws, { defval: null, range: 1 });
         if (!rows.length) throw new Error("Planilha vazia ou formato inválido.");
 
+        const invalidas = rows.map((row, idx) => ({ numero: idx + 3, imei: acharImeiLinha(row) }))
+          .filter(item => !item.imei);
+        if (invalidas.length) {
+          throw new Error(`Importação interrompida: ${invalidas.length} linha(s) sem IMEI numérico válido (14 a 16 dígitos). Linhas: ${invalidas.slice(0, 15).map(x => x.numero).join(", ")}. Confira o cabeçalho/coluna IMEI na planilha. Nenhum pedido foi criado.`);
+        }
+        const repetidos = rows.map(acharImeiLinha).filter((imei, idx, itens) => itens.indexOf(imei) !== idx);
+        if (repetidos.length) throw new Error("Planilha contém IMEIs duplicados. Corrija a origem antes de importar.");
+
         const loteColuna = rows.find(r => r["RESERVA"] || r["LOTE"])?.[("RESERVA")] ||
                            rows.find(r => r["RESERVA"] || r["LOTE"])?.[("LOTE")];
         const loteArquivo = file.name
@@ -98,13 +133,13 @@ export async function importarPedidoB2B(file, userId, extras = {}) {
 
         // IMEIs da planilha, já normalizados (trim) para o match com a triagem
         const imeisLista = rows
-          .map(r => limparImei(r["IMEI"] || r["NUM_IMEI"]))
+          .map(r => acharImeiLinha(r))
           .filter(i => i.length > 5);
 
         const wmsMap = await localizarImeisWms(imeisLista);
 
         const itens = rows.map((r, rowIdx) => {
-          const imei = limparImei(r["IMEI"] || r["NUM_IMEI"]);
+          const imei = acharImeiLinha(r);
           const wms = wmsMap.get(imei) || null;
           let valor = null;
           if (valorIdx >= 0) {
