@@ -58,3 +58,11 @@ export async function registrarNaoLiga(voucher) {
   if (error) throw new Error(error.message);
   return data;
 }
+
+export async function regularizarDivergencia(caso, acao, valor, justificativa) {
+  const { data, error } = await supabase.rpc("assurant_divergencias_regularizar", {
+    p_caso: caso, p_acao: acao, p_valor: valor, p_justificativa: justificativa,
+  });
+  if (error) throw new Error(error.message);
+  return data;
+}
