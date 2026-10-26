@@ -1,5 +1,4 @@
 import React from 'react'
-import { installDraftRecovery } from './lib/draftRecovery.js'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter, Navigate } from 'react-router-dom'
 import './index.css'
@@ -53,5 +52,3 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     </BrowserRouter>
   </React.StrictMode>,
 )
-
-installDraftRecovery();
