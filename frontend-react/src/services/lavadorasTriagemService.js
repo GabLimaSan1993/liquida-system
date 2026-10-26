@@ -928,3 +928,9 @@ export async function aprovarPosReparo(ciclo, operador, observacoes = "") {
   });
   return data;
 }
+
+export async function cadastrarRetornoLojaLavadora(numeroOs) {
+  const { data, error } = await supabase.rpc("linha_branca_cadastrar_retorno_loja", { p_numero_os: String(numeroOs || "").trim() });
+  if (error) throw new Error(error.message);
+  return data;
+}
