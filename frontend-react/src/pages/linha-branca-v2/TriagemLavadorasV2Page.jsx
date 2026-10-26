@@ -353,9 +353,9 @@ export default function TriagemLavadorasV2Page() {
   const linhasValidacao = useMemo(() => {
     if (!selectedOs) return [];
     return [
-      { key: "marca", label: "Marca", sistema: selectedOs.marca, obrigatorio: true },
+      { key: "marca", label: "Marca", sistema: retornoLoja ? validacao.marca : selectedOs.marca, obrigatorio: true },
       { key: "modelo", label: "Modelo", sistema: retornoLoja ? validacao.modelo : selectedOs.modelo, obrigatorio: !retornoLoja },
-      { key: "tensao", label: "Tensão", sistema: selectedOs.voltagem, obrigatorio: true },
+      { key: "tensao", label: "Tensão", sistema: retornoLoja ? validacao.tensao : selectedOs.voltagem, obrigatorio: true },
       { key: "tipo", label: "Tipo", sistema: tipoReferenciaLavadora(selectedOs, referenciaProduto), obrigatorio: true },
       {
         key: "capacidade",
