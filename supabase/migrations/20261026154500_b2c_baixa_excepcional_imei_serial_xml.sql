@@ -118,7 +118,97 @@ begin
      raise exception 'Informe motivo entre 10 e 2000 caracteres';
    end if;
    v_path := p_dados->>'xml_path';
-   if v_path is null or v_path !~ ('^'||auth.uid()::text||'/[a-f0-9-]{36}\\.xml$') then
+   if v_path is null or v_path !~ ('^'||auth.uid()::text||'/[a-f0-9-]{36}[.]xml then
+     raise exception 'Anexe um XML válido e vinculado ao solicitante';
+   end if;
+   if not exists(select 1 from storage.objects where bucket_id='b2c-baixas-xml' and name=v_path) then
+     raise exception 'O XML informado não foi encontrado no armazenamento seguro';
+   end if;
+   snap := liquida_private.b2c_baixa_excepcional_contexto(p_dados->>'pedido',p_dados->>'identificador',p_dados->>'tipo');
+   if snap is distinct from p_dados->'previa' then
+     raise exception 'O contexto do produto mudou. Consulte novamente antes de solicitar';
+   end if;
+   if exists(select 1 from liquida_private.b2c_baixas_excepcionais
+     where upper(btrim(identificador))=snap->>'identificador' and status='pendente') then
+     raise exception 'Já existe uma baixa pendente para este identificador';
+   end if;
+   insert into liquida_private.b2c_baixas_excepcionais(
+     pedido_id,pedido_referencia,identificador,tipo_identificador,alocacao_id,triagem_id,
+     xml_path,justificativa,antes,solicitado_por
+   ) values(
+     (snap->>'pedido_id')::uuid,p_dados->>'pedido',snap->>'identificador',snap->>'tipo_identificador',
+     (snap->>'alocacao_id')::uuid,(snap->>'triagem_id')::uuid,
+     v_path,btrim(p_dados->>'justificativa'),snap,u.id
+   ) returning * into s;
+ elsif p_acao in('aprovar','rejeitar') then
+   if not '/v2/assurant/b2c/baixas/aprovar'=any(coalesce(u.telas_permitidas,'{}'::text[]))
+   then raise exception 'Sem permissão para aprovar baixas excepcionais' using errcode='42501'; end if;
+   select * into s from liquida_private.b2c_baixas_excepcionais
+     where id=(p_dados->>'id')::uuid for update;
+   if not found then raise exception 'Solicitação não localizada'; end if;
+   if s.status<>'pendente' then raise exception 'Solicitação já decidida'; end if;
+   if s.solicitado_por=u.id then raise exception 'O solicitante não pode aprovar sua própria baixa'; end if;
+   if length(btrim(coalesce(p_dados->>'parecer','')))<10 then raise exception 'Informe parecer com 10 caracteres ou mais'; end if;
+   if p_acao='rejeitar' then
+     update liquida_private.b2c_baixas_excepcionais
+       set status='rejeitada',decidido_por=u.id,decidido_em=clock_timestamp(),parecer=btrim(p_dados->>'parecer')
+       where id=s.id returning * into s;
+   else
+     if not exists(select 1 from storage.objects where bucket_id='b2c-baixas-xml' and name=s.xml_path)
+     then raise exception 'XML não localizado: aprovação bloqueada'; end if;
+     novo := liquida_private.b2c_baixa_excepcional_contexto(
+        coalesce(s.pedido_id::text,''),s.identificador,s.tipo_identificador);
+     if (novo-'reserva_ativa') is distinct from (s.antes-'reserva_ativa') then
+       raise exception 'A identificação, pedido ou posição mudou. Rejeite e solicite novamente';
+     end if;
+     if s.alocacao_id is not null then
+       select * into a from public.wms_alocacoes where id=s.alocacao_id for update;
+       if a.status<>'confirmado' or a.retirado_em is not null then
+         raise exception 'Alocação já movimentada';
+       end if;
+       select * into e from public.wms_enderecos where id=a.endereco_id for update;
+       if not found or not e.ativo or e.status<>'ocupado'
+       then raise exception 'Endereço físico precisa ser conciliado antes da baixa'; end if;
+       if (select count(*) from public.wms_alocacoes where endereco_id=e.id and status='confirmado' and retirado_em is null)<>1
+       then raise exception 'Endereço possui múltiplos produtos ativos'; end if;
+       update public.wms_reservas_saida set status='cancelado',
+         finalizado_em=clock_timestamp(),finalizado_por=u.id,atualizado_em=clock_timestamp()
+         where alocacao_id=a.id and status in ('reservado','analise','reconciliar');
+       update public.wms_alocacoes set status='retirado',retirado_em=clock_timestamp(),retirado_por=u.id,
+         saida_canal='BAIXA_MANUAL',saida_referencia=s.id::text,atualizado_em=clock_timestamp()
+         where id=a.id;
+       update public.wms_enderecos set status='livre',reserva_id=null,reservado_ate=null,
+         atualizado_em=clock_timestamp() where id=e.id;
+     end if;
+     if s.triagem_id is not null then
+       update public.assurant_triagem set status_atual='Baixa manual administrativa',
+         atualizado_em=timezone('UTC',now())
+       where id=s.triagem_id;
+     end if;
+     insert into public.assurant_movimentacao(usuario,etapa,voucher,serial_imei,data_etapa,uploaded_by)
+     values(u.nome,'Baixa manual excepcional — XML vinculado',s.antes->>'voucher',s.identificador,
+       timezone('UTC',now()),u.id);
+     res:=jsonb_build_object('ok',true,'identificador',s.identificador,
+       'wms_retirado',s.alocacao_id is not null,'alocacao_id',s.alocacao_id,
+       'triagem_baixada',s.triagem_id is not null,'xml_path',s.xml_path);
+     update liquida_private.b2c_baixas_excepcionais set status='efetivada',
+       decidido_por=u.id,decidido_em=clock_timestamp(),parecer=btrim(p_dados->>'parecer'),
+       depois=res where id=s.id returning * into s;
+   end if;
+ else
+   raise exception 'Ação inválida';
+ end if;
+ return jsonb_build_object('ok',true,'id',s.id,'status',s.status);
+end $$;
+revoke all on function liquida_private.b2c_baixa_excepcional_operar(text,jsonb) from public,anon;
+grant execute on function liquida_private.b2c_baixa_excepcional_operar(text,jsonb) to authenticated;
+create or replace function public.assurant_b2c_baixa_excepcional(p_acao text,p_dados jsonb default '{}'::jsonb)
+returns jsonb language sql security invoker set search_path=pg_catalog as $$
+select liquida_private.b2c_baixa_excepcional_operar(p_acao,p_dados)
+$$;
+revoke all on function public.assurant_b2c_baixa_excepcional(text,jsonb) from public,anon;
+grant execute on function public.assurant_b2c_baixa_excepcional(text,jsonb) to authenticated;
+) then
      raise exception 'Anexe um XML válido e vinculado ao solicitante';
    end if;
    if not exists(select 1 from storage.objects where bucket_id='b2c-baixas-xml' and name=v_path) then
