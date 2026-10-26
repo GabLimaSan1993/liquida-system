@@ -35,6 +35,7 @@ import {
   POSICOES_BANCADA_LAVADORAS,
   STATUS_RESERVA_POSICAO,
   buscarReferenciaProduto,
+  cadastrarRetornoLojaLavadora,
   calcularTempoExecutado,
   concluirCicloLavadora,
   condenarLavadora,
@@ -220,6 +221,8 @@ export default function TriagemLavadorasV2Page() {
   const [validacao, setValidacao] = useState({ ...EMPTY_VALIDACAO });
   const [posicaoNova, setPosicaoNova] = useState("");
   const [buscaOs, setBuscaOs] = useState("");
+  const [origemCadastro, setOrigemCadastro] = useState("Lote de Estoque");
+  const [novaOsRetorno, setNovaOsRetorno] = useState("");
   const [scannerAberto, setScannerAberto] = useState(false);
   const [eventos, setEventos] = useState([]);
   const [erroCiclo, setErroCiclo] = useState(null);
@@ -346,11 +349,12 @@ export default function TriagemLavadorasV2Page() {
     });
   }, [tick, painel.ciclos, carregarPainel, operador]);
 
+  const retornoLoja = selectedOs?.origem === "Retorno de Loja";
   const linhasValidacao = useMemo(() => {
     if (!selectedOs) return [];
     return [
       { key: "marca", label: "Marca", sistema: selectedOs.marca, obrigatorio: true },
-      { key: "modelo", label: "Modelo", sistema: selectedOs.modelo, obrigatorio: true },
+      { key: "modelo", label: "Modelo", sistema: retornoLoja ? validacao.modelo : selectedOs.modelo, obrigatorio: !retornoLoja },
       { key: "tensao", label: "Tensão", sistema: selectedOs.voltagem, obrigatorio: true },
       { key: "tipo", label: "Tipo", sistema: tipoReferenciaLavadora(selectedOs, referenciaProduto), obrigatorio: true },
       {
@@ -366,7 +370,7 @@ export default function TriagemLavadorasV2Page() {
         obrigatorio: Boolean(referenciaProduto?.cor),
       },
     ];
-  }, [selectedOs, referenciaProduto]);
+  }, [selectedOs, referenciaProduto, retornoLoja, validacao.modelo]);
 
   const validacaoLiberada = useMemo(
     () =>
@@ -678,9 +682,33 @@ export default function TriagemLavadorasV2Page() {
                 <ScanLine className="h-4 w-4" /> Bipar etiqueta
               </button>
             </div>
+            <div className="mt-3 rounded-xl border border-violet-100 bg-violet-50 p-3">
+              <p className="mb-2 text-xs font-bold text-slate-700">Origem da OS</p>
+              <div className="flex flex-wrap gap-4 text-xs">
+                {["Lote de Estoque","Retorno de Loja"].map(opcao =>
+                  <label key={opcao} className="flex items-center gap-2">
+                    <input type="radio" name="origem-lavadora" checked={origemCadastro===opcao} onChange={()=>setOrigemCadastro(opcao)}/>
+                    {opcao}
+                  </label>)}
+              </div>
+              {origemCadastro==="Retorno de Loja" && <form className="mt-3 flex gap-2" onSubmit={async e=>{
+                e.preventDefault();
+                try{
+                  setSaving(true);
+                  const r=await cadastrarRetornoLojaLavadora(novaOsRetorno);
+                  await carregarPainel();
+                  setSelectedOsId(String(r.id));
+                  setMensagem(r.ja_existia ? "OS já cadastrada; registro existente preservado." : "Retorno de Loja cadastrado, sem exigir modelo no Aging.");
+                  setNovaOsRetorno("");
+                }catch(err){setMensagem(err.message);}finally{setSaving(false);}
+              }}>
+                <input aria-label="Número da OS de retorno" className="min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm" required pattern="[0-9]{5,10}" value={novaOsRetorno} onChange={e=>setNovaOsRetorno(e.target.value)} placeholder="Número da OS de retorno"/>
+                <button type="submit" disabled={saving} className="rounded-lg bg-violet-700 px-3 py-2 text-xs font-bold text-white">Cadastrar retorno</button>
+              </form>}
+            </div>
             <select value={selectedOsId} onChange={(event) => setSelectedOsId(event.target.value)} className="mt-3 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 outline-none focus:border-[#765D81]">
               <option value="">Selecione uma OS</option>
-              {osFiltradas.map((os) => <option key={os.id} value={os.id}>{os.numero_os} — {os.marca || "Sem marca"} {os.modelo || ""}</option>)}
+              {osFiltradas.map((os) => <option key={os.id} value={os.id}>{os.numero_os} — {os.origem==="Retorno de Loja"?"Retorno de Loja":"Lote de Estoque"} — {os.marca || "Sem marca"} {os.modelo || ""}</option>)}
             </select>
 
             {selectedOs ? (
@@ -688,7 +716,7 @@ export default function TriagemLavadorasV2Page() {
                 <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div><div className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">OS</div><div className="mt-1 text-lg font-black text-slate-900">{selectedOs.numero_os}</div></div>
-                    <StatusPill status={{ label: "Aguardando triagem", tone: "purple" }} />
+                    <div className="flex flex-wrap gap-2"><span className="rounded-lg bg-white px-2 py-1 text-[10px] font-bold">{retornoLoja?"Retorno de Loja":"Lote de Estoque"}</span><StatusPill status={{ label: "Aguardando triagem", tone: "purple" }} /></div>
                   </div>
                   <div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-200 pt-4 text-xs">
                     <div><div className="font-bold text-slate-400">Entrada</div><div className="mt-1 font-black text-slate-700">{formatarData(selectedOs.dt_entrada)}</div></div>
