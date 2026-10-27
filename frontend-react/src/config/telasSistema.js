@@ -4,6 +4,8 @@ export const TELAS = [
   { id: "/v2/assurant/b2c/baixas/aprovar", label: "B2C — Aprovar baixas manuais", grupo: "Assurant — B2C" },
   { id: "/v2/linha-branca/uploads", label: "Upload diário de Aging", grupo: "Linha Branca — Gestão" },
   { id: "/v2/linha-branca/gestao/producao", label: "Gestão da produção, peças e SLA", grupo: "Linha Branca — Gestão" },
+  { id: "/v2/linha-branca/gestao/estoque", label: "Gestão de Estoque — Peças, insumos, compras e WIP", grupo: "Linha Branca — Gestão" },
+  { id: "/v2/linha-branca/desmembramento", label: "Desmembramento de Peças — entrada e rastreabilidade", grupo: "Linha Branca — Gestão" },
   { id: "/chamados/gestao", label: "Gestão de chamados e SLAs — exclusivo Gabriel", grupo: "Sistema" },
   { id: "/chamados", label: "Chamados e solicitações", grupo: "Sistema" },
   { id: "/v2/linha-branca", label: "Acesso à Linha Branca", grupo: "Linha Branca" },
