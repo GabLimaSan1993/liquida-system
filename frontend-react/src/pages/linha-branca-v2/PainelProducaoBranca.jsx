@@ -102,12 +102,12 @@ export default function PainelProducaoBranca({painel,resumo,periodo,etapa,onEtap
    />
    <DistribuicaoDestinoCard
     titulo="Qual é o resultado da operação inteira?"
-    subtitulo="Situação atual das OS trabalhadas em qualquer etapa no período."
+    subtitulo="Situação atual das OS recebidas ou trabalhadas no período."
     dados={painel.distribuicaoOperacao}
     total={painel.totalOperacao}
     foco="aprovado"
     rotuloCentro="finalizados"
-    rodape="Cada OS com atividade operacional no período conta uma vez. Mostra o status atual, não uma reconstrução histórica do fechamento naquela data."
+    rodape="Cada OS recebida ou trabalhada no período conta uma vez, incluindo aquelas aguardando triagem. Mostra o status atual, não uma reconstrução histórica do fechamento daquela data."
    />
   </div>
 
