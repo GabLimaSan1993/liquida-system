@@ -183,10 +183,11 @@ export default function GestaoEstoqueLinhaBrancaPage() {
       <h3 className="text-sm font-black">{grupo.marca}</h3>
       <span className="text-xs font-semibold text-slate-500">{fmt(grupo.itens.length)} códigos · {fmt(grupo.itens.reduce((a,p)=>a+Number(p.saldo||0),0))} un. exibidas</span>
      </div>
-     <Tabela colunas={["Código interno","PN fabricante","Descrição","Categoria","Compatibilidade / modelos","Saldo","Unidade","Localização"]}
+     <Tabela colunas={["Código interno","PN fabricante","Descrição","Categoria","Saldo","Unidade","Localização"]}
       linhas={grupo.itens.map(x=><tr key={x.id}>
        <TD forte>{x.pn}</TD><TD>{x.pn_fabricante||"Não informado"}</TD>
-       <TD>{x.descricao}</TD><TD>{x.categoria||"—"}</TD><TD>{x.compatibilidade||"—"}</TD>
+       <TD><span className="block max-w-[260px] truncate" title={x.descricao||""}>{x.descricao}</span></TD>
+       <TD>{x.categoria||"—"}</TD>
        <TD><span className={Number(x.saldo)<=0?"font-black text-rose-600":"font-black text-emerald-700"}>{fmt(x.saldo)}</span></TD>
        <TD>{x.unidade}</TD><TD>{x.localizacao||"—"}</TD>
       </tr>)}/>
