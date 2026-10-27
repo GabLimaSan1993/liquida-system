@@ -21,9 +21,9 @@ const ETAPAS=[
  ["BLOQUEADO","Bloqueado"]
 ];
 const ABAS=[
- ["saldos","Saldos",Boxes],["requisicoes","Requisições",ClipboardList],
- ["compras","Compras",ShoppingCart],["notas","Entradas NF",FileText],
- ["insumos","Insumos",PackagePlus],["wip","WIP / Pré-entrada",Warehouse],
+ ["pecas","Estoque de Peças",Boxes],["insumos","Estoque de Insumos",Package],
+ ["requisicoes","Requisições",ClipboardList],["compras","Compras",ShoppingCart],
+ ["notas","Entradas NF",FileText],["wip","WIP / Pré-entrada",Warehouse],
  ["movimentos","Movimentações",History],["desmembramento","Desmembramento",Wrench]
 ];
 
@@ -47,11 +47,13 @@ function Tabela({colunas,linhas}) {
 const TD=({children,forte=false})=><td className={"px-3 py-3 align-top "+(forte?"font-bold text-slate-800":"text-slate-600")}>{children??"—"}</td>;
 
 export default function GestaoEstoqueLinhaBrancaPage() {
- const [aba,setAba]=useState("saldos");
+ const [aba,setAba]=useState("pecas");
  const [painel,setPainel]=useState({});
  const [loading,setLoading]=useState(false),[saving,setSaving]=useState(false);
  const [erro,setErro]=useState(""),[ok,setOk]=useState("");
  const [busca,setBusca]=useState("");
+ const [marcaSelecionada,setMarcaSelecionada]=useState("TODAS");
+ const [categoriaInsumo,setCategoriaInsumo]=useState("TODAS");
  const [requisicao,setRequisicao]=useState({numero_os:"",estoque_id:"",quantidade:"1",observacoes:""});
  const [compra,setCompra]=useState({numero_os:"",pn:"",descricao:"",quantidade:"1",observacoes:""});
  const [nota,setNota]=useState({numero_nf:"",serie_nf:"",chave_nfe:"",fornecedor:"",observacoes:""});
@@ -91,7 +93,19 @@ export default function GestaoEstoqueLinhaBrancaPage() {
  const estoque=painel.estoque||[], requisicoes=painel.requisicoes||[],
   compras=painel.compras||[],movimentos=painel.movimentacoes||[],wips=painel.wip||[];
  const pecas=estoque.filter(x=>x.tipo_item!=="INSUMO"),insumos=estoque.filter(x=>x.tipo_item==="INSUMO");
- const filtrados=lista=>lista.filter(x=>Object.values(x).some(v=>String(v??"").toLowerCase().includes(busca.toLowerCase())));
+ const filtrados=lista=>lista.filter(x=>Object.values(x).some(v=>String(v??"").toLocaleLowerCase("pt-BR").includes(busca.toLocaleLowerCase("pt-BR"))));
+ const marcaDaPeca=item=>item.marca?.trim()||"Sem marca informada";
+ const marcas=[...new Set(pecas.map(marcaDaPeca))].sort((a,b)=>{
+  if(a==="Sem marca informada")return 1;
+  if(b==="Sem marca informada")return -1;
+  return a.localeCompare(b,"pt-BR");
+ });
+ const categoriasInsumos=[...new Set(insumos.map(x=>x.categoria?.trim()||"Sem categoria"))].sort((a,b)=>a.localeCompare(b,"pt-BR"));
+ const insumosVisiveis=filtrados(insumos).filter(x=>categoriaInsumo==="TODAS"||(x.categoria?.trim()||"Sem categoria")===categoriaInsumo);
+ const gruposPorMarca=marcas.map(marca=>({
+  marca,
+  itens:filtrados(pecas).filter(p=>marcaDaPeca(p)===marca)
+ })).filter(g=>(marcaSelecionada==="TODAS"||g.marca===marcaSelecionada)&&g.itens.length>0);
  const pendencias=requisicoes.filter(x=>x.status!=="entregue").length;
  const comprasPendentes=compras.filter(x=>x.status!=="recebida").length;
  const wipPrev=wips.filter(x=>x.etapa!=="EM_LINHA").length;
@@ -120,10 +134,12 @@ export default function GestaoEstoqueLinhaBrancaPage() {
    </button>
   </header>
   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-   {[[Boxes,"Peças / códigos",pecas.length],[ClipboardList,"Requisições pendentes",pendencias],
-      [ShoppingCart,"Compras pendentes",comprasPendentes],[Warehouse,"WIP / pré-entrada",wipPrev]].map(([Icon,nome,valor])=>
-    <div key={nome} className={BOX}><div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-[#F3EFF5] text-[#43284F]"><Icon size={19}/></div>
-     <p className="text-xs font-bold text-slate-500">{nome}</p><p className="mt-1 text-3xl font-black">{fmt(valor)}</p></div>)}
+   {[[Boxes,"Peças cadastradas",pecas.length,"pecas"],[Package,"Insumos cadastrados",insumos.length,"insumos"],
+      [ClipboardList,"Requisições pendentes",pendencias,"requisicoes"],[Warehouse,"WIP / pré-entrada",wipPrev,"wip"]].map(([Icon,nome,valor,destino])=>
+    <button type="button" key={nome} onClick={()=>{setAba(destino);setBusca("");setErro("");}} className={BOX+" text-left transition hover:border-[#765D81] hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#765D81]"}>
+     <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-[#F3EFF5] text-[#43284F]"><Icon size={19}/></div>
+     <p className="text-xs font-bold text-slate-500">{nome}</p><p className="mt-1 text-3xl font-black">{fmt(valor)}</p>
+     <span className="mt-2 block text-[11px] font-semibold text-[#765D81]">Ver detalhes</span></button>)}
   </div>
   {erro&&<div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">{erro}</div>}
   {ok&&<div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">{ok}</div>}
@@ -132,14 +148,52 @@ export default function GestaoEstoqueLinhaBrancaPage() {
       className={"flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-xs font-bold transition "+(aba===id?"bg-[#43284F] text-white":"text-slate-500 hover:bg-slate-50")}>
       <Icon size={15}/>{nome}</button>)}
   </div>
-  {["saldos","requisicoes","compras","wip","movimentos"].includes(aba)&&<div className="flex justify-between gap-3">
+  {["pecas","insumos","requisicoes","compras","wip","movimentos"].includes(aba)&&<div className="flex justify-between gap-3">
     <p className="text-xs text-slate-500">Consulta operacional</p>
     <label className="relative w-full max-w-xs"><Search size={15} className="absolute left-3 top-2.5 text-slate-400"/>
      <input value={busca} onChange={e=>setBusca(e.target.value)} className="w-full rounded-xl border border-slate-200 py-2 pl-9 pr-3 text-xs outline-none focus:border-violet-400" placeholder="Pesquisar registros"/></label>
   </div>}
-  {aba==="saldos"&&<section className={BOX}><h2 className="mb-4 text-sm font-black">Saldos de peças e insumos</h2>
-   <Tabela colunas={["Código / PN","Descrição","Tipo","Disponível","Unidade","Localização"]} linhas={filtrados(estoque).map(x=><tr key={x.id}><TD forte>{x.pn}</TD><TD>{x.descricao}</TD><TD>{x.tipo_item==="INSUMO"?"Insumo":"Peça"}</TD><TD><span className={Number(x.saldo)<=0?"font-black text-rose-600":"font-black text-emerald-700"}>{fmt(x.saldo)}</span></TD><TD>{x.unidade}</TD><TD>{x.localizacao}</TD></tr>)}/>
-   <p className="mt-3 text-[11px] text-slate-400">Saldos atuais da base de peças compartilhada. Entradas de desmembramento permanecem visíveis no mesmo cadastro.</p>
+  {aba==="pecas"&&<section className={BOX}>
+   <div className="flex flex-wrap items-start justify-between gap-4">
+    <div><h2 className="text-base font-black">Estoque de Peças por Marca</h2>
+     <p className="mt-1 text-xs text-slate-500">{fmt(pecas.length)} códigos cadastrados · classificação conforme arquivo de origem.</p>
+    </div>
+    <Campo label="Marca">
+     <select className={INPUT+" min-w-[210px]"} value={marcaSelecionada} onChange={e=>setMarcaSelecionada(e.target.value)}>
+      <option value="TODAS">Todas as marcas ({pecas.length})</option>
+      {marcas.map(m=><option key={m} value={m}>{m} ({pecas.filter(p=>marcaDaPeca(p)===m).length})</option>)}
+     </select>
+    </Campo>
+   </div>
+   <div className="my-5 flex flex-wrap gap-2">
+    {marcas.map(m=>{
+     const subset=pecas.filter(p=>marcaDaPeca(p)===m);
+     return <button type="button" key={m} aria-pressed={marcaSelecionada===m}
+      onClick={()=>{setMarcaSelecionada(marcaSelecionada===m?"TODAS":m);setBusca("");}}
+      className={"rounded-xl border px-3 py-2 text-left transition "+(marcaSelecionada===m?"border-[#43284F] bg-[#43284F] text-white":"border-slate-200 bg-slate-50 text-slate-700 hover:border-[#765D81]")}>
+      <span className="block text-xs font-black">{m}</span>
+      <span className="mt-1 block text-[11px] opacity-80">{fmt(subset.length)} códigos · {fmt(subset.reduce((a,p)=>a+Number(p.saldo||0),0))} un.</span>
+     </button>;
+    })}
+    {marcaSelecionada!=="TODAS"&&<button type="button" onClick={()=>setMarcaSelecionada("TODAS")} className={SOFT}>Mostrar todas</button>}
+   </div>
+   <div className="space-y-5">
+    {gruposPorMarca.map(grupo=><div key={grupo.marca} className="rounded-xl border border-slate-200">
+     <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 px-4 py-3">
+      <h3 className="text-sm font-black">{grupo.marca}</h3>
+      <span className="text-xs font-semibold text-slate-500">{fmt(grupo.itens.length)} códigos · {fmt(grupo.itens.reduce((a,p)=>a+Number(p.saldo||0),0))} un. exibidas</span>
+     </div>
+     <Tabela colunas={["Código interno","PN fabricante","Descrição","Categoria","Compatibilidade / modelos","Saldo","Unidade","Localização"]}
+      linhas={grupo.itens.map(x=><tr key={x.id}>
+       <TD forte>{x.pn}</TD><TD>{x.pn_fabricante||"Não informado"}</TD>
+       <TD>{x.descricao}</TD><TD>{x.categoria||"—"}</TD><TD>{x.compatibilidade||"—"}</TD>
+       <TD><span className={Number(x.saldo)<=0?"font-black text-rose-600":"font-black text-emerald-700"}>{fmt(x.saldo)}</span></TD>
+       <TD>{x.unidade}</TD><TD>{x.localizacao||"—"}</TD>
+      </tr>)}/>
+    </div>)}
+    {!gruposPorMarca.length&&<Vazio>Nenhuma peça corresponde aos filtros.</Vazio>}
+   </div>
+   <p className="mt-4 text-[11px] text-slate-500">Os itens sem marca continuam identificados como "Sem marca informada"; nenhuma classificação presumida foi aplicada.</p>
   </section>}
 
   {aba==="requisicoes"&&<>
