@@ -58,6 +58,7 @@ export default function GestaoEstoqueLinhaBrancaPage() {
  const [itensNota,setItensNota]=useState([novoItem()]);
  const [notaId,setNotaId]=useState(()=>crypto.randomUUID());
  const [consumo,setConsumo]=useState({estoque_id:"",quantidade:"1",numero_os:"",motivo:""});
+ const [consumoId,setConsumoId]=useState(()=>crypto.randomUUID());
  const [wip,setWip]=useState({id:"",numero_os:"",identificador:"",categoria:"Linha Branca",marca:"",modelo:"",serial:"",origem:"",etapa:"AGUARDANDO_ENTRADA",endereco:"",motivo:"",observacoes:""});
 
  async function acao(tipo,dados={}) {
@@ -219,11 +220,11 @@ export default function GestaoEstoqueLinhaBrancaPage() {
 
   {aba==="insumos"&&<>
    <section className={BOX}><h2 className="mb-4 text-sm font-black">Baixa de insumos operacionais</h2>
-    <form className="grid gap-3 md:grid-cols-4" onSubmit={e=>{e.preventDefault();if(!window.confirm("Confirmar baixa de insumos no estoque?"))return;executar("saida_insumo",consumo,"Insumo baixado do estoque.",()=>setConsumo({estoque_id:"",quantidade:"1",numero_os:"",motivo:""}));}}>
-     <Campo label="Insumo"><select className={INPUT} required value={consumo.estoque_id} onChange={e=>setConsumo(v=>({...v,estoque_id:e.target.value}))}><option value="">Selecione</option>{insumos.map(x=><option key={x.id} value={x.id}>{x.pn} · {x.descricao} ({fmt(x.saldo)})</option>)}</select></Campo>
-     <Campo label="Quantidade"><input className={INPUT} required type="number" min="0.001" step="0.001" value={consumo.quantidade} onChange={e=>setConsumo(v=>({...v,quantidade:e.target.value}))}/></Campo>
-     <Campo label="OS (opcional)"><input className={INPUT} value={consumo.numero_os} onChange={e=>setConsumo(v=>({...v,numero_os:e.target.value}))}/></Campo>
-     <Campo label="Finalidade / área"><input className={INPUT} required value={consumo.motivo} onChange={e=>setConsumo(v=>({...v,motivo:e.target.value}))} placeholder="Ex.: limpeza, manutenção, bancada"/></Campo>
+    <form className="grid gap-3 md:grid-cols-4" onSubmit={e=>{e.preventDefault();if(!window.confirm("Confirmar baixa de insumos no estoque?"))return;executar("saida_insumo",{...consumo,operacao_id:consumoId},"Insumo baixado do estoque.",()=>{setConsumo({estoque_id:"",quantidade:"1",numero_os:"",motivo:""});setConsumoId(crypto.randomUUID());});}}>
+     <Campo label="Insumo"><select className={INPUT} required value={consumo.estoque_id} onChange={e=>{setConsumo(v=>({...v,estoque_id:e.target.value}));setConsumoId(crypto.randomUUID());}}><option value="">Selecione</option>{insumos.map(x=><option key={x.id} value={x.id}>{x.pn} · {x.descricao} ({fmt(x.saldo)})</option>)}</select></Campo>
+     <Campo label="Quantidade"><input className={INPUT} required type="number" min="0.001" step="0.001" value={consumo.quantidade} onChange={e=>{setConsumo(v=>({...v,quantidade:e.target.value}));setConsumoId(crypto.randomUUID());}}/></Campo>
+     <Campo label="OS (opcional)"><input className={INPUT} value={consumo.numero_os} onChange={e=>{setConsumo(v=>({...v,numero_os:e.target.value}));setConsumoId(crypto.randomUUID());}}/></Campo>
+     <Campo label="Finalidade / área"><input className={INPUT} required value={consumo.motivo} onChange={e=>{setConsumo(v=>({...v,motivo:e.target.value}));setConsumoId(crypto.randomUUID());}} placeholder="Ex.: limpeza, manutenção, bancada"/></Campo>
      <div className="md:col-span-4 flex justify-end"><button className={BTN} disabled={saving}><PackageCheck size={15}/> Registrar consumo</button></div>
     </form>
    </section>
