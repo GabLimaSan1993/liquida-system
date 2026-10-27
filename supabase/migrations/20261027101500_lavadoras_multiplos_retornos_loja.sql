@@ -120,26 +120,6 @@ begin
     ) returning * into v_os;
   end if;
 
-  -- Protege contra duplo clique/reenvio da mesma solicitação.
-  select * into v_retorno
-  from public.linha_branca_lavadora_retornos_loja
-  where os_id = v_os.id
-    and status = 'aberto'
-    and recebido_em >= now() - interval '2 minutes'
-    and coalesce(recebido_por, '') = coalesce(nullif(trim(p_operador), ''), '')
-    and motivo = trim(p_motivo)
-  order by numero_retorno desc
-  limit 1;
-
-  if found then
-    return to_jsonb(v_os) || jsonb_build_object(
-      'retorno_loja_id', v_retorno.id,
-      'numero_retorno', v_retorno.numero_retorno,
-      'novo_retorno', false,
-      'ja_existia', v_ja_existia
-    );
-  end if;
-
   update public.linha_branca_lavadora_retornos_loja
   set status = 'encerrado_por_novo_retorno', finalizado_em = now(), updated_at = now()
   where os_id = v_os.id and status = 'aberto';
