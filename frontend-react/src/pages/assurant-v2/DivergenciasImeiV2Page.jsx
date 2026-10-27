@@ -324,7 +324,7 @@ export default function DivergenciasImeiV2Page() {
               Diretriz — {caso.voucher}
             </h2>
             <p className="text-sm text-slate-600">
-              {problema(caso) === "nao_liga" ? "Encaminhar para laudo libera a avaliação do aparelho que não liga. A diretriz ficará registrada." : problema(caso) === "sem_ordem" ? "Autorizar libera a triagem sem ordem ativa. A referência consultada e a justificativa serão preservadas." : "Autorizar devolve o aparelho à triagem funcional, com nova bipagem e preservação do contrato original."}
+              {problema(caso) === "nao_liga" ? "Escolha entre encaminhar para laudo, retornar para uma nova triagem ou segregar para devolução. A decisão e a justificativa ficarão registradas." : problema(caso) === "sem_ordem" ? "Autorizar libera a triagem sem ordem ativa. A referência consultada e a justificativa serão preservadas." : "Autorizar devolve o aparelho à triagem funcional, com nova bipagem e preservação do contrato original."}
             </p>
             <label className="block text-sm font-bold">
               Decisão
@@ -338,6 +338,11 @@ export default function DivergenciasImeiV2Page() {
                 <option value="autorizado">
                   {problema(caso) === "nao_liga" ? "Encaminhar para laudo" : problema(caso) === "sem_ordem" ? "Autorizar triagem sem ordem" : "Autorizar triagem com o aparelho recebido"}
                 </option>
+                {problema(caso) === "nao_liga" && (
+                  <option value="reconferencia">
+                    Retornar para triagem novamente
+                  </option>
+                )}
                 <option value="devolver">
                   Manter segregado para devolução à origem
                 </option>
