@@ -192,7 +192,7 @@ export function resumirPainelBranca(resumo) {
   const eventos=operacionais.filter(e=>areaLinhaBranca(e.os.categoria)===nome);
   return {nome,equipamentos:new Set(eventos.map(e=>String(e.os_id))).size,triados:new Set(eventos.filter(e=>e.etapa==='Triagem').map(e=>String(e.os_id))).size,atividades:eventos.length};
  });
- const osComAtividade=new Map(operacionais.map(e=>[String(e.os_id),e.os]));
+ const osComAtividade=new Map(resumo.eventos.map(e=>[String(e.os_id),e.os]));
  // Denominador do reparo: uma OS por reparo registrado no período, ainda que haja retrabalho.
  const osComReparo=new Map(operacionais.filter(e=>e.etapa==='Reparo').map(e=>[String(e.os_id),e.os]));
  const distribuicaoReparo=agruparDestinosAtuais(osComReparo,DESTINOS_REPARO_BRANCA);
