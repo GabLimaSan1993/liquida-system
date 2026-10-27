@@ -273,6 +273,28 @@ export default function GestaoEstoqueLinhaBrancaPage() {
   </>}
 
   {aba==="insumos"&&<>
+   <section className={BOX}>
+    <div className="flex flex-wrap items-start justify-between gap-4">
+     <div><h2 className="text-base font-black">Estoque de Insumos</h2>
+      <p className="mt-1 text-xs text-slate-500">{fmt(insumos.length)} códigos cadastrados · separado do estoque de peças.</p>
+     </div>
+     <Campo label="Categoria do insumo">
+      <select className={INPUT+" min-w-[210px]"} value={categoriaInsumo} onChange={e=>setCategoriaInsumo(e.target.value)}>
+       <option value="TODAS">Todas as categorias ({insumos.length})</option>
+       {categoriasInsumos.map(c=><option key={c} value={c}>{c} ({insumos.filter(p=>(p.categoria?.trim()||"Sem categoria")===c).length})</option>)}
+      </select>
+     </Campo>
+    </div>
+    <div className="mt-5">
+     <Tabela colunas={["Código","Descrição","Categoria","Saldo disponível","Unidade","Localização"]}
+      linhas={insumosVisiveis.map(x=><tr key={x.id}>
+       <TD forte>{x.pn}</TD><TD>{x.descricao}</TD><TD>{x.categoria||"Sem categoria"}</TD>
+       <TD><span className={Number(x.saldo)<=0?"font-black text-rose-600":"font-black text-emerald-700"}>{fmt(x.saldo)}</span></TD>
+       <TD>{x.unidade}</TD><TD>{x.localizacao||"—"}</TD>
+      </tr>)}/>
+    </div>
+    <p className="mt-3 text-[11px] text-slate-500">Os saldos são do estoque operacional de insumos. A baixa é realizada separadamente, com registro do destino.</p>
+   </section>
    <section className={BOX}><h2 className="mb-4 text-sm font-black">Baixa de insumos operacionais</h2>
     <form className="grid gap-3 md:grid-cols-4" onSubmit={e=>{e.preventDefault();if(!window.confirm("Confirmar baixa de insumos no estoque?"))return;executar("saida_insumo",{...consumo,operacao_id:consumoId},"Insumo baixado do estoque.",()=>{setConsumo({estoque_id:"",quantidade:"1",numero_os:"",motivo:""});setConsumoId(crypto.randomUUID());});}}>
      <Campo label="Insumo"><select className={INPUT} required value={consumo.estoque_id} onChange={e=>{setConsumo(v=>({...v,estoque_id:e.target.value}));setConsumoId(crypto.randomUUID());}}><option value="">Selecione</option>{insumos.map(x=><option key={x.id} value={x.id}>{x.pn} · {x.descricao} ({fmt(x.saldo)})</option>)}</select></Campo>
@@ -282,10 +304,7 @@ export default function GestaoEstoqueLinhaBrancaPage() {
      <div className="md:col-span-4 flex justify-end"><button className={BTN} disabled={saving}><PackageCheck size={15}/> Registrar consumo</button></div>
     </form>
    </section>
-   <section className={BOX}><h2 className="mb-4 text-sm font-black">Saldos de insumos</h2>
-    <Tabela colunas={["Código","Descrição","Saldo","Localização"]} linhas={insumos.map(x=><tr key={x.id}><TD forte>{x.pn}</TD><TD>{x.descricao}</TD><TD>{fmt(x.saldo)}</TD><TD>{x.localizacao}</TD></tr>)}/>
-   </section>
-  </>}
+  </>
 
   {aba==="wip"&&<>
    <section className={BOX}><h2 className="mb-4 text-sm font-black">{wip.id?"Movimentar produto em WIP":"Cadastrar produto em pré-entrada / WIP"}</h2>
