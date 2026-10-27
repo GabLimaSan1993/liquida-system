@@ -304,7 +304,7 @@ export default function GestaoEstoqueLinhaBrancaPage() {
      <div className="md:col-span-4 flex justify-end"><button className={BTN} disabled={saving}><PackageCheck size={15}/> Registrar consumo</button></div>
     </form>
    </section>
-  </>
+  </>}
 
   {aba==="wip"&&<>
    <section className={BOX}><h2 className="mb-4 text-sm font-black">{wip.id?"Movimentar produto em WIP":"Cadastrar produto em pré-entrada / WIP"}</h2>
