@@ -59,7 +59,7 @@ function FotoCamera({titulo,valor,onChange}){
   }
   return <label className="block space-y-2 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
     <span className="text-sm font-bold">{titulo} — foto obrigatória</span>
-    <span className="block text-xs text-slate-500">Tire uma foto de teste com a câmera indicada e confira o resultado.</span>
+
     <input type="file" accept="image/jpeg,image/png,image/webp" capture={titulo.toLowerCase().includes("frontal") ? "user" : "environment"} onChange={escolher} className={CAMPO}/>
     {valor?.preview&&<img src={valor.preview} alt={"Evidência "+titulo} className="h-40 w-full rounded-lg object-contain bg-slate-100"/>}
     {aviso&&<span className="block text-xs text-red-700">{aviso}</span>}
@@ -178,44 +178,79 @@ export default function TriagemUnificadaTestePage(){
   <div className="flex flex-wrap items-center gap-2">
    <span className="rounded-lg bg-violet-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-violet-700">Assurant Warehouse</span>
    <span className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Triagens</span>
-   <span className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-amber-700"><FlaskConical className="h-3.5 w-3.5"/> Laboratório</span>
+   <span className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-slate-500"><FlaskConical className="h-3.5 w-3.5"/> Teste</span>
   </div>
   <div className="flex items-start gap-3">
    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-700"><ScanLine className="h-5 w-5"/></div>
    <div><h1 className="text-2xl font-black tracking-tight text-slate-900 lg:text-[30px]">Triagem Unificada — TR / BM</h1>
-    <p className="mt-1 max-w-[900px] text-sm text-slate-500">Fluxo TR com teste de câmeras, defeitos e cosmética na mesma bancada. BM permanece nas duas bancadas atuais.</p>
+    
    </div>
   </div>
  </div>
  <Progresso etapa={etapa}/>
- <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] font-semibold leading-5 text-amber-800">
-  <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0"/>Piloto com gravação no banco operacional. Use voucher TR destinado ao teste; confirmar a conclusão modifica o status do aparelho.
- </div>
+
  {erro&&<div role="alert" className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs font-semibold text-rose-800"><AlertTriangle className="h-4 w-4 shrink-0"/>{erro}</div>}
   {etapa>0&&<div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 text-xs text-slate-500 shadow-sm"><span className="font-mono font-black text-violet-700">{ctx?.voucher}</span><span>Condição: <b className="text-slate-800">{tipo}</b></span><span>Status: <b className="text-slate-800">{ctx?.existente?.status_atual||"—"}</b></span></div>}
-  {etapa===0&&<form onSubmit={consultar}><Painel titulo="Identificação por voucher" subtitulo="Bipe o voucher para iniciar a triagem." icone={Search}>
+  {etapa===0&&<form onSubmit={consultar}><Painel titulo="Identificação por voucher" subtitulo="" icone={Search}>
     
     <label className="block space-y-2 text-sm font-bold">Voucher<input required className={CAMPO} value={voucher} onChange={e=>setVoucher(e.target.value.toUpperCase())} placeholder="YBV..."/></label>
     <button className={BOTAO} disabled={busy||!voucher.trim()}>{busy?"Consultando...":"Consultar e identificar BM/TR"}</button>
   </Painel></form>}
-  {etapa===1&&<Painel titulo="Identificação física do produto" subtitulo="Confira o modelo e a condição física na bancada." icone={Smartphone}>
+  {etapa===1&&<Painel titulo="Identificação física do produto" subtitulo="" icone={Smartphone}>
     
-    {tipo==="BM"?<div className="space-y-4"><div className="rounded-xl bg-sky-50 p-4 text-sm text-sky-900">Compra BM: mantenha as duas triagens já utilizadas. A tela piloto não movimenta este voucher.</div>
-      <div className="flex flex-wrap gap-3"><Link className={BOTAO} to="/v2/assurant/triagens/funcional">Abrir triagem funcional BM</Link><Link className={BOTAO} to="/v2/assurant/triagens/cosmetica">Abrir triagem cosmética BM</Link></div></div>
-      :<><label className="block space-y-2 text-sm font-bold">Modelo observado fisicamente<input value={modelo} onChange={e=>setModelo(e.target.value)} className={CAMPO} placeholder="Marca e modelo do aparelho"/></label>
-      <div className="space-y-2"><div className="text-sm font-bold">Condição inicial — verificação física</div>
-       {[["normal","Liga e está desbloqueado"],["nao_liga","Não liga → Laudo"],["bloqueado","Bloqueado → Laudo"]].map(([valor,nome])=><label key={valor} className="flex items-center gap-3 rounded-xl border p-3"><input type="radio" checked={condicao===valor} onChange={()=>setCondicao(valor)}/>{nome}</label>)}
-      </div><button type="button" className={BOTAO} onClick={avancarProduto}>Continuar</button></>}
+    {tipo==="BM"?<div className="flex flex-wrap gap-3">
+       <Link className={BOTAO} to="/v2/assurant/triagens/funcional">Triagem Funcional</Link>
+       <Link className={BOTAO} to="/v2/assurant/triagens/cosmetica">Triagem Cosmética</Link>
+      </div>:<>
+      <label className="block space-y-2 text-xs font-bold text-slate-700">Condição inicial do aparelho
+       <select className={CAMPO} value={condicao} onChange={e=>{setCondicao(e.target.value);setImei("");setDefeitos(v=>e.target.value==="danos_tela"?[...new Set([...v,"Danos da tela"])]:v.filter(x=>x!=="Danos da tela"));}}>
+        <option value="">Sem ocorrência</option>
+        <option value="nao_liga">Produto não liga</option>
+        <option value="bloqueado">Bloqueado</option>
+        <option value="danos_tela">Danos da tela</option>
+       </select>
+      </label>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+       <label className="block space-y-2 text-xs font-bold text-slate-700">Marca
+        <input list="unificada-tr-marcas" className={CAMPO} value={produto.marca}
+         onChange={e=>setProduto({marca:e.target.value.toUpperCase(),modelo:"",armazenamento:"",cor:""})} placeholder="Pesquise ou digite a marca"/>
+        <datalist id="unificada-tr-marcas">{marcas.map(v=><option key={v} value={v}/>)}</datalist>
+       </label>
+       <label className="block space-y-2 text-xs font-bold text-slate-700">Modelo
+        <input list="unificada-tr-modelos" className={CAMPO} value={produto.modelo}
+         disabled={!produto.marca} onChange={e=>setProduto(v=>({...v,modelo:e.target.value.toUpperCase(),armazenamento:"",cor:""}))}
+         placeholder={produto.marca?"Pesquise ou digite o modelo":"Informe a marca primeiro"}/>
+        <datalist id="unificada-tr-modelos">{modelos.map(v=><option key={v} value={v}/>)}</datalist>
+       </label>
+       <label className="block space-y-2 text-xs font-bold text-slate-700">Armazenamento
+        <input list="unificada-tr-capacidades" className={CAMPO} value={produto.armazenamento} disabled={!produto.modelo}
+         onChange={e=>setProduto(v=>({...v,armazenamento:e.target.value.toUpperCase(),cor:""}))}
+         placeholder={produto.modelo?"Ex: 128GB":"Informe o modelo primeiro"}/>
+        <datalist id="unificada-tr-capacidades">{capacidades.map(v=><option key={v} value={v}/>)}</datalist>
+       </label>
+       <label className="block space-y-2 text-xs font-bold text-slate-700">Cor
+        <input list="unificada-tr-cores" className={CAMPO} value={produto.cor} disabled={!produto.modelo}
+         onChange={e=>setProduto(v=>({...v,cor:e.target.value.toUpperCase()}))}
+         placeholder={produto.modelo?"Pesquise ou digite a cor":"Informe o modelo primeiro"}/>
+        <datalist id="unificada-tr-cores">{cores.map(v=><option key={v} value={v}/>)}</datalist>
+       </label>
+      </div>
+      <div className="flex flex-wrap items-center justify-end gap-3 border-t border-slate-100 pt-4">
+       <button type="button" className={BOTAO} onClick={avancarProduto} disabled={busy||(condicao!=="nao_liga"&&!produtoCompleto)}>
+        {condicao==="nao_liga"?"Encaminhar para laudo":"Salvar e continuar"}
+       </button>
+      </div>
+      </>}
   </Painel>}
-  {etapa===2&&<Painel titulo="Conferência do IMEI" subtitulo="Valide o identificador físico do aparelho." icone={ScanLine}>
+  {etapa===2&&<Painel titulo="Conferência do IMEI" subtitulo="" icone={ScanLine}>
     
-    <p className="text-sm text-slate-500">O IMEI deve ser obtido fisicamente do aparelho; divergências são tratadas na tela atual.</p>
-    <input autoFocus inputMode="numeric" className={CAMPO} placeholder="Bipe o IMEI" value={imei} onChange={e=>setImei(e.target.value.replace(/\D/g,""))}/>
+
+    <input autoFocus inputMode="numeric" className={CAMPO} placeholder={condicao==="danos_tela"?"IMEI (opcional)":"Bipe o IMEI"} value={imei} onChange={e=>setImei(e.target.value.replace(/\D/g,""))}/>
     <div className="flex gap-3"><button type="button" className={BOTAO} onClick={avancarImei}>Conferir e continuar</button><button type="button" onClick={()=>setEtapa(1)} className={CAMPO}>Voltar</button></div>
   </Painel>}
-  {etapa===3&&<Painel titulo="Câmeras e defeitos adicionais" subtitulo="Testes guiados, evidências fotográficas e defeitos." icone={Camera}>
+  {etapa===3&&<Painel titulo="Câmeras e defeitos adicionais" subtitulo="" icone={Camera}>
     
-    <p className="text-sm text-slate-500">Teste as câmeras do telefone. É necessário fotografar evidências das duas, inclusive em caso de falha.</p>
+ 
     <div className="grid gap-4 md:grid-cols-2">{[["frontal","Câmera frontal"],["traseira","Câmera traseira"]].map(([k,nome])=><div key={k} className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/50 p-4">
       <h3 className="font-bold">{nome} funciona?</h3>
       <div className="flex gap-3">{[[true,"Sim"],[false,"Não"]].map(([ok,rot])=><button key={rot} type="button" onClick={()=>setCameras(v=>({...v,[k]:ok}))} className={"rounded-lg border px-5 py-2 text-sm "+(cameras[k]===ok?"bg-violet-700 text-white":"bg-white")}>{rot}</button>)}</div>
@@ -224,10 +259,10 @@ export default function TriagemUnificadaTestePage(){
     <h3 className="font-bold">Defeitos adicionais — catálogo da funcional</h3>
     <input className={CAMPO} value={buscaDefeito} onChange={e=>setBuscaDefeito(e.target.value)} placeholder="Pesquisar defeitos"/>
     <div className="flex max-h-52 flex-wrap gap-2 overflow-auto">{catalogoDefeitos.filter(d=>d.nome.toLowerCase().includes(buscaDefeito.toLowerCase())).map(d=><button type="button" key={d.id} onClick={()=>alternarDefeito(d.nome)} className={"rounded-lg border px-3 py-2 text-xs font-semibold "+(defeitos.includes(d.nome)?"bg-violet-700 text-white":"bg-white text-slate-700")}>{d.nome}</button>)}</div>
-    <div className="text-sm">Selecionados: <b>{defeitos.length}</b> · Falha de câmera ou defeito adicional determina grade QUEBRADO.</div>
+    <div className="text-xs font-semibold text-slate-500">Defeitos selecionados: {defeitos.length}</div>
     <button type="button" className={BOTAO} onClick={avancarCamera}>Prosseguir para cosmética</button>
   </Painel>}
-  {etapa===4&&<Painel titulo="Avaliação cosmética" subtitulo="Tela, Laterais e Traseira com o catálogo atual de grades." icone={ClipboardCheck}>
+  {etapa===4&&<Painel titulo="Avaliação cosmética" subtitulo="" icone={ClipboardCheck}>
     
     {PARTES.map(p=><div key={p.id} className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/50 p-4">
       <h3 className="font-bold">{p.nome}</h3>
@@ -238,7 +273,7 @@ export default function TriagemUnificadaTestePage(){
     {grade&&<div className="rounded-xl bg-violet-50 p-4 text-sm"><b>Grade final:</b> {grade.grade} · <b>Estética:</b> {grade.gradeCosmetica}{grade.motivo&&<p className="mt-1">{grade.motivo}</p>}</div>}
     <button type="button" className={BOTAO} disabled={!grade||busy} onClick={concluir}>{busy?"Salvando...":"Concluir TR → Aguardando armazenagem"}</button>
   </Painel>}
-  {etapa===5&&<Painel titulo="Resultado e encaminhamento" subtitulo="Conferência final e destino operacional." icone={CheckCircle2}>
+  {etapa===5&&<Painel titulo="Resultado e encaminhamento" subtitulo="" icone={CheckCircle2}>
     
     {resultado?<div className="rounded-xl bg-emerald-50 p-4 text-sm"><p><b>Destino:</b> {resultado.status}</p><p><b>Grade:</b> {resultado.grade||"Não se aplica"}</p><p><b>Voucher:</b> {resultado.voucher}</p></div>:<div className="space-y-3"><p className="text-sm">Condição informada: <b>{condicao==="nao_liga"?"Não liga":"Bloqueado"}</b>. O aparelho seguirá para <b>Aguardando laudo</b>, sem avaliação cosmética.</p>
      <label className="block space-y-2 text-sm">IMEI físico (quando disponível)<input className={CAMPO} value={imei} onChange={e=>setImei(e.target.value.replace(/\D/g,""))} placeholder="IMEI, opcional quando não liga"/></label>
