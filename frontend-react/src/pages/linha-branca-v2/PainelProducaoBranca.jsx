@@ -16,6 +16,42 @@ function Indicador({titulo,valor,detalhe,Icon,cor,destaque=false}) {
  </div>;
 }
 
+function DistribuicaoDestinoCard({titulo,subtitulo,dados,total,foco='aprovado',rotuloCentro='aprovados',rodape}) {
+ const fatia=dados.find(d=>d.id===foco);
+ const taxa=total?((fatia?.total||0)/total)*100:null;
+ const validas=dados.filter(d=>d.total>0);
+ return <section className={caixa}>
+  <div className="flex items-start justify-between gap-3">
+   <div><h3 className="font-black">{titulo}</h3><p className="mt-1 text-xs text-slate-500">{subtitulo}</p></div>
+   <span className="rounded-lg bg-amber-50 p-2 text-amber-600"><ArrowUpRight size={20}/></span>
+  </div>
+  {total>0?<div className="relative mx-auto h-56 w-64 max-w-full" role="img"
+    aria-label={dados.map(d=>`${d.nome}: ${d.total}`).join('; ')}>
+   <ResponsiveContainer width="100%" height="100%">
+    <PieChart><Pie data={validas} isAnimationActive={false} dataKey="total" nameKey="nome"
+      innerRadius={73} outerRadius={98} paddingAngle={3} stroke="none">
+      {validas.map(d=><Cell key={d.id} fill={d.cor}/>)}
+    </Pie><Tooltip formatter={(valor,nome)=>[`${numero(valor)} OS`,nome]}/></PieChart>
+   </ResponsiveContainer>
+   <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+    <strong className="text-3xl font-black">{percentual(taxa)}</strong>
+    <span className="mt-1 text-xs text-slate-500">{rotuloCentro}</span>
+   </div>
+  </div>:<div className="flex h-56 items-center justify-center text-center text-sm text-slate-400">
+    Nenhuma OS no recorte<br/>selecionado.
+  </div>}
+  <ul className="space-y-3">{dados.map(d=><li key={d.id} className="flex items-center justify-between gap-3 text-xs">
+   <span className="flex items-center gap-2 text-slate-600">
+    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{background:d.cor}}/>{d.nome}
+   </span>
+   <span className="shrink-0 font-bold">{numero(d.total)} <span className="ml-2 font-normal text-slate-400">
+     {percentual(total?d.total/total*100:null)}
+   </span></span>
+  </li>)}</ul>
+  <p className="mt-5 border-t border-slate-100 pt-3 text-[10px] leading-5 text-slate-400">{rodape}</p>
+ </section>;
+}
+
 export default function PainelProducaoBranca({painel,resumo,periodo,etapa,onEtapa,onTecnicos}) {
  const maior=painel.ranking[0]?.total||1;
  const maiorCategoria=Math.max(1,...painel.categorias.map(c=>c.equipamentos));
@@ -52,6 +88,27 @@ export default function PainelProducaoBranca({painel,resumo,periodo,etapa,onEtap
     <div className="mt-5 flex flex-wrap gap-x-4 gap-y-2 border-t border-slate-100 pt-4">{ETAPAS_BRANCA.slice(1).map((e,i)=><span key={e} className="flex items-center gap-1.5 text-[10px] text-slate-500"><span className="h-2 w-2 rounded-full" style={{background:CORES_ETAPAS_BRANCA[i+1]}}/>{e}</span>)}</div>
     <p className="mt-3 text-[10px] leading-5 text-slate-400">Uma OS pode gerar atividades em várias etapas. Recebimentos não entram no ranking.{painel.semTecnico>0?` Há ${numero(painel.semTecnico)} atividades sem colaborador identificado fora do ranking.`:''}</p>
    </section>
+  </div>
+
+  <div className="grid gap-5 xl:grid-cols-2">
+   <DistribuicaoDestinoCard
+    titulo="Qual foi o destino dos reparos?"
+    subtitulo="Situação atual das OS com atividade de reparo no período."
+    dados={painel.distribuicaoReparo}
+    total={painel.totalReparo}
+    foco="aprovado"
+    rotuloCentro="finalizados"
+    rodape="Cada OS com atividade de reparo no período conta uma vez, independentemente da quantidade de áreas ou retrabalhos. O destino é a situação atual da OS."
+   />
+   <DistribuicaoDestinoCard
+    titulo="Qual é o resultado da operação inteira?"
+    subtitulo="Situação atual das OS trabalhadas em qualquer etapa no período."
+    dados={painel.distribuicaoOperacao}
+    total={painel.totalOperacao}
+    foco="aprovado"
+    rotuloCentro="finalizados"
+    rodape="Cada OS com atividade operacional no período conta uma vez. Mostra o status atual, não uma reconstrução histórica do fechamento naquela data."
+   />
   </div>
 
   <section className={caixa}>
