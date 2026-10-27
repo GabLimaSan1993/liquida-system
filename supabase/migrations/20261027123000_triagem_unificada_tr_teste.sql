@@ -36,7 +36,7 @@ as $tr$
 declare
  v_usuario uuid:=auth.uid();
  v_voucher text:=upper(btrim(p_dados->>'voucher'));
- v_imei text:=btrim(p_dados->>'imei');
+ v_imei text:=nullif(btrim(p_dados->>'imei'),'');
  v_condicao text:=p_dados->>'condicao';
  v_t public.assurant_triagem%rowtype;
  v_tradein record;
