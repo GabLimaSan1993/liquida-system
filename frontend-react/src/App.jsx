@@ -166,6 +166,7 @@ function ProtectedRoute({
 
 function UserOnlyRoute({
   userId,
+  userIds,
   children,
 }) {
   const {
@@ -190,7 +191,7 @@ function UserOnlyRoute({
     );
   }
 
-  if (user.id !== userId) {
+  if (userIds?.length ? !userIds.includes(user.id) : user.id !== userId) {
     return (
       <Navigate
         to="/sem-acesso"
@@ -535,7 +536,7 @@ export default function App() {
         <Route
           path="triagens/unificada-teste"
           element={
-            <UserOnlyRoute userId="b517d70a-56be-4b4f-8b9e-a03c769dd3c3">
+            <UserOnlyRoute userIds={["b517d70a-56be-4b4f-8b9e-a03c769dd3c3","490cfecb-4ba4-4670-9a53-5775c0b15bef","8549de55-3657-4042-86c6-822cd3d49941","6e0ac557-93a2-42ae-8595-12648b2ac0de"]}>
               <TriagemUnificadaTestePage />
             </UserOnlyRoute>
           }
