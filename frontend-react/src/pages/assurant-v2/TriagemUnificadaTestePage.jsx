@@ -44,29 +44,6 @@ function Painel({titulo,subtitulo,icone:Icon,children}){
  </section>;
 }
 
-function FotoCamera({titulo,valor,onChange}){
-  const [aviso,setAviso]=useState("");
-  function escolher(e){
-    const file=e.target.files?.[0];
-    setAviso("");
-    if(!file){onChange(null);return;}
-    if(!["image/jpeg","image/png","image/webp"].includes(file.type) || file.size>5*1024*1024 || !file.size){
-      setAviso("Use JPG, PNG ou WebP até 5 MB.");onChange(null);return;
-    }
-    const reader=new FileReader();
-    reader.onload=()=>onChange({file,preview:reader.result});
-    reader.onerror=()=>setAviso("Não foi possível ler a imagem.");
-    reader.readAsDataURL(file);
-  }
-  return <label className="block space-y-2 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
-    <span className="text-sm font-bold">{titulo} — foto obrigatória</span>
-
-    <input type="file" accept="image/jpeg,image/png,image/webp" capture={titulo.toLowerCase().includes("frontal") ? "user" : "environment"} onChange={escolher} className={CAMPO}/>
-    {valor?.preview&&<img src={valor.preview} alt={"Evidência "+titulo} className="h-40 w-full rounded-lg object-contain bg-slate-100"/>}
-    {aviso&&<span className="block text-xs text-red-700">{aviso}</span>}
-  </label>;
-}
-
 export default function TriagemUnificadaTestePage(){
  const {user}=useAuth();
  const [voucher,setVoucher]=useState(""),[ctx,setCtx]=useState(null);
@@ -80,7 +57,6 @@ export default function TriagemUnificadaTestePage(){
  const [cameras,setCameras]=useState({frontal:null,traseira:null});
  const [telaSemFalhasOuDanos,setTelaSemFalhasOuDanos]=useState(null);
  const [botaoFaltando,setBotaoFaltando]=useState(null);
- const [fotos,setFotos]=useState({frontal:null,traseira:null});
  const [defeitos,setDefeitos]=useState([]),[catalogoDefeitos,setCatalogoDefeitos]=useState([]);
  const [buscaDefeito,setBuscaDefeito]=useState("");
  const [opcoes,setOpcoes]=useState({tela:[],laterais:[],traseira:[]});
@@ -106,9 +82,8 @@ export default function TriagemUnificadaTestePage(){
  const grade=useMemo(()=>escolhas.tela&&escolhas.laterais&&escolhas.traseira
   ? calcularGradeFinal({...escolhas,temDefeitoFuncional:cameras.frontal===false||cameras.traseira===false||defeitosEfetivos.length>0,bateria:ctx?.existente?.status_bateria})
   : null,[escolhas,cameras,defeitosEfetivos,ctx]);
- const validoFotos=!!fotos.frontal?.file&&!!fotos.traseira?.file;
  const falha=(e)=>setErro(e?.message||String(e));
- function reiniciar(){setVoucher("");setCtx(null);setEtapa(0);setErro("");setResultado(null);setCondicao("");setProduto({marca:"",modelo:"",armazenamento:"",cor:""});setImei("");setImei2("");setCameras({frontal:null,traseira:null});setTelaSemFalhasOuDanos(null);setBotaoFaltando(null);setFotos({frontal:null,traseira:null});setDefeitos([]);setBuscaDefeito("");setEscolhas({tela:"",laterais:"",traseira:""});}
+ function reiniciar(){setVoucher("");setCtx(null);setEtapa(0);setErro("");setResultado(null);setCondicao("");setProduto({marca:"",modelo:"",armazenamento:"",cor:""});setImei("");setImei2("");setCameras({frontal:null,traseira:null});setTelaSemFalhasOuDanos(null);setBotaoFaltando(null);setDefeitos([]);setBuscaDefeito("");setEscolhas({tela:"",laterais:"",traseira:""});}
  async function consultar(e){
   e.preventDefault();setErro("");setBusy(true);
   try{
@@ -146,40 +121,25 @@ export default function TriagemUnificadaTestePage(){
  }
  function avancarCamera(){
   setErro("");
-  if(cameras.frontal===null||cameras.traseira===null||!validoFotos){setErro("Responda funcionamento e fotografe as duas câmeras.");return;}
+  if(cameras.frontal===null||cameras.traseira===null){setErro("Responda se as câmeras frontal e traseira funcionam.");return;}
   if(telaSemFalhasOuDanos===null||botaoFaltando===null){setErro("Responda às perguntas sobre tela e botões.");return;}
   if(condicao==="danos_tela"&&telaSemFalhasOuDanos===true){setErro("A condição inicial indica danos na tela. Revise a resposta sobre a tela.");return;}
   setEtapa(4);
  }
  function alternarDefeito(nome){setDefeitos(v=>v.includes(nome)?v.filter(x=>x!==nome):[...v,nome]);}
- async function enviarFotos(){
-   const paths={};
-   for(const lado of ["frontal","traseira"]){
-    const f=fotos[lado]?.file;
-    if(!f)throw Error("Fotos obrigatórias ausentes.");
-    const ext=f.type==="image/png"?"png":f.type==="image/webp"?"webp":"jpg";
-    const path=user.id+"/"+crypto.randomUUID()+"_"+lado+"."+ext;
-    const {error}=await supabase.storage.from("triagem-tr-teste").upload(path,f,{contentType:f.type,upsert:false});
-    if(error)throw Error("Upload "+lado+": "+error.message);
-    paths[lado]=path;
-   }
-   return paths;
- }
  async function concluir(){
   setErro("");
   if(tipo!=="TR"||!PILOT_USERS.has(user?.id)){setErro("Somente TR na conta piloto pode usar este fechamento.");return;}
-  if(!["nao_liga","bloqueado"].includes(condicao)&&(!grade||!validoFotos||cameras.frontal===null||cameras.traseira===null||telaSemFalhasOuDanos===null||botaoFaltando===null)){setErro("Complete os testes de câmera, tela, botões e cosmética.");return;}
+  if(!["nao_liga","bloqueado"].includes(condicao)&&(!grade||cameras.frontal===null||cameras.traseira===null||telaSemFalhasOuDanos===null||botaoFaltando===null)){setErro("Complete os testes de câmera, tela, botões e cosmética.");return;}
   if(condicao==="danos_tela"&&telaSemFalhasOuDanos===true){setErro("A condição inicial registra danos na tela. Revise a resposta.");return;}
   if(condicao!=="nao_liga"&&erroCodigo){setErro(erroCodigo);return;}
   if(!window.confirm("Confirmar a triagem de TESTE no banco operacional? O status do voucher será atualizado."))return;
   setBusy(true);
   try{
-   const paths=!["nao_liga","bloqueado"].includes(condicao)?await enviarFotos():{};
    const dados={voucher:ctx.voucher,
      marca:produto.marca,modelo:produto.modelo,capacidade:produto.armazenamento,cor:produto.cor,
      sku:sku.sku,imei:imei.trim()||null,imei2:doisImeis?imei2.trim()||null:null,condicao:condicao||"normal",
      camera_frontal_funciona:cameras.frontal,camera_traseira_funciona:cameras.traseira,
-     foto_frontal_path:paths.frontal||null,foto_traseira_path:paths.traseira||null,
      tela_sem_falhas_ou_danos:telaSemFalhasOuDanos,botao_faltando:botaoFaltando,
      defeitos:defeitosEfetivos,
      tela:escolhas.tela,laterais:escolhas.laterais,traseira:escolhas.traseira};
@@ -286,7 +246,6 @@ export default function TriagemUnificadaTestePage(){
     <div className="grid gap-4 md:grid-cols-2">{[["frontal","Câmera frontal"],["traseira","Câmera traseira"]].map(([k,nome])=><div key={k} className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/50 p-4">
       <h3 className="font-bold">{nome} funciona?</h3>
       <div className="flex gap-3">{[[true,"Sim"],[false,"Não"]].map(([ok,rot])=><button key={rot} type="button" onClick={()=>setCameras(v=>({...v,[k]:ok}))} className={"rounded-lg border px-5 py-2 text-sm "+(cameras[k]===ok?"bg-violet-700 text-white":"bg-white")}>{rot}</button>)}</div>
-      <FotoCamera titulo={nome} valor={fotos[k]} onChange={f=>setFotos(v=>({...v,[k]:f}))}/>
     </div>)}</div>
     <div className="grid gap-3 md:grid-cols-2">
       <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
