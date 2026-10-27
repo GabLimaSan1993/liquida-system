@@ -63,15 +63,12 @@ async function localizarImeisWms(imeis) {
   return mapa;
 }
 
-async function resolverCliente(ganhador) {
-  if (!ganhador) return "Cliente não identificado";
-  const termo = ganhador.substring(0, 30).trim();
-  const { data } = await supabase
-    .from("b2b_clientes").select("nome, nome_cnpj").ilike("nome_cnpj", `%${termo}%`).limit(1).single();
-  if (data?.nome) return data.nome;
-  const { data: data2 } = await supabase
-    .from("b2b_clientes").select("nome, nome_cnpj").ilike("nome", `%${ganhador.split(" ")[0]}%`).limit(1).single();
-  return data2?.nome || ganhador;
+function normalizarCnpjUpload(valor) {
+  const cnpj = String(valor ?? "").replace(/\D/g, "");
+  if (cnpj.length !== 14) {
+    throw new Error("CNPJ do upload inválido ou ausente: informe 14 dígitos. Nenhum dado foi alterado.");
+  }
+  return cnpj;
 }
 
 export async function importarPedidoB2B(file, userId, extras = {}) {
@@ -109,8 +106,17 @@ export async function importarPedidoB2B(file, userId, extras = {}) {
           .replace(/\s+/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "").trim();
         const lote = loteColuna || loteArquivo || "SEM_LOTE";
 
-        const ganhador = rows[0]["Ganhador"] || "";
-        const cliente  = await resolverCliente(ganhador);
+        // Origem do cliente: exclusivamente Ganhador da planilha.
+        const ganhadores = [...new Set(rows.map(r => String(r["Ganhador"] ?? "").trim()).filter(Boolean))];
+        if (ganhadores.length !== 1 || rows.some(r => !String(r["Ganhador"] ?? "").trim())) {
+          throw new Error("Planilha deve ter um único Ganhador preenchido em todas as linhas. Nenhum pedido foi criado.");
+        }
+        const cliente = ganhadores[0];
+        const cnpjUpload = normalizarCnpjUpload(extras.cnpj_agregado);
+        const condicaoPagamentoUpload = String(extras.condicao_pagamento ?? "").trim();
+        if (!condicaoPagamentoUpload) {
+          throw new Error("Informe a condição de pagamento no upload. Nenhum pedido foi criado.");
+        }
 
         const { data: existing } = await supabase.from("b2b_pedidos").select("id").eq("lote", lote).single();
         if (existing) throw new Error(`Pedido "${lote}" já foi importado.`);
@@ -123,8 +129,8 @@ export async function importarPedidoB2B(file, userId, extras = {}) {
             data_pedido:        extrairDataDoNome(file.name),
             total_itens:        rows.length,
             criado_por:         userId,
-            condicao_pagamento: extras.condicao_pagamento || null,
-            cnpj_agregado:      extras.cnpj_agregado      || null,
+            condicao_pagamento: condicaoPagamentoUpload,
+            cnpj_agregado:      cnpjUpload,
             status_picking:     "em_andamento",
             status_faturamento: "pendente",
           })
@@ -375,9 +381,14 @@ export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
 
   const { data: pedido, error: errPedido } = await supabase.from("b2b_pedidos").select("*").eq("id", pedidoId).single();
   if (errPedido || !pedido) throw new Error(errPedido?.message || "Pedido não encontrado.");
-  const { data: clienteData } = await supabase.from("b2b_clientes").select("cnpj").eq("nome", pedido.cliente).single();
-  // Prioriza o CNPJ informado no upload; pedidos antigos usam o cadastro do cliente.
-  const cnpj = String(pedido.cnpj_agregado || clienteData?.cnpj || "");
+  // Faturamento não consulta b2b_clientes: dados são os do próprio upload.
+  const cliente = String(pedido.cliente ?? "").trim();
+  if (!cliente) throw new Error("Faturamento bloqueado: cliente ausente no pedido.");
+  const cnpj = normalizarCnpjUpload(pedido.cnpj_agregado);
+  const condicaoPagamento = String(pedido.condicao_pagamento ?? "").trim();
+  if (!condicaoPagamento) {
+    throw new Error("Faturamento bloqueado: condição de pagamento ausente no upload. Regularize o pedido antes de exportar.");
+  }
 
   const { data: novaExportacao, error: errExp } = await supabase.from("b2b_exportacoes")
     .insert({ pedido_id: pedidoId, exportado_por: userId, nome_usuario: nomeUsuario, total_itens: itensBipados.length })
@@ -394,9 +405,9 @@ export async function exportarFaturamento(pedidoId, userId, nomeUsuario) {
   const numeroExportacao = (totalExportacoes || 0) + 1;
   const rows = itensBipados.map(i => ({
     "LOTE":      pedido.lote,
-    "CLIENTE":   pedido.cliente,
+    "CLIENTE":   cliente,
     "CNPJ":      cnpj,
-    "CONDIÇÃO DE PAGAMENTO": pedido.condicao_pagamento || "",
+    "CONDIÇÃO DE PAGAMENTO": condicaoPagamento,
     "VOUCHER":   i.voucher,
     "IMEI":      i.imei,
     "MODELO":    i.modelo,
