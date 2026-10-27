@@ -92,6 +92,7 @@ import DesvinculacoesLiquidaV2Page from "./pages/assurant-v2/DesvinculacoesLiqui
 
 import GestaoProducaoLinhaBrancaPage from "./pages/linha-branca-v2/GestaoProducaoLinhaBrancaPage.jsx";
 import DesmembramentoLinhaBrancaPage from "./pages/linha-branca-v2/DesmembramentoLinhaBrancaPage.jsx";
+import GestaoEstoqueLinhaBrancaPage from "./pages/linha-branca-v2/GestaoEstoqueLinhaBrancaPage.jsx";
 import LinhaBrancaHomePage from "./pages/linha-branca-v2/LinhaBrancaHomePage.jsx";
 import RefrigeracaoV2Page from "./pages/linha-branca-v2/RefrigeracaoV2Page.jsx";
 import TriagemRefrigeracaoV2Page from "./pages/linha-branca-v2/TriagemRefrigeracaoV2Page.jsx";
@@ -379,6 +380,7 @@ export default function App() {
         <Route path="uploads" element={<ProtectedRoute tela="/v2/linha-branca/uploads"><UploadAgingLinhaBrancaPage /></ProtectedRoute>} />
         <Route path="gestao/producao" element={<ProtectedRoute tela="/v2/linha-branca/gestao/producao"><GestaoProducaoLinhaBrancaPage /></ProtectedRoute>} />
         <Route path="desmembramento" element={<ProtectedRoute tela="/v2/linha-branca"><DesmembramentoLinhaBrancaPage /></ProtectedRoute>} />
+        <Route path="gestao/estoque" element={<ProtectedRoute tela="/v2/linha-branca"><GestaoEstoqueLinhaBrancaPage /></ProtectedRoute>} />
       </Route>
 
 
