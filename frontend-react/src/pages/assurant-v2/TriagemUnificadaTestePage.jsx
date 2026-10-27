@@ -10,7 +10,7 @@ const CAMPO = "w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text
 const BOTAO = "rounded-xl bg-violet-700 px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40";
 const STEPS = ["Voucher", "Produto", "IMEI", "Câmeras e defeitos", "Cosmética", "Resultado"];
 const PARTES = [{id:"tela",nome:"Tela"},{id:"laterais",nome:"Laterais"},{id:"traseira",nome:"Traseira"}];
-const OWNER = "b517d70a-56be-4b4f-8b9e-a03c769dd3c3";
+const PILOT_USERS = new Set(["b517d70a-56be-4b4f-8b9e-a03c769dd3c3","490cfecb-4ba4-4670-9a53-5775c0b15bef","8549de55-3657-4042-86c6-822cd3d49941","6e0ac557-93a2-42ae-8595-12648b2ac0de"]);
 
 function FotoCamera({titulo,valor,onChange}){
   const [aviso,setAviso]=useState("");
@@ -29,7 +29,7 @@ function FotoCamera({titulo,valor,onChange}){
   return <label className="block space-y-2 rounded-xl border border-slate-200 p-4">
     <span className="text-sm font-bold">{titulo} — foto obrigatória</span>
     <span className="block text-xs text-slate-500">Tire uma foto de teste com a câmera indicada e confira o resultado.</span>
-    <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={escolher} className={CAMPO}/>
+    <input type="file" accept="image/jpeg,image/png,image/webp" capture={titulo.toLowerCase().includes("frontal") ? "user" : "environment"} onChange={escolher} className={CAMPO}/>
     {valor?.preview&&<img src={valor.preview} alt={"Evidência "+titulo} className="h-40 w-full rounded-lg object-contain bg-slate-100"/>}
     {aviso&&<span className="block text-xs text-red-700">{aviso}</span>}
   </label>;
@@ -110,7 +110,7 @@ export default function TriagemUnificadaTestePage(){
  }
  async function concluir(){
   setErro("");
-  if(tipo!=="TR"||user?.id!==OWNER){setErro("Somente TR na conta piloto pode usar este fechamento.");return;}
+  if(tipo!=="TR"||!PILOT_USERS.has(user?.id)){setErro("Somente TR na conta piloto pode usar este fechamento.");return;}
   if(condicao==="normal"&&(!grade||!validoFotos||cameras.frontal===null||cameras.traseira===null)){setErro("Complete testes de câmera e as três perguntas cosméticas.");return;}
   if(condicao==="normal"&&!/^[0-9]{14,16}$/.test(imei)){setErro("IMEI físico obrigatório.");return;}
   if(!window.confirm("Confirmar a triagem de TESTE no banco operacional? O status do voucher será atualizado."))return;
@@ -127,7 +127,7 @@ export default function TriagemUnificadaTestePage(){
    setResultado(data);setEtapa(5);
   }catch(e){falha(e);}finally{setBusy(false);}
  }
- if(user?.id!==OWNER)return <p className="p-6">Tela restrita ao responsável pelo piloto.</p>;
+ if(!PILOT_USERS.has(user?.id))return <p className="p-6">Tela restrita ao responsável pelo piloto.</p>;
  return <div className="mx-auto max-w-5xl space-y-5 p-4 md:p-6">
   <header className="rounded-2xl border border-violet-200 bg-violet-50 p-5">
     <div className="text-xs font-black uppercase tracking-wide text-violet-700">Assurant · Laboratório restrito</div>
