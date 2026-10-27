@@ -173,7 +173,7 @@ export default function LinhaBrancaHomePage() {
       </div>
 
       <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-        {AREAS.filter(area => !area.disponivel || hasAccess(area.rota) || (area.rota === '/v2/linha-branca/desmembramento' && hasAccess('/v2/linha-branca')) || (area.rota === '/v2/linha-branca/gestao/estoque' && hasAccess('/v2/linha-branca'))).map((area) => (
+        {AREAS.filter(area => !area.disponivel || hasAccess(area.rota)).map((area) => (
           <AreaCard
             key={area.nome}
             {...area}
