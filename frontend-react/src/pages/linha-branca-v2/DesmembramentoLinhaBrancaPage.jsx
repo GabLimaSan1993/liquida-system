@@ -49,19 +49,26 @@ export default function DesmembramentoLinhaBrancaPage(){
   setLote(crypto.randomUUID());
  }
  function trocarOS(v){setNumero(v);setConsulta(null);setPecas([ESTADO_PECA()]);setLote(crypto.randomUUID());setErro("");setSucesso("");}
- async function consultar(e){
-  e?.preventDefault();setErro("");setSucesso("");setCarregando(true);
+ async function abrirOS(numeroOS){
+  const numeroSelecionado=String(numeroOS||"").trim();
+  if(!numeroSelecionado)return;
+  trocarOS(numeroSelecionado);
+  setCarregando(true);
   try{
-   const res=await operar("consultar",{numero_os:numero.trim()});
+   const res=await operar("consultar",{numero_os:numeroSelecionado});
    setConsulta(res);setPecas([ESTADO_PECA()]);setLote(crypto.randomUUID());
   }catch(err){setConsulta(null);setErro(err.message);}
   finally{setCarregando(false);}
+ }
+ async function consultar(e){
+  e?.preventDefault();
+  await abrirOS(numero);
  }
  function adicionar(){if(pecas.length>=30)return;setPecas(v=>[...v,ESTADO_PECA()]);setLote(crypto.randomUUID());}
  function excluir(id){setPecas(v=>v.length>1?v.filter(p=>p.id!==id):[ESTADO_PECA()]);setLote(crypto.randomUUID());}
  async function confirmar(e){
   e.preventDefault();setErro("");setSucesso("");
-  if(!consulta?.os)return setErro("Consulte uma OS com desmembramento aprovado.");
+  if(!consulta?.os)return setErro("Selecione ou consulte uma OS liberada para desmembramento.");
   if(!pecas.length||pecas.some(p=>!p.descricao.trim()||!/^[0-9]+$/.test(p.quantidade)||Number(p.quantidade)<1||Number(p.quantidade)>10000))
    return setErro("Confira a descrição e a quantidade inteira das peças.");
   if(!window.confirm(`Confirmar entrada de ${pecas.length} tipo(s) de peça(s) da OS ${consulta.os.numero_os} no estoque da Linha Branca?`))return;
@@ -92,7 +99,7 @@ export default function DesmembramentoLinhaBrancaPage(){
   <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
     <div><h2 className="text-sm font-black">OSs indicadas para desmembramento</h2>
-     <p className="mt-1 text-xs text-slate-500">Fila de avaliação. A entrada de peças exige cadastro da OS e aprovação para destino Desmembramento.</p>
+     <p className="mt-1 text-xs text-slate-500">As quatro OSs autorizadas para o piloto podem ser desmembradas em paralelo, sem alterar o fluxo atual. Peças registradas entram no estoque com rastreabilidade.</p>
     </div>
     <span className="rounded-full bg-violet-50 px-3 py-1 text-xs font-black text-violet-700">{fila.length} OS(s)</span>
    </div>
@@ -104,15 +111,15 @@ export default function DesmembramentoLinhaBrancaPage(){
      </tr></thead>
      <tbody className="divide-y divide-slate-100">{fila.map(x=><tr key={x.numero_os}>
       <td className="px-3 py-3 font-black text-slate-800">{x.numero_os}</td>
-      <td className="px-3 py-3">{x.os_id?[x.categoria,x.marca,x.modelo].filter(Boolean).join(" · "):"Aguardando cadastro da OS"}</td>
-      <td className="px-3 py-3">{x.status_atual||"Sem cadastro operacional"}</td>
+      <td className="px-3 py-3">{x.os_id?[x.categoria,x.marca,x.modelo].filter(Boolean).join(" · "):"Piloto — identificada pelo número da OS"}</td>
+      <td className="px-3 py-3">{x.status_atual||(x.liberado_estoque?"Piloto paralelo":"Sem cadastro operacional")}</td>
       <td className="px-3 py-3">
        <span className={"inline-flex rounded-lg px-2.5 py-1 font-bold "+(x.liberado_estoque?"bg-emerald-50 text-emerald-700":"bg-amber-50 text-amber-800")}>
         {x.situacao}
        </span>
       </td>
       <td className="px-3 py-3"><button type="button"
-       onClick={()=>{trocarOS(x.numero_os);if(!x.liberado_estoque)setErro("OS selecionada para avaliação. O registro de peças exige cadastro válido e aprovação do destino Desmembramento.");}}
+       onClick={()=>abrirOS(x.numero_os)} disabled={carregando}
        className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 font-bold text-violet-700 hover:bg-violet-100">
        Selecionar OS
       </button></td>
@@ -130,7 +137,7 @@ export default function DesmembramentoLinhaBrancaPage(){
     <button type="submit" disabled={carregando||!numero.trim()} className={botao}>{carregando?"Consultando...":"Consultar OS"}</button>
    </form>
    {consulta?.os&&<div className="mt-5 grid gap-3 rounded-xl border border-emerald-100 bg-emerald-50/50 p-4 sm:grid-cols-2 lg:grid-cols-4">
-    {[["OS",consulta.os.numero_os],["Máquina",consulta.os.maquina],["Marca",consulta.os.marca],["Modelo anterior",consulta.os.modelo],["Número de série",consulta.os.serial],["Situação",consulta.os.status],["Destino","Desmembramento aprovado"]].map(([chave,valor])=><div key={chave}><p className="text-[10px] font-black uppercase tracking-wide text-slate-400">{chave}</p><p className="mt-1 text-sm font-bold text-slate-800">{valor||"—"}</p></div>)}
+    {[["OS",consulta.os.numero_os],["Máquina",consulta.os.maquina],["Marca",consulta.os.marca],["Modelo anterior",consulta.os.modelo],["Número de série",consulta.os.serial],["Situação",consulta.os.status],["Autorização",consulta.os.condenacao_id?"Desmembramento aprovado":"Piloto paralelo — liberado"]].map(([chave,valor])=><div key={chave}><p className="text-[10px] font-black uppercase tracking-wide text-slate-400">{chave}</p><p className="mt-1 text-sm font-bold text-slate-800">{valor||"—"}</p></div>)}
    </div>}
   </section>
   {consulta?.os&&<form onSubmit={confirmar} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
