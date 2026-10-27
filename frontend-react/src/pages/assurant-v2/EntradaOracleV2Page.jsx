@@ -110,11 +110,20 @@ const GRADES_ORACLE_FILTRO = [
 
   {
     codigo: 5,
-    rotulo: "5 · Quebrado",
+    rotulo: "5 · Quebrado (BM)",
     ativo:
       "border-rose-600 bg-rose-600 text-white",
     inativo:
       "border-rose-200 bg-white text-rose-700 hover:bg-rose-50",
+  },
+
+  {
+    codigo: 7,
+    rotulo: "7 · Quebrado (TR)",
+    ativo:
+      "border-fuchsia-700 bg-fuchsia-700 text-white",
+    inativo:
+      "border-fuchsia-200 bg-white text-fuchsia-700 hover:bg-fuchsia-50",
   },
 
   {
@@ -375,6 +384,9 @@ function OracleBadge({
 
     5:
       "bg-rose-50 text-rose-700 ring-rose-200",
+
+    7:
+      "bg-fuchsia-50 text-fuchsia-700 ring-fuchsia-200",
   };
 
   return (
@@ -975,6 +987,9 @@ await carregarPendentes();
 
           Grade:
             item.grade,
+
+          "Condição loja":
+            item.condicaoLoja || "",
 
           "Grade Oracle":
             item.gradeOracle,
@@ -1687,6 +1702,12 @@ await carregarPendentes();
                                   />
                                 )}
                               </div>
+
+                              {item.condicaoLoja && (
+                                <div className="mt-0.5 text-[9px] font-bold text-slate-400">
+                                  Compra loja: {item.condicaoLoja}
+                                </div>
+                              )}
 
                               {item.statusBateria && (
                                 <div className="mt-0.5 max-w-[150px] truncate text-[9px] text-slate-400">
