@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase.js";
+import { fetchOsAguardandoCmp } from "./reparoLinhaBrancaService.js";
 import {
   atualizarNecessidadeCompraStatus,
   consultarPecaPorPn,
@@ -396,16 +397,36 @@ export async function finalizarOperacaoClimatizacao(
 }
 
 export async function fetchComponentesEmReparo() {
-  const { data, error } = await supabase
-    .from("climatizacao_componentes")
-    .select("*, os:ordens_servico(*)")
-    .eq("status", "em_reparo")
-    .order("updated_at", { ascending: true });
+  const [{ data, error }, aguardandoCmp] = await Promise.all([
+    supabase
+      .from("climatizacao_componentes")
+      .select("*, os:ordens_servico(*)")
+      .eq("status", "em_reparo")
+      .order("updated_at", { ascending: true }),
+    fetchOsAguardandoCmp(),
+  ]);
 
   if (error) throw error;
 
-  const componentes = data || [];
-  const osIds = componentes.map((item) => item.os_id);
+  const osCmp = aguardandoCmp.filter((os) => os.categoria === "Ar-condicionado");
+  let componentesCmp = [];
+  if (osCmp.length) {
+    const osPorId = new Map(osCmp.map((os) => [String(os.id), os]));
+    const { data: cmpData, error: cmpError } = await supabase
+      .from("climatizacao_componentes")
+      .select("*")
+      .in("os_id", osCmp.map((os) => os.id));
+    if (cmpError) throw cmpError;
+    componentesCmp = (cmpData || []).map((item) => ({
+      ...item,
+      os: osPorId.get(String(item.os_id)) || null,
+    }));
+  }
+
+  const mapa = new Map((data || []).map((item) => [String(item.id), item]));
+  componentesCmp.forEach((item) => mapa.set(String(item.id), item));
+  const componentes = [...mapa.values()];
+  const osIds = [...new Set(componentes.map((item) => item.os_id))];
   if (!osIds.length) return [];
 
   const { data: triagens, error: triagemError } = await supabase

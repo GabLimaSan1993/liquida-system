@@ -1,12 +1,34 @@
 import { supabase } from "../lib/supabase";
 
+export function osAguardandoCmp(os) {
+  const etapa = String(os?.dados_aging?.ETAPA || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, " ");
+  return etapa === "AGUARDANDO CMP";
+}
+
+export async function fetchOsAguardandoCmp() {
+  const { data, error } = await supabase
+    .from("ordens_servico")
+    .select("*")
+    .eq("linha_produto", "Linha Branca")
+    .contains("dados_aging", { ETAPA: "Aguardando CMP" })
+    .order("dt_entrada", { ascending: true });
+
+  if (error) throw error;
+  return data || [];
+}
+
 export async function fetchOsParaReparo(areaExecucao) {
   const { data, error } = await supabase
     .from("ordens_servico")
     .select("*")
     .contains("areas_reparo", [areaExecucao])
     .not("areas_concluidas", "cs", `{${areaExecucao}}`)
-    .in("status_atual", ["Triado", "Em reparo"])
+    .in("status_atual", ["Triado", "Em reparo", "Aguardando peça"])
     .order("dt_entrada", { ascending: true });
 
   if (error) throw error;

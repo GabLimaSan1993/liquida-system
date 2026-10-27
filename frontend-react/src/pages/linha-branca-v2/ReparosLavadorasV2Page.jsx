@@ -16,8 +16,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../AuthContext.jsx";
 import {
   condenarOs,
+  fetchOsAguardandoCmp,
   fetchOsParaReparo,
   fetchTriagemDaOs,
+  osAguardandoCmp,
   salvarExecucaoReparo,
 } from "../../services/reparoLinhaBrancaService.js";
 import {
@@ -26,6 +28,7 @@ import {
   REPAROS_MECANICOS_LAVADORAS,
 } from "../../services/linhaBrancaService.js";
 import { fetchHistoricoLavadora } from "../../services/lavadorasTriagemService.js";
+import { identificarTipoLavadora } from "../../services/lavadorasConferencia.js";
 
 const AREA_CONFIG = {
   "Reparo Mecânico": { titulo: "Mecânico", lista: REPAROS_MECANICOS_LAVADORAS },
@@ -84,16 +87,27 @@ export default function ReparosLavadorasV2Page() {
   async function carregarOs() {
     try {
       setLoading(true);
-      const resultados = await Promise.all(AREAS.map((area) => fetchOsParaReparo(area)));
+      const resultados = await Promise.all([
+        ...AREAS.map((area) => fetchOsParaReparo(area)),
+        fetchOsAguardandoCmp(),
+      ]);
       const mapa = new Map();
       resultados.flat().forEach((os) => mapa.set(os.id, os));
       const filtradas = await Promise.all([...mapa.values()].map(async (os) => {
+        const aguardandoCmp = osAguardandoCmp(os);
+        const cmpDeLavadora = aguardandoCmp && Boolean(identificarTipoLavadora(os.categoria));
+        if (aguardandoCmp && !cmpDeLavadora) return null;
+
+        const areas = Array.isArray(os.areas_reparo) && os.areas_reparo.length
+          ? os.areas_reparo
+          : cmpDeLavadora ? ["Reparo Mecânico"] : [];
         try {
           const triagem = await fetchTriagemDaOs(os.id);
-          if (triagem?.tipo_produto !== "Lavadoras") return null;
-          return { ...os, __triagem: triagem };
+          if (triagem?.tipo_produto !== "Lavadoras" && !cmpDeLavadora) return null;
+          return { ...os, areas_reparo: areas, __triagem: triagem };
         } catch {
-          return null;
+          if (!cmpDeLavadora) return null;
+          return { ...os, areas_reparo: areas, __triagem: null };
         }
       }));
       setOsList(filtradas.filter(Boolean));

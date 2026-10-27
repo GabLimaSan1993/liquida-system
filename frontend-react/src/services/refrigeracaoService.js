@@ -1,6 +1,8 @@
 import { supabase } from "../lib/supabase.js";
+import { fetchOsAguardandoCmp, osAguardandoCmp } from "./reparoLinhaBrancaService.js";
 
 export const REFRIGERACAO_CATEGORIA = "Refrigerador";
+export const REFRIGERACAO_CATEGORIAS = ["Refrigerador", "Freezer", "Frigobar", "Adega", "Cervejeira"];
 export const DESTINOS_CONDENACAO = ["Scrap", "Venda no estado", "Desmembramento"];
 
 const STATUS_AGUARDANDO = ["Recebido", "Aguardando triagem", "Em triagem"];
@@ -54,17 +56,26 @@ export async function fetchIndicadoresRefrigeracao() {
 }
 
 export async function fetchOsRefrigeracaoParaReparo() {
-  const { data, error } = await supabase
-    .from("ordens_servico")
-    .select("*")
-    .eq("linha_produto", "Linha Branca")
-    .eq("categoria", REFRIGERACAO_CATEGORIA)
-    .in("status_atual", STATUS_REPARO)
-    .order("dt_entrada", { ascending: true });
+  const [{ data, error }, aguardandoCmp] = await Promise.all([
+    supabase
+      .from("ordens_servico")
+      .select("*")
+      .eq("linha_produto", "Linha Branca")
+      .eq("categoria", REFRIGERACAO_CATEGORIA)
+      .in("status_atual", STATUS_REPARO)
+      .order("dt_entrada", { ascending: true }),
+    fetchOsAguardandoCmp(),
+  ]);
 
   if (error) throw error;
 
-  const lista = data || [];
+  const mapa = new Map((data || []).map((os) => [String(os.id), os]));
+  aguardandoCmp
+    .filter((os) => REFRIGERACAO_CATEGORIAS.includes(os.categoria))
+    .forEach((os) => mapa.set(String(os.id), os));
+  const lista = [...mapa.values()].sort((a, b) =>
+    String(a.dt_entrada || "").localeCompare(String(b.dt_entrada || ""))
+  );
   if (!lista.length) return [];
 
   const ids = lista.map((os) => os.id);
@@ -102,6 +113,7 @@ export async function fetchOsRefrigeracaoParaReparo() {
         const area = normalizarArea(os.area_destino);
         if (["Reparo Mecânico", "Reparo Elétrico", "Reparo Estético"].includes(area)) areas = [area];
       }
+      if (!areas.length && osAguardandoCmp(os)) areas = ["Reparo Mecânico"];
 
       return {
         ...os,
