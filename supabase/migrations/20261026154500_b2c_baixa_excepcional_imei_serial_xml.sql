@@ -179,6 +179,15 @@ begin
        then raise exception 'Endereço físico precisa ser conciliado antes da baixa'; end if;
        if (select count(*) from public.wms_alocacoes where endereco_id=e.id and status='confirmado' and retirado_em is null)<>1
        then raise exception 'Endereço possui múltiplos produtos ativos'; end if;
+       -- Não cancelar reservas de outros pedidos/canais automaticamente.
+       if exists (
+         select 1 from public.wms_reservas_saida r
+         where r.alocacao_id=a.id
+           and r.status in ('reservado','analise','reconciliar')
+           and (r.canal<>'B2C' or r.referencia_id is distinct from s.pedido_id::text)
+       ) then
+         raise exception 'Produto reservado por outro pedido/canal: concilie antes de aprovar';
+       end if;
        update public.wms_reservas_saida set status='cancelado',
          finalizado_em=clock_timestamp(),finalizado_por=u.id,atualizado_em=clock_timestamp()
          where alocacao_id=a.id and status in ('reservado','analise','reconciliar');
