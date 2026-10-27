@@ -125,6 +125,43 @@ export function agruparProdutosBranca(resumo,campo) {
  return [...grupos.values()].map(g=>({...g,os:g.os.size,concluidas:g.concluidas.size})).sort((a,b)=>b.total-a.total||b.custo-a.custo);
 }
 
+// Classificação mutuamente exclusiva pela posição ATUAL da OS.
+// O recorte de período seleciona as OS com atividade; não reconstrói estados passados.
+export function classificarDestinoAtualBranca(os) {
+ const status=normalizar(os?.status_atual);
+ const etapa=normalizar(os?.etapa_atual);
+ if(/scrap|conden/.test(status)||/scrap|conden/.test(etapa))return 'scrap';
+ if(/^(finalizado|aprovado|concluido|expedido)$/.test(status))return 'aprovado';
+ if(/bancada|teste|limpeza|higien|qualidade/.test(status)||/bancada|teste|limpeza|higien|qualidade/.test(etapa))return 'pos_reparo';
+ if(/reparo|aguardando peca|aguardando kit|triado/.test(status)||/reparo|aguardando peca|aguardando kit|reparo|eletronica/.test(etapa))return 'reparo';
+ if(/triagem/.test(status)||/triagem/.test(etapa))return 'triagem';
+ return 'outros';
+}
+const DESTINOS_REPARO_BRANCA=[
+ {id:'aprovado',nome:'Finalizados / aprovados',cor:'#10b981'},
+ {id:'pos_reparo',nome:'Em testes / limpeza / qualidade',cor:'#0ea5e9'},
+ {id:'reparo',nome:'Em reparo / aguardando peça',cor:'#f59e0b'},
+ {id:'scrap',nome:'Condenados / scrap',cor:'#f43f5e'},
+ {id:'triagem',nome:'Retornaram à triagem',cor:'#8b5cf6'},
+ {id:'outros',nome:'Outro destino / não informado',cor:'#94a3b8'},
+];
+const DESTINOS_OPERACAO_BRANCA=[
+ {id:'aprovado',nome:'Finalizados / aprovados',cor:'#10b981'},
+ {id:'reparo',nome:'Em reparo / aguardando peça',cor:'#f59e0b'},
+ {id:'pos_reparo',nome:'Em testes / limpeza / qualidade',cor:'#0ea5e9'},
+ {id:'triagem',nome:'Aguardando / em triagem',cor:'#8b5cf6'},
+ {id:'scrap',nome:'Condenados / scrap',cor:'#f43f5e'},
+ {id:'outros',nome:'Outro status / não informado',cor:'#94a3b8'},
+];
+function agruparDestinosAtuais(osUnicas, categorias) {
+ const totais=new Map(categorias.map(c=>[c.id,0]));
+ for(const os of osUnicas.values()) {
+  const destino=classificarDestinoAtualBranca(os);
+  totais.set(destino,(totais.get(destino)||0)+1);
+ }
+ return categorias.map(c=>({...c,total:totais.get(c.id)||0}));
+}
+
 // Equipamentos únicos para os destinos; atividades para comparar a produção por pessoa.
 export function resumirPainelBranca(resumo) {
  const operacionais=resumo.eventos.filter(e=>e.etapa!=='Recebimento');
@@ -155,8 +192,15 @@ export function resumirPainelBranca(resumo) {
   const eventos=operacionais.filter(e=>areaLinhaBranca(e.os.categoria)===nome);
   return {nome,equipamentos:new Set(eventos.map(e=>String(e.os_id))).size,triados:new Set(eventos.filter(e=>e.etapa==='Triagem').map(e=>String(e.os_id))).size,atividades:eventos.length};
  });
+ const osComAtividade=new Map(operacionais.map(e=>[String(e.os_id),e.os]));
+ // Denominador do reparo: uma OS por reparo registrado no período, ainda que haja retrabalho.
+ const osComReparo=new Map(operacionais.filter(e=>e.etapa==='Reparo').map(e=>[String(e.os_id),e.os]));
+ const distribuicaoReparo=agruparDestinosAtuais(osComReparo,DESTINOS_REPARO_BRANCA);
+ const distribuicaoOperacao=agruparDestinosAtuais(osComAtividade,DESTINOS_OPERACAO_BRANCA);
+ const totalReparo=osComReparo.size, totalOperacao=osComAtividade.size;
  const triados=destinos.size,reparo=distribuicao[0].total;
- return {triados,reparo,taxaReparo:triados?reparo/triados*100:null,distribuicao,ranking,categorias,
+ return {triados,reparo,taxaReparo:triados?reparo/triados*100:null,distribuicao,
+  distribuicaoReparo,totalReparo,distribuicaoOperacao,totalOperacao,ranking,categorias,
   reparados:new Set(operacionais.filter(e=>e.etapa==='Reparo'&&['concluido','aprovado'].includes(e.resultado)).map(e=>String(e.os_id))).size,
   higienizados:unicas('Higienização'),finalizados:resumo.concluidas.length,
   equipamentos:new Set(operacionais.map(e=>String(e.os_id))).size,atividades:operacionais.length,
