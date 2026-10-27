@@ -66,6 +66,13 @@ const TRIAGEM_AUTO_ALLOWED_USERS = [
   "b517d70a-56be-4b4f-8b9e-a03c769dd3c3",
 ];
 
+const TRIAGEM_UNIFICADA_PILOTO_USERS = [
+  "b517d70a-56be-4b4f-8b9e-a03c769dd3c3",
+  "490cfecb-4ba4-4670-9a53-5775c0b15bef",
+  "8549de55-3657-4042-86c6-822cd3d49941",
+  "6e0ac557-93a2-42ae-8595-12648b2ac0de",
+];
+
 const ACTIVE_B2C_STATUSES = [
   "aguardando_alocacao",
   "aguardando_definicao_produto",
@@ -131,6 +138,14 @@ const MENU_GROUPS = [
           },
 
           { label: "Divergências", icon: ShieldCheck, to: "/v2/assurant/triagens/divergencias-imei", exact: true },
+
+          {
+            label: "Triagem Unificada — Teste",
+            icon: FlaskConical,
+            to: "/v2/assurant/triagens/unificada-teste",
+            exact: true,
+            allowedUserIds: TRIAGEM_UNIFICADA_PILOTO_USERS,
+          },
 
           {
             label: "Triagem Automática — LAB",
