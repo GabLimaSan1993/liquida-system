@@ -9,6 +9,7 @@ import {
   WashingMachine,
   PackageSearch,
   PackagePlus,
+  Warehouse,
 } from "lucide-react";
 
 import { useNavigate } from "react-router-dom";
@@ -21,6 +22,13 @@ const AREAS = [
     descricao: "Produção por técnico, marca, modelo e fornecedor, peças e SLA.",
     icon: BarChart3,
     rota: "/v2/linha-branca/gestao/producao",
+    disponivel: true,
+  },
+  {
+    nome: "Gestão de Estoque",
+    descricao: "Peças e insumos, requisições das OSs, compras, notas fiscais, WIP e movimentações.",
+    icon: Warehouse,
+    rota: "/v2/linha-branca/gestao/estoque",
     disponivel: true,
   },
   {
@@ -165,7 +173,7 @@ export default function LinhaBrancaHomePage() {
       </div>
 
       <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-        {AREAS.filter(area => !area.disponivel || hasAccess(area.rota) || (area.rota === '/v2/linha-branca/desmembramento' && hasAccess('/v2/linha-branca'))).map((area) => (
+        {AREAS.filter(area => !area.disponivel || hasAccess(area.rota) || (area.rota === '/v2/linha-branca/desmembramento' && hasAccess('/v2/linha-branca')) || (area.rota === '/v2/linha-branca/gestao/estoque' && hasAccess('/v2/linha-branca'))).map((area) => (
           <AreaCard
             key={area.nome}
             {...area}
