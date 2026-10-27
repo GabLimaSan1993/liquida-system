@@ -25,17 +25,11 @@ const GRADE_ORACLE = {
 //  - Regular  + bateria 70-79% → Quebrado (5)
 //  - Quebrado + bateria 70-79% → Quebrado (5)  (já é)
 //  - Outlet   → sempre Outlet (204); a bateria não muda nada
-// Condição da loja (TradeIn): QUEBRADO comprado como TR vai direto para estoque 7.
-// O de/para padrão QUEBRADO → 5 permanece válido para BM e outras origens.
 // Retorna null para grade desconhecida — a tela mostra em branco em vez de chutar.
-export function gradeParaOracle(gradeTexto, statusBateria, condicaoLoja = null) {
+export function gradeParaOracle(gradeTexto, statusBateria) {
   const g = String(gradeTexto || "").toLowerCase().trim();
   const bateriaBaixa =
     String(statusBateria || "").toLowerCase().trim() === BATERIA_REBAIXA;
-
-  if (g === "quebrado" && String(condicaoLoja || "").trim().toUpperCase() === "TR") {
-    return 7;
-  }
 
   if (g === "outlet") return 204;
 
@@ -265,8 +259,7 @@ export async function listarAguardandoOracle() {
     }
   }
 
-  // 4. Grade Oracle depende também da condição da loja: TR quebrado → 7.
-  const condicaoLojaPorVoucher = await buscarCondicaoLojaPorVoucher(vouchers);
+  // 4. Monta a linha da tela.
   return itens.map(t => {
     const ap = apPorPo.get(t.voucher) || null;
     const grade = campo(t, "grade", "grade_cosmetica", "grade_final");
@@ -279,8 +272,7 @@ export async function listarAguardandoOracle() {
       produto:       campo(t, "produto", "modelo", "descricao"),
       grade,
       statusBateria: bateria,
-      condicaoLoja:  condicaoLojaPorVoucher.get(String(t.voucher || "").toUpperCase()) || null,
-      gradeOracle:   gradeParaOracle(grade, bateria, condicaoLojaPorVoucher.get(String(t.voucher || "").toUpperCase())),
+      gradeOracle:   gradeParaOracle(grade, bateria),
       rebaixado:     rebaixadoPorBateria(grade, bateria),
       local:         campo(t, "local"),
       documento:     ap?.cpf_cnpj  || null,
@@ -292,28 +284,6 @@ export async function listarAguardandoOracle() {
       pendenteRi:    !ap || !ap.ri_numero,
     };
   });
-}
-
-// Busca a condição ORIGINAL comprada na loja: não é o campo físico "condicao" da triagem.
-// A origem de verdade é tradein_geral.condicao_sufixo (BM/TR).
-// Consultas em lotes impedem estouro de URL do PostgREST.
-async function buscarCondicaoLojaPorVoucher(vouchers) {
-  const ids = [...new Set((vouchers || []).map(voucher => {
-    const m = /^YBV(\d+)$/i.exec(String(voucher || "").trim());
-    return m ? Number(m[1]) : null;
-  }).filter(id => Number.isSafeInteger(id) && id > 0))];
-  const condicaoPorVoucher = new Map();
-  for (let inicio = 0; inicio < ids.length; inicio += BLOCO_IDS) {
-    const { data, error } = await supabase
-      .from("tradein_geral")
-      .select("voucher,condicao_sufixo")
-      .in("voucher", ids.slice(inicio, inicio + BLOCO_IDS));
-    if (error) throw new Error("Falha ao consultar a condição de compra do TradeIn: " + error.message);
-    for (const registro of data || []) {
-      condicaoPorVoucher.set("YBV" + registro.voucher, String(registro.condicao_sufixo || "").trim().toUpperCase());
-    }
-  }
-  return condicaoPorVoucher;
 }
 
 // Lista o histórico do que já foi confirmado no Oracle. Mesmo cruzamento com o
@@ -365,9 +335,6 @@ export async function listarConfirmadosOracle({ limite = null } = {}) {
     }
   }
 
-  // Condição original da compra é necessária também no histórico/exportação.
-  const condicaoLojaPorVoucher = await buscarCondicaoLojaPorVoucher(vouchers);
-
   // Nome de quem confirmou (a triagem guarda só o uuid).
   const userIds = [...new Set(itens.map(i => i.oracle_confirmado_por).filter(Boolean))];
   const nomes = new Map();
@@ -389,8 +356,7 @@ export async function listarConfirmadosOracle({ limite = null } = {}) {
       produto:       campo(t, "produto", "modelo", "descricao"),
       grade,
       statusBateria: bateria,
-      condicaoLoja:  condicaoLojaPorVoucher.get(String(t.voucher || "").toUpperCase()) || null,
-      gradeOracle:   gradeParaOracle(grade, bateria, condicaoLojaPorVoucher.get(String(t.voucher || "").toUpperCase())),
+      gradeOracle:   gradeParaOracle(grade, bateria),
       rebaixado:     rebaixadoPorBateria(grade, bateria),
       local:         campo(t, "local"),
       documento:     ap?.cpf_cnpj    || null,
