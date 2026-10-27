@@ -963,23 +963,94 @@ export async function cadastrarRetornoLojaLavadora(numeroOs, {
   observacoes = "",
   operador = "",
 } = {}) {
-  const parametros = {
-    p_numero_os: String(numeroOs || "").trim(),
-    p_motivo: String(motivo || "").trim(),
-    p_observacoes: String(observacoes || "").trim() || null,
-    p_operador: String(operador || "").trim() || null,
-  };
-  const { data, error } = await supabase.rpc("linha_branca_abrir_retorno_loja", parametros);
-  if (error) {
-    const indisponivel = /linha_branca_abrir_retorno_loja|schema cache|function.*does not exist/i.test(error.message || "");
-    if (indisponivel) {
-      const legado = await supabase.rpc("linha_branca_cadastrar_retorno_loja", {
-        p_numero_os: parametros.p_numero_os,
-      });
-      if (legado.error) throw new Error(legado.error.message);
-      return { ...legado.data, migracao_pendente: true };
-    }
-    throw new Error(error.message);
+  const numero = String(numeroOs || "").trim();
+  const motivoLimpo = String(motivo || "").trim();
+  if (!/^\d{5,10}$/.test(numero)) throw new Error("Número de OS inválido.");
+  if (!motivoLimpo) throw new Error("Informe o motivo do retorno.");
+
+  let { data: os, error: osError } = await supabase
+    .from("ordens_servico")
+    .select("*")
+    .eq("numero_os", numero)
+    .limit(1)
+    .maybeSingle();
+  if (osError) throw new Error(osError.message);
+
+  if (!os) {
+    const legado = await supabase.rpc("linha_branca_cadastrar_retorno_loja", {
+      p_numero_os: numero,
+    });
+    if (legado.error) throw new Error(legado.error.message);
+    os = legado.data;
   }
-  return data;
+
+  const { data: retornos, error: retornosError } = await supabase
+    .from("linha_branca_lavadora_retornos_loja")
+    .select("id,numero_retorno,status")
+    .eq("os_id", os.id)
+    .order("numero_retorno", { ascending: false });
+  if (retornosError) {
+    const migracaoPendente = /linha_branca_lavadora_retornos_loja|schema cache|does not exist/i.test(retornosError.message || "");
+    if (migracaoPendente) return { ...os, migracao_pendente: true };
+    throw new Error(retornosError.message);
+  }
+
+  const numeroRetorno = Math.max(0, ...(retornos || []).map((item) => Number(item.numero_retorno || 0))) + 1;
+  const { data: retorno, error: retornoError } = await supabase
+    .from("linha_branca_lavadora_retornos_loja")
+    .insert({
+      os_id: os.id,
+      numero_retorno: numeroRetorno,
+      motivo: motivoLimpo,
+      observacoes: String(observacoes || "").trim() || null,
+      recebido_por: String(operador || "").trim() || null,
+      snapshot_anterior: os,
+    })
+    .select("*")
+    .single();
+  if (retornoError) throw new Error(retornoError.message);
+
+  const abertosAnteriores = (retornos || [])
+    .filter((item) => item.status === "aberto")
+    .map((item) => item.id);
+  if (abertosAnteriores.length) {
+    const { error: encerramentoError } = await supabase
+      .from("linha_branca_lavadora_retornos_loja")
+      .update({
+        status: "encerrado_por_novo_retorno",
+        finalizado_em: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .in("id", abertosAnteriores);
+    if (encerramentoError) throw new Error(encerramentoError.message);
+  }
+
+  const { data: osAtualizada, error: atualizacaoError } = await supabase
+    .from("ordens_servico")
+    .update({
+      status_atual: "Aguardando triagem",
+      etapa_atual: "Aguardando triagem",
+      area_destino: null,
+      areas_reparo: [],
+      areas_concluidas: [],
+      origem: "Retorno de Loja",
+      tecnico_triagem: null,
+      tecnico_bancada: null,
+      tecnico_responsavel: null,
+      aprovado_bancada: false,
+      obs_bancada: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", os.id)
+    .select("*")
+    .single();
+  if (atualizacaoError) throw new Error(atualizacaoError.message);
+
+  return {
+    ...osAtualizada,
+    retorno_loja_id: retorno.id,
+    numero_retorno: retorno.numero_retorno,
+    novo_retorno: true,
+    ja_existia: true,
+  };
 }
