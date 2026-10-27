@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase.js";
+import { osAguardandoCmp } from "./reparoLinhaBrancaService.js";
 import {
   CATEGORIAS_LAVADORAS, dadosHistoricosOs, duracaoTesteLavadora,
   normalizarConferencia,
@@ -182,10 +183,11 @@ export async function fetchIndicadoresLavadoras() {
 
   return {
     aguardandoTriagem: osList.filter((os) =>
-      STATUS_TRIAGEM_OS.includes(os.status_atual) && !osEmTeste.has(String(os.id))
+      STATUS_TRIAGEM_OS.includes(os.status_atual) && !osAguardandoCmp(os) && !osEmTeste.has(String(os.id))
     ).length,
     emReparo: osList.filter((os) =>
       ["Triado", "Em reparo", "Aguardando peça"].includes(os.status_atual) ||
+      osAguardandoCmp(os) ||
       String(os.area_destino || "").startsWith("Reparo")
     ).length,
     emTestes: osEmTeste.size,
@@ -230,7 +232,7 @@ export async function fetchPainelTriagemLavadoras() {
   );
 
   const aguardando = osList.filter(
-    (os) => STATUS_TRIAGEM_OS.includes(os.status_atual) && !osReservadas.has(String(os.id))
+    (os) => STATUS_TRIAGEM_OS.includes(os.status_atual) && !osAguardandoCmp(os) && !osReservadas.has(String(os.id))
   );
 
   return { osList, aguardando, ciclos: ciclosEnriquecidos };

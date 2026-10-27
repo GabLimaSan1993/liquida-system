@@ -36,7 +36,7 @@ test("equipamentos e etapas posteriores não voltam para triagem", () => {
   assert.equal(etapaAging('SCRAP Prejuízo Venda no Estado').status, 'Scrap');
   assert.equal(etapaAging('QCC').status, 'Qualidade');
   assert.deepEqual(etapaAging('Aguardando CMP'), { status: 'Aguardando peça', etapa: 'Reparo', area: 'Reparo' });
-  assert.equal(etapaAging('Aguardando Confirmação de movimentação CMP/HF').status, 'Aprovado');
+  assert.deepEqual(etapaAging('Aguardando Confirmação de movimentação CMP/HF'), { status: 'Aguardando peça', etapa: 'Reparo', area: 'Reparo' });
   assert.equal(etapaAging('Laboratorio').status, 'Em reparo');
   assert.equal(etapaAging('Expedido').status, 'Finalizado');
 });

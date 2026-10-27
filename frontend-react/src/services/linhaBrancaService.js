@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase";
+import { osAguardandoCmp } from "./reparoLinhaBrancaService.js";
 
 export const TIPOS_PRODUTO_LINHA_BRANCA = [
   "Refrigeração",
@@ -233,7 +234,7 @@ export async function fetchOsAguardandoTriagemLinhaBranca() {
     .order("dt_entrada", { ascending: true });
 
   if (error) throw error;
-  return data || [];
+  return (data || []).filter((os) => !osAguardandoCmp(os));
 }
 
 export async function salvarTriagemLinhaBranca(os, triagem) {

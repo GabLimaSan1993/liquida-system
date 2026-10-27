@@ -1,5 +1,5 @@
 import { supabase } from "../lib/supabase.js";
-import { fetchOsAguardandoCmp } from "./reparoLinhaBrancaService.js";
+import { fetchOsAguardandoCmp, osAguardandoCmp } from "./reparoLinhaBrancaService.js";
 import {
   atualizarNecessidadeCompraStatus,
   consultarPecaPorPn,
@@ -95,7 +95,7 @@ export async function fetchOsClimatizacaoAguardandoTriagem() {
     .order("dt_entrada", { ascending: true });
 
   if (error) throw error;
-  return data || [];
+  return (data || []).filter((os) => !osAguardandoCmp(os));
 }
 
 async function criarSolicitacaoCondenacao({

@@ -27,10 +27,13 @@ export async function fetchIndicadoresRefrigeracao() {
   if (error) throw error;
   const osList = data || [];
 
-  const aguardandoTriagem = osList.filter((os) => STATUS_AGUARDANDO.includes(os.status_atual));
+  const aguardandoTriagem = osList.filter(
+    (os) => STATUS_AGUARDANDO.includes(os.status_atual) && !osAguardandoCmp(os)
+  );
   const emReparo = osList.filter(
     (os) =>
       STATUS_REPARO.includes(os.status_atual) ||
+      osAguardandoCmp(os) ||
       String(os.area_destino || "").startsWith("Reparo") ||
       os.area_destino === "Eletrônica"
   );

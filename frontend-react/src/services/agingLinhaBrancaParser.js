@@ -49,10 +49,10 @@ export function etapaAging(etapa) {
   if (/SCRAP|SUCATA/.test(e)) return { status: "Scrap", etapa: "Scrap", area: "Scrap" };
   if (/VENDA NO ESTADO/.test(e)) return { status: "Venda no estado", etapa: "Venda no estado", area: null };
   if (/EXPEDID|ENCERRAD|GERACAO DE MINUTA/.test(e)) return { status: "Finalizado", etapa: "Aprovado", area: null };
+  if (/^AGUARDANDO(?: CONFIRMACAO DE MOVIMENTACAO)? CMP(?:\/HF)?$/.test(e)) return { status: "Aguardando peça", etapa: "Reparo", area: "Reparo" };
   if (/ESTOQUE VENDA|CMP\/HF/.test(e)) return { status: "Aprovado", etapa: "Aprovado", area: null };
   if (/QCC|QUALIDADE|EMBALAGEM/.test(e)) return { status: "Qualidade", etapa: "Qualidade", area: "Qualidade" };
   if (/LIMPEZA|HIGIENIZA/.test(e)) return { status: "Limpeza", etapa: "Limpeza", area: "Limpeza" };
-  if (/^AGUARDANDO CMP$/.test(e)) return { status: "Aguardando peça", etapa: "Reparo", area: "Reparo" };
   if (/COMPONENTE|AGUARDANDO PECA/.test(e)) return { status: "Aguardando peça", etapa: "Reparo", area: "Reparo" };
   if (/REPARO|LABORATORIO|ENGENHARIA|COLAGEM/.test(e)) return { status: "Em reparo", etapa: "Reparo", area: "Reparo" };
   if (/BANCADA|TESTE/.test(e)) return { status: "Bancada de Testes", etapa: "Bancada de Testes", area: "Bancada de Testes" };

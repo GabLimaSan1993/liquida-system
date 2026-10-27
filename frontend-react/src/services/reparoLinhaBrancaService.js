@@ -7,7 +7,7 @@ export function osAguardandoCmp(os) {
     .trim()
     .toUpperCase()
     .replace(/\s+/g, " ");
-  return etapa === "AGUARDANDO CMP";
+  return /^AGUARDANDO(?: CONFIRMACAO DE MOVIMENTACAO)? CMP(?:\/HF)?$/.test(etapa);
 }
 
 export async function fetchOsAguardandoCmp() {
@@ -15,7 +15,7 @@ export async function fetchOsAguardandoCmp() {
     .from("ordens_servico")
     .select("*")
     .eq("linha_produto", "Linha Branca")
-    .contains("dados_aging", { ETAPA: "Aguardando CMP" })
+    .ilike("dados_aging->>ETAPA", "Aguardando%CMP%")
     .order("dt_entrada", { ascending: true });
 
   if (error) throw error;
