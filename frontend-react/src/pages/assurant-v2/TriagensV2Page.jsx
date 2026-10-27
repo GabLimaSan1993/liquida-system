@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+import { useAuth } from "../../AuthContext.jsx";
 import {
   lazy,
   Suspense,
@@ -123,6 +125,7 @@ function LoadingScreen({
 export default function TriagensV2Page({
   tipo = "funcional",
 }) {
+  const { user } = useAuth();
   const config =
     CONFIG[tipo] ||
     CONFIG.funcional;
@@ -168,6 +171,12 @@ export default function TriagensV2Page({
           </div>
         </div>
       </div>
+
+      {tipo === "funcional" && user?.id === "b517d70a-56be-4b4f-8b9e-a03c769dd3c3" && (
+        <Link to="/v2/assurant/triagens/unificada-teste" className="inline-flex rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-xs font-bold text-violet-700">
+          Abrir laboratório de triagem unificada TR / BM
+        </Link>
+      )}
 
       <Suspense
         fallback={
