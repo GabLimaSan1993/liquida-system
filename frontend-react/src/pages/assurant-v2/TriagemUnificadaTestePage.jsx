@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { AlertTriangle, Camera, CheckCircle2, ClipboardCheck, FlaskConical, ScanLine, Search, ShieldAlert, Smartphone } from "lucide-react";
 import { useAuth } from "../../AuthContext.jsx";
 import { supabase } from "../../lib/supabase.js";
-import { consultarVoucher, listarDefeitos } from "../../services/triagemFuncionalService.js";
+import { consultarVoucher, listarDefeitos, carregarCatalogo, resolverSku } from "../../services/triagemFuncionalService.js";
 import { buscarOpcoes, calcularGradeFinal } from "../../services/cosmeticaService.js";
 import { codigoCondicaoCompra } from "../../services/condicaoCompra.js";
 
@@ -71,7 +71,9 @@ export default function TriagemUnificadaTestePage(){
  const [voucher,setVoucher]=useState(""),[ctx,setCtx]=useState(null);
  const [etapa,setEtapa]=useState(0),[busy,setBusy]=useState(false);
  const [erro,setErro]=useState(""),[resultado,setResultado]=useState(null);
- const [condicao,setCondicao]=useState("normal"),[modelo,setModelo]=useState("");
+ const [condicao,setCondicao]=useState("");
+ const [produto,setProduto]=useState({marca:"",modelo:"",armazenamento:"",cor:""});
+ const [catalogo,setCatalogo]=useState({produtos:[]});
  const [imei,setImei]=useState("");
  const [cameras,setCameras]=useState({frontal:null,traseira:null});
  const [fotos,setFotos]=useState({frontal:null,traseira:null});
@@ -80,12 +82,19 @@ export default function TriagemUnificadaTestePage(){
  const [opcoes,setOpcoes]=useState({tela:[],laterais:[],traseira:[]});
  const [escolhas,setEscolhas]=useState({tela:"",laterais:"",traseira:""});
  const tipo=ctx?codigoCondicaoCompra(ctx.tradein?.condicao_aparelho,ctx.tradein?.condicao_sufixo):null;
+ // Mesma origem e mesma seleção encadeada da triagem funcional atual.
+ const marcas=useMemo(()=>[...new Set(catalogo.produtos.map(p=>p.marca))].filter(Boolean).sort(),[catalogo]);
+ const modelos=useMemo(()=>[...new Set(catalogo.produtos.filter(p=>p.marca===produto.marca).map(p=>p.modelo))].filter(Boolean).sort(),[catalogo,produto.marca]);
+ const capacidades=useMemo(()=>[...new Set(catalogo.produtos.filter(p=>p.marca===produto.marca&&p.modelo===produto.modelo).map(p=>p.capacidade))].filter(Boolean).sort(),[catalogo,produto.marca,produto.modelo]);
+ const cores=useMemo(()=>[...new Set(catalogo.produtos.filter(p=>p.marca===produto.marca&&p.modelo===produto.modelo&&(p.capacidade||"")===produto.armazenamento).map(p=>p.cor))].filter(Boolean).sort(),[catalogo,produto.marca,produto.modelo,produto.armazenamento]);
+ const sku=useMemo(()=>resolverSku(catalogo.produtos,{marca:produto.marca,modelo:produto.modelo,capacidade:produto.armazenamento,cor:produto.cor}),[catalogo,produto]);
+ const produtoCompleto=Boolean(produto.marca&&produto.modelo&&produto.armazenamento&&produto.cor);
  const grade=useMemo(()=>escolhas.tela&&escolhas.laterais&&escolhas.traseira
-  ? calcularGradeFinal({...escolhas,temDefeitoFuncional:cameras.frontal===false||cameras.traseira===false||defeitos.length>0,bateria:ctx?.existente?.status_bateria})
-  : null,[escolhas,cameras,defeitos,ctx]);
+  ? calcularGradeFinal({...escolhas,temDefeitoFuncional:cameras.frontal===false||cameras.traseira===false||defeitos.length>0||condicao==="danos_tela",bateria:ctx?.existente?.status_bateria})
+  : null,[escolhas,cameras,defeitos,ctx,condicao]);
  const validoFotos=!!fotos.frontal?.file&&!!fotos.traseira?.file;
  const falha=(e)=>setErro(e?.message||String(e));
- function reiniciar(){setVoucher("");setCtx(null);setEtapa(0);setErro("");setResultado(null);setCondicao("normal");setModelo("");setImei("");setCameras({frontal:null,traseira:null});setFotos({frontal:null,traseira:null});setDefeitos([]);setBuscaDefeito("");setEscolhas({tela:"",laterais:"",traseira:""});}
+ function reiniciar(){setVoucher("");setCtx(null);setEtapa(0);setErro("");setResultado(null);setCondicao("");setProduto({marca:"",modelo:"",armazenamento:"",cor:""});setImei("");setCameras({frontal:null,traseira:null});setFotos({frontal:null,traseira:null});setDefeitos([]);setBuscaDefeito("");setEscolhas({tela:"",laterais:"",traseira:""});}
  async function consultar(e){
   e.preventDefault();setErro("");setBusy(true);
   try{
@@ -96,29 +105,31 @@ export default function TriagemUnificadaTestePage(){
    if(!r.tradein)throw Error("Piloto liberado apenas para vouchers YBV com referência TradeIn.");
    const c=codigoCondicaoCompra(r.tradein.condicao_aparelho,r.tradein.condicao_sufixo);
    if(!["TR","BM"].includes(c))throw Error("Condição de compra não identificada. Não é permitido escolher BM/TR manualmente.");
-   setCtx(r);setModelo("");setImei("");setEtapa(1);
+   setCtx(r);setProduto({marca:"",modelo:"",armazenamento:"",cor:""});setCondicao("");setImei("");setEtapa(1);
    if(c==="TR"){
-     const [d,o]=await Promise.all([listarDefeitos(),buscarOpcoes()]);
-     setCatalogoDefeitos(d);setOpcoes(o);
+     const [d,o,catalogoAtual]=await Promise.all([listarDefeitos(),buscarOpcoes(),carregarCatalogo()]);
+     setCatalogoDefeitos(d);setOpcoes(o);setCatalogo(catalogoAtual);
    }
   }catch(e){falha(e);}finally{setBusy(false);}
  }
  function avancarProduto(){
   setErro("");
-  if(modelo.trim().length<3){setErro("Informe o modelo verificado fisicamente.");return;}
-  if(condicao!=="normal"){setEtapa(5);return;}
+  // Exatamente como a funcional atual: "Não liga" não exige o catálogo.
+  if(condicao==="nao_liga"){setEtapa(5);return;}
+  if(!produtoCompleto){setErro("Selecione marca, modelo, armazenamento e cor.");return;}
   setEtapa(2);
  }
  function avancarImei(){
   setErro("");
-  if(!/^[0-9]{14,16}$/.test(imei.trim())){setErro("Bipe um IMEI válido de 14 a 16 dígitos.");return;}
+  if(!imei.trim()&&condicao!=="danos_tela"){setErro("Bipe o IMEI físico.");return;}
+  if(imei.trim()&&!/^[0-9]{14,16}$/.test(imei.trim())){setErro("Bipe um IMEI válido de 14 a 16 dígitos.");return;}
   if(ctx.tradein?.imei && String(ctx.tradein.imei).trim()!==imei.trim()){
     setErro("O IMEI não confere com a compra. Utilize a tela de Divergências, sem concluir esta triagem.");return;
   }
   if(ctx.existente?.imei && String(ctx.existente.imei).trim()!==imei.trim()){
     setErro("IMEI diferente do recebimento. Regularize na tela de Divergências.");return;
   }
-  setEtapa(3);
+  setEtapa(condicao==="bloqueado"?5:3);
  }
  function avancarCamera(){
   setErro("");
@@ -142,16 +153,19 @@ export default function TriagemUnificadaTestePage(){
  async function concluir(){
   setErro("");
   if(tipo!=="TR"||!PILOT_USERS.has(user?.id)){setErro("Somente TR na conta piloto pode usar este fechamento.");return;}
-  if(condicao==="normal"&&(!grade||!validoFotos||cameras.frontal===null||cameras.traseira===null)){setErro("Complete testes de câmera e as três perguntas cosméticas.");return;}
-  if(condicao==="normal"&&!/^[0-9]{14,16}$/.test(imei)){setErro("IMEI físico obrigatório.");return;}
+  if(!["nao_liga","bloqueado"].includes(condicao)&&(!grade||!validoFotos||cameras.frontal===null||cameras.traseira===null)){setErro("Complete testes de câmera e as três perguntas cosméticas.");return;}
+  if(!["nao_liga","danos_tela"].includes(condicao)&&!/^[0-9]{14,16}$/.test(imei)){setErro("IMEI físico obrigatório.");return;}
   if(!window.confirm("Confirmar a triagem de TESTE no banco operacional? O status do voucher será atualizado."))return;
   setBusy(true);
   try{
-   const paths=condicao==="normal"?await enviarFotos():{};
-   const dados={voucher:ctx.voucher,modelo:modelo.trim(),imei:imei.trim()||null,condicao,
+   const paths=!["nao_liga","bloqueado"].includes(condicao)?await enviarFotos():{};
+   const dados={voucher:ctx.voucher,
+     marca:produto.marca,modelo:produto.modelo,capacidade:produto.armazenamento,cor:produto.cor,
+     sku:sku.sku,imei:imei.trim()||null,condicao:condicao||"normal",
      camera_frontal_funciona:cameras.frontal,camera_traseira_funciona:cameras.traseira,
      foto_frontal_path:paths.frontal||null,foto_traseira_path:paths.traseira||null,
-     defeitos,tela:escolhas.tela,laterais:escolhas.laterais,traseira:escolhas.traseira};
+     defeitos:condicao==="danos_tela"?[...new Set([...defeitos,"Danos da tela"])]:defeitos,
+     tela:escolhas.tela,laterais:escolhas.laterais,traseira:escolhas.traseira};
    const {data,error}=await supabase.rpc("assurant_triagem_unificada_tr_teste",{p_dados:dados});
    if(error)throw Error(error.message);
    if(!data?.ok)throw Error(data?.erro||"Falha ao concluir.");
