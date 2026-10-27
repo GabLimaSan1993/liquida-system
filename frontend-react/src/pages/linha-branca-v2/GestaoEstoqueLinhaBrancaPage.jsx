@@ -236,6 +236,7 @@ export default function GestaoEstoqueLinhaBrancaPage() {
   {aba==="wip"&&<>
    <section className={BOX}><h2 className="mb-4 text-sm font-black">{wip.id?"Movimentar produto em WIP":"Cadastrar produto em pré-entrada / WIP"}</h2>
     <form className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" onSubmit={e=>{e.preventDefault();executar("wip_salvar",wip,wip.id?"Movimentação WIP registrada.":"Produto incluído no pré-tratamento.",novoWip);}}>
+     {wip.id&&<Campo label="Vincular OS após pré-entrada (opcional)"><input className={INPUT} value={wip.numero_os||""} onChange={e=>setWip(v=>({...v,numero_os:e.target.value}))} placeholder="Número da OS quando disponível"/></Campo>}
      {!wip.id&&<>
       <Campo label="OS (opcional, se já recebida)"><input className={INPUT} value={wip.numero_os} onChange={e=>setWip(v=>({...v,numero_os:e.target.value}))}/></Campo>
       <Campo label="Identificador de pré-entrada"><input className={INPUT} value={wip.identificador} onChange={e=>setWip(v=>({...v,identificador:e.target.value}))} placeholder="Etiqueta ou referência de chegada"/></Campo>
@@ -256,7 +257,7 @@ export default function GestaoEstoqueLinhaBrancaPage() {
     <Tabela colunas={["OS / Etiqueta","Máquina / modelo","Etapa","Posição","Última atualização","Ação"]} linhas={filtrados(wips).map(x=><tr key={x.id}>
      <TD forte>{x.numero_os||x.identificador||x.id.slice(0,8)}</TD><TD>{x.categoria} · {x.marca} {x.modelo}</TD>
      <TD>{ETAPAS.find(e=>e[0]===x.etapa)?.[1]||x.etapa}</TD><TD>{x.endereco}</TD><TD>{dia(x.atualizado_em)}</TD>
-     <TD><button type="button" className={SOFT} onClick={()=>{setWip({id:x.id,etapa:x.etapa,endereco:x.endereco||"",observacoes:x.observacoes||"",motivo:""});window.scrollTo({top:0,behavior:"smooth"});}}>Movimentar</button></TD>
+     <TD><button type="button" className={SOFT} onClick={()=>{setWip({id:x.id,numero_os:x.numero_os||"",etapa:x.etapa,endereco:x.endereco||"",observacoes:x.observacoes||"",motivo:""});window.scrollTo({top:0,behavior:"smooth"});}}>Movimentar</button></TD>
     </tr>)}/>
     <p className="mt-3 text-[11px] text-slate-400">O WIP é uma camada de controle logístico: não altera automaticamente a etapa técnica ou o status da OS.</p>
    </section>
