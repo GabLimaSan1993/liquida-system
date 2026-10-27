@@ -172,7 +172,7 @@ export default function TriagensV2Page({
         </div>
       </div>
 
-      {tipo === "funcional" && user?.id === "b517d70a-56be-4b4f-8b9e-a03c769dd3c3" && (
+      {tipo === "funcional" && ["b517d70a-56be-4b4f-8b9e-a03c769dd3c3","490cfecb-4ba4-4670-9a53-5775c0b15bef","8549de55-3657-4042-86c6-822cd3d49941","6e0ac557-93a2-42ae-8595-12648b2ac0de"].includes(user?.id) && (
         <Link to="/v2/assurant/triagens/unificada-teste" className="inline-flex rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-xs font-bold text-violet-700">
           Abrir laboratório de triagem unificada TR / BM
         </Link>
