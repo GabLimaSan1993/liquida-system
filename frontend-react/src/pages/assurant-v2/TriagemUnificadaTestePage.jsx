@@ -78,6 +78,8 @@ export default function TriagemUnificadaTestePage(){
  const [imei,setImei]=useState("");
  const [imei2,setImei2]=useState("");
  const [cameras,setCameras]=useState({frontal:null,traseira:null});
+ const [telaSemFalhasOuDanos,setTelaSemFalhasOuDanos]=useState(null);
+ const [botaoFaltando,setBotaoFaltando]=useState(null);
  const [fotos,setFotos]=useState({frontal:null,traseira:null});
  const [defeitos,setDefeitos]=useState([]),[catalogoDefeitos,setCatalogoDefeitos]=useState([]);
  const [buscaDefeito,setBuscaDefeito]=useState("");
@@ -96,12 +98,17 @@ export default function TriagemUnificadaTestePage(){
  const doisImeis=exigeDoisImeis(produto.modelo,tipoAparelho,condicao==="bloqueado",condicao==="danos_tela");
  const erroCodigo=erroIdentificacao(tipoAparelho,imei,doisImeis?imei2:null,
    {modelo:produto.modelo,aparelhoBloqueado:condicao==="bloqueado",danosTela:condicao==="danos_tela"});
+ const defeitosEfetivos=useMemo(()=>[...new Set([
+    ...defeitos,
+    ...(telaSemFalhasOuDanos===false||condicao==="danos_tela"?["Danos da tela"]:[]),
+    ...(botaoFaltando===true?["Botão faltando"]:[])
+ ])],[defeitos,telaSemFalhasOuDanos,botaoFaltando,condicao]);
  const grade=useMemo(()=>escolhas.tela&&escolhas.laterais&&escolhas.traseira
-  ? calcularGradeFinal({...escolhas,temDefeitoFuncional:cameras.frontal===false||cameras.traseira===false||defeitos.length>0||condicao==="danos_tela",bateria:ctx?.existente?.status_bateria})
-  : null,[escolhas,cameras,defeitos,ctx,condicao]);
+  ? calcularGradeFinal({...escolhas,temDefeitoFuncional:cameras.frontal===false||cameras.traseira===false||defeitosEfetivos.length>0,bateria:ctx?.existente?.status_bateria})
+  : null,[escolhas,cameras,defeitosEfetivos,ctx]);
  const validoFotos=!!fotos.frontal?.file&&!!fotos.traseira?.file;
  const falha=(e)=>setErro(e?.message||String(e));
- function reiniciar(){setVoucher("");setCtx(null);setEtapa(0);setErro("");setResultado(null);setCondicao("");setProduto({marca:"",modelo:"",armazenamento:"",cor:""});setImei("");setImei2("");setCameras({frontal:null,traseira:null});setFotos({frontal:null,traseira:null});setDefeitos([]);setBuscaDefeito("");setEscolhas({tela:"",laterais:"",traseira:""});}
+ function reiniciar(){setVoucher("");setCtx(null);setEtapa(0);setErro("");setResultado(null);setCondicao("");setProduto({marca:"",modelo:"",armazenamento:"",cor:""});setImei("");setImei2("");setCameras({frontal:null,traseira:null});setTelaSemFalhasOuDanos(null);setBotaoFaltando(null);setFotos({frontal:null,traseira:null});setDefeitos([]);setBuscaDefeito("");setEscolhas({tela:"",laterais:"",traseira:""});}
  async function consultar(e){
   e.preventDefault();setErro("");setBusy(true);
   try{
@@ -140,6 +147,8 @@ export default function TriagemUnificadaTestePage(){
  function avancarCamera(){
   setErro("");
   if(cameras.frontal===null||cameras.traseira===null||!validoFotos){setErro("Responda funcionamento e fotografe as duas câmeras.");return;}
+  if(telaSemFalhasOuDanos===null||botaoFaltando===null){setErro("Responda às perguntas sobre tela e botões.");return;}
+  if(condicao==="danos_tela"&&telaSemFalhasOuDanos===true){setErro("A condição inicial indica danos na tela. Revise a resposta sobre a tela.");return;}
   setEtapa(4);
  }
  function alternarDefeito(nome){setDefeitos(v=>v.includes(nome)?v.filter(x=>x!==nome):[...v,nome]);}
@@ -159,7 +168,8 @@ export default function TriagemUnificadaTestePage(){
  async function concluir(){
   setErro("");
   if(tipo!=="TR"||!PILOT_USERS.has(user?.id)){setErro("Somente TR na conta piloto pode usar este fechamento.");return;}
-  if(!["nao_liga","bloqueado"].includes(condicao)&&(!grade||!validoFotos||cameras.frontal===null||cameras.traseira===null)){setErro("Complete testes de câmera e as três perguntas cosméticas.");return;}
+  if(!["nao_liga","bloqueado"].includes(condicao)&&(!grade||!validoFotos||cameras.frontal===null||cameras.traseira===null||telaSemFalhasOuDanos===null||botaoFaltando===null)){setErro("Complete os testes de câmera, tela, botões e cosmética.");return;}
+  if(condicao==="danos_tela"&&telaSemFalhasOuDanos===true){setErro("A condição inicial registra danos na tela. Revise a resposta.");return;}
   if(condicao!=="nao_liga"&&erroCodigo){setErro(erroCodigo);return;}
   if(!window.confirm("Confirmar a triagem de TESTE no banco operacional? O status do voucher será atualizado."))return;
   setBusy(true);
@@ -170,7 +180,8 @@ export default function TriagemUnificadaTestePage(){
      sku:sku.sku,imei:imei.trim()||null,imei2:doisImeis?imei2.trim()||null:null,condicao:condicao||"normal",
      camera_frontal_funciona:cameras.frontal,camera_traseira_funciona:cameras.traseira,
      foto_frontal_path:paths.frontal||null,foto_traseira_path:paths.traseira||null,
-     defeitos:condicao==="danos_tela"?[...new Set([...defeitos,"Danos da tela"])]:defeitos,
+     tela_sem_falhas_ou_danos:telaSemFalhasOuDanos,botao_faltando:botaoFaltando,
+     defeitos:defeitosEfetivos,
      tela:escolhas.tela,laterais:escolhas.laterais,traseira:escolhas.traseira};
    const {data,error}=await supabase.rpc("assurant_triagem_unificada_tr_teste",{p_dados:dados});
    if(error)throw Error(error.message);
@@ -277,10 +288,30 @@ export default function TriagemUnificadaTestePage(){
       <div className="flex gap-3">{[[true,"Sim"],[false,"Não"]].map(([ok,rot])=><button key={rot} type="button" onClick={()=>setCameras(v=>({...v,[k]:ok}))} className={"rounded-lg border px-5 py-2 text-sm "+(cameras[k]===ok?"bg-violet-700 text-white":"bg-white")}>{rot}</button>)}</div>
       <FotoCamera titulo={nome} valor={fotos[k]} onChange={f=>setFotos(v=>({...v,[k]:f}))}/>
     </div>)}</div>
+    <div className="grid gap-3 md:grid-cols-2">
+      <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+        <h3 className="text-sm font-bold text-slate-800">O aparelho está sem falhas ou danos na tela?</h3>
+        <div className="mt-3 flex gap-3">{[[true,"Sim"],[false,"Não"]].map(([valor,rotulo])=>
+          <button type="button" key={rotulo} aria-pressed={telaSemFalhasOuDanos===valor}
+           onClick={()=>setTelaSemFalhasOuDanos(valor)}
+           className={"rounded-lg border px-5 py-2 text-sm font-semibold transition "+(telaSemFalhasOuDanos===valor?"border-violet-700 bg-violet-700 text-white":"border-slate-200 bg-white text-slate-700 hover:border-violet-200")}>
+            {rotulo}
+          </button>)}</div>
+      </div>
+      <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+        <h3 className="text-sm font-bold text-slate-800">O aparelho está com algum botão faltando?</h3>
+        <div className="mt-3 flex gap-3">{[[true,"Sim"],[false,"Não"]].map(([valor,rotulo])=>
+          <button type="button" key={rotulo} aria-pressed={botaoFaltando===valor}
+           onClick={()=>setBotaoFaltando(valor)}
+           className={"rounded-lg border px-5 py-2 text-sm font-semibold transition "+(botaoFaltando===valor?"border-violet-700 bg-violet-700 text-white":"border-slate-200 bg-white text-slate-700 hover:border-violet-200")}>
+            {rotulo}
+          </button>)}</div>
+      </div>
+    </div>
     <h3 className="font-bold">Defeitos adicionais — catálogo da funcional</h3>
     <input className={CAMPO} value={buscaDefeito} onChange={e=>setBuscaDefeito(e.target.value)} placeholder="Pesquisar defeitos"/>
     <div className="flex max-h-52 flex-wrap gap-2 overflow-auto">{catalogoDefeitos.filter(d=>d.nome.toLowerCase().includes(buscaDefeito.toLowerCase())).map(d=><button type="button" key={d.id} onClick={()=>alternarDefeito(d.nome)} className={"rounded-lg border px-3 py-2 text-xs font-semibold "+(defeitos.includes(d.nome)?"bg-violet-700 text-white":"bg-white text-slate-700")}>{d.nome}</button>)}</div>
-    <div className="text-xs font-semibold text-slate-500">Defeitos selecionados: {defeitos.length}</div>
+    <div className="text-xs font-semibold text-slate-500">Defeitos registrados: {defeitosEfetivos.length}</div>
     <button type="button" className={BOTAO} onClick={avancarCamera}>Prosseguir para cosmética</button>
   </Painel>}
   {etapa===4&&<Painel titulo="Avaliação cosmética" subtitulo="" icone={ClipboardCheck}>
