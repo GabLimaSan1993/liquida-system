@@ -13,7 +13,7 @@ async function executar(acao, dados = {}) {
   return data;
 }
 
-async function conferirXML(file) {
+async function conferirXML(file, numeroNF) {
   if (!file) throw new Error("Anexe o XML relacionado à baixa.");
   if (!/\.xml$/i.test(file.name) || file.size > 2 * 1024 * 1024 || !file.size) {
     throw new Error("Selecione um arquivo .xml válido com até 2 MB.");
@@ -22,12 +22,22 @@ async function conferirXML(file) {
   if (/<!DOCTYPE/i.test(conteudo)) throw new Error("XML com DOCTYPE não é permitido.");
   const parsed = new DOMParser().parseFromString(conteudo, "application/xml");
   if (parsed.querySelector("parsererror")) throw new Error("O arquivo informado não contém XML bem formado.");
+  const tags = [...parsed.getElementsByTagName("*")];
+  const numeroNoXML = tags.find(node => node.localName === "nNF")?.textContent?.trim() || "";
+  const documentoNFe = tags.some(node => node.localName === "infNFe");
+  if (!documentoNFe || !/^[0-9]{1,9}$/.test(numeroNoXML)) {
+    throw new Error("O XML deve ser de uma NF-e com número de nota.");
+  }
+  if (numeroNoXML.replace(/^0+/, "") !== String(numeroNF).replace(/^0+/, "")) {
+    throw new Error("NF informada não corresponde ao número da nota presente no XML.");
+  }
 }
 
 export default function BaixaExcepcionalPanel() {
   const { user, profile } = useAuth();
   const [pedido, setPedido] = useState("");
   const [identificador, setIdentificador] = useState("");
+  const [numeroNF, setNumeroNF] = useState("");
   const [tipo, setTipo] = useState("imei");
   const [motivo, setMotivo] = useState("");
   const [xml, setXml] = useState(null);
@@ -76,7 +86,8 @@ export default function BaixaExcepcionalPanel() {
     if (!previa || !user?.id) return;
     setBusy(true); setErro(""); setMensagem("");
     try {
-      await conferirXML(xml);
+      if (!/^[0-9]{1,9}$/.test(numeroNF.trim())) throw new Error("Informe número da NF (1 a 9 dígitos).");
+      await conferirXML(xml, numeroNF.trim());
       const caminho = user.id + "/" + crypto.randomUUID() + ".xml";
       const { error: errUpload } = await supabase.storage.from(BUCKET).upload(caminho, xml, {
         upsert: false, contentType: "application/xml", cacheControl: "3600",
@@ -86,10 +97,11 @@ export default function BaixaExcepcionalPanel() {
         ...contexto(),
         previa,
         xml_path: caminho,
+        numero_nf: numeroNF.trim(),
         justificativa: motivo.trim(),
       });
       setMensagem("Baixa excepcional solicitada com XML vinculado. Aguardando outro aprovador.");
-      setPrevia(null); setPedido(""); setIdentificador(""); setMotivo(""); setXml(null);
+      setPrevia(null); setPedido(""); setIdentificador(""); setNumeroNF(""); setMotivo(""); setXml(null);
       setOffset(0);
       await atualizar();
     } catch (e) { setErro(e.message); }
@@ -124,7 +136,7 @@ export default function BaixaExcepcionalPanel() {
       <h2 className="text-lg font-black text-slate-800">Baixa excepcional — qualquer etapa</h2>
       <p className="mt-1 text-sm text-slate-500">
         Para produtos ainda não faturados, pedidos faturados com outro IMEI ou equipamentos identificados por serial.
-        Não exige status faturado nem NF no pedido. Exige motivo, arquivo XML e aprovação de outro responsável.
+        Aceita pedidos em Aguardando Definição. Exige IMEI/serial, número da NF, XML correspondente, motivo e aprovação por outro responsável.
       </p>
     </header>
     {erro && <p role="alert" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{erro}</p>}
@@ -164,7 +176,12 @@ export default function BaixaExcepcionalPanel() {
           placeholder="Descreva o motivo da baixa, inclusive divergência entre IMEI físico e faturado quando houver."
           className={input} rows={3}/>
       </label>
-      <label className="block text-xs font-semibold">XML vinculado à baixa (.xml, até 2 MB)
+      <label className="block text-xs font-semibold">Número da NF para esta baixa
+        <input required inputMode="numeric" pattern="[0-9]{1,9}" value={numeroNF}
+          onChange={e=>setNumeroNF(e.target.value.replace(/\D/g, ""))}
+          placeholder="Número da nota fiscal" className={input}/>
+      </label>
+      <label className="block text-xs font-semibold">XML vinculado à NF (.xml, até 2 MB)
         <input required type="file" accept=".xml,text/xml,application/xml" onChange={e=>setXml(e.target.files?.[0]||null)}
           className={input}/>
       </label>
@@ -172,7 +189,7 @@ export default function BaixaExcepcionalPanel() {
         A baixa não cria nota fiscal, não altera o faturamento e registra quem solicitou e quem aprovou.
         Uma alocação WMS ativa só será retirada após a aprovação.
       </p>
-      <button disabled={busy || !xml || motivo.trim().length<10} className={button}>Solicitar baixa com XML</button>
+      <button disabled={busy || !xml || !/^[0-9]{1,9}$/.test(numeroNF.trim()) || motivo.trim().length<10} className={button}>Solicitar baixa com NF e XML</button>
     </form>}
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
@@ -191,6 +208,7 @@ export default function BaixaExcepcionalPanel() {
             <td className="p-3">{item.status}</td>
             <td className="p-3">{item.solicitante}</td>
             <td className="p-3">
+              <div><b>NF:</b> {item.numero_nf || "—"}</div>
               <button type="button" className="font-semibold text-violet-700 underline" onClick={()=>abrirXML(item.xml_path)}>Abrir XML</button>
               <details className="mt-2"><summary>Motivo e parecer</summary><p className="max-w-xs whitespace-pre-wrap">{item.justificativa}</p>
                 <p className="max-w-xs whitespace-pre-wrap">{item.parecer || "Aguardando decisão"}</p></details>
@@ -215,7 +233,7 @@ export default function BaixaExcepcionalPanel() {
     </div>
     {revisao && <form onSubmit={decidir} className="space-y-3 rounded-xl border border-amber-300 bg-amber-50 p-4">
       <h3 className="font-bold">{revisao.acao === "aprovar" ? "Aprovar baixa física / administrativa" : "Rejeitar baixa"}</h3>
-      <p className="text-sm">IMEI/serial: <b>{revisao.item.identificador}</b>. XML e motivo devem ser conferidos antes da decisão.</p>
+      <p className="text-sm">Pedido: <b>{revisao.item.pedido_referencia || "—"}</b> · IMEI/serial: <b>{revisao.item.identificador}</b> · NF: <b>{revisao.item.numero_nf || "—"}</b>. Confira o XML e o motivo antes da decisão.</p>
       <button type="button" className="text-sm font-bold text-violet-700 underline" onClick={()=>abrirXML(revisao.item.xml_path)}>Conferir XML</button>
       <p className="text-sm">{revisao.item.justificativa}</p>
       <textarea required minLength={10} maxLength={2000} className={input} value={parecer}
