@@ -22,6 +22,8 @@ export default function DesmembramentoLinhaBrancaPage(){
  const [pecas,setPecas]=useState([ESTADO_PECA()]);
  const [lote,setLote]=useState(()=>crypto.randomUUID());
  const [recentes,setRecentes]=useState([]);
+ const [fila,setFila]=useState([]);
+ const [filaErro,setFilaErro]=useState("");
  const [busy,setBusy]=useState(false);
  const [carregando,setCarregando]=useState(false);
  const [erro,setErro]=useState("");
@@ -33,7 +35,15 @@ export default function DesmembramentoLinhaBrancaPage(){
   try{const r=await operar("listar");setRecentes(r.itens||[]);setListaErro("");}
   catch(e){setListaErro(e.message);}
  }
- useEffect(()=>{carregarRecentes();},[]);
+ async function carregarFila(){
+  try{
+   const {data,error}=await supabase.rpc("linha_branca_desmembramento_fila");
+   if(error)throw Error(error.message);
+   if(!data?.ok)throw Error("A consulta da fila não retornou dados");
+   setFila(data.oss||[]);setFilaErro("");
+  }catch(e){setFilaErro(e.message);}
+ }
+ useEffect(()=>{carregarRecentes();carregarFila();},[]);
  function editarPeca(id,chave,valor){
   setPecas(v=>v.map(p=>p.id===id?{...p,[chave]:valor}:p));
   setLote(crypto.randomUUID());
@@ -61,7 +71,7 @@ export default function DesmembramentoLinhaBrancaPage(){
     descricao:p.descricao.trim(),pn:p.pn.trim(),quantidade:p.quantidade,localizacao:p.localizacao.trim()
    }))});
    setSucesso(`Entrada registrada: ${br(res.itens?.reduce((n,p)=>n+Number(p.quantidade),0))} unidade(s) de ${res.itens?.length||0} item(ns) vinculados à OS ${consulta.os.numero_os}.`);
-   const [atual]=await Promise.all([operar("consultar",{numero_os:consulta.os.numero_os}),carregarRecentes()]);
+   const [atual]=await Promise.all([operar("consultar",{numero_os:consulta.os.numero_os}),carregarRecentes(),carregarFila()]);
    setConsulta(atual);setPecas([ESTADO_PECA()]);setLote(crypto.randomUUID());
   }catch(err){setErro(err.message);}
   finally{setBusy(false);}
@@ -75,10 +85,42 @@ export default function DesmembramentoLinhaBrancaPage(){
     <h1 className="mt-2 text-3xl font-black tracking-tight">Desmembramento de peças</h1>
     <p className="mt-1 text-sm text-slate-500">Peças recuperadas com vínculo à OS de origem e entrada rastreável no estoque.</p>
    </div>
-   <button onClick={carregarRecentes} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-black text-slate-600"><RefreshCw size={16}/> Atualizar histórico</button>
+   <button onClick={()=>{carregarRecentes();carregarFila();}} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-black text-slate-600"><RefreshCw size={16}/> Atualizar dados</button>
   </header>
   {erro&&<div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-bold text-rose-700">{erro}</div>}
   {sucesso&&<div role="status" className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-700"><CheckCircle2 size={18}/>{sucesso}</div>}
+  <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+   <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+    <div><h2 className="text-sm font-black">OSs indicadas para desmembramento</h2>
+     <p className="mt-1 text-xs text-slate-500">Fila de avaliação. A entrada de peças exige cadastro da OS e aprovação para destino Desmembramento.</p>
+    </div>
+    <span className="rounded-full bg-violet-50 px-3 py-1 text-xs font-black text-violet-700">{fila.length} OS(s)</span>
+   </div>
+   {filaErro&&<p role="alert" className="mb-3 text-xs text-rose-700">{filaErro}</p>}
+   <div className="overflow-x-auto">
+    <table className="w-full min-w-[750px] text-left text-xs">
+     <thead className="border-b border-slate-100 bg-slate-50 text-slate-500"><tr>
+      {["OS","Máquina / modelo","Situação atual","Situação do desmembramento","Ação"].map(x=><th key={x} className="px-3 py-3">{x}</th>)}
+     </tr></thead>
+     <tbody className="divide-y divide-slate-100">{fila.map(x=><tr key={x.numero_os}>
+      <td className="px-3 py-3 font-black text-slate-800">{x.numero_os}</td>
+      <td className="px-3 py-3">{x.os_id?[x.categoria,x.marca,x.modelo].filter(Boolean).join(" · "):"Aguardando cadastro da OS"}</td>
+      <td className="px-3 py-3">{x.status_atual||"Sem cadastro operacional"}</td>
+      <td className="px-3 py-3">
+       <span className={"inline-flex rounded-lg px-2.5 py-1 font-bold "+(x.liberado_estoque?"bg-emerald-50 text-emerald-700":"bg-amber-50 text-amber-800")}>
+        {x.situacao}
+       </span>
+      </td>
+      <td className="px-3 py-3"><button type="button"
+       onClick={()=>{trocarOS(x.numero_os);if(!x.liberado_estoque)setErro("OS selecionada para avaliação. O registro de peças exige cadastro válido e aprovação do destino Desmembramento.");}}
+       className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 font-bold text-violet-700 hover:bg-violet-100">
+       Selecionar OS
+      </button></td>
+     </tr>)}</tbody>
+    </table>
+    {!fila.length&&!filaErro&&<p className="py-5 text-center text-xs text-slate-400">Nenhuma OS na fila.</p>}
+   </div>
+  </section>
   <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
    <div className="mb-5 flex items-center gap-2"><div className="rounded-xl bg-violet-50 p-2 text-violet-700"><Search size={20}/></div><h2 className="text-sm font-black">1. OS de origem</h2></div>
    <form onSubmit={consultar} className="flex flex-col gap-3 sm:flex-row sm:items-end">
