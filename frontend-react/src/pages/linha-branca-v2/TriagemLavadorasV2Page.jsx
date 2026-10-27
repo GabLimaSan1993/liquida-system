@@ -223,6 +223,8 @@ export default function TriagemLavadorasV2Page() {
   const [buscaOs, setBuscaOs] = useState("");
   const [origemCadastro, setOrigemCadastro] = useState("Lote de Estoque");
   const [novaOsRetorno, setNovaOsRetorno] = useState("");
+  const [motivoRetorno, setMotivoRetorno] = useState("");
+  const [observacoesRetorno, setObservacoesRetorno] = useState("");
   const [scannerAberto, setScannerAberto] = useState(false);
   const [eventos, setEventos] = useState([]);
   const [erroCiclo, setErroCiclo] = useState(null);
@@ -685,30 +687,51 @@ export default function TriagemLavadorasV2Page() {
             <div className="mt-3 rounded-xl border border-violet-100 bg-violet-50 p-3">
               <p className="mb-2 text-xs font-bold text-slate-700">Origem da OS</p>
               <div className="flex flex-wrap gap-4 text-xs">
-                {["Lote de Estoque","Retorno de Loja"].map(opcao =>
+                {["Lote de Estoque", "Retorno de Loja"].map((opcao) => (
                   <label key={opcao} className="flex items-center gap-2">
-                    <input type="radio" name="origem-lavadora" checked={origemCadastro===opcao} onChange={()=>setOrigemCadastro(opcao)}/>
+                    <input type="radio" name="origem-lavadora" checked={origemCadastro === opcao} onChange={() => setOrigemCadastro(opcao)} />
                     {opcao}
-                  </label>)}
+                  </label>
+                ))}
               </div>
-              {origemCadastro==="Retorno de Loja" && <form className="mt-3 flex gap-2" onSubmit={async e=>{
-                e.preventDefault();
-                try{
-                  setSaving(true);
-                  const r=await cadastrarRetornoLojaLavadora(novaOsRetorno);
-                  await carregarPainel();
-                  setSelectedOsId(String(r.id));
-                  setMensagem(r.ja_existia ? "OS já cadastrada; registro existente preservado." : "Retorno de Loja cadastrado, sem exigir modelo no Aging.");
-                  setNovaOsRetorno("");
-                }catch(err){setMensagem(err.message);}finally{setSaving(false);}
-              }}>
-                <input aria-label="Número da OS de retorno" className="min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm" required pattern="[0-9]{5,10}" value={novaOsRetorno} onChange={e=>setNovaOsRetorno(e.target.value)} placeholder="Número da OS de retorno"/>
-                <button type="submit" disabled={saving} className="rounded-lg bg-violet-700 px-3 py-2 text-xs font-bold text-white">Cadastrar retorno</button>
-              </form>}
+              {origemCadastro === "Retorno de Loja" ? (
+                <form className="mt-3 grid gap-2 md:grid-cols-2" onSubmit={async (event) => {
+                  event.preventDefault();
+                  try {
+                    setSaving(true);
+                    const retorno = await cadastrarRetornoLojaLavadora(novaOsRetorno, {
+                      motivo: motivoRetorno,
+                      observacoes: observacoesRetorno,
+                      operador,
+                    });
+                    await carregarPainel();
+                    setSelectedOsId(String(retorno.id));
+                    setMensagem(
+                      retorno.migracao_pendente
+                        ? "A atualização do banco para múltiplos retornos ainda precisa ser aplicada."
+                        : `Retorno de Loja #${retorno.numero_retorno} aberto. Todo o histórico anterior foi preservado.`
+                    );
+                    setNovaOsRetorno("");
+                    setMotivoRetorno("");
+                    setObservacoesRetorno("");
+                  } catch (error) {
+                    setMensagem(error.message);
+                  } finally {
+                    setSaving(false);
+                  }
+                }}>
+                  <input aria-label="Número da OS de retorno" className="min-w-0 rounded-lg border px-3 py-2 text-sm" required pattern="[0-9]{5,10}" value={novaOsRetorno} onChange={(event) => setNovaOsRetorno(event.target.value)} placeholder="Número da OS" />
+                  <input aria-label="Motivo do retorno" className="min-w-0 rounded-lg border px-3 py-2 text-sm" required value={motivoRetorno} onChange={(event) => setMotivoRetorno(event.target.value)} placeholder="Defeito informado pelo cliente" />
+                  <input aria-label="Observações do retorno" className="min-w-0 rounded-lg border px-3 py-2 text-sm md:col-span-2" value={observacoesRetorno} onChange={(event) => setObservacoesRetorno(event.target.value)} placeholder="Observações adicionais (opcional)" />
+                  <button type="submit" disabled={saving} className="rounded-lg bg-violet-700 px-3 py-2 text-xs font-bold text-white md:col-span-2">
+                    {saving ? "Abrindo retorno..." : "Abrir nova jornada de retorno"}
+                  </button>
+                </form>
+              ) : null}
             </div>
             <select value={selectedOsId} onChange={(event) => setSelectedOsId(event.target.value)} className="mt-3 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 outline-none focus:border-[#765D81]">
               <option value="">Selecione uma OS</option>
-              {osFiltradas.map((os) => <option key={os.id} value={os.id}>{os.numero_os} — {os.origem==="Retorno de Loja"?"Retorno de Loja":"Lote de Estoque"} — {os.marca || "Sem marca"} {os.modelo || ""}</option>)}
+              {osFiltradas.map((os) => <option key={os.id} value={os.id}>{os.numero_os} — {os.__retornoLoja ? `Retorno de Loja #${os.__retornoLoja.numero_retorno}` : os.origem === "Retorno de Loja" ? "Retorno de Loja" : "Lote de Estoque"} — {os.marca || "Sem marca"} {os.modelo || ""}</option>)}
             </select>
 
             {selectedOs ? (
@@ -716,7 +739,7 @@ export default function TriagemLavadorasV2Page() {
                 <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div><div className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">OS</div><div className="mt-1 text-lg font-black text-slate-900">{selectedOs.numero_os}</div></div>
-                    <div className="flex flex-wrap gap-2"><span className="rounded-lg bg-white px-2 py-1 text-[10px] font-bold">{retornoLoja?"Retorno de Loja":"Lote de Estoque"}</span><StatusPill status={{ label: "Aguardando triagem", tone: "purple" }} /></div>
+                    <div className="flex flex-wrap gap-2"><span className="rounded-lg bg-white px-2 py-1 text-[10px] font-bold">{selectedOs.__retornoLoja ? `Retorno de Loja #${selectedOs.__retornoLoja.numero_retorno}` : retornoLoja ? "Retorno de Loja" : "Lote de Estoque"}</span><StatusPill status={{ label: "Aguardando triagem", tone: "purple" }} /></div>
                   </div>
                   <div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-200 pt-4 text-xs">
                     <div><div className="font-bold text-slate-400">Entrada</div><div className="mt-1 font-black text-slate-700">{formatarData(selectedOs.dt_entrada)}</div></div>

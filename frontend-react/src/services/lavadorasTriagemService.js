@@ -22,6 +22,23 @@ export const STATUS_RESERVA_POSICAO = [
 
 const STATUS_TRIAGEM_OS = ["Recebido", "Aguardando triagem", "Em triagem"];
 
+async function fetchRetornosLoja({ osId = null, status = null } = {}) {
+  let query = supabase
+    .from("linha_branca_lavadora_retornos_loja")
+    .select("*")
+    .order("numero_retorno", { ascending: true });
+  if (osId) query = query.eq("os_id", osId);
+  if (status) query = query.eq("status", status);
+
+  const { data, error } = await query;
+  if (error) {
+    const migracaoPendente = /linha_branca_lavadora_retornos_loja|schema cache|does not exist/i.test(error.message || "");
+    if (migracaoPendente) return [];
+    throw error;
+  }
+  return data || [];
+}
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -113,9 +130,10 @@ export async function fetchEventosCicloLavadora(cicloId) {
 }
 
 export async function fetchHistoricoLavadora(osId) {
-  if (!osId) return { ciclos: [], eventos: [], reparos: [], laudos: [], triagens: [] };
+  if (!osId) return { retornos: [], ciclos: [], eventos: [], reparos: [], laudos: [], triagens: [] };
 
-  const [ciclosRes, eventosRes, reparosRes, laudosRes, triagensRes] = await Promise.all([
+  const [retornosData, ciclosRes, eventosRes, reparosRes, laudosRes, triagensRes] = await Promise.all([
+    fetchRetornosLoja({ osId }),
     supabase
       .from("linha_branca_lavadora_ciclos")
       .select("*")
@@ -149,6 +167,7 @@ export async function fetchHistoricoLavadora(osId) {
   }
 
   return {
+    retornos: retornosData,
     ciclos: ciclosRes.data || [],
     eventos: eventosRes.data || [],
     reparos: reparosRes.data || [],
@@ -198,8 +217,11 @@ export async function fetchIndicadoresLavadoras() {
 }
 
 export async function fetchPainelTriagemLavadoras() {
-  const [{ data: osData, error: osError }, { data: ciclosData, error: ciclosError }] =
-    await Promise.all([
+  const [
+    { data: osData, error: osError },
+    { data: ciclosData, error: ciclosError },
+    retornosData,
+  ] = await Promise.all([
       lerHistoricoCompleto(() => supabase
         .from("ordens_servico")
         .select("*")
@@ -212,12 +234,17 @@ export async function fetchPainelTriagemLavadoras() {
         .eq("etapa_teste", "triagem")
         .order("created_at", { ascending: false })
         .limit(300),
+      fetchRetornosLoja({ status: "aberto" }),
     ]);
 
   if (osError) throw osError;
   if (ciclosError) throw ciclosError;
 
-  const osList = osData || [];
+  const retornoPorOs = new Map((retornosData || []).map((item) => [String(item.os_id), item]));
+  const osList = (osData || []).map((os) => ({
+    ...os,
+    __retornoLoja: retornoPorOs.get(String(os.id)) || null,
+  }));
   const ciclos = ciclosData || [];
   const osMap = new Map(osList.map((item) => [String(item.id), item]));
   const ciclosEnriquecidos = ciclos.map((ciclo) => ({
@@ -931,8 +958,28 @@ export async function aprovarPosReparo(ciclo, operador, observacoes = "") {
   return data;
 }
 
-export async function cadastrarRetornoLojaLavadora(numeroOs) {
-  const { data, error } = await supabase.rpc("linha_branca_cadastrar_retorno_loja", { p_numero_os: String(numeroOs || "").trim() });
-  if (error) throw new Error(error.message);
+export async function cadastrarRetornoLojaLavadora(numeroOs, {
+  motivo,
+  observacoes = "",
+  operador = "",
+} = {}) {
+  const parametros = {
+    p_numero_os: String(numeroOs || "").trim(),
+    p_motivo: String(motivo || "").trim(),
+    p_observacoes: String(observacoes || "").trim() || null,
+    p_operador: String(operador || "").trim() || null,
+  };
+  const { data, error } = await supabase.rpc("linha_branca_abrir_retorno_loja", parametros);
+  if (error) {
+    const indisponivel = /linha_branca_abrir_retorno_loja|schema cache|function.*does not exist/i.test(error.message || "");
+    if (indisponivel) {
+      const legado = await supabase.rpc("linha_branca_cadastrar_retorno_loja", {
+        p_numero_os: parametros.p_numero_os,
+      });
+      if (legado.error) throw new Error(legado.error.message);
+      return { ...legado.data, migracao_pendente: true };
+    }
+    throw new Error(error.message);
+  }
   return data;
 }

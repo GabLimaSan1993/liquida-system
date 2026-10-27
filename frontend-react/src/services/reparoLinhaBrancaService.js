@@ -1,6 +1,7 @@
 import { supabase } from "../lib/supabase";
 
 export function osAguardandoCmp(os) {
+  if (os?.origem === "Retorno de Loja") return false;
   const etapa = String(os?.dados_aging?.ETAPA || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -19,7 +20,7 @@ export async function fetchOsAguardandoCmp() {
     .order("dt_entrada", { ascending: true });
 
   if (error) throw error;
-  return data || [];
+  return (data || []).filter(osAguardandoCmp);
 }
 
 export async function fetchOsParaReparo(areaExecucao) {
