@@ -6,6 +6,7 @@ import { supabase } from "../../lib/supabase.js";
 import { consultarVoucher, listarDefeitos, carregarCatalogo, resolverSku } from "../../services/triagemFuncionalService.js";
 import { buscarOpcoes, calcularGradeFinal } from "../../services/cosmeticaService.js";
 import { codigoCondicaoCompra } from "../../services/condicaoCompra.js";
+import { tipoDoAparelho, exigeDoisImeis, erroIdentificacao } from "../../services/identificacaoAparelho.js";
 
 const CAMPO = "h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm font-medium text-slate-700 outline-none transition placeholder:text-slate-300 focus:border-violet-300 focus:ring-4 focus:ring-violet-100";
 const BOTAO = "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-violet-700 px-5 py-3 text-xs font-bold text-white shadow-sm transition hover:bg-violet-800 disabled:cursor-not-allowed disabled:opacity-40";
@@ -75,6 +76,7 @@ export default function TriagemUnificadaTestePage(){
  const [produto,setProduto]=useState({marca:"",modelo:"",armazenamento:"",cor:""});
  const [catalogo,setCatalogo]=useState({produtos:[]});
  const [imei,setImei]=useState("");
+ const [imei2,setImei2]=useState("");
  const [cameras,setCameras]=useState({frontal:null,traseira:null});
  const [fotos,setFotos]=useState({frontal:null,traseira:null});
  const [defeitos,setDefeitos]=useState([]),[catalogoDefeitos,setCatalogoDefeitos]=useState([]);
@@ -89,12 +91,17 @@ export default function TriagemUnificadaTestePage(){
  const cores=useMemo(()=>[...new Set(catalogo.produtos.filter(p=>p.marca===produto.marca&&p.modelo===produto.modelo&&(p.capacidade||"")===produto.armazenamento).map(p=>p.cor))].filter(Boolean).sort(),[catalogo,produto.marca,produto.modelo,produto.armazenamento]);
  const sku=useMemo(()=>resolverSku(catalogo.produtos,{marca:produto.marca,modelo:produto.modelo,capacidade:produto.armazenamento,cor:produto.cor}),[catalogo,produto]);
  const produtoCompleto=Boolean(produto.marca&&produto.modelo&&produto.armazenamento&&produto.cor);
+ const tipoCatalogo=catalogo.produtos.find(p=>p.modelo===produto.modelo&&p.marca===produto.marca)?.tipo;
+ const tipoAparelho=tipoDoAparelho(produto.modelo,tipoCatalogo);
+ const doisImeis=exigeDoisImeis(produto.modelo,tipoAparelho,condicao==="bloqueado",condicao==="danos_tela");
+ const erroCodigo=erroIdentificacao(tipoAparelho,imei,doisImeis?imei2:null,
+   {modelo:produto.modelo,aparelhoBloqueado:condicao==="bloqueado",danosTela:condicao==="danos_tela"});
  const grade=useMemo(()=>escolhas.tela&&escolhas.laterais&&escolhas.traseira
   ? calcularGradeFinal({...escolhas,temDefeitoFuncional:cameras.frontal===false||cameras.traseira===false||defeitos.length>0||condicao==="danos_tela",bateria:ctx?.existente?.status_bateria})
   : null,[escolhas,cameras,defeitos,ctx,condicao]);
  const validoFotos=!!fotos.frontal?.file&&!!fotos.traseira?.file;
  const falha=(e)=>setErro(e?.message||String(e));
- function reiniciar(){setVoucher("");setCtx(null);setEtapa(0);setErro("");setResultado(null);setCondicao("");setProduto({marca:"",modelo:"",armazenamento:"",cor:""});setImei("");setCameras({frontal:null,traseira:null});setFotos({frontal:null,traseira:null});setDefeitos([]);setBuscaDefeito("");setEscolhas({tela:"",laterais:"",traseira:""});}
+ function reiniciar(){setVoucher("");setCtx(null);setEtapa(0);setErro("");setResultado(null);setCondicao("");setProduto({marca:"",modelo:"",armazenamento:"",cor:""});setImei("");setImei2("");setCameras({frontal:null,traseira:null});setFotos({frontal:null,traseira:null});setDefeitos([]);setBuscaDefeito("");setEscolhas({tela:"",laterais:"",traseira:""});}
  async function consultar(e){
   e.preventDefault();setErro("");setBusy(true);
   try{
@@ -105,7 +112,7 @@ export default function TriagemUnificadaTestePage(){
    if(!r.tradein)throw Error("Piloto liberado apenas para vouchers YBV com referência TradeIn.");
    const c=codigoCondicaoCompra(r.tradein.condicao_aparelho,r.tradein.condicao_sufixo);
    if(!["TR","BM"].includes(c))throw Error("Condição de compra não identificada. Não é permitido escolher BM/TR manualmente.");
-   setCtx(r);setProduto({marca:"",modelo:"",armazenamento:"",cor:""});setCondicao("");setImei("");setEtapa(1);
+   setCtx(r);setProduto({marca:"",modelo:"",armazenamento:"",cor:""});setCondicao("");setImei("");setImei2("");setEtapa(1);
    if(c==="TR"){
      const [d,o,catalogoAtual]=await Promise.all([listarDefeitos(),buscarOpcoes(),carregarCatalogo()]);
      setCatalogoDefeitos(d);setOpcoes(o);setCatalogo(catalogoAtual);
@@ -121,8 +128,7 @@ export default function TriagemUnificadaTestePage(){
  }
  function avancarImei(){
   setErro("");
-  if(!imei.trim()&&condicao!=="danos_tela"){setErro("Bipe o IMEI físico.");return;}
-  if(imei.trim()&&!/^[0-9]{14,16}$/.test(imei.trim())){setErro("Bipe um IMEI válido de 14 a 16 dígitos.");return;}
+  if(erroCodigo){setErro(erroCodigo);return;}
   if(imei.trim()&&ctx.tradein?.imei && String(ctx.tradein.imei).trim()!==imei.trim()){
     setErro("O IMEI não confere com a compra. Utilize a tela de Divergências, sem concluir esta triagem.");return;
   }
@@ -154,14 +160,14 @@ export default function TriagemUnificadaTestePage(){
   setErro("");
   if(tipo!=="TR"||!PILOT_USERS.has(user?.id)){setErro("Somente TR na conta piloto pode usar este fechamento.");return;}
   if(!["nao_liga","bloqueado"].includes(condicao)&&(!grade||!validoFotos||cameras.frontal===null||cameras.traseira===null)){setErro("Complete testes de câmera e as três perguntas cosméticas.");return;}
-  if(!["nao_liga","danos_tela"].includes(condicao)&&!/^[0-9]{14,16}$/.test(imei)){setErro("IMEI físico obrigatório.");return;}
+  if(condicao!=="nao_liga"&&erroCodigo){setErro(erroCodigo);return;}
   if(!window.confirm("Confirmar a triagem de TESTE no banco operacional? O status do voucher será atualizado."))return;
   setBusy(true);
   try{
    const paths=!["nao_liga","bloqueado"].includes(condicao)?await enviarFotos():{};
    const dados={voucher:ctx.voucher,
      marca:produto.marca,modelo:produto.modelo,capacidade:produto.armazenamento,cor:produto.cor,
-     sku:sku.sku,imei:imei.trim()||null,condicao:condicao||"normal",
+     sku:sku.sku,imei:imei.trim()||null,imei2:doisImeis?imei2.trim()||null:null,condicao:condicao||"normal",
      camera_frontal_funciona:cameras.frontal,camera_traseira_funciona:cameras.traseira,
      foto_frontal_path:paths.frontal||null,foto_traseira_path:paths.traseira||null,
      defeitos:condicao==="danos_tela"?[...new Set([...defeitos,"Danos da tela"])]:defeitos,
@@ -203,7 +209,7 @@ export default function TriagemUnificadaTestePage(){
        <Link className={BOTAO} to="/v2/assurant/triagens/cosmetica">Triagem Cosmética</Link>
       </div>:<>
       <label className="block space-y-2 text-xs font-bold text-slate-700">Condição inicial do aparelho
-       <select className={CAMPO} value={condicao} onChange={e=>{setCondicao(e.target.value);setImei("");setDefeitos(v=>e.target.value==="danos_tela"?[...new Set([...v,"Danos da tela"])]:v.filter(x=>x!=="Danos da tela"));}}>
+       <select className={CAMPO} value={condicao} onChange={e=>{setCondicao(e.target.value);setImei("");setImei2("");setDefeitos(v=>e.target.value==="danos_tela"?[...new Set([...v,"Danos da tela"])]:v.filter(x=>x!=="Danos da tela"));}}>
         <option value="">Sem ocorrência</option>
         <option value="nao_liga">Produto não liga</option>
         <option value="bloqueado">Bloqueado</option>
@@ -245,8 +251,23 @@ export default function TriagemUnificadaTestePage(){
   {etapa===2&&<Painel titulo="Conferência do IMEI" subtitulo="" icone={ScanLine}>
     
 
-    <input autoFocus inputMode="numeric" className={CAMPO} placeholder={condicao==="danos_tela"?"IMEI (opcional)":"Bipe o IMEI"} value={imei} onChange={e=>setImei(e.target.value.replace(/\D/g,""))}/>
-    <div className="flex gap-3"><button type="button" className={BOTAO} onClick={avancarImei}>Conferir e continuar</button><button type="button" onClick={()=>setEtapa(1)} className={CAMPO}>Voltar</button></div>
+    <div className="max-w-[760px] space-y-4 rounded-2xl border border-violet-100 bg-violet-50/40 p-5">
+      <label className="block space-y-2 text-xs font-bold text-slate-700">{tipoAparelho==="CELULAR"?(condicao==="danos_tela"?"IMEI (opcional)":"IMEI 1"):"Referência / serial"}
+        <input autoFocus type="text" inputMode={tipoAparelho==="CELULAR"?"numeric":"text"}
+         autoComplete="off" spellCheck={false} maxLength={tipoAparelho==="CELULAR"?15:64}
+         className={CAMPO} placeholder={tipoAparelho==="CELULAR"?"Bipe o IMEI 1":"Bipe a referência / serial"}
+         value={imei} onChange={e=>setImei(tipoAparelho==="CELULAR"?e.target.value.replace(/\D/g,""):e.target.value.trim())}
+         onKeyDown={e=>{if(e.key==="Enter"&&doisImeis){e.preventDefault();document.getElementById("unificada-imei2")?.focus();}}}
+        />
+      </label>
+      {doisImeis&&<label className="block space-y-2 text-xs font-bold text-slate-700">IMEI 2
+        <input id="unificada-imei2" type="text" inputMode="numeric" autoComplete="off" spellCheck={false}
+          maxLength={15} className={CAMPO} placeholder="Bipe o IMEI 2" value={imei2}
+          onChange={e=>setImei2(e.target.value.replace(/\D/g,""))}/>
+      </label>}
+      {erroCodigo&&(imei||imei2)&&<p role="alert" className="text-xs font-bold text-rose-700">{erroCodigo}</p>}
+    </div>
+    <div className="flex gap-3"><button type="button" className={BOTAO} disabled={!!erroCodigo} onClick={avancarImei}>Validar identificação</button><button type="button" onClick={()=>setEtapa(1)} className={CAMPO}>Voltar</button></div>
   </Painel>}
   {etapa===3&&<Painel titulo="Câmeras e defeitos adicionais" subtitulo="" icone={Camera}>
     
