@@ -123,10 +123,10 @@ export default function TriagemUnificadaTestePage(){
   setErro("");
   if(!imei.trim()&&condicao!=="danos_tela"){setErro("Bipe o IMEI físico.");return;}
   if(imei.trim()&&!/^[0-9]{14,16}$/.test(imei.trim())){setErro("Bipe um IMEI válido de 14 a 16 dígitos.");return;}
-  if(ctx.tradein?.imei && String(ctx.tradein.imei).trim()!==imei.trim()){
+  if(imei.trim()&&ctx.tradein?.imei && String(ctx.tradein.imei).trim()!==imei.trim()){
     setErro("O IMEI não confere com a compra. Utilize a tela de Divergências, sem concluir esta triagem.");return;
   }
-  if(ctx.existente?.imei && String(ctx.existente.imei).trim()!==imei.trim()){
+  if(imei.trim()&&ctx.existente?.imei && String(ctx.existente.imei).trim()!==imei.trim()){
     setErro("IMEI diferente do recebimento. Regularize na tela de Divergências.");return;
   }
   setEtapa(condicao==="bloqueado"?5:3);
