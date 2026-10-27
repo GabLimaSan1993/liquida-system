@@ -379,8 +379,8 @@ export default function App() {
         />
         <Route path="uploads" element={<ProtectedRoute tela="/v2/linha-branca/uploads"><UploadAgingLinhaBrancaPage /></ProtectedRoute>} />
         <Route path="gestao/producao" element={<ProtectedRoute tela="/v2/linha-branca/gestao/producao"><GestaoProducaoLinhaBrancaPage /></ProtectedRoute>} />
-        <Route path="desmembramento" element={<ProtectedRoute tela="/v2/linha-branca"><DesmembramentoLinhaBrancaPage /></ProtectedRoute>} />
-        <Route path="gestao/estoque" element={<ProtectedRoute tela="/v2/linha-branca"><GestaoEstoqueLinhaBrancaPage /></ProtectedRoute>} />
+        <Route path="desmembramento" element={<ProtectedRoute tela="/v2/linha-branca/desmembramento"><DesmembramentoLinhaBrancaPage /></ProtectedRoute>} />
+        <Route path="gestao/estoque" element={<ProtectedRoute tela="/v2/linha-branca/gestao/estoque"><GestaoEstoqueLinhaBrancaPage /></ProtectedRoute>} />
       </Route>
 
 
