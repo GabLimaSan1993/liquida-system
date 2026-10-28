@@ -67,21 +67,24 @@ export default function FechamentoDiarioV2Page(){
   const [dados,setDados]=useState(null);
   const [backlog,setBacklog]=useState(null);
   const [metas,setMetas]=useState(null);
+  const [carteira,setCarteira]=useState(null);
   const [erro,setErro]=useState("");
   const [erroBacklog,setErroBacklog]=useState("");
   const [erroMetas,setErroMetas]=useState("");
+  const [erroCarteira,setErroCarteira]=useState("");
   const [loading,setLoading]=useState(false);
   const [refresh,setRefresh]=useState(0);
   const [grupoEtapa,setGrupoEtapa]=useState("Todos");
 
   const carregar=useCallback(async(signal)=>{
-    setLoading(true);setErro("");setErroBacklog("");setErroMetas("");
+    setLoading(true);setErro("");setErroBacklog("");setErroMetas("");setErroCarteira("");
     const params={p_inicio:filtros.inicio,p_fim:filtros.fim,p_agrupamento:filtros.agrupamento};
     const referencia=filtros.fim>hoje?hoje:filtros.fim;
-    const [fat,back,meta]=await Promise.allSettled([
+    const [fat,back,meta,car]=await Promise.allSettled([
       supabase.rpc("assurant_fechamento_diario_periodo",params).abortSignal(signal),
       supabase.rpc("assurant_fechamento_diario_backlog",{p_referencia:referencia}).abortSignal(signal),
-      supabase.rpc("assurant_fechamento_diario_metas",{p_inicio:filtros.inicio,p_fim:filtros.fim}).abortSignal(signal)
+      supabase.rpc("assurant_fechamento_diario_metas",{p_inicio:filtros.inicio,p_fim:filtros.fim}).abortSignal(signal),
+      supabase.rpc("assurant_fechamento_diario_carteira").abortSignal(signal)
     ]);
     if(signal.aborted)return;
     if(fat.status==="fulfilled"&&!fat.value.error){setDados(fat.value.data);}
@@ -90,6 +93,8 @@ export default function FechamentoDiarioV2Page(){
     else{setBacklog(null);setErroBacklog(back.status==="rejected"?String(back.reason):back.value.error?.message||"Backlog indisponível.");}
     if(meta.status==="fulfilled"&&!meta.value.error){setMetas(meta.value.data);}
     else{setMetas(null);setErroMetas(meta.status==="rejected"?String(meta.reason):meta.value.error?.message||"Metas indisponíveis.");}
+    if(car.status==="fulfilled"&&!car.value.error){setCarteira(car.value.data);}
+    else{setCarteira(null);setErroCarteira(car.status==="rejected"?String(car.reason):car.value.error?.message||"Carteira indisponível.");}
     setLoading(false);
   },[filtros,hoje]);
   useEffect(()=>{const controller=new AbortController();carregar(controller.signal);return ()=>controller.abort();},[carregar,refresh]);
@@ -133,6 +138,15 @@ export default function FechamentoDiarioV2Page(){
   const metaDiasVisiveis=metaDias.slice(-60).reverse();
   const metaChart=metaDias.slice(-40).map(r=>({...r,meta:Number(r.meta_total||550)}));
   const metaAtingimento=metaResumo&&Number(metaResumo.meta_total)>0 ? 100*Number(metaResumo.total_faturado)/Number(metaResumo.meta_total) : 0;
+  const carteiraTotal=carteira?.total||null;
+  const carteiraB2B=carteira?.b2b||null;
+  const carteiraB2C=carteira?.b2c||null;
+  const b2cPotencial=Number(carteiraB2C?.potencial_hoje||0);
+  const b2bPotencial=Number(carteiraB2B?.potencial_hoje||0);
+  const balizadorB2BPotencial=Math.max(0,400-Math.max(0,b2cPotencial-150));
+  const potencialSuficiente=!!carteiraTotal&&Number(carteiraTotal.potencial_hoje)>=550;
+  const b2cSuficiente=b2cPotencial>=150;
+  const b2bSuficiente=b2bPotencial>=balizadorB2BPotencial;
   const cor="#6d28d9";
 
   return <div className="mx-auto max-w-[1660px] space-y-5 pb-14 text-slate-900">
@@ -165,6 +179,7 @@ export default function FechamentoDiarioV2Page(){
     {erro&&<div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{erro}</div>}
     {erroBacklog&&<div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">Backlog: {erroBacklog}</div>}
     {erroMetas&&<div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">Meta de faturamento: {erroMetas}</div>}
+    {erroCarteira&&<div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">Carteira: {erroCarteira}</div>}
 
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <Kpi titulo="Faturamento total" valor={dados?fmtBRL(totalFat):"—"} detalhe="B2B + B2C, sem duplicar pedidos" icon={TrendingUp}/>
@@ -233,6 +248,83 @@ export default function FechamentoDiarioV2Page(){
         </table>
         {metaDias.length>60&&<p className="mt-3 text-xs text-slate-500">Exibindo os 60 dias mais recentes; os totais do topo consideram todos os {fmtNum(metaDias.length)} dias selecionados.</p>}
       </div>:<div className="mt-4"><InfoEmpty texto={loading?"Calculando metas...":"Sem dados de metas disponíveis."}/></div>}
+    </section>
+
+    <section className={panel}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="flex items-center gap-2 text-base font-black"><PackageCheck size={19} className="text-violet-700"/> Carteira de pedidos e capacidade de faturamento</h2>
+          <p className="mt-1 text-xs text-slate-500">Fotografia <strong>atual</strong> dos pedidos ainda não faturados, separando os que podem avançar dos que dependem de liberação.</p>
+        </div>
+        <span className="rounded-lg bg-slate-100 px-3 py-2 text-[11px] font-bold text-slate-600">
+          Carteira consultada em {carteira?.atualizado_em?new Date(carteira.atualizado_em).toLocaleString("pt-BR",{timeZone:"America/Sao_Paulo"}):"—"}
+        </span>
+      </div>
+      {carteira&&<>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <Kpi titulo="Carteira total B2C" valor={fmtNum(carteiraB2C?.carteira)} detalhe={fmtNum(carteiraB2C?.prontos)+" embalados · "+fmtNum(carteiraB2C?.em_preparacao)+" em preparação"} icon={PackageCheck} subtle/>
+          <Kpi titulo="Carteira total B2B" valor={fmtNum(carteiraB2B?.carteira)} detalhe={fmtNum(carteiraB2B?.pedidos)+" lotes · "+fmtNum(carteiraB2B?.prontos)+" preparados"} icon={FileText} subtle/>
+          <Kpi titulo="Carteira trabalhável" valor={fmtNum(carteiraTotal?.trabalhaveis)} detalhe={fmtNum(carteiraTotal?.prontos)+" prontos · "+fmtNum(Number(carteiraTotal?.trabalhaveis||0)-Number(carteiraTotal?.prontos||0))+" em preparação"} icon={Warehouse}/>
+          <Kpi titulo="Dependentes de liberação" valor={fmtNum(carteiraTotal?.com_restricao)} detalhe="Definições, análises, restrições ou erro fiscal" icon={AlertTriangle} subtle/>
+        </div>
+        <div className={"mt-4 rounded-xl border p-4 "+(potencialSuficiente&&b2cSuficiente&&b2bSuficiente?"border-emerald-200 bg-emerald-50":"border-amber-200 bg-amber-50")}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-black text-slate-900">
+                {potencialSuficiente&&b2cSuficiente&&b2bSuficiente
+                  ?"Volume potencial suficiente para a meta, sujeito à execução"
+                  :!potencialSuficiente
+                  ?"Carteira operacional insuficiente para 550 aparelhos"
+                  :"Há volume total, mas falta capacidade em um dos canais"}
+              </p>
+              <p className="mt-1 text-xs leading-5 text-slate-700">Potencial indicativo de hoje = já faturado hoje + itens prontos + itens em preparação. Os itens com pendências ou bloqueios ficam fora do potencial.</p>
+            </div>
+            <span className="rounded-lg bg-white/80 px-3 py-2 text-sm font-black text-slate-900">{fmtNum(carteiraTotal?.potencial_hoje)} / 550 aparelhos</span>
+          </div>
+          <div className="mt-4 h-3 overflow-hidden rounded-full bg-white/80">
+            <div className={"h-full rounded-full "+(potencialSuficiente?"bg-emerald-600":"bg-amber-500")} style={{width:Math.min(100,100*Number(carteiraTotal?.potencial_hoje||0)/550)+"%"}}/>
+          </div>
+          <div className="mt-4 grid gap-2 md:grid-cols-3">
+            <div className="rounded-lg bg-white/75 p-3">
+              <p className="text-[11px] font-bold text-slate-500">Faturado hoje</p>
+              <p className="mt-1 text-xl font-black text-slate-900">{fmtNum(carteiraTotal?.faturados_hoje)}</p>
+            </div>
+            <div className="rounded-lg bg-white/75 p-3">
+              <p className="text-[11px] font-bold text-slate-500">Faltam para 550</p>
+              <p className="mt-1 text-xl font-black text-slate-900">{fmtNum(carteiraTotal?.faltam_para_meta)}</p>
+            </div>
+            <div className="rounded-lg bg-white/75 p-3">
+              <p className="text-[11px] font-bold text-slate-500">Potencial B2C / B2B</p>
+              <p className="mt-1 text-lg font-black text-slate-900">{fmtNum(b2cPotencial)} / {fmtNum(b2bPotencial)}</p>
+              <p className="mt-1 text-[11px] text-slate-600">Balizador B2B no máximo potencial B2C: {fmtNum(balizadorB2BPotencial)}</p>
+            </div>
+          </div>
+        </div>
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[650px] text-left text-xs">
+            <thead className="bg-slate-50 text-slate-500"><tr>
+              <th className="px-3 py-3">Canal</th><th className="px-3 py-3 text-right">Carteira total</th>
+              <th className="px-3 py-3 text-right">Prontos</th><th className="px-3 py-3 text-right">Em preparação</th>
+              <th className="px-3 py-3 text-right">Com pendências</th><th className="px-3 py-3 text-right">Potencial hoje</th>
+            </tr></thead>
+            <tbody className="divide-y divide-slate-100">
+              {[["B2C",carteiraB2C],["B2B",carteiraB2B]].map(([canal,c])=><tr key={canal}>
+                <td className="px-3 py-3 font-bold">{canal}</td>
+                <td className="px-3 py-3 text-right font-black">{fmtNum(c.carteira)}</td>
+                <td className="px-3 py-3 text-right">{fmtNum(c.prontos)}</td>
+                <td className="px-3 py-3 text-right">{fmtNum(c.em_preparacao)}</td>
+                <td className="px-3 py-3 text-right">{fmtNum(c.com_restricao)}</td>
+                <td className="px-3 py-3 text-right font-black">{fmtNum(c.potencial_hoje)}</td>
+              </tr>)}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-3 text-xs leading-5 text-slate-500">
+          <strong>Importante:</strong> possuir pedidos em carteira não significa conseguir faturá-los no mesmo dia. B2B exclui {fmtNum(carteiraB2B?.operacoes_internas_excluidas)} itens de lotes identificados como reparo/revisão/validação (não tratados como venda). No B2C, pedidos aguardando definição, alocação, validação ou análise são mostrados como pendência. O potencial é indicativo, não uma promessa de faturamento.
+        </p>
+        {filtros.inicio!==hoje&&<p className="mt-2 rounded-xl bg-amber-50 p-3 text-xs leading-5 font-medium text-amber-800">A carteira acima é a disponível hoje, {new Date(hoje+"T12:00:00Z").toLocaleDateString("pt-BR",{timeZone:"UTC"})}, e não a carteira que havia no período selecionado. Para avaliar falta de pedidos em dias anteriores, serão necessários snapshots históricos da carteira.</p>}
+      </>}
+      {!carteira&&<div className="mt-4"><InfoEmpty texto={loading?"Consultando a carteira...":"Carteira não disponível."}/></div>}
     </section>
     <div className="grid gap-4 xl:grid-cols-5">
       <section className={panel+" xl:col-span-3"}>
