@@ -112,10 +112,10 @@ export default function FechamentoDiarioV2Page(){
   const producao=useMemo(()=>{
     const byStage=new Map();
     for(const r of dados?.producao||[]){
-      const st=byStage.get(r.etapa)||{total:0,retrabalho:0};
-      st.total+=Number(r.total||0);st.retrabalho+=Number(r.retrabalho||0);byStage.set(r.etapa,st);
+      const st=byStage.get(r.etapa)||{total:0};
+      st.total+=Number(r.total||0);byStage.set(r.etapa,st);
     }
-    return STAGES.filter(s=>grupoEtapa==="Todos"||s.grupo===grupoEtapa).map(s=>({...s,...(byStage.get(s.id)||{total:0,retrabalho:0}),temDados:byStage.has(s.id)}));
+    return STAGES.filter(s=>grupoEtapa==="Todos"||s.grupo===grupoEtapa).map(s=>({...s,...(byStage.get(s.id)||{total:0}),temDados:byStage.has(s.id)}));
   },[dados,grupoEtapa]);
   const etapasBacklog=backlog?.etapas||[];
   const totalBacklog=etapasBacklog.filter(s=>s.etapa!=="antes_recebimento").reduce((n,s)=>n+Number(s.total||0),0);
@@ -187,22 +187,21 @@ export default function FechamentoDiarioV2Page(){
 
     <section className={panel}>
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div><h2 className="flex items-center gap-2 text-base font-black"><Activity size={19} className="text-violet-700"/> Produção por estação</h2><p className="mt-1 text-xs text-slate-500">Produção efetiva e retrabalho registrados no período, sem acumular estoques pendentes</p></div>
+        <div><h2 className="flex items-center gap-2 text-base font-black"><Activity size={19} className="text-violet-700"/> Produção por estação</h2><p className="mt-1 text-xs text-slate-500">Produção total de cada estação, incluindo as revisões e os reprocessamentos registrados, sem contagem em coluna separada</p></div>
         <div className="flex flex-wrap gap-1.5">{["Todos","Esteira","B2B","B2C"].map(x=><button type="button" key={x} className={"rounded-lg px-3 py-1.5 text-xs font-bold "+(grupoEtapa===x?"bg-violet-700 text-white":"bg-slate-100 text-slate-600")} onClick={()=>setGrupoEtapa(x)}>{x}</button>)}</div>
       </div>
-      {dados&&chartRows.length?<div className="mt-5 h-[320px] w-full"><ResponsiveContainer width="100%" height="100%"><BarChart data={chartRows.map(x=>({nome:x.label,total:x.total,retrabalho:x.retrabalho}))} layout="vertical" margin={{left:5,right:15,top:5,bottom:5}}>
+      {dados&&chartRows.length?<div className="mt-5 h-[320px] w-full"><ResponsiveContainer width="100%" height="100%"><BarChart data={chartRows.map(x=>({nome:x.label,total:x.total}))} layout="vertical" margin={{left:5,right:15,top:5,bottom:5}}>
         <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="#e2e8f0"/>
         <YAxis dataKey="nome" type="category" width={155} tick={{fontSize:11}}/>
         <XAxis type="number" tickFormatter={fmtShort} tick={{fontSize:11}}/>
         <Tooltip formatter={fmtNum}/>
         <Legend/>
-        <Bar name="Produção" dataKey="total" fill={cor} radius={[0,4,4,0]} maxBarSize={17}/>
-        <Bar name="Retrabalho" dataKey="retrabalho" fill="#f59e0b" radius={[0,4,4,0]} maxBarSize={17}/>
+        <Bar name="Produção total" dataKey="total" fill={cor} radius={[0,4,4,0]} maxBarSize={17}/>
       </BarChart></ResponsiveContainer></div>:<div className="mt-4"><InfoEmpty texto="Sem eventos de produção para as estações selecionadas."/></div>}
       <div className="mt-5 overflow-x-auto">
         <table className="w-full min-w-[620px] text-left text-xs">
-          <thead className="bg-slate-50 text-slate-500"><tr><th className="px-3 py-3">Estação / etapa</th><th className="px-3 py-3">Área</th><th className="px-3 py-3 text-right">Produzido</th><th className="px-3 py-3 text-right">Retrabalho</th><th className="px-3 py-3">Leitura</th></tr></thead>
-          <tbody className="divide-y divide-slate-100">{producao.map(row=><tr key={row.id}><td className="px-3 py-3 font-bold">{row.label}</td><td className="px-3 py-3 text-slate-500">{row.grupo}</td><td className="px-3 py-3 text-right font-black">{row.semCaptura?"—":fmtNum(row.total)}</td><td className="px-3 py-3 text-right">{row.semCaptura?"—":fmtNum(row.retrabalho)}</td><td className="px-3 py-3 text-slate-500">{row.semCaptura?"Sem captura específica no sistema":row.temDados?"Eventos registrados":"Sem registros no período"}</td></tr>)}</tbody>
+          <thead className="bg-slate-50 text-slate-500"><tr><th className="px-3 py-3">Estação / etapa</th><th className="px-3 py-3">Área</th><th className="px-3 py-3 text-right">Produzido</th><th className="px-3 py-3">Leitura</th></tr></thead>
+          <tbody className="divide-y divide-slate-100">{producao.map(row=><tr key={row.id}><td className="px-3 py-3 font-bold">{row.label}</td><td className="px-3 py-3 text-slate-500">{row.grupo}</td><td className="px-3 py-3 text-right font-black">{row.semCaptura?"—":fmtNum(row.total)}</td><td className="px-3 py-3 text-slate-500">{row.semCaptura?"Sem captura específica no sistema":row.temDados?"Eventos registrados":"Sem registros no período"}</td></tr>)}</tbody>
         </table>
       </div>
       <p className="mt-3 text-xs text-slate-500">Destrinche ainda não dispõe de captura própria na base de produção; não é exibido um zero artificial.</p>
