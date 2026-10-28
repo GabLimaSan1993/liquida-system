@@ -734,7 +734,7 @@ export default function App() {
         <Route path="gestao/fechamento-lojas" element={<ProtectedRoute tela="/v2/assurant/gestao/fechamento-lojas"><FechamentoLojasV2Page /></ProtectedRoute>} />
         <Route path="gestao/producao" element={<ProtectedRoute tela="/v2/assurant/gestao/producao"><ProducaoEsteiraV2Page /></ProtectedRoute>} />
         <Route path="gestao/esteira" element={<ProtectedRoute tela="/v2/assurant/gestao/esteira"><GestaoEsteiraV2Page /></ProtectedRoute>} />
-        <Route path="gestao/fechamento-diario" element={<UserOnlyRoute userId="b517d70a-56be-4b4f-8b9e-a03c769dd3c3"><FechamentoDiarioV2Page /></UserOnlyRoute>} />
+        <Route path="gestao/fechamento-diario" element={<UserOnlyRoute userIds={["b517d70a-56be-4b4f-8b9e-a03c769dd3c3","a5115520-a653-4ae3-b0ae-177674ffbff7","6e0ac557-93a2-42ae-8595-12648b2ac0de","8549de55-3657-4042-86c6-822cd3d49941"]}><FechamentoDiarioV2Page /></UserOnlyRoute>} />
 
 
 
