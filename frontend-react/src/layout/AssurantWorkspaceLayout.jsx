@@ -58,6 +58,10 @@ const FIFO_AUDIT_ALLOWED_USERS = [
   "b517d70a-56be-4b4f-8b9e-a03c769dd3c3",
 ];
 
+const FECHAMENTO_DIARIO_ALLOWED_USERS = [
+  "b517d70a-56be-4b4f-8b9e-a03c769dd3c3",
+];
+
 const MARGEM_B2C_ALLOWED_USERS = [
   "b517d70a-56be-4b4f-8b9e-a03c769dd3c3",
 ];
@@ -355,6 +359,7 @@ const MENU_GROUPS = [
   items: [
     { label: "Relatório de Estoque", icon: FileText, to: "/v2/assurant/gestao/relatorio-estoque", exact: true, enabled: true },
     { label: "Fechamento de Lojas", icon: FileText, to: "/v2/assurant/gestao/fechamento-lojas", exact: true, enabled: true },
+    { label: "Fechamento Diário", icon: BarChart3, to: "/v2/assurant/gestao/fechamento-diario", exact: true, enabled: true, allowedUserIds: FECHAMENTO_DIARIO_ALLOWED_USERS },
     { label: "Produção da Esteira", icon: Activity, to: "/v2/assurant/gestao/producao", exact: true, enabled: true },
     { label: "Gestão da Esteira", icon: Activity, to: "/v2/assurant/gestao/esteira", exact: true, enabled: true },
 
