@@ -2,6 +2,7 @@ import BaixasManuaisB2CV2Page from './pages/assurant-v2/BaixasManuaisB2CV2Page.j
 import UploadAgingLinhaBrancaPage from "./pages/linha-branca-v2/UploadAgingLinhaBrancaPage.jsx";
 import DivergenciasImeiV2Page from "./pages/assurant-v2/DivergenciasImeiV2Page.jsx";
 import ProducaoEsteiraV2Page from './pages/assurant-v2/ProducaoEsteiraV2Page.jsx';
+import FechamentoDiarioV2Page from './pages/assurant-v2/FechamentoDiarioV2Page.jsx';
 import RelatorioEstoqueV2Page from "./pages/assurant-v2/RelatorioEstoqueV2Page";
 import FechamentoLojasV2Page from "./pages/assurant-v2/FechamentoLojasV2Page";
 import GestaoEsteiraV2Page from "./pages/assurant-v2/GestaoEsteiraV2Page.jsx";
@@ -733,6 +734,7 @@ export default function App() {
         <Route path="gestao/fechamento-lojas" element={<ProtectedRoute tela="/v2/assurant/gestao/fechamento-lojas"><FechamentoLojasV2Page /></ProtectedRoute>} />
         <Route path="gestao/producao" element={<ProtectedRoute tela="/v2/assurant/gestao/producao"><ProducaoEsteiraV2Page /></ProtectedRoute>} />
         <Route path="gestao/esteira" element={<ProtectedRoute tela="/v2/assurant/gestao/esteira"><GestaoEsteiraV2Page /></ProtectedRoute>} />
+        <Route path="gestao/fechamento-diario" element={<UserOnlyRoute userId="b517d70a-56be-4b4f-8b9e-a03c769dd3c3"><FechamentoDiarioV2Page /></UserOnlyRoute>} />
 
 
 
