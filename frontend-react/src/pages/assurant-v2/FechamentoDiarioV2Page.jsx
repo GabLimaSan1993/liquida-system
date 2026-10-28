@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Activity, BarChart3, CalendarDays, Clock3, FileText, PackageCheck, RefreshCw, TrendingUp, Warehouse, AlertTriangle } from "lucide-react";
-import { Bar, BarChart, CartesianGrid, Cell, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, Legend, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { supabase } from "../../lib/supabase.js";
 
 const STAGES = [
@@ -66,25 +66,30 @@ export default function FechamentoDiarioV2Page(){
   const [filtros,setFiltros]=useState(()=>intervalo("dia",hoje,hoje,hoje));
   const [dados,setDados]=useState(null);
   const [backlog,setBacklog]=useState(null);
+  const [metas,setMetas]=useState(null);
   const [erro,setErro]=useState("");
   const [erroBacklog,setErroBacklog]=useState("");
+  const [erroMetas,setErroMetas]=useState("");
   const [loading,setLoading]=useState(false);
   const [refresh,setRefresh]=useState(0);
   const [grupoEtapa,setGrupoEtapa]=useState("Todos");
 
   const carregar=useCallback(async(signal)=>{
-    setLoading(true);setErro("");setErroBacklog("");
+    setLoading(true);setErro("");setErroBacklog("");setErroMetas("");
     const params={p_inicio:filtros.inicio,p_fim:filtros.fim,p_agrupamento:filtros.agrupamento};
     const referencia=filtros.fim>hoje?hoje:filtros.fim;
-    const [fat,back]=await Promise.allSettled([
+    const [fat,back,meta]=await Promise.allSettled([
       supabase.rpc("assurant_fechamento_diario_periodo",params).abortSignal(signal),
-      supabase.rpc("assurant_fechamento_diario_backlog",{p_referencia:referencia}).abortSignal(signal)
+      supabase.rpc("assurant_fechamento_diario_backlog",{p_referencia:referencia}).abortSignal(signal),
+      supabase.rpc("assurant_fechamento_diario_metas",{p_inicio:filtros.inicio,p_fim:filtros.fim}).abortSignal(signal)
     ]);
     if(signal.aborted)return;
     if(fat.status==="fulfilled"&&!fat.value.error){setDados(fat.value.data);}
     else{setDados(null);setErro(fat.status==="rejected"?String(fat.reason):fat.value.error?.message||"Erro ao consultar produção e faturamento.");}
     if(back.status==="fulfilled"&&!back.value.error){setBacklog(back.value.data);}
     else{setBacklog(null);setErroBacklog(back.status==="rejected"?String(back.reason):back.value.error?.message||"Backlog indisponível.");}
+    if(meta.status==="fulfilled"&&!meta.value.error){setMetas(meta.value.data);}
+    else{setMetas(null);setErroMetas(meta.status==="rejected"?String(meta.reason):meta.value.error?.message||"Metas indisponíveis.");}
     setLoading(false);
   },[filtros,hoje]);
   useEffect(()=>{const controller=new AbortController();carregar(controller.signal);return ()=>controller.abort();},[carregar,refresh]);
@@ -123,6 +128,11 @@ export default function FechamentoDiarioV2Page(){
   const maiorBacklog=Math.max(1,...etapasBacklog.map(x=>Number(x.total||0)));
   const totalFat=financeiro.totais.B2B.valor+financeiro.totais.B2C.valor;
   const chartRows=producao.filter(x=>!x.semCaptura&&x.temDados);
+  const metaResumo=metas?.resumo||null;
+  const metaDias=metas?.dias||[];
+  const metaDiasVisiveis=metaDias.slice(-60).reverse();
+  const metaChart=metaDias.slice(-40).map(r=>({...r,meta:Number(r.meta_total||550)}));
+  const metaAtingimento=metaResumo&&Number(metaResumo.meta_total)>0 ? 100*Number(metaResumo.total_faturado)/Number(metaResumo.meta_total) : 0;
   const cor="#6d28d9";
 
   return <div className="mx-auto max-w-[1660px] space-y-5 pb-14 text-slate-900">
@@ -154,6 +164,7 @@ export default function FechamentoDiarioV2Page(){
     {loading&&<div role="status" className="rounded-xl border border-violet-100 bg-violet-50 p-3 text-xs font-semibold text-violet-700">Carregando os indicadores do período...</div>}
     {erro&&<div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{erro}</div>}
     {erroBacklog&&<div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">Backlog: {erroBacklog}</div>}
+    {erroMetas&&<div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">Meta de faturamento: {erroMetas}</div>}
 
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <Kpi titulo="Faturamento total" valor={dados?fmtBRL(totalFat):"—"} detalhe="B2B + B2C, sem duplicar pedidos" icon={TrendingUp}/>
@@ -161,6 +172,68 @@ export default function FechamentoDiarioV2Page(){
       <Kpi titulo="Faturamento B2C" valor={dados?fmtBRL(financeiro.totais.B2C.valor):"—"} detalhe={fmtNum(financeiro.totais.B2C.documentos)+" pedidos · "+fmtNum(financeiro.totais.B2C.itens)+" itens"} icon={PackageCheck}/>
       <Kpi titulo="Backlog operacional" valor={backlog?fmtNum(totalBacklog):"—"} detalhe={fmtNum(preRecebimento)+" pré-recebimento, fora do backlog físico"} icon={Warehouse} subtle/>
     </div>
+
+    <section className={panel}>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 className="flex items-center gap-2 text-base font-black"><CalendarDays size={19} className="text-violet-700"/> Meta de faturamento · acordo Assurant</h2>
+          <p className="mt-1 text-xs text-slate-500">Meta-base por dia: <strong>150 aparelhos B2C + 400 aparelhos B2B = 550 aparelhos faturados</strong>. Aferição em unidades, não em reais.</p>
+        </div>
+        <div className="rounded-xl border border-violet-100 bg-violet-50 px-4 py-2 text-xs font-black text-violet-800">
+          {metaResumo?fmtNum(metaResumo.dias)+" dia(s) · meta "+fmtNum(metaResumo.meta_total)+" unidades":"Referência: 550 unidades/dia"}
+        </div>
+      </div>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Kpi titulo="B2C · unidades faturadas" valor={metaResumo?fmtNum(metaResumo.b2c_faturado):"—"} detalhe={metaResumo?"Meta-base "+fmtNum(metaResumo.meta_b2c)+" · "+(metaResumo.meta_b2c?Math.round(metaResumo.b2c_faturado/metaResumo.meta_b2c*100):0)+"%":"Meta 150 por dia"} icon={PackageCheck}/>
+        <Kpi titulo="B2B · unidades faturadas" valor={metaResumo?fmtNum(metaResumo.b2b_faturado):"—"} detalhe={metaResumo?"Balizador ajustado "+fmtNum(metaResumo.meta_b2b_ajustada)+" · base "+fmtNum(metaResumo.meta_b2b_base):"Meta-base 400 por dia"} icon={FileText}/>
+        <Kpi titulo="Total faturado · unidades" valor={metaResumo?fmtNum(metaResumo.total_faturado):"—"} detalhe={metaResumo?"Meta "+fmtNum(metaResumo.meta_total)+" · "+metaAtingimento.toFixed(1).replace(".",",")+"% de atingimento":"Meta 550 por dia"} icon={TrendingUp}/>
+        <Kpi titulo="Dias com meta total atingida" valor={metaResumo?fmtNum(metaResumo.dias_meta_total_atingida)+" / "+fmtNum(metaResumo.dias):"—"} detalhe={metaResumo?fmtNum(metaResumo.dias_ambos_balizadores_atingidos)+" dia(s) com ambos os balizadores atendidos":"Apuração por dia"} icon={BarChart3} subtle/>
+      </div>
+      <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <p className="text-xs font-black text-slate-800">Balizador de realocação B2B → B2C</p>
+        <p className="mt-1 text-xs leading-5 text-slate-600">Para cada aparelho B2C faturado <strong>acima de 150 no mesmo dia</strong>, a exigência B2B diminui 1 unidade, limitada a zero. Exemplo: 200 B2C tornam o balizador B2B igual a 350. A meta combinada continua sendo 550 unidades. Isso representa uma referência de capacidade, não confirma movimentação real de colaboradores.</p>
+        {metaResumo&&<p className="mt-2 text-xs font-bold text-violet-800">No período: {fmtNum(metaResumo.capacidade_realocada)} unidade(s) compensada(s) no balizador B2B. Meta B2B original {fmtNum(metaResumo.meta_b2b_base)} → ajustada {fmtNum(metaResumo.meta_b2b_ajustada)}.</p>}
+        <p className="mt-2 text-[11px] text-slate-500">A referência é aplicada a todos os dias corridos do período selecionado, inclusive fins de semana. O dia atual é parcial; períodos históricos recebem a mesma referência, sem pressupor a data de início do acordo.</p>
+      </div>
+      {metas&&metaChart.length>1&&<div className="mt-5">
+        <h3 className="text-sm font-black">Faturamento diário em unidades x referência total</h3>
+        <p className="mt-1 text-xs text-slate-500">Últimos {fmtNum(metaChart.length)} dias do período, com limite visual de 40 datas.</p>
+        <div className="mt-3 h-72 w-full"><ResponsiveContainer width="100%" height="100%">
+          <BarChart data={metaChart} margin={{top:12,right:12,bottom:8,left:4}}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0"/>
+            <XAxis dataKey="dia" tick={{fontSize:10}} interval="preserveStartEnd" tickFormatter={s=>s.slice(5).split("-").reverse().join("/")}/>
+            <YAxis tick={{fontSize:11}} tickFormatter={fmtShort} width={52}/>
+            <Tooltip labelFormatter={x=>"Dia: "+new Date(x+"T12:00:00Z").toLocaleDateString("pt-BR",{timeZone:"UTC"})} formatter={(v,n)=>[fmtNum(v)+" aparelhos",n]}/>
+            <Legend/>
+            <ReferenceLine y={550} stroke="#ea580c" strokeDasharray="4 4" label={{value:"Meta 550/dia",position:"insideTopRight",fontSize:10,fill:"#c2410c"}}/>
+            <Bar dataKey="b2b_faturado" name="B2B faturado" stackId="unidades" fill="#6d28d9" maxBarSize={36}/>
+            <Bar dataKey="b2c_faturado" name="B2C faturado" stackId="unidades" fill="#10b981" radius={[3,3,0,0]} maxBarSize={36}/>
+          </BarChart>
+        </ResponsiveContainer></div>
+      </div>}
+      {metas?<div className="mt-5 overflow-x-auto">
+        <h3 className="mb-2 text-sm font-black">Apuração e balizador por dia</h3>
+        <table className="w-full min-w-[780px] text-left text-xs">
+          <thead className="bg-slate-50 text-slate-500"><tr>
+            <th className="px-3 py-3">Dia</th><th className="px-3 py-3 text-right">B2C / meta</th><th className="px-3 py-3 text-right">B2B / meta ajustada</th>
+            <th className="px-3 py-3 text-right">Realocação</th><th className="px-3 py-3 text-right">Total / meta</th><th className="px-3 py-3">Situação</th>
+          </tr></thead>
+          <tbody className="divide-y divide-slate-100">{metaDiasVisiveis.map(d=>{
+            const status=d.b2c_atingiu&&d.b2b_atingiu?"Acordo atendido":d.total_atingiu?"Total atingido · B2C abaixo":d.dia===hoje?"Dia em andamento":"Abaixo da meta";
+            const css=d.b2c_atingiu&&d.b2b_atingiu?"bg-emerald-50 text-emerald-800":d.total_atingiu?"bg-sky-50 text-sky-800":d.dia===hoje?"bg-violet-50 text-violet-700":"bg-amber-50 text-amber-800";
+            return <tr key={d.dia}>
+              <td className="px-3 py-3 font-bold">{new Date(d.dia+"T12:00:00Z").toLocaleDateString("pt-BR",{timeZone:"UTC"})}</td>
+              <td className="px-3 py-3 text-right font-bold">{fmtNum(d.b2c_faturado)} / {fmtNum(d.meta_b2c)}</td>
+              <td className="px-3 py-3 text-right font-bold">{fmtNum(d.b2b_faturado)} / {fmtNum(d.meta_b2b_ajustada)}</td>
+              <td className="px-3 py-3 text-right">{fmtNum(d.capacidade_realocada)}</td>
+              <td className="px-3 py-3 text-right font-black">{fmtNum(d.total_faturado)} / {fmtNum(d.meta_total)}</td>
+              <td className="px-3 py-3"><span className={"rounded-lg px-2.5 py-1 text-[11px] font-bold "+css}>{status}</span></td>
+            </tr>;
+          })}</tbody>
+        </table>
+        {metaDias.length>60&&<p className="mt-3 text-xs text-slate-500">Exibindo os 60 dias mais recentes; os totais do topo consideram todos os {fmtNum(metaDias.length)} dias selecionados.</p>}
+      </div>:<div className="mt-4"><InfoEmpty texto={loading?"Calculando metas...":"Sem dados de metas disponíveis."}/></div>}
+    </section>
     <div className="grid gap-4 xl:grid-cols-5">
       <section className={panel+" xl:col-span-3"}>
         <div className="mb-4 flex items-center justify-between gap-3"><div><h2 className="text-base font-black">Evolução do faturamento</h2><p className="mt-1 text-xs text-slate-500">Valores faturados por data de competência operacional</p></div><BarChart3 className="text-violet-600" size={20}/></div>
