@@ -10,6 +10,7 @@ const date = d => d ? new Date(d).toLocaleString('pt-BR', { timeZone: 'America/S
 
 export default function ReparoOperacaoPanel({ modo = 'picking' }) {
   const { profile } = useAuth();
+  const podeImportarReparo = Boolean(profile?.is_master || profile?.telas_permitidas?.includes('/v2/assurant/b2b/reparo/importar'));
   const [pedidos, setPedidos] = useState([]);
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -122,8 +123,8 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
           <p className="text-xs text-slate-500">Pedido interno • sem faturamento</p></div>
       </div>
       <div className="flex flex-wrap gap-2">
-        {!oracle && profile?.is_master && <>
-          <a href="/modelos/Modelo_Upload_Envio_Reparo.xlsx" download className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs"><Download size={14} />Baixar modelo</a>
+        {!oracle && podeImportarReparo && <>
+          <a href="/modelos/Modelo_Upload_Envio_Reparo.xlsx" download className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs"><Download size={14} />Baixar layout para reparo</a>
           <input ref={arquivoRef} type="file" accept=".xlsx,.xls,.csv" aria-label="Planilha de IMEIs para reparo" className="hidden" onChange={selecionarArquivo} disabled={busy} />
           <button disabled={busy || loading} onClick={() => arquivoRef.current?.click()} className="flex items-center gap-2 rounded-xl bg-purple-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"><Upload size={14} />Importar para reparo</button>
         </>}
