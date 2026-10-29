@@ -8,7 +8,7 @@ test("danos da tela permite um IMEI opcional sem aceitar código malformado ou s
   assert.ok(erroIdentificacao("CELULAR", "12345678901234", null, { danosTela: true }));
   assert.ok(erroIdentificacao("CELULAR", "", "123456789012345", { danosTela: true }));
   assert.equal(erroIdentificacao("RELOGIO", "", null, { danosTela: true }), null);
-  assert.ok(erroIdentificacao("CELULAR", "", null, { aparelhoBloqueado: true }));
+  assert.equal(erroIdentificacao("CELULAR", "", null, { aparelhoBloqueado: true }), null);
 });
 test("celular exige dois IMEIs distintos e de exatamente 15 dígitos", () => {
   assert.equal(
