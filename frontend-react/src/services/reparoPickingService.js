@@ -10,6 +10,15 @@ export async function operarReparo(acao, pedidoId = null, extra = {}, signal) {
   return data;
 }
 
+// Novo importador: a planilha contém vouchers; o banco resolve os IMEIs.
+export async function operarReparoPorVouchers(vouchers) {
+  const { data, error } = await supabase.rpc('assurant_reparo_criar_por_vouchers', {
+    p_vouchers: vouchers,
+  });
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 export async function exportarReparo(pedido, itens, modo, statusDestino = '') {
   if (modo === 'oracle' && !statusDestino.trim() && !pedido.status_destino_oracle) {
     throw new Error('Informe o status de destino no Oracle antes de exportar.');
