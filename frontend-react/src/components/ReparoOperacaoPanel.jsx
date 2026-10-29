@@ -97,7 +97,7 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
       const data = await operarReparo(acao, detail.pedido.id, extra);
       setPedidos(p => p.map(x => x.id === data.pedido.id ? data.pedido : x));
       if (acao === 'concluir') {
-        setDetail(null); setMessage('Picking concluído. Pedido disponível em Integração Oracle → Reparos.');
+        setDetail(null); setMessage('Picking concluído. Romaneio de envio ao laboratório gerado automaticamente. Pedido disponível em Integração Oracle → Reparos.');
         await carregar();
       } else {
         setDetail(data);
