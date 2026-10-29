@@ -44,6 +44,7 @@ const TABS = [
 ];
 
 const CATEGORY_META = {
+  "Trade-in": { icon: ClipboardCheck, badge: "bg-indigo-50 text-indigo-700 ring-indigo-200", dot: "bg-indigo-500" },
   Recebimento: { icon: Truck, badge: "bg-blue-50 text-blue-700 ring-blue-200", dot: "bg-blue-500" },
   Triagem: { icon: ClipboardCheck, badge: "bg-violet-50 text-violet-700 ring-violet-200", dot: "bg-violet-500" },
   Oracle: { icon: Activity, badge: "bg-cyan-50 text-cyan-700 ring-cyan-200", dot: "bg-cyan-500" },
@@ -645,6 +646,36 @@ export default function RastreabilidadeItemV2Page() {
 
       if (rpcError) throw rpcError;
 
+      // O trade-in é a origem da jornada: também deve aparecer quando o voucher
+      // ainda não existe na Triagem nem no recebimento físico do Liquida.
+      const { data: tradeinResult, error: tradeinError } = await supabase.rpc(
+        "assurant_rastreabilidade_tradein",
+        { p_busca: term, p_imei: imei || result?.selecionado_imei || null }
+      );
+      if (tradeinError) throw tradeinError;
+
+      const temTradein = Boolean(tradeinResult?.encontrado);
+      const resultadoCompleto = temTradein ? {
+        ...(result || {}),
+        tradein: tradeinResult,
+        eventos: [...(result?.eventos || []), ...(tradeinResult.eventos || [])],
+        resumo: result?.resumo || {
+          voucher: tradeinResult.voucher,
+          imei: tradeinResult.imei,
+          sku: tradeinResult.sku,
+          modelo: tradeinResult.modelo,
+          data_recebimento: tradeinResult.recebido_em,
+          status_tradein: tradeinResult.status_tradein,
+          somente_tradein: true,
+        },
+        selecionado_imei: result?.selecionado_imei || tradeinResult.imei || null,
+        matches: result?.matches?.length
+          ? result.matches
+          : tradeinResult.imei
+            ? [{ imei: tradeinResult.imei, voucher: tradeinResult.voucher, sku: tradeinResult.sku, modelo: tradeinResult.modelo }]
+            : [],
+      } : result;
+
       let specialResult = { ativa: null, historico: [] };
       let unlinkResult = [];
       let retriageResult = [];
@@ -681,7 +712,7 @@ export default function RastreabilidadeItemV2Page() {
         colorResult = colorResponse.data || null;
       }
 
-      setData(result || null);
+      setData(resultadoCompleto || null);
       setSpecial(specialResult);
       setUnlinkHistory(unlinkResult);
       setRetriageHistory(retriageResult);
@@ -812,7 +843,7 @@ export default function RastreabilidadeItemV2Page() {
 
   const filteredEvents = useMemo(() => {
     if (activeTab === "triagem") {
-      return events.filter((event) => ["Recebimento", "Triagem", "Oracle"].includes(event.categoria));
+      return events.filter((event) => ["Trade-in", "Recebimento", "Triagem", "Oracle"].includes(event.categoria));
     }
 
     if (activeTab === "wms") {
@@ -1094,7 +1125,7 @@ export default function RastreabilidadeItemV2Page() {
               Consulta completa de histórico
             </h1>
             <p className="mt-1 max-w-4xl text-xs leading-5 text-slate-500">
-              Pesquisa unificada por voucher, IMEI/serial, pedido, NF, chave da NF, SKU ou modelo. A timeline consolida Triagem, Oracle, ciclos físicos do WMS, B2C, B2B, FIFO, etiquetas, romaneio e snapshots do AnyMarket.
+              Pesquisa por voucher, IMEI/serial, pedido, NF, chave da NF, SKU ou modelo. A jornada começa no Trade-in (quando disponível) e acompanha recebimento, Triagem, Oracle, WMS, B2C/B2B e expedição.
             </p>
           </div>
 
@@ -1238,7 +1269,7 @@ export default function RastreabilidadeItemV2Page() {
                       <div>
                         <div className="text-[9px] font-black uppercase tracking-[0.14em] text-slate-400">Identidade rastreada</div>
                         <div className="mt-1 font-mono text-xl font-black tracking-tight text-slate-950">
-                          {summary.imei || `Pedido ${data?.selecionado_pedido || "—"}`}
+                          {summary.imei || summary.voucher || `Pedido ${data?.selecionado_pedido || "—"}`}
                         </div>
                         <div className="mt-1 text-xs font-semibold text-slate-500">
                           {summary.voucher || "Sem voucher identificado"} · {summary.sku || "Sem SKU"}
@@ -1279,6 +1310,22 @@ export default function RastreabilidadeItemV2Page() {
                         </button>
                       )}
 
+                      {data?.tradein?.aguardando_recebimento && (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1.5 text-[10px] font-black text-amber-800 ring-1 ring-inset ring-amber-300">
+                          <Clock3 size={13} />
+                          Aguardando recebimento
+                        </span>
+                      )}
+                      {data?.tradein?.cancelado && (
+                        <span className="rounded-full bg-rose-50 px-3 py-1.5 text-[10px] font-black text-rose-700 ring-1 ring-inset ring-rose-200">
+                          Trade-in cancelado
+                        </span>
+                      )}
+                      {data?.tradein?.encontrado && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-3 py-1.5 text-[10px] font-black text-indigo-700 ring-1 ring-inset ring-indigo-200">
+                          <ClipboardCheck size={13} /> Origem Trade-in
+                        </span>
+                      )}
                       {summary.status_triagem && (
                         <span className={`rounded-full px-3 py-1.5 text-[10px] font-black ring-1 ring-inset ${statusTone(summary.status_triagem)}`}>
                           Triagem: {pretty(summary.status_triagem)}
@@ -1295,6 +1342,13 @@ export default function RastreabilidadeItemV2Page() {
 
                 <div className="grid gap-x-6 gap-y-5 p-5 sm:grid-cols-2 xl:grid-cols-6">
                   <DetailField label="Voucher" value={summary.voucher} mono />
+                  {data?.tradein?.encontrado && (
+                    <>
+                      <DetailField label="Trade-in iniciado em" value={fmtDateTime(data.tradein.inicio)} />
+                      <DetailField label="Marco de aprovação Trade-in" value={fmtDateTime(data.tradein.aprovacao)} />
+                      <DetailField label="Status na origem" value={data.tradein.status_tradein} wide />
+                    </>
+                  )}
                   <DetailField label="IMEI / Serial" value={summary.imei} mono />
                   <DetailField label="SKU" value={summary.sku} mono />
                   <div>
@@ -1305,7 +1359,7 @@ export default function RastreabilidadeItemV2Page() {
                       <span className="text-xs font-black text-slate-800">
                         {colorInfo?.cor_atual || colorInfo?.cor_sistema || "—"}
                       </span>
-                      <button
+                      {!summary.somente_tradein && <button
                         type="button"
                         onClick={() => {
                           setActionError("");
@@ -1318,7 +1372,7 @@ export default function RastreabilidadeItemV2Page() {
                       >
                         <Palette size={11} />
                         Alterar
-                      </button>
+                      </button>}
                     </div>
                     {colorInfo?.corrigida && colorInfo?.cor_sistema && colorInfo.cor_sistema !== colorInfo.cor_atual && (
                       <div className="mt-1 text-[9px] font-semibold text-amber-600">
@@ -1347,6 +1401,7 @@ export default function RastreabilidadeItemV2Page() {
                 </div>
               </div>
 
+              {!summary.somente_tradein && (<>
               <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <div className="flex flex-col gap-4 p-5 xl:flex-row xl:items-center xl:justify-between">
                   <div>
@@ -1487,6 +1542,14 @@ export default function RastreabilidadeItemV2Page() {
                   </button>
                 </div>
               </div>
+              </>)}
+
+              {summary.somente_tradein && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-900">
+                  <strong>Jornada iniciada no Trade-in:</strong> ainda não há triagem física vinculada a este voucher.
+                  As ações de estoque, reserva e expedição permanecem indisponíveis até a entrada operacional do aparelho.
+                </div>
+              )}
 
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <StatCard icon={History} label="Eventos registrados" value={events.length.toLocaleString("pt-BR")} helper="timeline unificada" />
