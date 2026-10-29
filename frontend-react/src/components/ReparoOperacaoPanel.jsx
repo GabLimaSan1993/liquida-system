@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Download, Upload, RefreshCw, Wrench, ArrowLeft, CheckCircle2 } from 'lucide-react';
-import { operarReparo, exportarReparo } from '../services/reparoPickingService.js';
-import { lerUploadReparo } from '../services/reparoUpload.js';
+import { operarReparo, operarReparoPorVouchers, exportarReparo } from '../services/reparoPickingService.js';
+import { lerUploadReparo, baixarModeloReparoVoucher } from '../services/reparoUpload.js';
 import { useAuth } from '../AuthContext.jsx';
 
 const labels = { pendente: 'Aguardando bipagem', bloqueado: 'Pendência', bipado: 'Bipado', em_reparo: 'Em reparo' };
@@ -26,14 +26,15 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
   const inputRef = useRef(null);
   const arquivoRef = useRef(null);
   const [upload, setUpload] = useState(null);
+  const [relatorioImportacao, setRelatorioImportacao] = useState(null);
   const oracle = modo === 'oracle';
 
   async function selecionarArquivo(event) {
     const arquivo = event.target.files?.[0];
     event.target.value = '';
     if (!arquivo || busy) return;
-    setBusy(true); setError(''); setMessage(''); setUpload(null);
-    try { setUpload({ nome: arquivo.name, imeis: await lerUploadReparo(arquivo) }); }
+    setBusy(true); setError(''); setMessage(''); setUpload(null); setRelatorioImportacao(null);
+    try { setUpload({ nome: arquivo.name, vouchers: await lerUploadReparo(arquivo) }); }
     catch (err) { setError(err.message); }
     finally { setBusy(false); }
   }
@@ -42,12 +43,16 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
     if (!upload || busy) return;
     setBusy(true); setError(''); setMessage('');
     try {
-      const data = await operarReparo('criar', null, { p_imeis: upload.imeis });
+      const data = await operarReparoPorVouchers(upload.vouchers);
       setUpload(null);
+      setRelatorioImportacao(data.importacao || null);
       await carregar();
-      if (data.pedido.status === 'picking') {
+      if (!data.pedido) {
+        setDetail(null);
+        setMessage('Nenhum novo aparelho incluído. Confira os vouchers já vinculados a outros pickings ou que precisam de regularização.');
+      } else if (data.pedido.status === 'picking') {
         setDetail(data); setImei(''); setBusca(''); setFiltro('');
-        setMessage(`Lote ${data.pedido.lote} disponível para separação: ${number(data.pedido.total)} aparelhos, ${number(data.pedido.bloqueados)} com pendência. Confira a lista e faça a bipagem.`);
+        setMessage(`Lote ${data.pedido.lote} criado a partir dos vouchers: ${number(data.importacao?.incluidos || data.pedido.total)} incluídos e ${number(data.importacao?.qtd_ignorados)} ignorados. ${number(data.pedido.bloqueados)} com pendência. Confira a lista antes da bipagem.`);
       } else {
         setDetail(null);
         setMessage(`Esta lista já foi importada no lote ${data.pedido.lote}. Consulte Integração Oracle → Reparos para acompanhar a movimentação.`);
@@ -124,8 +129,8 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
       </div>
       <div className="flex flex-wrap gap-2">
         {!oracle && podeImportarReparo && <>
-          <a href="/modelos/Modelo_Upload_Envio_Reparo.xlsx" download className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs"><Download size={14} />Baixar layout para reparo</a>
-          <input ref={arquivoRef} type="file" accept=".xlsx,.xls,.csv" aria-label="Planilha de IMEIs para reparo" className="hidden" onChange={selecionarArquivo} disabled={busy} />
+          <button type="button" onClick={baixarModeloReparoVoucher} className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs"><Download size={14} />Baixar layout por voucher</button>
+          <input ref={arquivoRef} type="file" accept=".xlsx,.xls,.csv" aria-label="Planilha de vouchers para reparo" className="hidden" onChange={selecionarArquivo} disabled={busy} />
           <button disabled={busy || loading} onClick={() => arquivoRef.current?.click()} className="flex items-center gap-2 rounded-xl bg-purple-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"><Upload size={14} />Importar para reparo</button>
         </>}
         {detail && <button disabled={busy} onClick={() => { setDetail(null); carregar(); }} className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs"><ArrowLeft size={14} />Pedidos</button>}
@@ -135,10 +140,27 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
     </div>
     {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
     {message && <p role="status" className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">{message}</p>}
+    {relatorioImportacao && (
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-slate-800">
+        <p className="font-black">Resultado da importação por voucher: {number(relatorioImportacao.incluidos)} incluídos, {number(relatorioImportacao.qtd_ignorados)} não incluídos.</p>
+        {relatorioImportacao.qtd_ignorados > 0 && (
+          <details className="mt-2">
+            <summary className="cursor-pointer font-semibold text-amber-900">Ver vouchers não incluídos e respectivos motivos</summary>
+            <div className="mt-2 max-h-60 overflow-auto rounded-lg border bg-white p-2">
+              {relatorioImportacao.ignorados.map((x, index) => (
+                <div key={x.voucher + '-' + index} className="border-b px-2 py-1.5 last:border-0">
+                  <span className="font-mono font-bold">{x.voucher}</span> — {x.motivo}
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
+      </div>
+    )}
     {!oracle && upload && <div className="space-y-3 rounded-xl border border-purple-200 bg-purple-50 p-4">
-      <p className="text-sm font-semibold text-slate-800">{upload.nome} • {number(upload.imeis.length)} IMEIs para reparo</p>
-      <p className="text-xs text-slate-600">A importação cria o pedido de separação. Produtos sem posição WMS ou com vínculo ativo ficam com pendência; a retirada física é registrada na bipagem.</p>
-      <details className="text-xs text-slate-600"><summary className="cursor-pointer font-semibold">Conferir IMEIs do arquivo</summary><div className="mt-2 max-h-40 overflow-auto rounded-lg border bg-white p-3 font-mono">{upload.imeis.map(codigo => <div key={codigo}>{codigo}</div>)}</div></details>
+      <p className="text-sm font-semibold text-slate-800">{upload.nome} • {number(upload.vouchers.length)} vouchers para reparo</p>
+      <p className="text-xs text-slate-600">A importação usa o voucher para localizar o aparelho e seu IMEI no WMS/Triagem. Vouchers já presentes em pickings ativos serão ignorados e listados. A retirada física continua exigindo bipagem.</p>
+      <details className="text-xs text-slate-600"><summary className="cursor-pointer font-semibold">Conferir vouchers do arquivo</summary><div className="mt-2 max-h-40 overflow-auto rounded-lg border bg-white p-3 font-mono">{upload.vouchers.map(codigo => <div key={codigo}>{codigo}</div>)}</div></details>
       <div className="flex gap-2"><button disabled={busy} onClick={importarReparo} className="rounded-lg bg-purple-700 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{busy ? 'Importando…' : 'Importar e criar lote'}</button><button disabled={busy} onClick={() => setUpload(null)} className="rounded-lg border bg-white px-4 py-2 text-xs disabled:opacity-50">Cancelar</button></div>
     </div>}
     {loading && !detail && <p className="text-sm text-slate-500">Consultando reparos…</p>}
