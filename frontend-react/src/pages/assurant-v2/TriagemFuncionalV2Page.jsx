@@ -2415,9 +2415,9 @@ export default function TriagemFuncionalV2Page() {
                   </button>
 
                   <div className="max-w-[760px] space-y-4 rounded-2xl border border-violet-100 bg-violet-50/40 p-5">
-                    <div className="text-xs font-black text-violet-700">{danosTela ? "Danos da tela · identificação opcional" : tipoAparelho === "CELULAR" ? (doisImeis ? "Celular · dois IMEIs obrigatórios" : "Celular · um IMEI obrigatório") : `${tipoAparelho === "TABLET" ? "Tablet" : "Relógio"} · referência / serial`}</div>
-                    <p className="text-xs text-slate-600">{danosTela ? "Informe somente um código, se conseguir lê-lo. Se não for possível, continue sem preencher. A ausência da bipagem ficará registrada na triagem." : tipoAparelho === "CELULAR" ? (doisImeis ? "Digite *#06# no aparelho e bipe os dois códigos. Cada IMEI deve ter exatamente 15 dígitos e ser diferente do outro." : "Bipe o único IMEI disponível, com exatamente 15 dígitos. As perguntas da triagem continuam normalmente.") : "Bipe o código de referência ou número de série. Letras, números, ponto, hífen e barra são aceitos."}</p>
-                    <label className="block text-xs font-bold text-slate-700">{tipoAparelho === "CELULAR" ? (danosTela ? "IMEI (opcional)" : "IMEI 1") : `Referência / serial${danosTela ? " (opcional)" : ""}`}
+                    <div className="text-xs font-black text-violet-700">{danosTela || aparelhoBloqueado ? (danosTela ? "Danos da tela" : "Bloqueado") + " · identificação opcional" : tipoAparelho === "CELULAR" ? (doisImeis ? "Celular · dois IMEIs obrigatórios" : "Celular · um IMEI obrigatório") : `${tipoAparelho === "TABLET" ? "Tablet" : "Relógio"} · referência / serial`}</div>
+                    <p className="text-xs text-slate-600">{danosTela || aparelhoBloqueado ? "Informe somente um IMEI, se conseguir consultá-lo fisicamente. Se não for possível, continue sem preencher. A falta de bipagem será identificada sem validar artificialmente o IMEI cadastral." : tipoAparelho === "CELULAR" ? (doisImeis ? "Digite *#06# no aparelho e bipe os dois códigos. Cada IMEI deve ter exatamente 15 dígitos e ser diferente do outro." : "Bipe o único IMEI disponível, com exatamente 15 dígitos. As perguntas da triagem continuam normalmente.") : "Bipe o código de referência ou número de série. Letras, números, ponto, hífen e barra são aceitos."}</p>
+                    <label className="block text-xs font-bold text-slate-700">{tipoAparelho === "CELULAR" ? (danosTela || aparelhoBloqueado ? "IMEI (opcional)" : "IMEI 1") : `Referência / serial${danosTela || aparelhoBloqueado ? " (opcional)" : ""}`}
                       <input autoFocus value={imeiDigitado} inputMode={tipoAparelho === "CELULAR" ? "numeric" : "text"}
                         maxLength={tipoAparelho === "CELULAR" ? 15 : 64}
                         autoComplete="off" spellCheck={false}
@@ -2433,8 +2433,8 @@ export default function TriagemFuncionalV2Page() {
                     </label>}
                     {erroCodigo && (imeiDigitado || imei2Digitado) && <p role="alert" className="text-xs font-bold text-rose-700">{erroCodigo}</p>}
                     <button type="button" onClick={handleValidarImei} disabled={!!erroCodigo || carregando}
-                      className="h-12 rounded-xl bg-violet-700 px-6 text-sm font-bold text-white disabled:opacity-40">{carregando ? "Validando..." : danosTela ? (imeiDigitado ? "Continuar triagem" : "Continuar sem IMEI") : "Validar identificação"}</button>
-                    <p className="text-xs text-slate-500">{danosTela ? "A exceção por danos da tela será registrada e as perguntas da triagem continuarão normalmente." : "Uma identificação divergente será segregada automaticamente e receberá etiqueta IMEI DIVERGENTE."}</p>
+                      className="h-12 rounded-xl bg-violet-700 px-6 text-sm font-bold text-white disabled:opacity-40">{carregando ? "Validando..." : danosTela || aparelhoBloqueado ? (imeiDigitado ? "Continuar triagem" : "Continuar sem IMEI") : "Validar identificação"}</button>
+                    <p className="text-xs text-slate-500">{danosTela || aparelhoBloqueado ? "Sem IMEI físico, a exceção será registrada e a triagem continuará com o vínculo do voucher, sem declarar conferência do IMEI." : "Uma identificação divergente será segregada automaticamente e receberá etiqueta IMEI DIVERGENTE."}</p>
                   </div>
 
                   {validacao &&
