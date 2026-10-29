@@ -1,52 +1,39 @@
--- Trade-in deve ser importado integralmente, mesmo quando o voucher está
--- segregado na Assurant. A sincronização para triagem fica bloqueada APENAS
--- para divergências ativas; os dados e as versões do Trade-in são preservados.
--- Não modifica endereços, status da triagem ou alocações do WMS.
-create or replace function liquida_private.tradein_pode_sincronizar_triagem(p_voucher text)
-returns boolean
-language sql stable security definer
-set search_path to 'pg_catalog','public'
-as $$
-  select not exists (
-    select 1 from public.assurant_divergencias_imei d
-    where d.voucher = p_voucher
-      and d.status in ('pendente','devolver')
-  );
-$$;
-revoke all on function liquida_private.tradein_pode_sincronizar_triagem(text) from public, anon;
-grant execute on function liquida_private.tradein_pode_sincronizar_triagem(text) to authenticated;
-
-do $migracao$
-declare
- v_ddl text;
- v_novo text;
+-- Migração correta: preserve sincronização fora do upload e apenas desative atualização da triagem durante importação em massa.
+CREATE OR REPLACE FUNCTION liquida_private.sem_ordem_auto()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare v text; cancelada boolean;
 begin
- select pg_get_triggerdef(t.oid)
- into v_ddl
- from pg_trigger t
- where t.tgrelid='public.tradein_geral'::regclass
-   and t.tgname='trg_sem_ordem_auto_geral'
-   and not t.tgisinternal;
-
- if v_ddl is null then
-   raise exception 'Trigger de sincronização do Trade-in não encontrado.';
+ if tg_table_name='tradein_geral' then
+   v:='YBV'||new.voucher::text;
+   cancelada:=upper(trim(coalesce(new.canceled,''))) in ('SIM','S','TRUE','1','YES') or coalesce(new.status_atual,'') ilike '%cancel%';
+ else
+   v:=case when coalesce(new.voucher_key,'') ~ '^[0-9]+$' then 'YBV'||new.voucher_key else upper(trim(coalesce(new.voucher_original,''))) end;
+   cancelada:=coalesce(new.cancelado,false) or coalesce(new.status_atual,'') ilike '%cancel%';
  end if;
-
- -- Não substituir silenciosamente condições preexistentes.
- if v_ddl ilike '% WHEN (%' then
-   raise exception 'Trigger já possui condição WHEN: revisar antes de migrar.';
+ if cancelada or v is null then return new; end if;
+ -- O upload de Trade-in é apenas informacional: não mexer na triagem física,
+ -- especialmente em equipamentos segregados ou aguardando decisão Assurant.
+ if nullif(current_setting('liquida.tradein_importacao',true),'') is not null then
+   return new;
  end if;
-
- v_novo := replace(
-   v_ddl,
-   ' EXECUTE FUNCTION',
-   ' WHEN (liquida_private.tradein_pode_sincronizar_triagem(''YBV''::text || NEW.voucher::text)) EXECUTE FUNCTION'
- );
- if v_novo = v_ddl then
-   raise exception 'Definição de trigger inesperada: %', v_ddl;
- end if;
-
- execute 'drop trigger trg_sem_ordem_auto_geral on public.tradein_geral';
- execute v_novo;
-end
-$migracao$;
+ -- Fora do upload, preservar separação de aparelhos sob decisão da Assurant.
+ if exists (
+   select 1 from public.assurant_divergencias_imei d
+   where d.voucher=v and d.status in ('pendente','devolver')
+     and d.tipo_problema <> 'sem_ordem'
+ ) then return new; end if;
+ update public.assurant_triagem t set status_atual='Aguardando triagem funcional'
+ from public.assurant_divergencias_imei d
+ where d.triagem_id=t.id and d.voucher=v and d.tipo_problema='sem_ordem'
+ and d.status='pendente' and t.status_atual not in ('Produto disponível','Concluído','Faturado');
+ update public.assurant_divergencias_imei d set status='reconferencia',
+   diretriz='Ordem identificada em nova planilha. Retorno automático à funcional.', decidido_em=now()
+ where d.voucher=v and d.tipo_problema='sem_ordem' and d.status='pendente'
+ and exists(select 1 from public.assurant_triagem t where t.id=d.triagem_id and t.status_atual='Aguardando triagem funcional');
+ return new;
+end $function$
+;
