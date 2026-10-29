@@ -121,10 +121,9 @@ function parseRow(
         row["Modelo"]
       ),
 
-    local:
-      textoOuNull(
-        row["Local"]
-      ),
+    // A importação GAIA é operacional, sem alteração de endereço físico.
+    // As posições oficiais permanecem sob gestão do Liquida WMS.
+    local: null,
 
     cliente:
       textoOuNull(
