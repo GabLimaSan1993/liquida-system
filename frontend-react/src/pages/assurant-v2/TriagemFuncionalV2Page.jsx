@@ -2114,7 +2114,7 @@ export default function TriagemFuncionalV2Page() {
                           <option value="danos_tela">Danos da tela</option>
                         </select>
                         <p className="mt-2 text-xs text-slate-600">
-                          {condicaoInicial === "nao_liga" ? "Ao continuar, o produto será encaminhado para Divergências, aguardando decisão da Assurant." : aparelhoBloqueado ? "Bipe o único IMEI disponível e responda às perguntas. O laudo seguirá a condição original da compra." : danosTela ? "Continue a triagem com um IMEI opcional. Se a tela impedir a leitura, deixe o campo vazio. Danos da tela será registrado como defeito adicional, sem encaminhamento para Divergências." : "Preencha os dados físicos e siga para a identificação do aparelho."}
+                          {condicaoInicial === "nao_liga" ? "Ao continuar, o produto será encaminhado para Divergências, aguardando decisão da Assurant." : aparelhoBloqueado ? "Informe um IMEI somente quando for possível consultá-lo fisicamente. Se não houver acesso pelo slot do chip, continue sem IMEI. O sistema preservará a referência cadastral sem considerá-la bipada. O laudo seguirá a condição original da compra." : danosTela ? "Continue a triagem com um IMEI opcional. Se a tela impedir a leitura, deixe o campo vazio. Danos da tela será registrado como defeito adicional, sem encaminhamento para Divergências." : "Preencha os dados físicos e siga para a identificação do aparelho."}
                         </p>
                       </Campo>
                       {modoRetriagem && (
