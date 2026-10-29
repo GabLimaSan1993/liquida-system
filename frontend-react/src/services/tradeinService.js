@@ -177,14 +177,32 @@ export async function uploadTradein(file, _userId, userNome, onProgress) {
   if (!registros.length) throw new Error("Nenhuma linha com VOUCHER numérico válido.");
 
   const BLOCO = 500;
-  const importacaoId = crypto.randomUUID();
   const metadados = {
     tamanho_bytes: file.size,
     total_linhas: linhas.length,
     sem_voucher: semVoucher,
     duplicados_no_arquivo: linhas.length - semVoucher - registros.length,
   };
-  let gravadas = 0;
+
+  // Retoma o mesmo upload parcial do usuário, sem gerar novo histórico.
+  // Os blocos já salvos são reenviados para conferir seus hashes; o servidor
+  // responde "repetido" sem gravá-los novamente.
+  const { data: retomada, error: erroRetomada } = await supabase.rpc("tradein_recuperar_importacao", {
+    p_arquivo: file.name,
+    p_total: registros.length,
+    p_metadados: metadados,
+  });
+  if (erroRetomada) throw new Error(`Não foi possível consultar a retomada da carga: ${erroRetomada.message}`);
+  const importacaoId = retomada?.encontrada ? retomada.importacao_id : crypto.randomUUID();
+  let gravadas = retomada?.encontrada ? Number(retomada.gravados || 0) : 0;
+
+  if (gravadas > registros.length || gravadas % BLOCO !== 0) {
+    throw new Error("O upload parcial não corresponde a blocos completos; interrompido para evitar duplicação.");
+  }
+  if (retomada?.encontrada && onProgress) {
+    onProgress({ fase: `TradeIn · retomando ${gravadas.toLocaleString("pt-BR")} já gravados`,
+      pct: Math.round((gravadas / registros.length) * 100) });
+  }
   for (let i = 0; i < registros.length; i += BLOCO) {
     const bloco = registros.slice(i, i + BLOCO);
     const { data, error } = await supabase.rpc("tradein_importar_bloco", {
@@ -196,9 +214,9 @@ export async function uploadTradein(file, _userId, userNome, onProgress) {
       p_metadados: metadados,
     });
     if (error) throw new Error(`Erro ao gravar o bloco ${i / BLOCO + 1}: ${error.message}. ${gravadas} vouchers anteriores desta carga já foram salvos com histórico.`);
-    gravadas = data.total_gravado;
+    gravadas = Number(data.total_gravado || 0);
     if (onProgress) {
-      onProgress({ fase: "TradeIn", pct: Math.round((gravadas / registros.length) * 100) });
+      onProgress({ fase: data.repetido ? "TradeIn · conferindo blocos anteriores" : "TradeIn", pct: Math.round((gravadas / registros.length) * 100) });
     }
   }
 
