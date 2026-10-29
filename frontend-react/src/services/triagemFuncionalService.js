@@ -66,7 +66,7 @@ export async function listarAguardandoFuncional() {
     imei:      t.imei,
     modelo:    t.modelo,
     devolvido: t.reanalise === "Sim",
-    motivo:    t.reanalise === "Sim" ? (t.condicao || "Devolvido pela cosmética") : null,
+    motivo:    t.reanalise === "Sim" ? (t.condicao || "Retorno para triagem funcional") : null,
     desde:     t.data_recebimento || t.criado_em,
   }));
 }
