@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ClipboardList, Wrench, Truck, PackageCheck, Printer, RefreshCw, ArrowLeft, Plus, X, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { ClipboardList, Wrench, Truck, PackageCheck, Printer, RefreshCw, ArrowLeft, Plus, X, Check, Search, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../../AuthContext.jsx';
 import { laboratorioReparo } from '../../services/laboratorioReparoService.js';
+import { listarDefeitos } from '../../services/triagemFuncionalService.js';
 
 const formatarData = v => v ? new Date(v).toLocaleString('pt-BR', {timeZone:'America/Sao_Paulo'}) : '—';
 const nRom = r => 'LAB-' + (r.tipo === 'envio' ? 'ENV-' : 'DEV-') + String(r.numero || 0).padStart(6,'0');
 const statusNome = {aguardando_recebimento:'Aguardando recebimento',recebido:'Recebido no laboratório',em_reparo:'Em reparo',concluido:'Reparo concluído',em_devolucao:'Aguardando warehouse',devolvido_warehouse:'Devolvido ao warehouse'};
 const escapar = v => String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const normalizarDefeito = v => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').trim();
 
 function imprimirRomaneio(rom, itens, lote) {
   const linhas = itens.filter(i => rom.tipo === 'envio' ? i.romaneio_saida_id === rom.id : i.romaneio_retorno_id === rom.id);
@@ -45,6 +47,10 @@ export default function LaboratorioReparoV2Page() {
   const [buscaDevolucao,setBuscaDevolucao]=useState('');
   const [edicao,setEdicao]=useState(null);
   const [defeitos,setDefeitos]=useState([]);
+  const [defeitosCatalogo,setDefeitosCatalogo]=useState([]);
+  const [buscaDefeito,setBuscaDefeito]=useState('');
+  const [erroCatalogo,setErroCatalogo]=useState('');
+  const [carregandoCatalogo,setCarregandoCatalogo]=useState(true);
   const [novoDefeito,setNovoDefeito]=useState('');
   const [resultado,setResultado]=useState('reparado');
   const [observacoes,setObservacoes]=useState('');
@@ -65,6 +71,25 @@ export default function LaboratorioReparoV2Page() {
   },[]);
 
   useEffect(()=>{atualizar();},[atualizar]);
+
+  // Usa o mesmo catalogo da triagem funcional, sem manter uma lista paralela.
+  useEffect(()=>{
+    let ativo=true;
+    listarDefeitos()
+      .then(lista=>{if(ativo){setDefeitosCatalogo(lista);setErroCatalogo('');}})
+      .catch(()=>{if(ativo)setErroCatalogo('Não foi possível carregar o catálogo da triagem. Você ainda pode adicionar defeitos manualmente.');})
+      .finally(()=>{if(ativo)setCarregandoCatalogo(false);});
+    return ()=>{ativo=false;};
+  },[]);
+  const defeitosFiltrados=useMemo(()=>{
+    const termo=normalizarDefeito(buscaDefeito);
+    return defeitosCatalogo.filter(d=>!termo||normalizarDefeito(d.nome).includes(termo)||normalizarDefeito(d.categoria).includes(termo));
+  },[defeitosCatalogo,buscaDefeito]);
+  const alternarDefeitoCatalogo=nome=>{
+    setDefeitos(atuais=>atuais.some(x=>normalizarDefeito(x)===normalizarDefeito(nome))
+      ? atuais.filter(x=>normalizarDefeito(x)!==normalizarDefeito(nome))
+      : [...atuais,nome]);
+  };
   const itens=detalhe?.itens || [];
   const manifests=detalhe?.romaneios || [];
   const envio=manifests.find(r=>r.tipo==='envio');
@@ -100,7 +125,7 @@ export default function LaboratorioReparoV2Page() {
     if(!localizado){setErro('Voucher ou IMEI não encontrado neste lote.');return;}
     if(!['recebido','em_reparo'].includes(localizado.status)){setErro('Este aparelho ainda não está disponível na bancada.');return;}
     setErro('');setEdicao(localizado);setDefeitos(Array.isArray(localizado.defeitos_atual)?[...localizado.defeitos_atual]:[]);
-    setResultado(localizado.resultado||'reparado');setObservacoes(localizado.observacoes||'');setNovoDefeito('');
+    setResultado(localizado.resultado||'reparado');setObservacoes(localizado.observacoes||'');setNovoDefeito('');setBuscaDefeito('');
     if(clear) setBuscaTec('');
   }
 
@@ -188,7 +213,34 @@ export default function LaboratorioReparoV2Page() {
                 <div><label className="mb-2 block text-xs font-bold uppercase tracking-wide text-violet-700">Defeitos confirmados após revisão</label>
                   <div className="flex flex-wrap gap-2">{defeitos.map((x,k)=><button key={k} onClick={()=>setDefeitos(a=>a.filter((_,j)=>j!==k))} title="Remover defeito" className="flex items-center gap-1 rounded-full border border-rose-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800">{x}<X size={13} className="text-rose-600"/></button>)}
                     {!defeitos.length&&<span className="text-sm text-slate-500">Nenhum defeito ativo.</span>}</div>
-                  <form onSubmit={e=>{e.preventDefault();const v=novoDefeito.trim();if(v&&!defeitos.some(d=>d.toLowerCase()===v.toLowerCase()))setDefeitos(a=>[...a,v]);setNovoDefeito('');}} className="mt-3 flex flex-wrap gap-2">
+                  <div className="mt-4 space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <h5 className="text-xs font-bold text-slate-800">Defeitos adicionais — catálogo da triagem</h5>
+                        <p className="mt-1 text-xs text-slate-500">Mesma lista da triagem funcional. Selecione ou desmarque os defeitos encontrados no reparo.</p>
+                      </div>
+                      <span className="rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-violet-700">{defeitos.length} selecionado{defeitos.length===1?'':'s'}</span>
+                    </div>
+                    <div className="relative">
+                      <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/>
+                      <input aria-label="Pesquisar defeitos adicionais" className={campo+' pl-9'} value={buscaDefeito} onChange={e=>setBuscaDefeito(e.target.value)} placeholder="Pesquisar defeito ou categoria..."/>
+                    </div>
+                    {erroCatalogo&&<p role="status" className="text-xs text-amber-700">{erroCatalogo}</p>}
+                    <div className="max-h-64 overflow-y-auto" role="group" aria-label="Lista de defeitos adicionais da triagem">
+                      {carregandoCatalogo?<p className="py-4 text-center text-xs text-slate-500">Carregando defeitos da triagem...</p>:
+                        defeitosFiltrados.length?<div className="flex flex-wrap gap-2">
+                          {defeitosFiltrados.map(d=>{
+                            const selecionado=defeitos.some(x=>normalizarDefeito(x)===normalizarDefeito(d.nome));
+                            return <button key={d.id} type="button" aria-pressed={selecionado} disabled={busy} title={d.categoria||d.nome}
+                              onClick={()=>alternarDefeitoCatalogo(d.nome)}
+                              className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors disabled:opacity-50 ${selecionado?'border-violet-700 bg-violet-700 text-white':'border-slate-200 bg-white text-slate-700 hover:border-violet-300 hover:bg-violet-50'}`}>
+                              {selecionado&&<Check size={13}/>} {d.nome}
+                            </button>;
+                          })}
+                        </div>:<p className="py-4 text-center text-xs text-slate-500">Nenhum defeito encontrado para esta pesquisa.</p>}
+                    </div>
+                  </div>
+                  <form onSubmit={e=>{e.preventDefault();const v=novoDefeito.trim();if(v&&!defeitos.some(d=>normalizarDefeito(d)===normalizarDefeito(v)))setDefeitos(a=>[...a,v]);setNovoDefeito('');}} className="mt-3 flex flex-wrap gap-2">
                     <input className={campo+' min-w-48 flex-1'} value={novoDefeito} onChange={e=>setNovoDefeito(e.target.value)} placeholder="Adicionar outro defeito" maxLength={150}/>
                     <button disabled={!novoDefeito.trim()} className={botao+' border border-slate-200 bg-white text-violet-700 hover:bg-violet-50'}><Plus size={15}/>Adicionar</button></form>
                 </div>
