@@ -223,7 +223,7 @@ export default function TriagemUnificadaTestePage(){
     
 
     <div className="max-w-[760px] space-y-4 rounded-2xl border border-violet-100 bg-violet-50/40 p-5">
-      <label className="block space-y-2 text-xs font-bold text-slate-700">{tipoAparelho==="CELULAR"?(condicao==="danos_tela"?"IMEI (opcional)":"IMEI 1"):"Referência / serial"}
+      <label className="block space-y-2 text-xs font-bold text-slate-700">{tipoAparelho==="CELULAR"?(["danos_tela","bloqueado"].includes(condicao)?"IMEI (opcional)":"IMEI 1"):"Referência / serial"}
         <input autoFocus type="text" inputMode={tipoAparelho==="CELULAR"?"numeric":"text"}
          autoComplete="off" spellCheck={false} maxLength={tipoAparelho==="CELULAR"?15:64}
          className={CAMPO} placeholder={tipoAparelho==="CELULAR"?"Bipe o IMEI 1":"Bipe a referência / serial"}
