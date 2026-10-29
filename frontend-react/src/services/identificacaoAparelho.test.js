@@ -49,7 +49,9 @@ test("Fit 3 é relógio mesmo com variações do modelo ou cadastro APARELHO", (
 });
 
 
-test("aparelho bloqueado aceita só um IMEI, sem relaxar os 15 dígitos", () => {
+test("aparelho bloqueado aceita IMEI ausente ou um IMEI válido, sem relaxar os 15 dígitos", () => {
+  assert.equal(erroIdentificacao("CELULAR", "", "", { modelo: "GALAXY S24", aparelhoBloqueado: true }), null);
+  assert.ok(erroIdentificacao("CELULAR", "123456789012345", "123456789012346", { modelo: "GALAXY S24", aparelhoBloqueado: true }));
   assert.equal(exigeDoisImeis("GALAXY S24", "", true), false);
   assert.equal(erroIdentificacao("CELULAR", "123456789012345", null, { modelo: "GALAXY S24", aparelhoBloqueado: true }), null);
   for (const codigo of ["12345678901234", "1234567890123456", "R7AX60XHHLR"]) {
