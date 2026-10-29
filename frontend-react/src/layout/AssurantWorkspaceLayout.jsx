@@ -132,6 +132,15 @@ const MENU_GROUPS = [
       },
 
       {
+        label: "Laboratório de Reparos · Piloto",
+        icon: ClipboardCheck,
+        to: "/v2/assurant/laboratorio/reparos",
+        exact: true,
+        enabled: true,
+        allowedUserIds: ["b517d70a-56be-4b4f-8b9e-a03c769dd3c3"],
+      },
+
+      {
         label: "Triagens",
         icon: FlaskConical,
         enabled: true,
