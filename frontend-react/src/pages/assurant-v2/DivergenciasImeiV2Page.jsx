@@ -98,7 +98,9 @@ export default function DivergenciasImeiV2Page() {
     try {
       await decidirDivergencia(caso.id, decisao, diretriz);
       setCaso(null);
-      setAviso("Diretriz registrada e situação do aparelho atualizada.");
+      setAviso(decisao === "reconferencia"
+        ? "Produto devolvido para a fila da Triagem Funcional, pronto para nova identificação e testes."
+        : "Diretriz registrada e situação do aparelho atualizada.");
       await carregar();
     } catch (e) {
       setErro(e.message);
@@ -223,16 +225,16 @@ export default function DivergenciasImeiV2Page() {
                 )}
                 {c.status === "pendente" && <button onClick={() => {setCorrecao({...c,acao:"voucher"});setNovoValor("");setJustificativa("");}} className="rounded-xl border p-3 text-xs font-bold">Corrigir voucher</button>}
                 {c.status === "pendente" && problema(c)==="imei_divergente" && <button onClick={() => {setCorrecao({...c,acao:"imei"});setNovoValor(c.imei1||"");setJustificativa("");}} className="rounded-xl border p-3 text-xs font-bold">Corrigir IMEI</button>}
-                {c.status === "pendente" && (
+                {(c.status === "pendente" || c.status === "devolver") && (
                   <button
                     onClick={() => {
                       setCaso(c);
                       setDiretriz("");
-                      setDecisao("");
+                      setDecisao(c.status === "devolver" ? "reconferencia" : "");
                     }}
-                    className="rounded-xl bg-violet-700 px-4 text-xs font-bold text-white"
+                    className="rounded-xl bg-violet-700 px-4 py-3 text-xs font-bold text-white"
                   >
-                    Definir diretriz
+                    {c.status === "devolver" ? "Voltar para funcional" : "Definir diretriz"}
                   </button>
                 )}
               </div>
@@ -324,7 +326,13 @@ export default function DivergenciasImeiV2Page() {
               Diretriz — {caso.voucher}
             </h2>
             <p className="text-sm text-slate-600">
-              {problema(caso) === "nao_liga" ? "Escolha entre encaminhar para laudo, retornar para uma nova triagem ou segregar para devolução. A decisão e a justificativa ficarão registradas." : problema(caso) === "sem_ordem" ? "Autorizar libera a triagem sem ordem ativa. A referência consultada e a justificativa serão preservadas." : "Autorizar devolve o aparelho à triagem funcional, com nova bipagem e preservação do contrato original."}
+              {caso.status === "devolver"
+                ? "Este aparelho foi segregado para devolução à origem. Ao confirmar, voltará para a fila da Triagem Funcional sem apagar o registro da decisão anterior."
+                : problema(caso) === "nao_liga"
+                ? "Escolha entre encaminhar para laudo, retornar para uma nova triagem ou segregar para devolução. A decisão e a justificativa ficarão registradas."
+                : problema(caso) === "sem_ordem"
+                ? "Autorizar libera a triagem sem ordem ativa. A referência consultada e a justificativa serão preservadas."
+                : "Autorizar devolve o aparelho à triagem funcional, com nova bipagem e preservação do contrato original."}
             </p>
             <label className="block text-sm font-bold">
               Decisão
@@ -335,17 +343,15 @@ export default function DivergenciasImeiV2Page() {
                 className="mt-2 w-full rounded-xl border p-3"
               >
                 <option value="">Selecione</option>
-                <option value="autorizado">
-                  {problema(caso) === "nao_liga" ? "Encaminhar para laudo" : problema(caso) === "sem_ordem" ? "Autorizar triagem sem ordem" : "Autorizar triagem com o aparelho recebido"}
-                </option>
-                {problema(caso) === "nao_liga" && (
-                  <option value="reconferencia">
-                    Retornar para triagem novamente
+                {caso.status === "pendente" && (
+                  <option value="autorizado">
+                    {problema(caso) === "nao_liga" ? "Encaminhar para laudo" : problema(caso) === "sem_ordem" ? "Autorizar triagem sem ordem" : "Autorizar triagem com o aparelho recebido"}
                   </option>
                 )}
-                <option value="devolver">
-                  Manter segregado para devolução à origem
-                </option>
+                <option value="reconferencia">Voltar para Triagem Funcional</option>
+                {caso.status === "pendente" && (
+                  <option value="devolver">Manter segregado para devolução à origem</option>
+                )}
               </select>
             </label>
             <label className="block text-sm font-bold">
