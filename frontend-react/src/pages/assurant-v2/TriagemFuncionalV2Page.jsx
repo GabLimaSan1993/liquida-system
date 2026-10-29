@@ -664,6 +664,8 @@ export default function TriagemFuncionalV2Page() {
   ] = useState("");
 
   const [imei2Digitado, setImei2Digitado] = useState("");
+  const [conferenciaImeis, setConferenciaImeis] = useState(false);
+  const [imeiConferidoPeloOperador, setImeiConferidoPeloOperador] = useState(false);
   const [condicaoInicial, setCondicaoInicial] = useState("");
   const aparelhoBloqueado = condicaoInicial === "bloqueado";
   const danosTela = condicaoInicial === "danos_tela";
@@ -1014,6 +1016,8 @@ export default function TriagemFuncionalV2Page() {
 
     setImeiDigitado("");
     setImei2Digitado("");
+    setConferenciaImeis(false);
+    setImeiConferidoPeloOperador(false);
     setCondicaoInicial("");
 
     setPerguntas(
@@ -1105,6 +1109,8 @@ export default function TriagemFuncionalV2Page() {
       setCondicaoInicial("");
       setImeiDigitado("");
       setImei2Digitado("");
+      setConferenciaImeis(false);
+      setImeiConferidoPeloOperador(false);
       setValidacao(null);
 
       setProduto({
@@ -1169,6 +1175,8 @@ export default function TriagemFuncionalV2Page() {
       setCondicaoInicial("");
       setImeiDigitado("");
       setImei2Digitado("");
+      setConferenciaImeis(false);
+      setImeiConferidoPeloOperador(false);
       setValidacao(null);
 
       /*
@@ -1260,6 +1268,8 @@ export default function TriagemFuncionalV2Page() {
 
     setImeiDigitado("");
     setImei2Digitado("");
+    setConferenciaImeis(false);
+    setImeiConferidoPeloOperador(false);
     setCondicaoInicial("");
 
     setValorBateria(
@@ -1326,6 +1336,8 @@ export default function TriagemFuncionalV2Page() {
       }
     }
 
+    setConferenciaImeis(false);
+    setImeiConferidoPeloOperador(false);
     setEtapa(
       "imei"
     );
@@ -1346,9 +1358,19 @@ export default function TriagemFuncionalV2Page() {
     finally { setCarregando(false); }
   }
 
+  function abrirConferenciaImeis() {
+    if (carregando) return;
+    if (erroCodigo) { mostrarErro(erroCodigo); return; }
+    // Conferência exclusivamente visual dos números digitados:
+    // nenhum IMEI esperado é apresentado ou comparado nesta etapa.
+    setImeiConferidoPeloOperador(false);
+    setConferenciaImeis(true);
+  }
+
   async function handleValidarImei() {
     if (carregando) return;
     if (erroCodigo) { mostrarErro(erroCodigo); return; }
+    setConferenciaImeis(false);
     setCarregando(true);
     try {
       const resposta = await identificarAparelho({
@@ -2107,7 +2129,7 @@ export default function TriagemFuncionalV2Page() {
                   >
                     <div className="space-y-5 p-5">
                       <Campo label="Condição inicial do aparelho">
-                        <select value={condicaoInicial} disabled={carregando} onChange={e => { const valor = e.target.value; setCondicaoInicial(valor); if (valor === "danos_tela") setDefeitosTodos(atual => [...new Set([...atual, "Danos da tela"])]); setImeiDigitado(""); setImei2Digitado(""); setValidacao(null); }} className={inputClass}>
+                        <select value={condicaoInicial} disabled={carregando} onChange={e => { const valor = e.target.value; setCondicaoInicial(valor); if (valor === "danos_tela") setDefeitosTodos(atual => [...new Set([...atual, "Danos da tela"])]); setImeiDigitado(""); setImei2Digitado(""); setConferenciaImeis(false); setImeiConferidoPeloOperador(false); setValidacao(null); }} className={inputClass}>
                           <option value="">Sem ocorrência</option>
                           <option value="nao_liga">Produto não liga</option>
                           <option value="bloqueado">Bloqueado</option>
@@ -2421,21 +2443,56 @@ export default function TriagemFuncionalV2Page() {
                       <input autoFocus value={imeiDigitado} inputMode={tipoAparelho === "CELULAR" ? "numeric" : "text"}
                         maxLength={tipoAparelho === "CELULAR" ? 15 : 64}
                         autoComplete="off" spellCheck={false}
-                        onChange={e=>{setImeiDigitado(e.target.value.trim());setValidacao(null);}}
+                        onChange={e=>{setImeiDigitado(e.target.value.trim());setConferenciaImeis(false);setImeiConferidoPeloOperador(false);setValidacao(null);}}
                         onKeyDown={e=>{if(e.key === "Enter") {e.preventDefault();if(doisImeis) document.getElementById("triagem-imei2")?.focus();else handleValidarImei();}}}
                         className="mt-2 h-12 w-full rounded-xl border border-violet-200 bg-white px-4 font-mono text-lg" />
                     </label>
                     {doisImeis && <label className="block text-xs font-bold text-slate-700">IMEI 2
                       <input id="triagem-imei2" maxLength={15} value={imei2Digitado} inputMode="numeric" autoComplete="off" spellCheck={false}
-                        onChange={e=>{setImei2Digitado(e.target.value.trim());setValidacao(null);}}
-                        onKeyDown={e=>{if(e.key === "Enter") {e.preventDefault();handleValidarImei();}}}
+                        onChange={e=>{setImei2Digitado(e.target.value.trim());setConferenciaImeis(false);setImeiConferidoPeloOperador(false);setValidacao(null);}}
+                        onKeyDown={e=>{if(e.key === "Enter") {e.preventDefault();abrirConferenciaImeis();}}}
                         className="mt-2 h-12 w-full rounded-xl border border-violet-200 bg-white px-4 font-mono text-lg" />
                     </label>}
                     {erroCodigo && (imeiDigitado || imei2Digitado) && <p role="alert" className="text-xs font-bold text-rose-700">{erroCodigo}</p>}
-                    <button type="button" onClick={handleValidarImei} disabled={!!erroCodigo || carregando}
-                      className="h-12 rounded-xl bg-violet-700 px-6 text-sm font-bold text-white disabled:opacity-40">{carregando ? "Validando..." : danosTela || aparelhoBloqueado ? (imeiDigitado ? "Continuar triagem" : "Continuar sem IMEI") : "Validar identificação"}</button>
-                    <p className="text-xs text-slate-500">{danosTela || aparelhoBloqueado ? "Sem IMEI físico, a exceção será registrada e a triagem continuará com o vínculo do voucher, sem declarar conferência do IMEI." : "Uma identificação divergente será segregada automaticamente e receberá etiqueta IMEI DIVERGENTE."}</p>
+                    <button type="button" onClick={doisImeis ? abrirConferenciaImeis : handleValidarImei} disabled={!!erroCodigo || carregando}
+                      className="h-12 rounded-xl bg-violet-700 px-6 text-sm font-bold text-white disabled:opacity-40">{carregando ? "Validando..." : doisImeis ? "Conferir IMEIs digitados" : danosTela || aparelhoBloqueado ? (imeiDigitado ? "Continuar triagem" : "Continuar sem IMEI") : "Validar identificação"}</button>
+                    <p className="text-xs text-slate-500">{doisImeis ? "Confira os dois IMEIs digitados antes de prosseguir. Nesta conferência o IMEI esperado do cadastro não é exibido." : danosTela || aparelhoBloqueado ? "Sem IMEI físico, a exceção será registrada e a triagem continuará com o vínculo do voucher, sem declarar conferência do IMEI." : "Uma identificação divergente será segregada automaticamente e receberá etiqueta IMEI DIVERGENTE."}</p>
                   </div>
+
+                  {doisImeis && conferenciaImeis && (
+                    <div role="group" aria-label="Conferência manual dos IMEIs" className="max-w-[760px] space-y-4 rounded-2xl border-2 border-violet-300 bg-white p-5 shadow-sm">
+                      <div>
+                        <p className="text-sm font-black text-slate-800">Conferência manual dos IMEIs</p>
+                        <p className="mt-1 text-xs leading-5 text-slate-600">
+                          Compare cada número digitado com o que está no aparelho. Esta etapa não informa se um IMEI está certo ou errado em relação ao cadastro.
+                        </p>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">IMEI 1 digitado</p>
+                          <p className="mt-2 break-all font-mono text-lg font-bold tracking-wider text-slate-900">{imeiDigitado}</p>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">IMEI 2 digitado</p>
+                          <p className="mt-2 break-all font-mono text-lg font-bold tracking-wider text-slate-900">{imei2Digitado}</p>
+                        </div>
+                      </div>
+                      <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-violet-100 bg-violet-50 p-3 text-xs font-semibold text-slate-800">
+                        <input type="checkbox" checked={imeiConferidoPeloOperador} onChange={e=>setImeiConferidoPeloOperador(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-violet-700"/>
+                        Conferi os dois IMEIs digitados com os códigos físicos disponíveis no aparelho.
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        <button type="button" onClick={()=>{setConferenciaImeis(false);setImeiConferidoPeloOperador(false);document.getElementById("triagem-imei2")?.focus();}}
+                          className="rounded-xl border border-slate-200 bg-white px-5 py-3 text-xs font-bold text-slate-700 hover:bg-slate-50">
+                          Corrigir IMEIs
+                        </button>
+                        <button type="button" onClick={handleValidarImei} disabled={!imeiConferidoPeloOperador || carregando}
+                          className="rounded-xl bg-violet-700 px-5 py-3 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">
+                          {carregando ? "Continuando..." : "Confirmar IMEIs e continuar"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {validacao &&
                     !validacao.confere && !validacao.prosseguir && (
