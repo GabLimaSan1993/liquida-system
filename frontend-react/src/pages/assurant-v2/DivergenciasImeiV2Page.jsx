@@ -93,17 +93,26 @@ export default function DivergenciasImeiV2Page() {
   }
   async function decidir(e) {
     e.preventDefault();
+    const escolha = String(decisao || "").trim().toLowerCase();
+    const justificativa = String(diretriz || "").trim();
+    if (!escolha || justificativa.length < 5) {
+      setErro("Selecione uma decisão e informe uma justificativa com pelo menos 5 caracteres.");
+      return;
+    }
     setLoading(true);
     setErro("");
     try {
-      await decidirDivergencia(caso.id, decisao, diretriz);
+      await decidirDivergencia(caso.id, escolha, justificativa);
       setCaso(null);
-      setAviso(decisao === "reconferencia"
-        ? "Produto devolvido para a fila da Triagem Funcional, pronto para nova identificação e testes."
+      setAviso(escolha === "reconferencia"
+        ? "Produto encaminhado à Triagem Funcional para nova avaliação. A decisão anterior foi preservada."
         : "Diretriz registrada e situação do aparelho atualizada.");
       await carregar();
     } catch (e) {
-      setErro(e.message);
+      const mensagem = String(e?.message || "Não foi possível concluir a decisão.");
+      setErro(mensagem.includes("Informe a decisão e uma diretriz com pelo menos 5 caracteres")
+        ? "Foi identificada uma validação antiga. Atualize a página com Ctrl+Shift+R e tente novamente."
+        : mensagem);
     } finally {
       setLoading(false);
     }
@@ -348,7 +357,7 @@ export default function DivergenciasImeiV2Page() {
                     {problema(caso) === "nao_liga" ? "Encaminhar para laudo" : problema(caso) === "sem_ordem" ? "Autorizar triagem sem ordem" : "Autorizar triagem com o aparelho recebido"}
                   </option>
                 )}
-                <option value="reconferencia">Voltar para Triagem Funcional</option>
+                <option value="reconferencia">Retornar para triagem funcional (nova avaliação)</option>
                 {caso.status === "pendente" && (
                   <option value="devolver">Manter segregado para devolução à origem</option>
                 )}
