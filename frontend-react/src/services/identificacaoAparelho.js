@@ -20,8 +20,9 @@ export function exigeDoisImeis(modelo = "", tipoCatalogo = "", aparelhoBloqueado
 export function erroIdentificacao(tipo, codigo, imei2 = "", { modelo = "", aparelhoBloqueado = false, danosTela = false } = {}) {
   const primeiro = String(codigo || "").trim();
   const segundo = String(imei2 || "").trim();
-  if (danosTela && segundo) return "Danos da tela permite informar apenas um código.";
-  if (danosTela && !primeiro) return null;
+  if ((danosTela || aparelhoBloqueado) && segundo)
+    return "Nesta condição, informe no máximo um IMEI físico.";
+  if ((danosTela || aparelhoBloqueado) && !primeiro) return null;
   if (tipo === "CELULAR") {
     if (!/^\d{15}$/.test(primeiro))
       return "O IMEI 1 deve ter exatamente 15 dígitos numéricos.";
