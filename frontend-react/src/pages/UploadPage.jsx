@@ -872,7 +872,7 @@ export default function UploadPage({ warehouseV2 = false }) {
           {/* ── Triagem Assurant ── */}
           <UploadBox
             title="Triagem Assurant — Diária"
-            description="Importe a planilha de triagem, recebimento e expedição do Warehouse."
+            description="Importe o relatório GAIA para atualizar a triagem. Não altera endereços físicos de estoque nem alocações do WMS."
             icon={Package}
             accept=".csv,.xlsx,.xls"
             file={triagemFile}
