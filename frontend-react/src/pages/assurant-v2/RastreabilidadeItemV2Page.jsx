@@ -655,18 +655,33 @@ export default function RastreabilidadeItemV2Page() {
       if (tradeinError) throw tradeinError;
 
       const temTradein = Boolean(tradeinResult?.encontrado);
+      const eventosAtuais = result?.eventos || [];
+      const recebimentoComplementar = temTradein
+        && tradeinResult.recebido_em
+        && !eventosAtuais.some((item) => item.categoria === "Recebimento")
+          ? [{
+              data: tradeinResult.recebido_em,
+              categoria: "Recebimento",
+              evento: "Recebimento físico identificado",
+              status: "recebido",
+              descricao: "Entrada identificada pela bipagem do voucher ou por um marco operacional posterior.",
+              origem: "recebimento_vouchers / assurant_triagem",
+              referencia: tradeinResult.voucher,
+            }]
+          : [];
       const resultadoCompleto = temTradein ? {
         ...(result || {}),
         tradein: tradeinResult,
-        eventos: [...(result?.eventos || []), ...(tradeinResult.eventos || [])],
+        eventos: [...eventosAtuais, ...(tradeinResult.eventos || []), ...recebimentoComplementar],
         resumo: result?.resumo || {
           voucher: tradeinResult.voucher,
           imei: tradeinResult.imei,
           sku: tradeinResult.sku,
           modelo: tradeinResult.modelo,
           data_recebimento: tradeinResult.recebido_em,
+          status_triagem: tradeinResult.status_triagem,
           status_tradein: tradeinResult.status_tradein,
-          somente_tradein: true,
+          somente_tradein: tradeinResult.somente_tradein,
         },
         selecionado_imei: result?.selecionado_imei || tradeinResult.imei || null,
         matches: result?.matches?.length
