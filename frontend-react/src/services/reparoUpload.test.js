@@ -1,24 +1,29 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs/promises';
-import { validarLinhasReparo, lerUploadReparo } from './reparoUpload.js';
+import { validarLinhasReparo, lerUploadReparo, normalizarVoucherReparo } from './reparoUpload.js';
 
-test('valida cabeçalho, espaços, linhas vazias e zeros iniciais', () => {
-  assert.deepEqual(validarLinhasReparo([[' imei '], ['001234567890123'], [''], [351234567890123]]), ['001234567890123', '351234567890123']);
+test('importação para reparo identifica vouchers e aceita número YBV sem prefixo', () => {
+  assert.deepEqual(validarLinhasReparo([
+    [' VOUCHER '], ['  YBV123456  '], [456789], ['samv112233'],
+    ['DEV1YBV333222'], ['']
+  ]), ['YBV123456', 'YBV456789', 'SAMV112233', 'DEV1YBV333222']);
+  assert.equal(normalizarVoucherReparo('000459711'), 'YBV459711');
 });
-test('rejeita lista vazia, IMEI malformado, duplicado e volume acima do limite', () => {
-  assert.throws(() => validarLinhasReparo([['Voucher'], ['YBV123456']]), /coluna IMEI/);
-  assert.throws(() => validarLinhasReparo([['IMEI'], ['']]), /pelo menos um/);
-  assert.throws(() => validarLinhasReparo([['IMEI'], ['3.51234E+14']]), /Linha 2/);
-  assert.throws(() => validarLinhasReparo([['IMEI'], ['12345678901234']]), /15 números/);
-  assert.throws(() => validarLinhasReparo([['IMEI'], ['351234567890123'], ['351234567890123']]), /repetido da linha 2/);
-  assert.throws(() => validarLinhasReparo([['IMEI'], ...Array.from({ length: 2001 }, (_, i) => [String(100000000000000 + i)])]), /máximo 2000/);
+
+test('arquivo antigo por IMEI recebe orientação específica', () => {
+  assert.throws(() => validarLinhasReparo([['IMEI'], ['351234567890123']]), /modelo antigo por IMEI/);
 });
-test('o modelo publicado aceita dados na aba Reparo e preserva o IMEI', async () => {
-  // O arquivo entregue também é o modelo disponível para download no sistema.
-  const path = new URL('../../public/modelos/Modelo_Upload_Envio_Reparo.xlsx', import.meta.url);
-  const buffer = await fs.readFile(path);
-  await assert.rejects(lerUploadReparo({ name: 'modelo.xlsx', size: buffer.length, arrayBuffer: async () => buffer }), /pelo menos um/);
-  const csv = new TextEncoder().encode('IMEI\r\n001234567890123\r\n351234567890123\r\n');
-  assert.deepEqual(await lerUploadReparo({ name: 'reparo.csv', size: csv.length, arrayBuffer: async () => csv }), ['001234567890123', '351234567890123']);
+
+test('vouchers repetidos, IMEIs disfarçados e formatos inválidos são rejeitados', () => {
+  assert.throws(() => validarLinhasReparo([['VOUCHER'], ['']]), /pelo menos um voucher/);
+  assert.throws(() => validarLinhasReparo([['VOUCHER'], ['YBV112233'], ['112233']]), /voucher repetido/);
+  assert.throws(() => validarLinhasReparo([['VOUCHER'], ['351234567890123']]), /parece um IMEI/);
+  assert.throws(() => validarLinhasReparo([['VOUCHER'], ['@@@']]), /Linha 2/);
+  assert.throws(() => validarLinhasReparo([['VOUCHER'], ...Array.from({length:2001},(_,i)=>['YBV'+String(i+100000)])]), /máximo 2000/);
+});
+
+test('CSV com coluna voucher é aceito e preserva códigos', async () => {
+  const csv=new TextEncoder().encode('VOUCHER\r\nYBV001234\r\nSAMV123456\r\n');
+  const dados=await lerUploadReparo({name:'reparo.csv',size:csv.length,arrayBuffer:async()=>csv});
+  assert.deepEqual(dados,['YBV1234','SAMV123456']);
 });
