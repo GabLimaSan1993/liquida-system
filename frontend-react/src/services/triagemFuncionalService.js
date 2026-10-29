@@ -269,9 +269,9 @@ export async function salvarTriagemFuncional({
 }) {
   const v = String(voucher || "").trim().toUpperCase();
   if (!v)    return { ok: false, erro: "Voucher ausente." };
-  if (!imei && !danosTela) return { ok: false, erro: "IMEI ausente." };
+  if (!imei && !imei1 && !danosTela && !aparelhoBloqueado) return { ok: false, erro: "IMEI ausente." };
 
-  const codigoBipado = danosTela ? (imei1 || null) : (imei1 || imei);
+  const codigoBipado = danosTela || aparelhoBloqueado ? (imei1 || null) : (imei1 || imei);
   const erroCodigo = erroIdentificacao(tipoDoAparelho(produto?.modelo, produto?.tipo), codigoBipado, imei2, { modelo: produto?.modelo, aparelhoBloqueado, danosTela });
   if (erroCodigo) return { ok: false, erro: erroCodigo };
   const defeitosRegistrados = [...new Set([...filtrarDefeitosAdicionais(defeitos), ...(danosTela ? ["Danos da tela"] : [])])];
