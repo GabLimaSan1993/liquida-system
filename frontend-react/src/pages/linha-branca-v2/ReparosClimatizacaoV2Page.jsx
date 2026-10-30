@@ -21,6 +21,7 @@ import {
 } from "../../services/linhaBrancaService.js";
 import {
   atualizarNecessidadeCompraStatus,
+  cadastrarComponenteParaReparo,
   consultarPecaPorPn,
   decidirCondenacaoClimatizacao,
   fetchComponentesEmReparo,
@@ -82,6 +83,7 @@ export default function ReparosClimatizacaoV2Page() {
 
   const [componentes, setComponentes] = useState([]);
   const [selecionadoId, setSelecionadoId] = useState("");
+  const [tipoUnidade, setTipoUnidade] = useState("");
   const [busca, setBusca] = useState("");
   const [areaAtual, setAreaAtual] = useState("");
   const [form, setForm] = useState({ ...EMPTY, dt_inicio: new Date().toISOString() });
@@ -224,6 +226,7 @@ export default function ReparosClimatizacaoV2Page() {
       (area) => !(item.os?.areas_concluidas || []).includes(area)
     );
     setSelecionadoId(String(item.id));
+    setTipoUnidade(item.tipo_unidade || "");
     setAreaAtual(pendentes[0] || "Reparo Mecânico");
     setBusca("");
     setFotos([]);
@@ -234,6 +237,7 @@ export default function ReparosClimatizacaoV2Page() {
 
   function limpar() {
     setSelecionadoId("");
+    setTipoUnidade("");
     setAreaAtual("");
     setBusca("");
     setFotos([]);
@@ -300,6 +304,9 @@ export default function ReparosClimatizacaoV2Page() {
     if (form.reposicaoTroca === null) {
       return setMensagem("Informe na seção de peças se haverá reposição ou troca.");
     }
+    if (selecionado.__pendenteCadastro && !tipoUnidade) {
+      return setMensagem("Confirme se o equipamento é condensadora ou evaporadora antes de registrar o reparo.");
+    }
 
     try {
       setSaving(true);
@@ -314,6 +321,9 @@ export default function ReparosClimatizacaoV2Page() {
         });
       }
 
+      const componenteOperacional = selecionado.__pendenteCadastro
+        ? await cadastrarComponenteParaReparo(os, tipoUnidade) : selecionado;
+
       await salvarContextoReposicaoTroca({
         os,
         areaReparo: areaAtual,
@@ -323,7 +333,7 @@ export default function ReparosClimatizacaoV2Page() {
       });
 
       await registrarReparoClimatizacao(
-        selecionado,
+        componenteOperacional,
         {
           tecnico,
           dt_inicio: form.dt_inicio,
@@ -358,12 +368,17 @@ export default function ReparosClimatizacaoV2Page() {
     if (!selecionado || !form.motivoCondenacao.trim()) {
       return setMensagem("Informe a justificativa técnica da condenação.");
     }
+    if (selecionado.__pendenteCadastro && !tipoUnidade) {
+      return setMensagem("Confirme se é condensadora ou evaporadora para abrir a OS.");
+    }
 
     try {
       setSaving(true);
       const numero = os.numero_os;
+      const componenteOperacional = selecionado.__pendenteCadastro
+        ? await cadastrarComponenteParaReparo(os, tipoUnidade) : selecionado;
       await solicitarCondenacaoClimatizacao(
-        selecionado,
+        componenteOperacional,
         form.motivoCondenacao,
         profile,
         areaAtual || "Reparo"
@@ -503,7 +518,19 @@ export default function ReparosClimatizacaoV2Page() {
 
           {selecionado ? (
             <div className="mt-4 rounded-xl bg-slate-50 p-4">
-              <div className="flex items-center gap-3"><Snowflake className="h-6 w-6 text-[#5B35C9]" /><div><div className="text-base font-black text-slate-900">{os?.numero_os}</div><div className="text-[10px] capitalize text-slate-500">{selecionado.tipo_unidade} · {os?.marca} {os?.modelo}</div></div></div>
+              {selecionado.__pendenteCadastro && (
+              <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3">
+                <label htmlFor="tipo-unidade-peca" className="block text-xs font-bold text-amber-900">OS histórica aguardando peça · confirme o tipo de unidade *</label>
+                <select id="tipo-unidade-peca" value={tipoUnidade} onChange={(e) => setTipoUnidade(e.target.value)}
+                  className="mt-2 h-10 w-full rounded-lg border border-amber-300 bg-white px-3 text-sm">
+                  <option value="">Selecione a unidade física</option>
+                  <option value="condensadora">Condensadora</option>
+                  <option value="evaporadora">Evaporadora</option>
+                </select>
+                <p className="mt-2 text-[11px] text-amber-800">A identificação será salva ao concluir o reparo; depois a unidade seguirá para formação de kit.</p>
+              </div>
+            )}
+            <div className="flex items-center gap-3"><Snowflake className="h-6 w-6 text-[#5B35C9]" /><div><div className="text-base font-black text-slate-900">{os?.numero_os}</div><div className="text-[10px] capitalize text-slate-500">{selecionado.tipo_unidade} · {os?.marca} {os?.modelo}</div></div></div>
               <div className="mt-4 grid grid-cols-2 gap-3">
                 <Info label="Tensão" value={selecionado.tensao || os?.voltagem} />
                 <Info label="BTU" value={selecionado.capacidade_btu} />
@@ -571,7 +598,7 @@ export default function ReparosClimatizacaoV2Page() {
               <button type="button" onClick={() => setForm((a) => ({ ...a, destino: "venda_no_estado" }))} className={`rounded-xl border px-4 py-3 text-xs font-black ${form.destino === "venda_no_estado" ? "border-amber-400 bg-amber-50 text-amber-700" : "border-slate-200 text-slate-600"}`}>Segregar para Venda no estado</button>
             </div>
 
-            <button type="button" onClick={salvar} disabled={saving || !selecionado || !areaAtual || !form.diagnostico.trim() || !form.servicos.length || form.reposicaoTroca === null} className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#5B35C9] text-xs font-black text-white disabled:bg-slate-300"><Wrench className="h-4 w-4" />Salvar reparo desta área</button>
+            <button type="button" onClick={salvar} disabled={saving || !selecionado || !areaAtual || !form.diagnostico.trim() || !form.servicos.length || form.reposicaoTroca === null || (selecionado.__pendenteCadastro && !tipoUnidade)} className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#5B35C9] text-xs font-black text-white disabled:bg-slate-300"><Wrench className="h-4 w-4" />Salvar reparo desta área</button>
           </div>
 
           {historico ? (
