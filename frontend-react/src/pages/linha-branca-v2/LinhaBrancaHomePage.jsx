@@ -9,6 +9,7 @@ import {
   WashingMachine,
   PackageSearch,
   PackagePlus,
+  Wrench,
   Warehouse,
 } from "lucide-react";
 
@@ -29,6 +30,13 @@ const AREAS = [
     descricao: "Peças e insumos, requisições das OSs, compras, notas fiscais, WIP e movimentações.",
     icon: Warehouse,
     rota: "/v2/linha-branca/gestao/estoque",
+    disponivel: true,
+  },
+  {
+    nome: "Reparo · Outras Categorias",
+    descricao: "Abrir OSs aguardando peça de acessórios e outras categorias sem fluxo especializado.",
+    icon: Wrench,
+    rota: "/v2/linha-branca/reparos-outros",
     disponivel: true,
   },
   {
