@@ -11,6 +11,7 @@ import {
   Navigate,
   Route,
   Routes,
+  useLocation,
 } from "react-router-dom";
 
 import {
@@ -125,10 +126,12 @@ function ProtectedRoute({
 }) {
   const {
     user,
+    profile,
     loading,
     hasAccess,
   } =
     useAuth();
+  const location = useLocation();
 
   if (
     loading
@@ -149,6 +152,12 @@ function ProtectedRoute({
         replace
       />
     );
+  }
+
+  // Operadores do laboratorio nao navegam para outras rotas nem por URL direta.
+  if (profile?.area_tecnica === "laboratorio_reparo" && !profile?.is_master &&
+      location.pathname !== "/v2/assurant/laboratorio/reparos") {
+    return <Navigate to="/v2/assurant/laboratorio/reparos" replace />;
   }
 
   if (
@@ -517,7 +526,7 @@ export default function App() {
         {/* Fluxo piloto — laboratório de reparos, acesso restrito */}
         <Route
           path="laboratorio/reparos"
-          element={<UserOnlyRoute userId="b517d70a-56be-4b4f-8b9e-a03c769dd3c3"><LaboratorioReparoV2Page /></UserOnlyRoute>}
+          element={<ProtectedRoute tela="/v2/assurant/laboratorio/reparos"><LaboratorioReparoV2Page /></ProtectedRoute>}
         />
 
         {/* Recebimento */}
