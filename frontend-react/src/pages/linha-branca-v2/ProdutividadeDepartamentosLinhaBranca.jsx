@@ -76,8 +76,8 @@ export default function ProdutividadeDepartamentosLinhaBranca({onVoltar}){
  const evolucao=(dados?.evolucao||[]).map(x=>({...x,rotulo:periodo.agrupar==="mes"?String(x.periodo).slice(0,7):dateLabel(x.periodo)}));
  const movimentos=dados?.ultimos_registros||[];
  const gerarCsv=()=>{
-  const cab=["Colaborador","Departamento","OS únicas","Atividades","Ciclos","Reparos","Diagnósticos","Movimentações","Aprovados","Reprovados"];
-  const linhas=tecnicos.map(x=>[x.tecnico,x.departamento,x.os_unicas,x.atividades,x.ciclos,x.reparos,x.diagnosticos,x.movimentacoes,x.aprovados,x.reprovados]);
+  const cab=["Colaborador","Departamento","OS com registros","Atividades","Etapas entregues","Ciclos","Reparos","Diagnósticos","Aprovados","Reprovados"];
+  const linhas=tecnicos.map(x=>[x.tecnico,x.departamento,x.os_unicas,x.atividades,x.etapas_concluidas,x.ciclos,x.reparos,x.diagnosticos,x.aprovados,x.reprovados]);
   const csv=[cab,...linhas].map(row=>row.map(v=>'"'+String(v??"").replaceAll('"','""')+'"').join(";")).join("\r\n");
   const url=URL.createObjectURL(new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"}));
   const a=document.createElement("a");a.href=url;a.download="linha-branca-produtividade-"+periodo.inicio+"-"+periodo.fim+".csv";
@@ -89,7 +89,7 @@ export default function ProdutividadeDepartamentosLinhaBranca({onVoltar}){
     <button type="button" onClick={onVoltar} className="mb-3 inline-flex items-center gap-2 text-xs font-bold text-violet-700"><ArrowLeft className="h-4 w-4"/>Voltar ao mapa de máquinas</button>
     <p className="text-[10px] font-black uppercase tracking-[0.2em] text-violet-600">Linha Branca · Gestão da produção</p>
     <h1 className="mt-1 text-2xl font-black sm:text-3xl">Produção por departamento e colaborador</h1>
-    <p className="mt-2 text-xs text-slate-500">Dados realizados, separados entre testes, reparos, diagnósticos e movimentações de OS.</p>
+    <p className="mt-2 text-xs text-slate-500">Somente ações registradas nos módulos do Liquida: triagem, reparos e testes. Não inclui registros importados ou departamentos externos.</p>
    </div>
    <div className="flex gap-2">
     <button type="button" onClick={()=>setVersao(x=>x+1)} disabled={carregando} className={cssButton+" inline-flex items-center gap-2 disabled:opacity-50"}><RefreshCw className={"h-4 w-4 "+(carregando?"animate-spin":"")}/>Atualizar</button>
@@ -131,24 +131,24 @@ export default function ProdutividadeDepartamentosLinhaBranca({onVoltar}){
    <p className="mt-3 text-xs text-slate-500">Período consultado: <strong>{periodo.inicio}</strong> a <strong>{periodo.fim}</strong> · {periodo.agrupar==="mes"?"agrupado por mês":"agrupado por dia"}</p>
    {(departamento||tecnico)&&<button type="button" onClick={()=>{setDepartamento("");setTecnico("")}} className="mt-2 text-xs font-bold text-violet-700">Limpar filtros de equipe e departamento</button>}
   </section>
-  <FluxoLinhaBrancaPeriodo periodo={periodo} area={area} departamento={departamento} tecnico={tecnico}/>
+  {dados&&<FluxoLinhaBrancaPeriodo dados={dados} periodo={periodo}/>}
   {erro&&<p role="alert" className="rounded-xl bg-rose-50 p-4 text-xs font-semibold text-rose-700">{erro}</p>}
   {!dados&&carregando&&<div className="flex items-center justify-center gap-3 rounded-xl bg-violet-50 p-10 text-sm font-bold text-violet-700"><Loader2 className="h-5 w-5 animate-spin"/>Consultando produção...</div>}
   {dados&&<>
    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-    <Stat nome="OS movimentadas" valor={geral.os_movimentadas} descricao="Máquinas distintas com registros no período" Icon={Activity}/>
-    <Stat nome="Atividades produtivas" valor={geral.atividades_produtivas} descricao="Ciclos + reparos + diagnósticos + outros apontamentos" Icon={BarChart3}/>
+    <Stat nome="OS com ações no Liquida" valor={geral.os_movimentadas} descricao="Máquinas distintas com ações feitas nos módulos internos" Icon={Activity}/>
+    <Stat nome="Atividades registradas" valor={geral.atividades_produtivas} descricao="Ciclos, reparos, diagnósticos e registros de bancada" Icon={BarChart3}/>
     <Stat nome="Ciclos executados" valor={geral.ciclos} descricao="Triagem funcional e bancada pós-reparo" Icon={Clock3}/>
     <Stat nome="Reparos concluídos" valor={geral.reparos} descricao="Execuções técnicas encerradas" Icon={Wrench}/>
    </div>
    <div className="grid gap-3 sm:grid-cols-3">
     <div className="rounded-xl border border-slate-200 bg-white p-4 text-xs"><strong className="text-xl font-black text-slate-900">{numerar(geral.diagnosticos)}</strong><p className="mt-1 text-slate-500">Diagnósticos de triagem registrados</p></div>
-    <div className="rounded-xl border border-slate-200 bg-white p-4 text-xs"><strong className="text-xl font-black text-slate-900">{numerar(geral.movimentacoes)}</strong><p className="mt-1 text-slate-500">Mudanças de etapa (não somadas à produção)</p></div>
+    <div className="rounded-xl border border-slate-200 bg-white p-4 text-xs"><strong className="text-xl font-black text-slate-900">{numerar(geral.etapas_concluidas)}</strong><p className="mt-1 text-slate-500">Etapas concluídas e registradas no Liquida</p></div>
     <div className="rounded-xl border border-slate-200 bg-white p-4 text-xs"><strong className="text-xl font-black text-slate-900">{horas(geral.tempo_operacao_segundos)}</strong><p className="mt-1 text-slate-500">Tempo registrado de ciclos e reparos — não horas de presença</p></div>
    </div>
    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
     <h2 className="text-base font-black">Evolução da produção</h2>
-    <p className="mt-1 text-xs text-slate-500">Ciclos, reparos e diagnósticos por {periodo.agrupar==="mes"?"mês":"dia"}. Movimentações de status ficam fora do volume produzido.</p>
+    <p className="mt-1 text-xs text-slate-500">Ciclos, reparos e diagnósticos por {periodo.agrupar==="mes"?"mês":"dia"}, apenas quando apontados no Liquida.</p>
     {evolucao.length?<div className="mt-4 h-64 w-full">
      <ResponsiveContainer width="100%" height="100%"><BarChart data={evolucao} margin={{top:8,right:10,bottom:4,left:-20}}>
       <CartesianGrid strokeDasharray="3 3" vertical={false}/>
@@ -163,23 +163,23 @@ export default function ProdutividadeDepartamentosLinhaBranca({onVoltar}){
    </section>
    <div className="grid gap-4 xl:grid-cols-2">
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-     <div className="p-4"><h2 className="text-sm font-black">Atividades executadas por departamento</h2><p className="mt-1 text-xs text-slate-500">Esta tabela mede <strong>execuções</strong> e OS distintas que receberam registros. Não representa entradas, saldo de fila nem máquinas finalizadas. Para o balanço de etapas, consulte a conciliação acima.</p></div>
+     <div className="p-4"><h2 className="text-sm font-black">Atividades por área controlada no Liquida</h2><p className="mt-1 text-xs text-slate-500">Somente atividades realizadas nos módulos de Triagem, Reparos e Bancada. Cada OS pode ter vários ciclos e execuções.</p></div>
      <div className="max-h-[520px] overflow-auto"><table className="w-full min-w-[580px] text-left text-xs">
-      <thead className="sticky top-0 bg-slate-50 text-[10px] uppercase text-slate-500"><tr>{["Departamento","OS com registros","Execuções","Ciclos","Reparos","Trocas de etapa"].map(t=><th key={t} className="px-3 py-2">{t}</th>)}</tr></thead>
+      <thead className="sticky top-0 bg-slate-50 text-[10px] uppercase text-slate-500"><tr>{["Departamento","OS com registros","Execuções","Ciclos","Reparos","Etapas entregues"].map(t=><th key={t} className="px-3 py-2">{t}</th>)}</tr></thead>
       <tbody className="divide-y divide-slate-100">{setores.map(s=><tr key={s.departamento} className="hover:bg-violet-50/40">
        <td className="px-3 py-3"><button type="button" onClick={()=>setDepartamento(s.departamento)} className="text-left font-bold text-violet-700">{s.departamento}</button></td>
-       {[s.os_unicas,s.atividades,s.ciclos,s.reparos,s.movimentacoes].map((v,i)=><td key={i} className="px-3 py-3 tabular-nums">{numerar(v)}</td>)}
+       {[s.os_unicas,s.atividades,s.ciclos,s.reparos,s.etapas_concluidas].map((v,i)=><td key={i} className="px-3 py-3 tabular-nums">{numerar(v)}</td>)}
       </tr>)}</tbody>
      </table></div>
     </section>
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
      <div className="p-4"><h2 className="text-sm font-black">Produtividade por colaborador e departamento</h2><p className="mt-1 text-xs text-slate-500">Somente registros identificados no Liquida. “Não identificado” evidencia lacunas de apontamento.</p></div>
      <div className="max-h-[520px] overflow-auto"><table className="w-full min-w-[680px] text-left text-xs">
-      <thead className="sticky top-0 bg-slate-50 text-[10px] uppercase text-slate-500"><tr>{["Técnico","Departamento","OS com registros","Execuções","Ciclos","Reparos","Diagnósticos"].map(t=><th key={t} className="px-3 py-2">{t}</th>)}</tr></thead>
+      <thead className="sticky top-0 bg-slate-50 text-[10px] uppercase text-slate-500"><tr>{["Técnico","Departamento","OS com registros","Execuções","Entregas","Ciclos","Reparos","Diagnósticos"].map(t=><th key={t} className="px-3 py-2">{t}</th>)}</tr></thead>
       <tbody className="divide-y divide-slate-100">{tecnicos.map((t,i)=><tr key={t.tecnico+"-"+t.departamento+"-"+i} className="hover:bg-violet-50/40">
        <td className="px-3 py-3"><button type="button" onClick={()=>setTecnico(t.tecnico)} className="text-left font-bold text-violet-700">{t.tecnico}</button></td>
        <td className="px-3 py-3 text-slate-600">{t.departamento}</td>
-       {[t.os_unicas,t.atividades,t.ciclos,t.reparos,t.diagnosticos].map((v,j)=><td key={j} className="px-3 py-3 tabular-nums">{numerar(v)}</td>)}
+       {[t.os_unicas,t.atividades,t.etapas_concluidas,t.ciclos,t.reparos,t.diagnosticos].map((v,j)=><td key={j} className="px-3 py-3 tabular-nums">{numerar(v)}</td>)}
       </tr>)}</tbody>
      </table></div>
     </section>
@@ -195,9 +195,7 @@ export default function ProdutividadeDepartamentosLinhaBranca({onVoltar}){
       <td className="px-3 py-2">{x.tecnico}</td><td className="px-3 py-2">{x.origem}</td></tr>)}</tbody>
     </table></div>
    </details>
-   <p className="rounded-xl bg-slate-50 p-4 text-xs leading-5 text-slate-600"><strong>Critério:</strong> contagem por evento registrado, não por presença ou jornada de trabalho.
-    Uma mesma máquina pode ter dois ciclos e um reparo no período; por isso, “OS únicas” é diferente de “atividades”.
-    Movimentos de etapa não são considerados produção. Dados históricos sem técnico identificado permanecem sinalizados.</p>
+   <p className="rounded-xl bg-slate-50 p-4 text-xs leading-5 text-slate-600"><strong>Escopo: Liquida System.</strong> Uma máquina só conta se houver ação no módulo de Triagem, Reparos ou Bancada. Datas recebidas de Aging, importações externas, estoque geral e etapas sem apontamento dentro do Liquida não entram nesta produção. “OS com registros” é diferente de número de atividades, e nenhuma entrega de etapa é tratada como conclusão total da máquina.</p>
   </>}
  </div>;
 }
