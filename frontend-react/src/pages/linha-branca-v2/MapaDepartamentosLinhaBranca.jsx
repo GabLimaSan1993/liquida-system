@@ -1,6 +1,7 @@
 import {useEffect,useMemo,useState} from "react";
 import {Activity, AlertTriangle, ArrowRight, Boxes, ChevronLeft, ChevronRight, Clock3, Factory, Loader2, RefreshCw, Search, X} from "lucide-react";
 import {buscarMapaDepartamentosLinhaBranca,detalheOSLinhaBranca} from "../../services/mapaDepartamentosLinhaBrancaService.js";
+import DetalheOperacionalOS from "../../components/linha-branca/DetalheOperacionalOS.jsx";
 
 const AREAS=["","Lavadoras","Refrigeração","Climatização","Outros / Portáteis"];
 const qtd=n=>Number(n||0).toLocaleString("pt-BR");
@@ -72,7 +73,6 @@ export default function MapaDepartamentosLinhaBranca({onIndicadores}){
  const totalPaginas=Math.max(1,Math.ceil(totalFiltrado/50));
  const mudarArea=a=>{setArea(a);setDepartamento("");setPagina(1)};
  const mudarBusca=v=>{setBusca(v);setPagina(1)};
- const historico=detalhe?.historico||[];
  return <div className="space-y-5 text-slate-900">
   <header className="flex flex-wrap items-start justify-between gap-4">
    <div><p className="text-[10px] font-black uppercase tracking-[0.2em] text-violet-600">Gestão · Linha Branca</p>
@@ -150,9 +150,9 @@ export default function MapaDepartamentosLinhaBranca({onIndicadores}){
     {carregando&&<span className="inline-flex items-center gap-2 text-xs font-semibold text-violet-600"><Loader2 className="h-4 w-4 animate-spin"/>Atualizando</span>}
    </div>
    <div className="overflow-x-auto">
-    <table className="w-full min-w-[1040px] whitespace-nowrap text-left text-xs">
+    <table className="w-full min-w-[1250px] whitespace-nowrap text-left text-xs">
      <thead className="bg-slate-50 text-[10px] font-bold uppercase text-slate-500"><tr>
-      {["OS / tipo","Produto","Departamento atual","Status / área do sistema","Responsável","Entrada","Aging total","Detalhes"].map(h=><th key={h} className="px-4 py-3">{h}</th>)}
+      {["OS / tipo","Produto","Departamento atual","Status / área do sistema","Responsável","Entrada","Última etapa / conclusão","Aging total","Detalhes"].map(h=><th key={h} className="px-4 py-3">{h}</th>)}
      </tr></thead>
      <tbody className="divide-y divide-slate-100">
       {itens.map(o=><tr key={o.id} className="hover:bg-violet-50/40">
@@ -162,11 +162,17 @@ export default function MapaDepartamentosLinhaBranca({onIndicadores}){
        <td className="px-4 py-3"><div>{o.status_atual||"—"}</div><div className="mt-1 text-[10px] text-slate-400">{o.area_destino||o.etapa_atual||"Não informado"}</div></td>
        <td className="px-4 py-3"><span className={o.responsavel?"font-semibold text-slate-700":"font-semibold text-amber-700"}>{o.responsavel||"Não identificado"}</span></td>
        <td className="px-4 py-3 text-slate-600">{dataBR(o.dt_entrada)}</td>
+       <td className="px-4 py-3">
+         <div className="font-bold text-slate-700">{o.ultima_etapa_em?quando(o.ultima_etapa_em):"Não registrada"}</div>
+         <div className={"mt-1 text-[10px] "+(o.ultima_etapa_confirmada?"text-emerald-700":"text-amber-700")}>
+           {o.ultima_etapa_tipo||"Sem movimentação"}
+         </div>
+       </td>
        <td className="px-4 py-3"><span className={"rounded-lg px-2 py-1 font-bold "+(o.aging_dias>30?"bg-rose-50 text-rose-700":o.aging_dias>7?"bg-amber-50 text-amber-700":"bg-slate-100 text-slate-600")}>
         {o.aging_dias===null?"Sem data":qtd(o.aging_dias)+" dias"}</span></td>
        <td className="px-4 py-3"><button type="button" onClick={()=>setSelecionada(o)} className="rounded-lg border border-violet-200 px-3 py-2 text-[11px] font-bold text-violet-700">Ver OS</button></td>
       </tr>)}
-      {!itens.length&&<tr><td colSpan={8} className="px-4 py-12 text-center text-sm text-slate-400">Não há OS para os filtros selecionados.</td></tr>}
+      {!itens.length&&<tr><td colSpan={9} className="px-4 py-12 text-center text-sm text-slate-400">Não há OS para os filtros selecionados.</td></tr>}
      </tbody>
     </table>
    </div>
@@ -193,24 +199,7 @@ export default function MapaDepartamentosLinhaBranca({onIndicadores}){
     </div>
     {carregandoDetalhe&&<p className="mt-5 flex items-center gap-2 text-sm text-violet-600"><Loader2 className="h-4 w-4 animate-spin"/>Carregando histórico...</p>}
     {erroDetalhe&&<p className="mt-4 text-sm text-rose-700">{erroDetalhe}</p>}
-    {detalhe&&<div className="mt-5 space-y-4">
-     <div className="grid grid-cols-2 gap-3 rounded-xl bg-slate-50 p-4 text-xs">
-      {[
-       ["Produto",[detalhe.os.marca,detalhe.os.modelo].filter(Boolean).join(" ")],["Categoria",detalhe.os.categoria],
-       ["Fornecedor",detalhe.os.fornecedor],["Status",detalhe.os.status_atual],["Etapa",detalhe.os.etapa_atual],
-       ["Área destino",detalhe.os.area_destino],["Responsável",detalhe.os.tecnico_responsavel],
-       ["Triagem",detalhe.os.tecnico_triagem],["Bancada",detalhe.os.tecnico_bancada],
-       ["Higienização",detalhe.os.tecnico_limpeza],["Nível reparo",detalhe.os.nivel_reparo],
-       ["Última atualização",quando(detalhe.os.updated_at)]
-      ].map(([nome,valor])=><div key={nome}><div className="text-[10px] font-bold uppercase text-slate-400">{nome}</div>
-       <div className="mt-1 font-semibold text-slate-700">{valor||"Não informado"}</div></div>)}
-     </div>
-     <h3 className="text-sm font-black">Histórico de movimentações registrado</h3>
-     {detalhe.historico.length?<div className="space-y-2">{detalhe.historico.map(h=><div key={h.id} className="rounded-lg border border-slate-200 p-3 text-xs">
-      <div className="font-bold">{h.status_anterior||"Entrada"} → {h.status_novo||"Movimentação"}</div>
-      <div className="mt-1 text-slate-500">{h.etapa_nova||"—"} · {h.responsavel||"Não identificado"} · {quando(h.created_at)}</div>
-     </div>)}</div>:<p className="rounded-xl bg-amber-50 p-3 text-xs text-amber-800">Sem histórico de transições registrado nesta OS. O setor atual vem do cadastro, não de um endereço físico confirmado.</p>}
-    </div>}
+    {detalhe&&<DetalheOperacionalOS detalhe={detalhe}/>}
    </div>
   </div>}
  </div>;
