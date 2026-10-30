@@ -34,7 +34,7 @@ function restaurarRolagem(chave) {
     if (!Number.isFinite(y)) return;
     // Esperar a altura da página se estabilizar ao retornar da câmera.
     window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
-      window.scrollTo({ top: y, behavior: "instant" });
+      window.scrollTo({ top: y, behavior: "auto" });
       window.sessionStorage.removeItem(chaveScroll(chave));
     }));
   } catch { /* Sem acesso ao storage: não interromper o preenchimento. */ }
