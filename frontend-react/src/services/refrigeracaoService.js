@@ -1,5 +1,5 @@
 import { supabase } from "../lib/supabase.js";
-import { fetchOsAguardandoCmp, osAguardandoCmp } from "./reparoLinhaBrancaService.js";
+import { fetchOsAguardandoCmp, osAguardandoCmp, osAguardandoPeca } from "./reparoLinhaBrancaService.js";
 
 export const REFRIGERACAO_CATEGORIA = "Refrigerador";
 export const REFRIGERACAO_CATEGORIAS = ["Refrigerador", "Freezer", "Frigobar", "Adega", "Cervejeira"];
@@ -116,11 +116,13 @@ export async function fetchOsRefrigeracaoParaReparo() {
         const area = normalizarArea(os.area_destino);
         if (["Reparo Mecânico", "Reparo Elétrico", "Reparo Estético"].includes(area)) areas = [area];
       }
-      if (!areas.length && osAguardandoCmp(os)) areas = ["Reparo Mecânico"];
+      const especialidadeIndefinida = osAguardandoPeca(os) && !areas.length;
+      if (!areas.length && osAguardandoCmp(os) && !especialidadeIndefinida) areas = ["Reparo Mecânico"];
 
       return {
         ...os,
         areas_reparo: areas,
+        __especialidade_indefinida: especialidadeIndefinida,
         area_destino: normalizarArea(os.area_destino),
         etapa_atual: normalizarArea(os.etapa_atual),
         __triagem: triagemPorOs.get(String(os.id)) || null,
