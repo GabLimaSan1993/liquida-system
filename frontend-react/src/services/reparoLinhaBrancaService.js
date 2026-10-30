@@ -11,29 +11,50 @@ export function osAguardandoCmp(os) {
   return /^AGUARDANDO(?: CONFIRMACAO DE MOVIMENTACAO)? CMP(?:\/HF)?$/.test(etapa);
 }
 
-export async function fetchOsAguardandoCmp() {
+// Fila operacional: o status atual prevalece sobre o histórico importado de Aging.
+export function osAguardandoPeca(os) {
+  return String(os?.status_atual || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .trim().toUpperCase() === "AGUARDANDO PECA";
+}
+
+export async function fetchOsAguardandoPeca() {
   const { data, error } = await supabase
     .from("ordens_servico")
     .select("*")
     .eq("linha_produto", "Linha Branca")
-    .ilike("dados_aging->>ETAPA", "Aguardando%CMP%")
-    .order("dt_entrada", { ascending: true });
-
-  if (error) throw error;
-  return (data || []).filter(osAguardandoCmp);
-}
-
-export async function fetchOsParaReparo(areaExecucao) {
-  const { data, error } = await supabase
-    .from("ordens_servico")
-    .select("*")
-    .contains("areas_reparo", [areaExecucao])
-    .not("areas_concluidas", "cs", `{${areaExecucao}}`)
-    .in("status_atual", ["Triado", "Em reparo", "Aguardando peça"])
+    .eq("status_atual", "Aguardando peça")
     .order("dt_entrada", { ascending: true });
 
   if (error) throw error;
   return data || [];
+}
+
+// Compatibilidade com as telas que já utilizavam a fila de Aguardando CMP.
+export const fetchOsAguardandoCmp = fetchOsAguardandoPeca;
+
+export async function fetchOsParaReparo(areaExecucao) {
+  const [{ data, error }, aguardandoPeca] = await Promise.all([
+    supabase
+      .from("ordens_servico")
+      .select("*")
+      .contains("areas_reparo", [areaExecucao])
+      .not("areas_concluidas", "cs", `{${areaExecucao}}`)
+      .in("status_atual", ["Triado", "Em reparo", "Aguardando peça"])
+      .order("dt_entrada", { ascending: true }),
+    fetchOsAguardandoPeca(),
+  ]);
+
+  if (error) throw error;
+  const mapa = new Map((data || []).map((os) => [String(os.id), os]));
+  // OSs históricas sem triagem ou especialidade são abertas no reparo mecânico,
+  // podendo ser reclassificadas pelo técnico antes da conclusão.
+  if (areaExecucao === "Reparo Mecânico") {
+    aguardandoPeca.filter((os) => !(os.areas_reparo || []).length)
+      .forEach((os) => mapa.set(String(os.id), os));
+  }
+  return [...mapa.values()].sort((a, b) =>
+    String(a.dt_entrada || "").localeCompare(String(b.dt_entrada || "")));
 }
 
 export async function fetchTriagemDaOs(osId) {
@@ -43,7 +64,7 @@ export async function fetchTriagemDaOs(osId) {
     .eq("os_id", osId)
     .order("created_at", { ascending: false })
     .limit(1)
-    .single();
+    .maybeSingle();
 
   if (error) throw error;
   return data;
@@ -105,7 +126,7 @@ export async function salvarExecucaoReparo(os, execucao, areaExecucao) {
   );
 
   // Direciona automaticamente para a próxima especialidade ainda pendente.
-  const areasReparo = os.areas_reparo || [];
+  const areasReparo = (os.areas_reparo || []).length ? os.areas_reparo : [areaExecucao];
   const areasPendentes = areasReparo.filter(
     (area) => !areasConcluidasAtualizadas.includes(area)
   );
@@ -121,6 +142,7 @@ export async function salvarExecucaoReparo(os, execucao, areaExecucao) {
       status_atual: novoStatus,
       etapa_atual: novaEtapa,
       area_destino: novaArea,
+      areas_reparo: areasReparo,
       areas_concluidas: areasConcluidasAtualizadas,
       tecnico_responsavel: execucao.tecnico,
     })
