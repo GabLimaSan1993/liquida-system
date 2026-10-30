@@ -22,7 +22,7 @@ function cabecalhoB2B(v) {
 function prioridadeImeiB2B(v) {
   const chave=cabecalhoB2B(v);
   if (chave==="IMEI") return 100;
-  if (/^IMEI (1|01|PRINCIPAL|DO APARELHO|APARELHO|DO EQUIPAMENTO|EQUIPAMENTO)$/.test(chave)) return 95;
+  if (/^IMEI(?: ?(?:1|01)| (?:PRINCIPAL|DO APARELHO|APARELHO|DO EQUIPAMENTO|EQUIPAMENTO|DO PRODUTO))$/.test(chave)) return 95;
   if (/^(NUM|NUMERO|NRO|N) (DE )?IMEI( 1)?$/.test(chave)) return 90;
   if (/^(SERIAL IMEI|IMEI SERIAL|IDENTIFICADOR IMEI)$/.test(chave)) return 85;
   // Não selecionar IMEI2 ou números de SKU como IMEI principal.
@@ -50,6 +50,23 @@ function validarImei(v) {
 }
 function limparImei(v) { return String(v??"").trim(); }
 function acharImeiLinha(linha) { return validarImei(linha?.IMEI); }
+function valorMoedaB2B(v){
+  if(v===null||v===undefined||v==="") return null;
+  if(typeof v==="number")return Number.isFinite(v)?v:null;
+  const raw=String(v).replace(/[^\d.,-]/g,"").trim();
+  if(!raw)return null;
+  const virgula=raw.lastIndexOf(","),ponto=raw.lastIndexOf(".");
+  let normalizado=raw;
+  if(virgula>=0&&ponto>=0){
+    normalizado=virgula>ponto?raw.replace(/\./g,"").replace(",","."):raw.replace(/,/g,"");
+  }else if(virgula>=0){
+    normalizado=raw.replace(",",".");
+  }else if((raw.match(/\./g)||[]).length>1 || /^\d{1,3}(\.\d{3})+$/.test(raw)){
+    normalizado=raw.replace(/\./g,"");
+  }
+  const numero=Number(normalizado);
+  return Number.isFinite(numero)?numero:null;
+}
 
 // Ganhador continua sendo a origem obrigatória do cliente, nunca inferida.
 function extrairPlanilhaPedidoB2B(wb) {
@@ -204,12 +221,7 @@ export async function importarPedidoB2B(file, userId, extras = {}) {
           const imei = acharImeiLinha(r);
           const wms = wmsMap.get(imei) || null;
           let valor = null;
-          if (valorIdx >= 0) {
-            const rawVal = r.__celulas[valorIdx];
-            const n = typeof rawVal === "number" ? rawVal :
-              Number(String(rawVal ?? "").replace(/R\$|\s/g,"").replace(/\./g,"").replace(",","."));
-            if(rawVal!=null && rawVal!=="" && Number.isFinite(n))valor=n;
-          }
+          if (valorIdx >= 0) valor = valorMoedaB2B(r.__celulas[valorIdx]);
           return {
             pedido_id: pedido.id, imei,
             voucher:       wms?.voucher || null,
