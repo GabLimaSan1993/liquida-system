@@ -113,9 +113,11 @@ export default function BaixaExcepcionalPanel() {
     if (!revisao) return;
     setBusy(true); setErro(""); setMensagem("");
     try {
-      await executar(revisao.acao, {id: revisao.item.id, parecer: parecer.trim()});
+      const resposta = await executar(revisao.acao, {id: revisao.item.id, parecer: parecer.trim()});
       setMensagem(revisao.acao === "aprovar"
-        ? "Baixa confirmada com rastreabilidade. Nenhum faturamento foi criado."
+        ? resposta?.pedido_concluido
+          ? `Baixa de estoque efetivada. Pedido #${resposta.pedido || revisao.item.pedido_referencia} removido de Aguardando Definição e movido para Concluídos, com histórico preservado. Nenhum faturamento foi criado.`
+          : "Baixa confirmada com rastreabilidade. Nenhum faturamento foi criado."
         : "Solicitação rejeitada sem movimentar o estoque.");
       setRevisao(null); setParecer("");
       await atualizar();
