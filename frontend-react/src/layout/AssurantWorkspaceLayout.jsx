@@ -137,7 +137,6 @@ const MENU_GROUPS = [
         to: "/v2/assurant/laboratorio/reparos",
         exact: true,
         enabled: true,
-        allowedUserIds: ["b517d70a-56be-4b4f-8b9e-a03c769dd3c3"],
       },
 
       {
