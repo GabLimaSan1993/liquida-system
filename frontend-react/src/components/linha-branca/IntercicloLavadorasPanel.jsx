@@ -1,4 +1,4 @@
-import {useEffect,useMemo,useState} from "react";
+import {useCallback,useEffect,useMemo,useRef,useState} from "react";
 import {Camera,CheckCircle2,ShieldCheck,AlertTriangle,Loader2,Play,Wrench} from "lucide-react";
 import {REPAROS_ESTETICOS_LAVADORAS} from "../../services/linhaBrancaService.js";
 import {
@@ -6,7 +6,41 @@ import {
  anexarFotoLavadora,salvarIntercicloLavadora,urlFotoLavadora
 } from "../../services/lavadorasPreventivaService.js";
 
-function FotoObrigatoria({osId,cicloId,categoria,item,fase="antes",fotos,onUploaded,disabled}) {
+// O navegador do dispositivo pode descarregar a tela enquanto a câmera nativa
+// está aberta. O rascunho é persistido por usuário e ciclo, sem armazenar fotos.
+const RASCUNHO_TTL = 48 * 60 * 60 * 1000;
+const prefixoRascunho = "liquida:lavadoras:preventiva:rascunho:v2:";
+const chaveRascunho = (cicloId, usuarioId) => prefixoRascunho + String(usuarioId || "operador") + ":" + String(cicloId);
+const chaveScroll = (chave) => chave + ":camera-scroll";
+function lerRascunho(chave) {
+  try {
+    const salvo = JSON.parse(window.localStorage.getItem(chave) || "null");
+    if (!salvo?.atualizadoEm || Date.now() - salvo.atualizadoEm > RASCUNHO_TTL) {
+      if (salvo) window.localStorage.removeItem(chave);
+      return null;
+    }
+    return salvo;
+  } catch { return null; }
+}
+function salvarRascunho(chave, dados) {
+  try { window.localStorage.setItem(chave, JSON.stringify({...dados, atualizadoEm: Date.now()})); }
+  catch { /* Navegador sem armazenamento: a sessão atual continua normalmente. */ }
+}
+function restaurarRolagem(chave) {
+  try {
+    const salvo = window.sessionStorage.getItem(chaveScroll(chave));
+    if (salvo === null) return;
+    const y = Number(salvo);
+    if (!Number.isFinite(y)) return;
+    // Esperar a altura da página se estabilizar ao retornar da câmera.
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+      window.scrollTo({ top: y, behavior: "instant" });
+      window.sessionStorage.removeItem(chaveScroll(chave));
+    }));
+  } catch { /* Sem acesso ao storage: não interromper o preenchimento. */ }
+}
+
+function FotoObrigatoria({osId,cicloId,categoria,item,fase="antes",fotos,onUploaded,disabled,onCameraOpen,onCameraReturn}) {
  const [arquivoCarregando,setArquivoCarregando]=useState(false);
  const [url,setUrl]=useState("");
  const foto=useMemo(()=>fotos.find(f=>f.categoria===categoria&&f.item===item&&f.fase===fase),[fotos,categoria,item,fase]);
@@ -22,7 +56,7 @@ function FotoObrigatoria({osId,cicloId,categoria,item,fase="antes",fotos,onUploa
      setArquivoCarregando(true);
      const dado=await anexarFotoLavadora({osId,cicloPrimeiroId:cicloId,categoria,item,fase,arquivo:file});
      onUploaded(dado);
-   }catch(err){onUploaded(null,err.message)}finally{setArquivoCarregando(false);e.target.value="";}
+   }catch(err){onUploaded(null,err.message)}finally{setArquivoCarregando(false);e.target.value="";onCameraReturn?.();}
  }
  return <label className="flex min-h-16 cursor-pointer flex-wrap items-center gap-3 rounded-xl border border-dashed border-violet-200 bg-white p-3">
    <Camera className="h-5 w-5 text-violet-600"/>
@@ -31,11 +65,11 @@ function FotoObrigatoria({osId,cicloId,categoria,item,fase="antes",fotos,onUploa
    </span>
    {url&&<img src={url} alt={"Evidência "+item} className="h-14 w-14 rounded-lg object-cover"/>}
    {arquivoCarregando?<Loader2 className="h-5 w-5 animate-spin text-violet-600"/>:<span className={foto?"text-xs font-bold text-emerald-700":"text-xs text-violet-700"}>{foto?"Registrada":"Adicionar"}</span>}
-   <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="sr-only" disabled={disabled||arquivoCarregando} onChange={upload}/>
+   <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="sr-only" disabled={disabled||arquivoCarregando} onClick={onCameraOpen} onChange={upload}/>
  </label>;
 }
 
-export default function IntercicloLavadorasPanel({ciclo,operador,saving,onIniciar,onOxidacao}) {
+export default function IntercicloLavadorasPanel({ciclo,operador,usuarioId,saving,onIniciar,onOxidacao}) {
  const [checklist,setChecklist]=useState({});
  const [vazamento,setVazamento]=useState("");
  const [lgAplicada,setLgAplicada]=useState("");
@@ -47,25 +81,65 @@ export default function IntercicloLavadorasPanel({ciclo,operador,saving,onInicia
  const [salvo,setSalvo]=useState(false);
  const [erro,setErro]=useState("");
  const [observacoes,setObservacoes]=useState("");
+ const [rascunhoRestaurado,setRascunhoRestaurado]=useState(false);
+ const idRascunho=useMemo(()=>chaveRascunho(ciclo.id,usuarioId),[ciclo.id,usuarioId]);
+ const draftAtualRef=useRef(null);
  const lg=/^LG(?:\b|\W)/i.test(ciclo?.os?.marca||"");
  useEffect(()=>{
   let vivo=true;
-  setCarregando(true);setErro("");setSalvo(false);setObservacoes("");setChecklist({});setVazamento("");setLgAplicada("");setEstetica("");setDefeitos([]);setFotos([]);
+  setCarregando(true);setErro("");setSalvo(false);setRascunhoRestaurado(false);
+  setObservacoes("");setChecklist({});setVazamento("");setLgAplicada("");setEstetica("");setDefeitos([]);setFotos([]);
   buscarIntercicloLavadora(ciclo.id).then(({check,fotos:itens})=>{
    if(!vivo)return;
-   if(check){
-    setChecklist(check.checklist||{});
-    setObservacoes(check.observacoes_preventiva||"");
-    setVazamento(check.vazamento===true?"sim":check.vazamento===false?"nao":"");
-    setLgAplicada(check.lg_preventiva_aplicada===true?"sim":check.lg_preventiva_aplicada===false?"nao":"");
-    setEstetica(check.estetica_apresenta_defeito?"sim":"nao");
-    setDefeitos(check.defeitos_esteticos||[]);
-    setSalvo(true);
+   const rascunho = lerRascunho(idRascunho);
+   const rascunhoMaisRecente = rascunho && (!check ||
+     rascunho.atualizadoEm > new Date(check.concluido_em || 0).getTime());
+   if(rascunhoMaisRecente) {
+     setChecklist(rascunho.checklist || {});
+     setObservacoes(rascunho.observacoes || "");
+     setVazamento(rascunho.vazamento || "");
+     setLgAplicada(rascunho.lgAplicada || "");
+     setEstetica(rascunho.estetica || "");
+     setDefeitos(rascunho.defeitos || []);
+     setRascunhoRestaurado(true);
+   } else if(check){
+     setChecklist(check.checklist||{});
+     setObservacoes(check.observacoes_preventiva||"");
+     setVazamento(check.vazamento===true?"sim":check.vazamento===false?"nao":"");
+     setLgAplicada(check.lg_preventiva_aplicada===true?"sim":check.lg_preventiva_aplicada===false?"nao":"");
+     setEstetica(check.estetica_apresenta_defeito?"sim":"nao");
+     setDefeitos(check.defeitos_esteticos||[]);
+     setSalvo(true);
    }
    setFotos(itens);
-  }).catch(e=>{if(vivo)setErro(e.message)}).finally(()=>{if(vivo)setCarregando(false)});
+  }).catch(e=>{
+    if(!vivo)return;
+    // Mesmo que a rede falhe ao retomar, recuperar o preenchimento local.
+    const rascunho=lerRascunho(idRascunho);
+    if(rascunho){
+      setChecklist(rascunho.checklist || {});
+      setObservacoes(rascunho.observacoes || "");
+      setVazamento(rascunho.vazamento || "");
+      setLgAplicada(rascunho.lgAplicada || "");
+      setEstetica(rascunho.estetica || "");
+      setDefeitos(rascunho.defeitos || []);
+      setRascunhoRestaurado(true);
+    }
+    setErro("Não foi possível sincronizar as fotos: " + e.message);
+  }).finally(()=>{if(vivo){setCarregando(false);restaurarRolagem(idRascunho)}});
   return ()=>{vivo=false};
- },[ciclo.id]);
+ },[ciclo.id,idRascunho]);
+ // Salvar imediatamente ao alterar um campo, sem depender de clicar em "Salvar".
+ const dadosRascunho={checklist,vazamento,lgAplicada,estetica,defeitos,observacoes};
+ draftAtualRef.current=dadosRascunho;
+ useEffect(()=>{
+   if(!carregando) salvarRascunho(idRascunho,draftAtualRef.current);
+ },[idRascunho,carregando,checklist,vazamento,lgAplicada,estetica,defeitos,observacoes]);
+ const antesDaCamera=useCallback(()=>{
+   salvarRascunho(idRascunho,draftAtualRef.current);
+   try {window.sessionStorage.setItem(chaveScroll(idRascunho),String(window.scrollY))} catch{}
+ },[idRascunho]);
+ const depoisDaCamera=useCallback(()=>restaurarRolagem(idRascunho),[idRascunho]);
  const fotoExiste=(categoria,item,fase="antes")=>fotos.some(f=>f.categoria===categoria&&f.item===item&&f.fase===fase);
  const pendentes=ITENS_PREVENTIVA_LAVADORA.filter(i=>!["ok","nao_ok"].includes(checklist[i.chave]));
  const faltandoFoto=ITENS_PREVENTIVA_LAVADORA.filter(i=>i.foto&&!fotoExiste("preventiva",i.label==="Pés niveladores"?"PÉ NIVELADOR":"OXIDAÇÃO"));
@@ -87,10 +161,10 @@ export default function IntercicloLavadorasPanel({ciclo,operador,saving,onInicia
      estetica_apresenta_defeito:estetica==="sim",defeitos_esteticos:defeitos,operador,
      observacoes_preventiva:observacoes
    });
-   setSalvo(true);return true;
+   setSalvo(true);setRascunhoRestaurado(false);return true;
   }catch(e){setErro(e.message);return false}finally{setOcupado(false)}
  };
- const fotoProps={osId:ciclo.os_id,cicloId:ciclo.id,fotos,disabled:saving||ocupado,
+ const fotoProps={osId:ciclo.os_id,cicloId:ciclo.id,fotos,disabled:saving||ocupado,onCameraOpen:antesDaCamera,onCameraReturn:depoisDaCamera,
   onUploaded:(d,err)=>{if(err)setErro(err);if(d){setFotos(p=>[d,...p]);alterado();}}};
  if(carregando)return <section className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Carregando checklist entre ciclos...</section>;
  return <section id="checklist-preventiva" className="rounded-2xl border border-violet-200 bg-white p-4 shadow-sm md:p-6">
@@ -99,6 +173,7 @@ export default function IntercicloLavadorasPanel({ciclo,operador,saving,onInicia
    <div className="flex-1"><h2 className="text-base font-bold text-slate-900">Preventiva obrigatória entre ciclos · OS {ciclo.os?.numero_os}</h2>
      <p className="mt-1 text-xs text-slate-500">Conclua a conferência física, registre as fotos e verifique defeitos estéticos antes do ciclo 2.</p></div>
    <span className={`rounded-lg px-3 py-1 text-xs font-bold ${salvo?"bg-emerald-100 text-emerald-800":"bg-amber-100 text-amber-800"}`}>{salvo?"Checklist registrado":"Pendente"}</span>
+   <span className="rounded-lg bg-slate-100 px-3 py-1 text-[10px] font-semibold text-slate-600">{rascunhoRestaurado?"Rascunho recuperado":"Rascunho protegido automaticamente"}</span>
   </div>
   <div className="mt-4 grid gap-3 md:grid-cols-2">
    {ITENS_PREVENTIVA_LAVADORA.map(item=><div key={item.chave} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
