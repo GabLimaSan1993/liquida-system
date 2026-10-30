@@ -18,8 +18,8 @@ import { useAuth } from "../../AuthContext.jsx";
 const AREAS = [
   { nome: "Upload diário de Aging", descricao: "Importar o relatório diário de OSs da Linha Branca.", icon: Upload, rota: "/v2/linha-branca/uploads", disponivel: true },
   {
-    nome: "Gestão da Produção",
-    descricao: "Produção por técnico, marca, modelo e fornecedor, peças e SLA.",
+    nome: "Gestão por Departamento e Produção",
+    descricao: "Localize cada OS por setor em tempo real, filtre filas, aging, responsáveis e acesse os indicadores de produção.",
     icon: BarChart3,
     rota: "/v2/linha-branca/gestao/producao",
     disponivel: true,
