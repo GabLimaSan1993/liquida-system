@@ -27,7 +27,7 @@ export async function detalheOSLinhaBranca(osId,signal){
 
 /** KPIs de produtividade agrupados no banco: nunca baixar milhares de eventos para processar no navegador. */
 export async function buscarProdutividadeLinhaBranca({inicio,fim,area="",departamento="",tecnico="",agrupar="dia",signal}){
- let query=supabase.rpc("linha_branca_produtividade_periodo",{
+ let query=supabase.rpc("linha_branca_produtividade_liquida",{
   p_inicio:inicio,p_fim:fim,p_area:area||null,p_departamento:departamento||null,
   p_tecnico:tecnico||null,p_agrupar:agrupar
  });
