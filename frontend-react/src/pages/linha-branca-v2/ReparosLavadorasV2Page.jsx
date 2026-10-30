@@ -22,6 +22,7 @@ import {
   fetchOsParaReparo,
   fetchTriagemDaOs,
   osAguardandoCmp,
+  osAguardandoPeca,
   salvarExecucaoReparo,
 } from "../../services/reparoLinhaBrancaService.js";
 import {
@@ -78,7 +79,8 @@ export default function ReparosLavadorasV2Page() {
   const areasPendentes = useMemo(() => {
     if (!selectedOs) return [];
     const concluidas = selectedOs.areas_concluidas || [];
-    return (selectedOs.areas_reparo || []).filter((area) => AREAS.includes(area) && !concluidas.includes(area));
+    const areas = selectedOs.__especialidade_indefinida ? AREAS : (selectedOs.areas_reparo || []);
+    return areas.filter((area) => AREAS.includes(area) && !concluidas.includes(area));
   }, [selectedOs]);
 
   const configArea = areaAtual ? AREA_CONFIG[areaAtual] : null;
@@ -88,9 +90,15 @@ export default function ReparosLavadorasV2Page() {
       const nivel = nivelServicoLavadora(areaAtual, servico);
       return Math.max(max, nivel ? Number(nivel.slice(1)) : 3);
     }, 0);
-    return "N" + Math.max(Number(nivelDaOs?.slice(1) || 3), maior);
-  }, [execucao.servicos, areaAtual, nivelDaOs]);
-  const podeExecutar = selectedOs ? tecnicoPodeAtuarOsLavadora(profile, selectedOs) && tecnicoHabilitadoLavadora(profile, nivelDaExecucao) : false;
+    const nivelBase = selectedOs?.__especialidade_indefinida ? 1 : Number(nivelDaOs?.slice(1) || 3);
+    return "N" + Math.max(nivelBase, maior);
+  }, [execucao.servicos, areaAtual, nivelDaOs, selectedOs?.__especialidade_indefinida]);
+  const podeExecutar = selectedOs
+    ? (selectedOs.__especialidade_indefinida
+        ? !selectedOs.retorno_pos_reparo_exclusivo_carlos
+        : tecnicoPodeAtuarOsLavadora(profile, selectedOs))
+      && tecnicoHabilitadoLavadora(profile, nivelDaExecucao)
+    : false;
   const verTodos = profile?.is_master === true;
 
   const osFiltradas = useMemo(() => {
@@ -109,24 +117,35 @@ export default function ReparosLavadorasV2Page() {
       ]);
       const mapa = new Map();
       resultados.flat().forEach((os) => mapa.set(os.id, os));
-      const filtradas = await Promise.all([...mapa.values()].map(async (os) => {
-        const aguardandoCmp = osAguardandoCmp(os);
-        const cmpDeLavadora = aguardandoCmp && Boolean(identificarTipoLavadora(os.categoria));
-        if (aguardandoCmp && !cmpDeLavadora) return null;
-
-        const areas = Array.isArray(os.areas_reparo) && os.areas_reparo.length
-          ? os.areas_reparo
-          : cmpDeLavadora ? ["Reparo Mecânico"] : [];
-        try {
-          const triagem = await fetchTriagemDaOs(os.id);
-          if (triagem?.tipo_produto !== "Lavadoras" && !cmpDeLavadora) return null;
-          return { ...os, areas_reparo: areas, __triagem: triagem };
-        } catch {
-          if (!cmpDeLavadora) return null;
-          return { ...os, areas_reparo: areas, __triagem: null };
-        }
-      }));
-      setOsList(filtradas.filter(Boolean).filter(os => verTodos || tecnicoPodeAtuarOsLavadora(profile,os)));
+      // Somente as OSs da família de lavadoras entram nesta tela.
+      const candidatos = [...mapa.values()].filter((os) => {
+        const pendente = osAguardandoPeca(os) || osAguardandoCmp(os);
+        return !pendente || Boolean(identificarTipoLavadora(os.categoria));
+      });
+      // Busca as triagens em lote (OSs antigas aguardando peça não possuem triagem).
+      const { data: triagens, error: triagensError } = candidatos.length
+        ? await import("../../lib/supabase.js").then(({ supabase }) => supabase
+            .from("linha_branca_triagens")
+            .select("*")
+            .in("os_id", candidatos.map(os => os.id))
+            .order("created_at", { ascending: false }))
+        : { data: [], error: null };
+      if (triagensError) throw triagensError;
+      const porOs = new Map();
+      (triagens || []).forEach((triagem) => {
+        if (!porOs.has(String(triagem.os_id))) porOs.set(String(triagem.os_id), triagem);
+      });
+      const filtradas = candidatos.map((os) => {
+        const pendente = osAguardandoPeca(os) || osAguardandoCmp(os);
+        const semArea = !(os.areas_reparo || []).length;
+        const deLavadora = Boolean(identificarTipoLavadora(os.categoria));
+        const triagem = porOs.get(String(os.id)) || null;
+        if (triagem?.tipo_produto !== "Lavadoras" && !(pendente && deLavadora)) return null;
+        return { ...os, __especialidade_indefinida: pendente && semArea, __triagem: triagem };
+      });
+      setOsList(filtradas.filter(Boolean).filter(os =>
+        verTodos || os.__especialidade_indefinida || tecnicoPodeAtuarOsLavadora(profile, os)
+      ));
     } catch (error) {
       setMensagem(`Erro ao carregar OS: ${error.message}`);
     } finally {
@@ -158,7 +177,8 @@ export default function ReparosLavadorasV2Page() {
 
   function selecionarOs(os) {
     const concluidas = os.areas_concluidas || [];
-    const pendentes = (os.areas_reparo || []).filter((area) => AREAS.includes(area) && !concluidas.includes(area));
+    const areas = os.__especialidade_indefinida ? AREAS : (os.areas_reparo || []);
+    const pendentes = areas.filter((area) => AREAS.includes(area) && !concluidas.includes(area));
     setSelectedOsId(String(os.id));
     setAreaAtual(pendentes[0] || "");
     setBusca("");
@@ -203,7 +223,7 @@ export default function ReparosLavadorasV2Page() {
     try {
       setSaving(true);
       const numeroOs = selectedOs.numero_os;
-      const haviaMaisAreas = areasPendentes.length > 1;
+      const haviaMaisAreas = !selectedOs.__especialidade_indefinida && areasPendentes.length > 1;
       await salvarExecucaoReparo(selectedOs, {
         tecnico,
         dt_inicio: execucao.dt_inicio,
@@ -268,12 +288,12 @@ export default function ReparosLavadorasV2Page() {
                 </div>
                 <div className="mt-1 pl-4 text-xs text-slate-600">{os.marca||"—"} {os.modelo||""}</div>
                 {retrabalhoCarlos&&<div className="mt-1.5 pl-4 text-[10px] font-bold text-rose-800">Retorno da bancada · exclusivo Carlos</div>}
-                <div className="mt-1 pl-4 text-[10px] text-slate-500">{(os.areas_reparo||[]).join(" • ")}</div>
+                <div className="mt-1 pl-4 text-[10px] text-slate-500">{os.__especialidade_indefinida ? "Definir especialidade do reparo" : (os.areas_reparo||[]).join(" • ")}</div>
               </button>;
             })}
             {!osFiltradas.length && <p className="rounded-lg bg-slate-50 px-3 py-5 text-center text-xs text-slate-500">Nenhuma OS disponível para este nível e usuário.</p>}
           </div>
-          {selectedOs ? <><div className="mt-4 rounded-xl bg-slate-50 p-4"><div className="flex items-center gap-3"><WashingMachine className="h-6 w-6 text-[#5B35C9]" /><div><div className="flex items-center gap-2"><span className={`h-3 w-3 rounded-full ${VISUAL_NIVEIS_LAVADORAS[nivelDaOs].bolinha}`}/><span className="text-base font-black text-slate-900">{selectedOs.numero_os}</span><span className={`rounded px-2 py-0.5 text-xs font-black ${VISUAL_NIVEIS_LAVADORAS[nivelDaOs].selo}`}>{nivelDaOs}</span>{selectedOs.retorno_pos_reparo_exclusivo_carlos&&<span className="rounded bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-800">Retrabalho · Carlos</span>}</div><div className="text-[10px] text-slate-500">{selectedOs.marca} {selectedOs.modelo}</div></div></div><div className="mt-4 grid grid-cols-2 gap-3"><Info label="Tensão" value={selectedOs.voltagem} /><Info label="Serial" value={selectedOs.serial_number} /><Info label="Status" value={selectedOs.status_atual} /><Info label="Área atual" value={selectedOs.area_destino} /></div></div><button type="button" onClick={limpar} className="mt-3 text-[10px] font-black text-slate-500">Trocar OS</button></> : null}
+          {selectedOs ? <><div className="mt-4 rounded-xl bg-slate-50 p-4"><div className="flex items-center gap-3"><WashingMachine className="h-6 w-6 text-[#5B35C9]" /><div><div className="flex items-center gap-2"><span className={`h-3 w-3 rounded-full ${VISUAL_NIVEIS_LAVADORAS[nivelDaOs].bolinha}`}/><span className="text-base font-black text-slate-900">{selectedOs.numero_os}</span><span className={`rounded px-2 py-0.5 text-xs font-black ${VISUAL_NIVEIS_LAVADORAS[nivelDaOs].selo}`}>{nivelDaOs}</span>{selectedOs.retorno_pos_reparo_exclusivo_carlos&&<span className="rounded bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-800">Retrabalho · Carlos</span>}</div><div className="text-[10px] text-slate-500">{selectedOs.marca} {selectedOs.modelo}</div></div></div><div className="mt-4 grid grid-cols-2 gap-3"><Info label="Tensão" value={selectedOs.voltagem} /><Info label="Serial" value={selectedOs.serial_number} /><Info label="Status" value={selectedOs.status_atual} /><Info label="Área atual" value={selectedOs.__especialidade_indefinida ? "Especialidade a definir" : selectedOs.area_destino} /></div></div><button type="button" onClick={limpar} className="mt-3 text-[10px] font-black text-slate-500">Trocar OS</button></> : null}
         </div>
 
         <div className="space-y-5">
@@ -281,7 +301,8 @@ export default function ReparosLavadorasV2Page() {
 
           <div className={`rounded-2xl border p-5 ${selectedOs ? VISUAL_NIVEIS_LAVADORAS[nivelDaOs].card : "border-slate-200 bg-white opacity-40 pointer-events-none"}`}>
             {selectedOs && <p className="mb-3 text-xs font-bold text-slate-700">Complexidade: {nivelDaExecucao} · {selectedOs.retorno_pos_reparo_exclusivo_carlos ? "Reprovado no pós-reparo: revisão exclusiva de Carlos Dias" : podeExecutar ? "Técnico habilitado" : "Execução restrita ao técnico habilitado."}</p>}
-            <div className="flex flex-wrap gap-2">{areasPendentes.map((area) => <button key={area} type="button" onClick={() => { setAreaAtual(area); setExecucao((a) => ({ ...a, servicos: [] })); }} className={`rounded-xl px-4 py-2 text-xs font-black ${areaAtual === area ? "bg-[#5B35C9] text-white" : "bg-slate-100 text-slate-600"}`}>{area}</button>)}</div>{configArea ? <div className="mt-5"><div className="text-sm font-black text-slate-900">Serviços — {configArea.titulo}</div><div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{configArea.lista.map((item) => <label key={item} className={`flex cursor-pointer items-center gap-2 rounded-xl border p-3 text-[10px] font-bold ${VISUAL_NIVEIS_LAVADORAS[nivelServicoLavadora(areaAtual,item)]?.card || "border-slate-200 bg-slate-50"}`}>
+            {selectedOs?.__especialidade_indefinida && <p className="mb-3 text-xs font-bold text-amber-800">OS importada aguardando peça: selecione a especialidade conforme o reparo realizado. A escolha será registrada na conclusão.</p>}
+             <div className="flex flex-wrap gap-2">{areasPendentes.map((area) => <button key={area} type="button" onClick={() => { setAreaAtual(area); setExecucao((a) => ({ ...a, servicos: [] })); }} className={`rounded-xl px-4 py-2 text-xs font-black ${areaAtual === area ? "bg-[#5B35C9] text-white" : "bg-slate-100 text-slate-600"}`}>{area}</button>)}</div>{configArea ? <div className="mt-5"><div className="text-sm font-black text-slate-900">Serviços — {configArea.titulo}</div><div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{configArea.lista.map((item) => <label key={item} className={`flex cursor-pointer items-center gap-2 rounded-xl border p-3 text-[10px] font-bold ${VISUAL_NIVEIS_LAVADORAS[nivelServicoLavadora(areaAtual,item)]?.card || "border-slate-200 bg-slate-50"}`}>
               <input type="checkbox" checked={execucao.servicos.includes(item)} onChange={() => toggleServico(item)} />
               <span className="flex-1">{item}</span><span className="font-black">{nivelServicoLavadora(areaAtual,item)||"A avaliar"}</span>
             </label>)}</div></div> : null}
