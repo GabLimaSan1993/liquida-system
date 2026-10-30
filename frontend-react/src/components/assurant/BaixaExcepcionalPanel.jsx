@@ -231,17 +231,20 @@ export default function BaixaExcepcionalPanel() {
         <button type="button" className="rounded-lg border px-3 py-2 text-xs" disabled={busy || offset+50>=total} onClick={()=>setOffset(v=>v+50)}>Próxima</button>
       </div>
     </div>
-    {revisao && <form onSubmit={decidir} className="space-y-3 rounded-xl border border-amber-300 bg-amber-50 p-4">
-      <h3 className="font-bold">{revisao.acao === "aprovar" ? "Aprovar baixa física / administrativa" : "Rejeitar baixa"}</h3>
+    {revisao && <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/60 p-3 sm:p-6" role="presentation">
+      <form role="dialog" aria-modal="true" aria-labelledby="baixa-excepcional-titulo-decisao" onSubmit={decidir}
+        className="max-h-[90vh] w-full max-w-2xl space-y-4 overflow-y-auto rounded-2xl border border-violet-200 bg-white p-5 shadow-2xl sm:p-6">
+      <h3 id="baixa-excepcional-titulo-decisao" className="text-lg font-bold text-slate-900">{revisao.acao === "aprovar" ? "Aprovar baixa física / administrativa" : "Rejeitar baixa"}</h3>
+      {erro && <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{erro}</p>}
       <p className="text-sm">Pedido: <b>{revisao.item.pedido_referencia || "—"}</b> · IMEI/serial: <b>{revisao.item.identificador}</b> · NF: <b>{revisao.item.numero_nf || "—"}</b>. Confira o XML e o motivo antes da decisão.</p>
       <button type="button" className="text-sm font-bold text-violet-700 underline" onClick={()=>abrirXML(revisao.item.xml_path)}>Conferir XML</button>
       <p className="text-sm">{revisao.item.justificativa}</p>
-      <textarea required minLength={10} maxLength={2000} className={input} value={parecer}
+      <textarea autoFocus required minLength={10} maxLength={2000} className={input} value={parecer}
         onChange={e=>setParecer(e.target.value)} placeholder="Parecer obrigatório do aprovador"/>
       <div className="flex gap-3">
-        <button className={button} disabled={busy || parecer.trim().length<10}>Confirmar decisão</button>
-        <button type="button" className="rounded-xl border px-3 py-2 text-xs" onClick={()=>setRevisao(null)}>Voltar</button>
+        <button type="submit" className={button} disabled={busy || parecer.trim().length<10}>{busy ? "Processando..." : revisao.acao==="aprovar" ? "Confirmar aprovação" : "Confirmar rejeição"}</button>
+        <button type="button" className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold" disabled={busy} onClick={()=>{setRevisao(null);setParecer("");setErro("");}}>Cancelar</button>
       </div>
-    </form>}
+    </form></div>}
   </section>;
 }
