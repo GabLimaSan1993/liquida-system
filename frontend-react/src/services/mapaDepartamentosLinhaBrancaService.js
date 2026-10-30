@@ -47,3 +47,17 @@ export async function buscarFluxoLinhaBranca({inicio,fim,area="",departamento=""
  if(error)throw error;
  return data;
 }
+
+/** Drilldown dos reparos concluídos: nível máximo, especialidade e itens efetivamente executados por técnico. */
+export async function buscarReparosDrilldownLinhaBranca({
+ inicio,fim,area="",tecnico="",nivel="",tipo="",signal
+}){
+ let q=supabase.rpc("linha_branca_reparos_drilldown",{
+  p_inicio:inicio,p_fim:fim,p_area:area||null,p_tecnico:tecnico||null,
+  p_nivel:nivel||null,p_tipo:tipo||null
+ });
+ if(signal)q=q.abortSignal(signal);
+ const {data,error}=await q;
+ if(error)throw error;
+ return data;
+}
