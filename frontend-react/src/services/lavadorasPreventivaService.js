@@ -58,6 +58,7 @@ export async function salvarIntercicloLavadora(ciclo,payload){
     estetica_apresenta_defeito:payload.estetica_apresenta_defeito,
     defeitos_esteticos:payload.estetica_apresenta_defeito?payload.defeitos_esteticos:[],
     operador:payload.operador,
+    observacoes_preventiva:payload.observacoes_preventiva || null,
     concluido_em:new Date().toISOString(),
   };
   const {data,error}=await supabase.from("linha_branca_lavadora_interciclo")
