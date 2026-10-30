@@ -390,9 +390,7 @@ async function criarCiclo({
   if (!posicaoEscolhida) throw new Error("Não há posição de bancada disponível.");
   if (setOcupadas.has(posicaoEscolhida)) throw new Error(`A posição ${posicaoEscolhida} já está ocupada.`);
 
-  const duracao = duracaoAlvo || (etapaTeste === "triagem"
-    ? duracaoTesteLavadora(validacaoProduto?.tipo?.fisico || os.categoria)
-    : DURACAO_CICLO_LAVADORA);
+  const duracao = duracaoAlvo || duracaoTesteLavadora(validacaoProduto?.tipo?.fisico || os.categoria);
   const instante = nowIso();
   const tentativa = await proximaTentativa(os.id, etapaTeste);
   const { data, error } = await supabase
@@ -493,10 +491,19 @@ export async function iniciarSegundoCicloLavadora(cicloAnterior, operador) {
 
 export async function iniciarCicloPosReparo({ os, operador, posicao }) {
   if (!os?.id) throw new Error("OS inválida para iniciar o teste pós-reparo.");
+  const { data: triagemAnterior, error: tipoError } = await supabase
+    .from("linha_branca_lavadora_ciclos")
+    .select("validacao_produto,duracao_alvo_segundos")
+    .eq("os_id",os.id).eq("etapa_teste","triagem")
+    .order("created_at",{ascending:false}).limit(1).maybeSingle();
+  if (tipoError) throw tipoError;
+  const tipo = triagemAnterior?.validacao_produto?.tipo?.fisico || os.categoria;
+  const duracaoAlvo = duracaoTesteLavadora(tipo);
   const ciclo = await criarCiclo({
     os,
     operador,
-    validacaoProduto: {},
+    validacaoProduto: triagemAnterior?.validacao_produto || {},
+    duracaoAlvo,
     posicao,
     etapaTeste: "pos_reparo",
     numeroCiclo: 1,
