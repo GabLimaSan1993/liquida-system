@@ -46,14 +46,16 @@ export default function IntercicloLavadorasPanel({ciclo,operador,saving,onInicia
  const [ocupado,setOcupado]=useState(false);
  const [salvo,setSalvo]=useState(false);
  const [erro,setErro]=useState("");
+ const [observacoes,setObservacoes]=useState("");
  const lg=/^LG(?:\b|\W)/i.test(ciclo?.os?.marca||"");
  useEffect(()=>{
   let vivo=true;
-  setCarregando(true);setErro("");setSalvo(false);setChecklist({});setVazamento("");setLgAplicada("");setEstetica("");setDefeitos([]);setFotos([]);
+  setCarregando(true);setErro("");setSalvo(false);setObservacoes("");setChecklist({});setVazamento("");setLgAplicada("");setEstetica("");setDefeitos([]);setFotos([]);
   buscarIntercicloLavadora(ciclo.id).then(({check,fotos:itens})=>{
    if(!vivo)return;
    if(check){
     setChecklist(check.checklist||{});
+    setObservacoes(check.observacoes_preventiva||"");
     setVazamento(check.vazamento===true?"sim":check.vazamento===false?"nao":"");
     setLgAplicada(check.lg_preventiva_aplicada===true?"sim":check.lg_preventiva_aplicada===false?"nao":"");
     setEstetica(check.estetica_apresenta_defeito?"sim":"nao");
@@ -72,7 +74,8 @@ export default function IntercicloLavadorasPanel({ciclo,operador,saving,onInicia
  const naoConforme=ITENS_PREVENTIVA_LAVADORA.some(i=>i.chave!=="oxidacao"&&checklist[i.chave]==="nao_ok") || vazamento==="sim";
  const pronto=pendentes.length===0 && faltandoFoto.length===0 && fotosEsteticasPendentes.length===0
   && vazamento!=="" && estetica!=="" && (!lg || lgAplicada!=="")
-  && (estetica!=="sim"||defeitos.length>0);
+  && (estetica!=="sim"||defeitos.length>0)
+  && (!lg || lgAplicada!=="nao" || Boolean(observacoes.trim()));
  const alterado=()=>setSalvo(false);
  const selectClass="mt-1.5 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700";
  const salvar=async()=>{
@@ -81,7 +84,8 @@ export default function IntercicloLavadorasPanel({ciclo,operador,saving,onInicia
    setOcupado(true);setErro("");
    await salvarIntercicloLavadora(ciclo,{
      checklist,vazamento:vazamento==="sim",lg_preventiva_aplicada:lg?lgAplicada==="sim":null,
-     estetica_apresenta_defeito:estetica==="sim",defeitos_esteticos:defeitos,operador
+     estetica_apresenta_defeito:estetica==="sim",defeitos_esteticos:defeitos,operador,
+     observacoes_preventiva:observacoes
    });
    setSalvo(true);return true;
   }catch(e){setErro(e.message);return false}finally{setOcupado(false)}
@@ -116,6 +120,9 @@ export default function IntercicloLavadorasPanel({ciclo,operador,saving,onInicia
     </select>
    </label>}
   </div>
+  <label className="mt-3 block text-xs font-bold text-slate-800">Observações da preventiva {lg&&lgAplicada==="nao"?"(obrigatórias para LG sem aplicação)":"(opcionais)"}
+   <textarea rows={2} value={observacoes} onChange={e=>{setObservacoes(e.target.value);alterado()}} className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs" placeholder="Registrar correções realizadas, motivos e particularidades da máquina..."/>
+  </label>
   <div className="mt-3 grid gap-3 md:grid-cols-2">
    <FotoObrigatoria {...fotoProps} categoria="preventiva" item="PÉ NIVELADOR"/>
    <FotoObrigatoria {...fotoProps} categoria="preventiva" item="OXIDAÇÃO"/>
