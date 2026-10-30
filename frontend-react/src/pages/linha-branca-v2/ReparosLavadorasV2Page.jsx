@@ -29,7 +29,7 @@ import {
 } from "../../services/linhaBrancaService.js";
 import { fetchHistoricoLavadora } from "../../services/lavadorasTriagemService.js";
 import { identificarTipoLavadora } from "../../services/lavadorasConferencia.js";
-import { classificarTriagemLavadora, nivelEfetivoLavadora, nivelServicoLavadora, tecnicoHabilitadoLavadora, VISUAL_NIVEIS_LAVADORAS } from "../../services/reparosLavadorasNiveis.js";
+import { classificarTriagemLavadora, nivelEfetivoLavadora, nivelServicoLavadora, tecnicoHabilitadoLavadora, tecnicoPodeAtuarOsLavadora, VISUAL_NIVEIS_LAVADORAS } from "../../services/reparosLavadorasNiveis.js";
 
 const AREA_CONFIG = {
   "Reparo Mecânico": { titulo: "Mecânico", lista: REPAROS_MECANICOS_LAVADORAS },
@@ -87,7 +87,7 @@ export default function ReparosLavadorasV2Page() {
     }, 0);
     return "N" + Math.max(Number(nivelDaOs?.slice(1) || 3), maior);
   }, [execucao.servicos, areaAtual, nivelDaOs]);
-  const podeExecutar = selectedOs ? tecnicoHabilitadoLavadora(profile, nivelDaExecucao) : false;
+  const podeExecutar = selectedOs ? tecnicoPodeAtuarOsLavadora(profile, selectedOs) && tecnicoHabilitadoLavadora(profile, nivelDaExecucao) : false;
   const verTodos = profile?.is_master === true;
 
   const osFiltradas = useMemo(() => {
@@ -123,7 +123,7 @@ export default function ReparosLavadorasV2Page() {
           return { ...os, areas_reparo: areas, __triagem: null };
         }
       }));
-      setOsList(filtradas.filter(Boolean).filter(os => verTodos || tecnicoHabilitadoLavadora(profile,nivelEfetivoLavadora(os))));
+      setOsList(filtradas.filter(Boolean).filter(os => verTodos || tecnicoPodeAtuarOsLavadora(profile,os)));
     } catch (error) {
       setMensagem(`Erro ao carregar OS: ${error.message}`);
     } finally {
@@ -190,7 +190,7 @@ export default function ReparosLavadorasV2Page() {
     if (!selectedOs || !areaAtual || !execucao.diagnostico_final.trim() || !execucao.servicos.length) {
       return setMensagem("Informe o diagnóstico e selecione ao menos um serviço executado.");
     }
-    if (!podeExecutar) return setMensagem("Nível N3 exclusivo de Carlos Dias; N1/N2 disponíveis para Carlos, Kaua e Alexandre.");
+    if (!podeExecutar) return setMensagem(selectedOs?.retorno_pos_reparo_exclusivo_carlos ? "Retorno reprovado na bancada: somente Carlos Dias pode refazer este reparo." : "Nível N3 exclusivo de Carlos Dias; N1/N2 disponíveis para Carlos, Kaua e Alexandre.");
     try {
       setSaving(true);
       const numeroOs = selectedOs.numero_os;
@@ -218,7 +218,7 @@ export default function ReparosLavadorasV2Page() {
 
   async function condenar() {
     if (!selectedOs) return;
-    if (!tecnicoHabilitadoLavadora(profile,nivelDaOs)) return setMensagem("Técnico sem habilitação para esta OS.");
+    if (!tecnicoPodeAtuarOsLavadora(profile,selectedOs)) return setMensagem("Esta OS retornou da bancada e está exclusiva para Carlos Dias.");
     if (!execucao.motivoCondenacao.trim()) return setMensagem("Informe a justificativa da condenação / Scrap.");
     try {
       setSaving(true);
@@ -249,6 +249,7 @@ export default function ReparosLavadorasV2Page() {
             {osFiltradas.map(os=>{
               const nivel=nivelEfetivoLavadora(os), estilo=VISUAL_NIVEIS_LAVADORAS[nivel];
               const pendente=classificarTriagemLavadora(os.__triagem).pendente;
+              const retrabalhoCarlos=os.retorno_pos_reparo_exclusivo_carlos===true;
               return <button type="button" key={os.id} onClick={()=>selecionarOs(os)}
                 className={`w-full rounded-xl border p-3 text-left transition-colors ${estilo.card} ${String(os.id)===selectedOsId?"ring-2 ring-violet-500":""}`}>
                 <div className="flex items-center gap-2">
@@ -257,19 +258,20 @@ export default function ReparosLavadorasV2Page() {
                   <span className={`ml-auto rounded-md px-2 py-0.5 text-[10px] font-black ${estilo.selo}`}>{pendente?"A avaliar / N3":nivel}</span>
                 </div>
                 <div className="mt-1 pl-4 text-xs text-slate-600">{os.marca||"—"} {os.modelo||""}</div>
+                {retrabalhoCarlos&&<div className="mt-1.5 pl-4 text-[10px] font-bold text-rose-800">Retorno da bancada · exclusivo Carlos</div>}
                 <div className="mt-1 pl-4 text-[10px] text-slate-500">{(os.areas_reparo||[]).join(" • ")}</div>
               </button>;
             })}
             {!osFiltradas.length && <p className="rounded-lg bg-slate-50 px-3 py-5 text-center text-xs text-slate-500">Nenhuma OS disponível para este nível e usuário.</p>}
           </div>
-          {selectedOs ? <><div className="mt-4 rounded-xl bg-slate-50 p-4"><div className="flex items-center gap-3"><WashingMachine className="h-6 w-6 text-[#5B35C9]" /><div><div className="flex items-center gap-2"><span className={`h-3 w-3 rounded-full ${VISUAL_NIVEIS_LAVADORAS[nivelDaOs].bolinha}`}/><span className="text-base font-black text-slate-900">{selectedOs.numero_os}</span><span className={`rounded px-2 py-0.5 text-xs font-black ${VISUAL_NIVEIS_LAVADORAS[nivelDaOs].selo}`}>{nivelDaOs}</span></div><div className="text-[10px] text-slate-500">{selectedOs.marca} {selectedOs.modelo}</div></div></div><div className="mt-4 grid grid-cols-2 gap-3"><Info label="Tensão" value={selectedOs.voltagem} /><Info label="Serial" value={selectedOs.serial_number} /><Info label="Status" value={selectedOs.status_atual} /><Info label="Área atual" value={selectedOs.area_destino} /></div></div><button type="button" onClick={limpar} className="mt-3 text-[10px] font-black text-slate-500">Trocar OS</button></> : null}
+          {selectedOs ? <><div className="mt-4 rounded-xl bg-slate-50 p-4"><div className="flex items-center gap-3"><WashingMachine className="h-6 w-6 text-[#5B35C9]" /><div><div className="flex items-center gap-2"><span className={`h-3 w-3 rounded-full ${VISUAL_NIVEIS_LAVADORAS[nivelDaOs].bolinha}`}/><span className="text-base font-black text-slate-900">{selectedOs.numero_os}</span><span className={`rounded px-2 py-0.5 text-xs font-black ${VISUAL_NIVEIS_LAVADORAS[nivelDaOs].selo}`}>{nivelDaOs}</span>{selectedOs.retorno_pos_reparo_exclusivo_carlos&&<span className="rounded bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-800">Retrabalho · Carlos</span>}</div><div className="text-[10px] text-slate-500">{selectedOs.marca} {selectedOs.modelo}</div></div></div><div className="mt-4 grid grid-cols-2 gap-3"><Info label="Tensão" value={selectedOs.voltagem} /><Info label="Serial" value={selectedOs.serial_number} /><Info label="Status" value={selectedOs.status_atual} /><Info label="Área atual" value={selectedOs.area_destino} /></div></div><button type="button" onClick={limpar} className="mt-3 text-[10px] font-black text-slate-500">Trocar OS</button></> : null}
         </div>
 
         <div className="space-y-5">
           {selectedOs ? <div className="rounded-2xl border border-rose-100 bg-rose-50 p-5"><div className="flex items-center gap-2 text-sm font-black text-rose-800"><AlertTriangle className="h-4 w-4" /> Origem da falha / Triagem</div><div className="mt-3 text-sm leading-6 text-rose-700">{selectedOs.__triagem?.observacoes_triagem || "Sem observação de falha na triagem."}</div><div className="mt-4 grid gap-2 md:grid-cols-3"><div className="rounded-xl bg-white p-3"><div className="text-[10px] font-black text-slate-500">Mecânicos solicitados</div><div className="mt-2 text-[10px] text-slate-600">{(selectedOs.__triagem?.reparos_mecanicos || []).join(", ") || "—"}</div></div><div className="rounded-xl bg-white p-3"><div className="text-[10px] font-black text-slate-500">Elétricos solicitados</div><div className="mt-2 text-[10px] text-slate-600">{(selectedOs.__triagem?.reparos_eletricos || []).join(", ") || "—"}</div></div><div className="rounded-xl bg-white p-3"><div className="text-[10px] font-black text-slate-500">Estéticos solicitados</div><div className="mt-2 text-[10px] text-slate-600">{(selectedOs.__triagem?.reparos_esteticos || []).join(", ") || "—"}</div></div></div></div> : null}
 
           <div className={`rounded-2xl border p-5 ${selectedOs ? VISUAL_NIVEIS_LAVADORAS[nivelDaOs].card : "border-slate-200 bg-white opacity-40 pointer-events-none"}`}>
-            {selectedOs && <p className="mb-3 text-xs font-bold text-slate-700">Complexidade: {nivelDaExecucao} · {podeExecutar ? "Técnico habilitado" : "Execução restrita ao técnico habilitado."}</p>}
+            {selectedOs && <p className="mb-3 text-xs font-bold text-slate-700">Complexidade: {nivelDaExecucao} · {selectedOs.retorno_pos_reparo_exclusivo_carlos ? "Reprovado no pós-reparo: revisão exclusiva de Carlos Dias" : podeExecutar ? "Técnico habilitado" : "Execução restrita ao técnico habilitado."}</p>}
             <div className="flex flex-wrap gap-2">{areasPendentes.map((area) => <button key={area} type="button" onClick={() => { setAreaAtual(area); setExecucao((a) => ({ ...a, servicos: [] })); }} className={`rounded-xl px-4 py-2 text-xs font-black ${areaAtual === area ? "bg-[#5B35C9] text-white" : "bg-slate-100 text-slate-600"}`}>{area}</button>)}</div>{configArea ? <div className="mt-5"><div className="text-sm font-black text-slate-900">Serviços — {configArea.titulo}</div><div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{configArea.lista.map((item) => <label key={item} className={`flex cursor-pointer items-center gap-2 rounded-xl border p-3 text-[10px] font-bold ${VISUAL_NIVEIS_LAVADORAS[nivelServicoLavadora(areaAtual,item)]?.card || "border-slate-200 bg-slate-50"}`}>
               <input type="checkbox" checked={execucao.servicos.includes(item)} onChange={() => toggleServico(item)} />
               <span className="flex-1">{item}</span><span className="font-black">{nivelServicoLavadora(areaAtual,item)||"A avaliar"}</span>
@@ -281,7 +283,7 @@ export default function ReparosLavadorasV2Page() {
 
           {historico ? <div className="rounded-2xl border border-slate-200 bg-white p-5"><div className="flex items-center gap-2 text-sm font-black text-slate-900"><History className="h-4 w-4 text-[#5B35C9]" /> Histórico técnico</div><div className="mt-4 grid gap-3 md:grid-cols-4"><div className="rounded-xl bg-violet-50 p-3"><div className="text-[10px] font-black text-violet-500">Retornos de loja</div>{historico.retornos.map((item) => <div key={item.id} className="mt-2 text-[10px] text-violet-700">Retorno #{item.numero_retorno} · {item.motivo} · {item.status}</div>)}</div><div className="rounded-xl bg-slate-50 p-3"><div className="text-[10px] font-black text-slate-400">Ciclos</div>{historico.ciclos.slice(-4).map((item) => <div key={item.id} className="mt-2 text-[10px] text-slate-600">{item.etapa_teste} · ciclo {item.numero_ciclo} · {item.status}</div>)}</div><div className="rounded-xl bg-slate-50 p-3"><div className="text-[10px] font-black text-slate-400">Reparos anteriores</div>{historico.reparos.slice(-4).map((item) => <div key={item.id} className="mt-2 text-[10px] text-slate-600">{item.area_execucao} · {item.servico_executado || item.diagnostico_final}</div>)}</div><div className="rounded-xl bg-slate-50 p-3"><div className="text-[10px] font-black text-slate-400">Laudos</div>{historico.laudos.slice(-4).map((item) => <div key={item.id} className="mt-2 text-[10px] text-slate-600">{item.titulo}</div>)}</div></div></div> : null}
 
-          <div className={`rounded-2xl border border-rose-100 bg-rose-50 p-5 ${!selectedOs ? "pointer-events-none opacity-40" : ""}`}><div className="flex items-center gap-2 text-sm font-black text-rose-800"><Trash2 className="h-4 w-4" /> Condenação / Scrap</div><p className="mt-1 text-[11px] text-rose-600">Use quando o reparo não for tecnicamente ou economicamente viável.</p><textarea rows={3} value={execucao.motivoCondenacao} onChange={(e) => setExecucao((a) => ({ ...a, motivoCondenacao: e.target.value }))} placeholder="Justificativa obrigatória da condenação" className="mt-3 w-full rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm" /><button type="button" onClick={condenar} disabled={saving || !tecnicoHabilitadoLavadora(profile,nivelDaOs) || !execucao.motivoCondenacao.trim()} className="mt-3 flex h-10 items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 text-xs font-black text-white disabled:opacity-40"><Trash2 className="h-4 w-4" /> Condenar e enviar para Scrap</button></div>
+          <div className={`rounded-2xl border border-rose-100 bg-rose-50 p-5 ${!selectedOs ? "pointer-events-none opacity-40" : ""}`}><div className="flex items-center gap-2 text-sm font-black text-rose-800"><Trash2 className="h-4 w-4" /> Condenação / Scrap</div><p className="mt-1 text-[11px] text-rose-600">Use quando o reparo não for tecnicamente ou economicamente viável.</p><textarea rows={3} value={execucao.motivoCondenacao} onChange={(e) => setExecucao((a) => ({ ...a, motivoCondenacao: e.target.value }))} placeholder="Justificativa obrigatória da condenação" className="mt-3 w-full rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm" /><button type="button" onClick={condenar} disabled={saving || !tecnicoPodeAtuarOsLavadora(profile,selectedOs) || !execucao.motivoCondenacao.trim()} className="mt-3 flex h-10 items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 text-xs font-black text-white disabled:opacity-40"><Trash2 className="h-4 w-4" /> Condenar e enviar para Scrap</button></div>
         </div>
       </section>
     </div>
