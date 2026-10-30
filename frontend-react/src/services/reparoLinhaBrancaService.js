@@ -33,26 +33,21 @@ export async function fetchOsAguardandoPeca() {
 // Compatibilidade com as telas que já utilizavam a fila de Aguardando CMP.
 export const fetchOsAguardandoCmp = fetchOsAguardandoPeca;
 
-export async function fetchOsParaReparo(areaExecucao) {
-  const [{ data, error }, aguardandoPeca] = await Promise.all([
-    supabase
-      .from("ordens_servico")
-      .select("*")
-      .contains("areas_reparo", [areaExecucao])
-      .not("areas_concluidas", "cs", `{${areaExecucao}}`)
-      .in("status_atual", ["Triado", "Em reparo", "Aguardando peça"])
-      .order("dt_entrada", { ascending: true }),
-    fetchOsAguardandoPeca(),
-  ]);
-
+export async function fetchOsParaReparo(areaExecucao, incluirPendentesSemArea = true) {
+  const { data, error } = await supabase
+    .from("ordens_servico")
+    .select("*")
+    .contains("areas_reparo", [areaExecucao])
+    .not("areas_concluidas", "cs", `{${areaExecucao}}`)
+    .in("status_atual", ["Triado", "Em reparo", "Aguardando peça"])
+    .order("dt_entrada", { ascending: true });
   if (error) throw error;
+  if (!incluirPendentesSemArea || areaExecucao !== "Reparo Mecânico") return data || [];
+
+  const aguardandoPeca = await fetchOsAguardandoPeca();
   const mapa = new Map((data || []).map((os) => [String(os.id), os]));
-  // OSs históricas sem triagem ou especialidade são abertas no reparo mecânico,
-  // podendo ser reclassificadas pelo técnico antes da conclusão.
-  if (areaExecucao === "Reparo Mecânico") {
-    aguardandoPeca.filter((os) => !(os.areas_reparo || []).length)
-      .forEach((os) => mapa.set(String(os.id), os));
-  }
+  aguardandoPeca.filter((os) => !(os.areas_reparo || []).length)
+    .forEach((os) => mapa.set(String(os.id), os));
   return [...mapa.values()].sort((a, b) =>
     String(a.dt_entrada || "").localeCompare(String(b.dt_entrada || "")));
 }
