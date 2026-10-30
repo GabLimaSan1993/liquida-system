@@ -1,5 +1,5 @@
 import {useEffect,useMemo,useState} from "react";
-import {Activity, AlertTriangle, ArrowRight, Boxes, ChevronLeft, ChevronRight, Clock3, Factory, Loader2, RefreshCw, Search, X} from "lucide-react";
+import {Activity, AlertTriangle, Boxes, ChevronLeft, ChevronRight, Clock3, Factory, Loader2, RefreshCw, Search, X} from "lucide-react";
 import {buscarMapaDepartamentosLinhaBranca,detalheOSLinhaBranca} from "../../services/mapaDepartamentosLinhaBrancaService.js";
 import DetalheOperacionalOS from "../../components/linha-branca/DetalheOperacionalOS.jsx";
 import ProdutividadeDepartamentosLinhaBranca from "./ProdutividadeDepartamentosLinhaBranca.jsx";
@@ -40,7 +40,7 @@ function Indicador({rotulo,valor,descricao,icone:Icon,atencao=false}){
   <p className="mt-1 text-[11px] text-slate-500">{descricao}</p>
  </div>;
 }
-export default function MapaDepartamentosLinhaBranca({onIndicadores}){
+export default function MapaDepartamentosLinhaBranca(){
  const [visao,setVisao]=useState("mapa");
  const [area,setArea]=useState(""),[departamento,setDepartamento]=useState("");
  const [busca,setBusca]=useState(""),[buscaAplicada,setBuscaAplicada]=useState("");
@@ -87,9 +87,7 @@ export default function MapaDepartamentosLinhaBranca({onIndicadores}){
     <button type="button" disabled={carregando} onClick={()=>setAtualizar(n=>n+1)}
       className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 disabled:opacity-50">
       <RefreshCw className={"h-4 w-4 "+(carregando?"animate-spin":"")}/>Atualizar</button>
-    {onIndicadores&&<button type="button" onClick={onIndicadores}
-      className="inline-flex items-center gap-2 rounded-xl bg-violet-700 px-4 py-2.5 text-xs font-bold text-white">
-      <Activity className="h-4 w-4"/>Indicadores históricos<ArrowRight className="h-4 w-4"/></button>}
+
    </div>
   </header>
   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
