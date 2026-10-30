@@ -14,6 +14,8 @@ import {
 import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "../../AuthContext.jsx";
+import FotosEsteticasLavadora from "../../components/linha-branca/FotosEsteticasLavadora.jsx";
+import { conferirEvidenciasEsteticas } from "../../services/lavadorasPreventivaService.js";
 import {
   condenarOs,
   fetchOsAguardandoCmp,
@@ -65,6 +67,7 @@ export default function ReparosLavadorasV2Page() {
   const [historico, setHistorico] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [fotosEsteticasPendentes,setFotosEsteticasPendentes]=useState(false);
   const [mensagem, setMensagem] = useState("");
 
   const selectedOs = useMemo(
@@ -191,6 +194,12 @@ export default function ReparosLavadorasV2Page() {
       return setMensagem("Informe o diagnóstico e selecione ao menos um serviço executado.");
     }
     if (!podeExecutar) return setMensagem(selectedOs?.retorno_pos_reparo_exclusivo_carlos ? "Retorno reprovado na bancada: somente Carlos Dias pode refazer este reparo." : "Nível N3 exclusivo de Carlos Dias; N1/N2 disponíveis para Carlos, Kaua e Alexandre.");
+    if(areaAtual==="Reparo Estético"){
+      try{
+        const fotos=await conferirEvidenciasEsteticas(selectedOs.id);
+        if(fotos.pendentes.length)return setMensagem("Fotos obrigatórias DEPOIS pendentes: "+fotos.pendentes.join(", "));
+      }catch(error){return setMensagem("Não foi possível conferir as evidências: "+error.message)}
+    }
     try {
       setSaving(true);
       const numeroOs = selectedOs.numero_os;
@@ -276,9 +285,12 @@ export default function ReparosLavadorasV2Page() {
               <input type="checkbox" checked={execucao.servicos.includes(item)} onChange={() => toggleServico(item)} />
               <span className="flex-1">{item}</span><span className="font-black">{nivelServicoLavadora(areaAtual,item)||"A avaliar"}</span>
             </label>)}</div></div> : null}
-            <div className="mt-5 grid gap-4 lg:grid-cols-2"><label><span className="text-[11px] font-black text-slate-600">Diagnóstico final *</span><textarea rows={4} value={execucao.diagnostico_final} onChange={(e) => setExecucao((a) => ({ ...a, diagnostico_final: e.target.value }))} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" /></label><label><span className="text-[11px] font-black text-slate-600">Observações</span><textarea rows={4} value={execucao.observacoes} onChange={(e) => setExecucao((a) => ({ ...a, observacoes: e.target.value }))} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" /></label></div>
+            {selectedOs && areaAtual==="Reparo Estético" && <div className="mt-4">
+               <FotosEsteticasLavadora key={selectedOs.id} osId={selectedOs.id} onEstado={setFotosEsteticasPendentes}/>
+             </div>}
+             <div className="mt-5 grid gap-4 lg:grid-cols-2"><label><span className="text-[11px] font-black text-slate-600">Diagnóstico final *</span><textarea rows={4} value={execucao.diagnostico_final} onChange={(e) => setExecucao((a) => ({ ...a, diagnostico_final: e.target.value }))} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" /></label><label><span className="text-[11px] font-black text-slate-600">Observações</span><textarea rows={4} value={execucao.observacoes} onChange={(e) => setExecucao((a) => ({ ...a, observacoes: e.target.value }))} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" /></label></div>
             <div className="mt-4"><div className="text-[11px] font-black text-slate-600">Peças utilizadas</div><div className="mt-2 flex gap-2"><input value={execucao.novaPeca} onChange={(e) => setExecucao((a) => ({ ...a, novaPeca: e.target.value }))} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); adicionarPeca(); } }} placeholder="Digite a peça" className="h-10 flex-1 rounded-xl border border-slate-200 px-3 text-sm" /><button type="button" onClick={adicionarPeca} className="flex h-10 items-center gap-2 rounded-xl border border-slate-200 px-3 text-xs font-black"><PackagePlus className="h-4 w-4" /> Adicionar</button></div><div className="mt-2 flex flex-wrap gap-2">{execucao.pecas.map((peca, index) => <span key={`${peca}-${index}`} className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-bold text-slate-600">{peca}</span>)}</div></div>
-            <button type="button" onClick={salvar} disabled={saving || !selectedOs || !podeExecutar || !areaAtual || !execucao.diagnostico_final.trim() || !execucao.servicos.length} className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#5B35C9] text-xs font-black text-white disabled:bg-slate-300"><Save className="h-4 w-4" /> Salvar reparo desta área</button>
+            <button type="button" onClick={salvar} disabled={saving || !selectedOs || !podeExecutar || (areaAtual==="Reparo Estético" && fotosEsteticasPendentes) || !areaAtual || !execucao.diagnostico_final.trim() || !execucao.servicos.length} className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#5B35C9] text-xs font-black text-white disabled:bg-slate-300"><Save className="h-4 w-4" /> Salvar reparo desta área</button>
           </div>
 
           {historico ? <div className="rounded-2xl border border-slate-200 bg-white p-5"><div className="flex items-center gap-2 text-sm font-black text-slate-900"><History className="h-4 w-4 text-[#5B35C9]" /> Histórico técnico</div><div className="mt-4 grid gap-3 md:grid-cols-4"><div className="rounded-xl bg-violet-50 p-3"><div className="text-[10px] font-black text-violet-500">Retornos de loja</div>{historico.retornos.map((item) => <div key={item.id} className="mt-2 text-[10px] text-violet-700">Retorno #{item.numero_retorno} · {item.motivo} · {item.status}</div>)}</div><div className="rounded-xl bg-slate-50 p-3"><div className="text-[10px] font-black text-slate-400">Ciclos</div>{historico.ciclos.slice(-4).map((item) => <div key={item.id} className="mt-2 text-[10px] text-slate-600">{item.etapa_teste} · ciclo {item.numero_ciclo} · {item.status}</div>)}</div><div className="rounded-xl bg-slate-50 p-3"><div className="text-[10px] font-black text-slate-400">Reparos anteriores</div>{historico.reparos.slice(-4).map((item) => <div key={item.id} className="mt-2 text-[10px] text-slate-600">{item.area_execucao} · {item.servico_executado || item.diagnostico_final}</div>)}</div><div className="rounded-xl bg-slate-50 p-3"><div className="text-[10px] font-black text-slate-400">Laudos</div>{historico.laudos.slice(-4).map((item) => <div key={item.id} className="mt-2 text-[10px] text-slate-600">{item.titulo}</div>)}</div></div></div> : null}
