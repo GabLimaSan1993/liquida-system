@@ -5,21 +5,21 @@ import { laboratorioReparo } from '../../services/laboratorioReparoService.js';
 import { listarDefeitos } from '../../services/triagemFuncionalService.js';
 
 const formatarData = v => v ? new Date(v).toLocaleString('pt-BR', {timeZone:'America/Sao_Paulo'}) : '—';
-const nRom = r => 'LAB-' + (r.tipo === 'envio' ? 'ENV-' : 'DEV-') + String(r.numero || 0).padStart(6,'0');
+const nRom = r => 'LAB-' + (r.tipo === 'envio' ? 'ENV-' : r.tipo === 'importacao' ? 'IMP-' : 'DEV-') + String(r.numero || 0).padStart(6,'0');
 const statusNome = {aguardando_recebimento:'Aguardando recebimento',recebido:'Recebido no laboratório',em_reparo:'Em reparo',concluido:'Reparo concluído',em_devolucao:'Aguardando warehouse',devolvido_warehouse:'Devolvido ao warehouse'};
 const escapar = v => String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const normalizarDefeito = v => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').trim();
 
 function imprimirRomaneio(rom, itens, lote) {
-  const linhas = itens.filter(i => rom.tipo === 'envio' ? i.romaneio_saida_id === rom.id : i.romaneio_retorno_id === rom.id);
+  const linhas = itens.filter(i => rom.tipo !== 'retorno' ? i.romaneio_saida_id === rom.id : i.romaneio_retorno_id === rom.id);
   if (!linhas.length) return;
   const janela = window.open('', '_blank', 'width=1050,height=800');
   if (!janela) { window.alert('Permita a abertura de janelas para imprimir o romaneio.'); return; }
   const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"/><title>${escapar(nRom(rom))}</title>
   <style>body{font:13px Arial,sans-serif;color:#182033;margin:28px}h1{margin:4px 0;font-size:25px}p{margin:5px 0}.meta{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px 0;border-block:2px solid #222}.tag{font-weight:700;letter-spacing:2px;color:#6030a5}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{padding:9px 6px;border:1px solid #ccc;text-align:left;vertical-align:top;font-size:11px}th{background:#eee}.assinaturas{display:flex;gap:50px;margin-top:75px}.assinaturas div{flex:1;text-align:center;border-top:1px solid #222;padding-top:8px}.rodape{margin-top:25px;font-size:11px;color:#555}@media print{button{display:none}}@page{size:A4 landscape;margin:13mm}</style></head><body>
-  <div class="tag">LIQUIDA SYSTEM · CONTROLE INTERNO</div><h1>Romaneio de ${rom.tipo === 'envio' ? 'envio ao laboratório' : 'devolução ao warehouse'}</h1>
-  <div class="meta"><div><p><b>Número:</b> ${escapar(nRom(rom))}</p><p><b>Lote:</b> ${escapar(lote)}</p><p><b>Origem:</b> ${rom.tipo==='envio'?'Warehouse':'Laboratório'}</p></div>
-  <div><p><b>Emissão:</b> ${escapar(formatarData(rom.criado_em))}</p><p><b>Total:</b> ${linhas.length} aparelhos</p><p><b>Destino:</b> ${rom.tipo==='envio'?'Laboratório':'Warehouse'}</p></div></div>
+  <div class="tag">LIQUIDA SYSTEM · CONTROLE INTERNO</div><h1>${rom.tipo==='importacao'?'Relação importada para conferência':rom.tipo === 'envio' ? 'Romaneio de envio ao laboratório' : 'Romaneio de devolução ao warehouse'}</h1>
+  <div class="meta"><div><p><b>Número:</b> ${escapar(nRom(rom))}</p><p><b>Lote:</b> ${escapar(lote)}</p><p><b>Origem:</b> ${rom.tipo==='importacao'?'Planilha — sem comprovação de expedição':rom.tipo==='envio'?'Warehouse':'Laboratório'}</p></div>
+  <div><p><b>Emissão:</b> ${escapar(formatarData(rom.criado_em))}</p><p><b>Total:</b> ${linhas.length} aparelhos</p><p><b>Destino:</b> ${rom.tipo==='importacao'?'Conferência no Laboratório':rom.tipo==='envio'?'Laboratório':'Warehouse'}</p></div></div>
   <table><thead><tr><th>#</th><th>Voucher</th><th>IMEI / Série</th><th>Modelo</th><th>OS vinculada</th><th>Resultado</th></tr></thead><tbody>
   ${linhas.map((i,k)=>`<tr><td>${k+1}</td><td>${escapar(i.voucher)}</td><td>${escapar(i.imei)}</td><td>${escapar(i.modelo)}</td><td>${escapar(i.os_numero || '—')}</td><td>${escapar(i.resultado || '—')}</td></tr>`).join('')}
   </tbody></table><div class="assinaturas"><div>Conferido / saída</div><div>Transportador</div><div>Conferido / recebimento</div></div>
@@ -43,6 +43,7 @@ export default function LaboratorioReparoV2Page() {
   const [sucesso,setSucesso]=useState('');
   const [voucher,setVoucher]=useState('');
   const [os,setOs]=useState('');
+  const [buscaReceb,setBuscaReceb]=useState('');
   const [buscaTec,setBuscaTec]=useState('');
   const [buscaDevolucao,setBuscaDevolucao]=useState('');
   const [edicao,setEdicao]=useState(null);
@@ -92,7 +93,7 @@ export default function LaboratorioReparoV2Page() {
   };
   const itens=detalhe?.itens || [];
   const manifests=detalhe?.romaneios || [];
-  const envio=manifests.find(r=>r.tipo==='envio');
+  const envio=manifests.find(r=>r.tipo==='envio'||r.tipo==='importacao');
   const concluidos=itens.filter(i=>i.status==='concluido'&&!i.romaneio_retorno_id).length;
   const pendentes=itens.filter(i=>i.status==='aguardando_recebimento');
   const prontos=itens.filter(i=>['recebido','em_reparo'].includes(i.status));
@@ -116,7 +117,8 @@ export default function LaboratorioReparoV2Page() {
     const localizado=itens.find(i=>i.voucher?.trim().toUpperCase()===voucher.trim().toUpperCase());
     if(!localizado){setErro('Voucher não pertence ao lote selecionado.');return;}
     if(localizado.status!=='aguardando_recebimento'){setErro('Este voucher já foi recebido.');return;}
-    const retorno=await executar('receber',{p_item_id:localizado.id,p_os:os},'Voucher recebido e OS vinculada.');
+    if(!os.trim()){setErro('Informe a OS após conferir o aparelho.');return;}
+    const retorno=await executar('receber',{p_item_id:localizado.id,p_os:os.trim()},'Voucher recebido fisicamente e OS vinculada.');
     if(retorno){setVoucher('');setOs('');}
   }
 
@@ -164,17 +166,17 @@ export default function LaboratorioReparoV2Page() {
       {sucesso&&<div role="status" className="rounded-xl bg-emerald-50 p-3 text-sm font-semibold text-emerald-700">{sucesso}</div>}
       <div className="grid min-w-0 gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
         <aside className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between"><h2 className="text-sm font-bold text-slate-900">Lotes do picking</h2><span className="rounded-full bg-violet-50 px-2.5 py-1 text-xs font-bold text-violet-700">{painel.envios?.length||0}</span></div>
-          <p className="text-xs leading-5 text-slate-500">O romaneio de envio é gerado automaticamente quando o picking para reparo é concluído.</p>
+          <div className="flex items-center justify-between"><h2 className="text-sm font-bold text-slate-900">Lotes para recebimento</h2><span className="rounded-full bg-violet-50 px-2.5 py-1 text-xs font-bold text-violet-700">{painel.envios?.length||0}</span></div>
+          <p className="text-xs leading-5 text-slate-500">Inclui lotes de picking e importações por planilha. Os importados ainda exigem conferência física e não registram saída do WMS.</p>
           {(painel.envios||[]).map(p=><button key={p.id} onClick={()=>{setErro('');setEdicao(null);atualizar(p.pedido_id);}} className={`w-full rounded-xl border p-3 text-left transition ${pedidoId===p.pedido_id?'border-violet-400 bg-violet-50':'border-slate-200 bg-white hover:bg-slate-50'}`}>
-            <div className="break-all text-sm font-semibold text-slate-800">{p.lote}</div><div className="mt-1 text-xs text-slate-500">{p.total} aparelhos • {p.pendentes} aguardando</div><div className="mt-1 text-[11px] text-slate-400">{formatarData(p.criado_em)}</div></button>)}
+            <div className="break-all text-sm font-semibold text-slate-800">{p.lote}</div><div className="mt-1 text-xs text-slate-500">{p.total} aparelhos • {p.pendentes} aguardando {p.tipo==='importacao'?'· planilha':'· picking'}</div><div className="mt-1 text-[11px] text-slate-400">{formatarData(p.criado_em)}</div></button>)}
           {!loading&&!painel.envios?.length&&<div className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">Nenhum picking de reparo concluído desde a implantação do piloto.</div>}
         </aside>
         <section className="min-w-0 space-y-4">
           {!detalhe?<div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">{loading?'Carregando lotes...':'Conclua um picking de reparo para iniciar o novo fluxo.'}</div>:<>
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="text-base font-bold text-slate-900">{detalhe.pedido?.lote}</h2><p className="mt-1 text-xs text-slate-500">{itens.length} vouchers • Pedido interno {String(pedidoId).slice(0,8)}</p></div>
-                {envio&&<button className={botao+' bg-violet-700 text-white hover:bg-violet-800'} onClick={()=>imprimirRomaneio(envio,itens,detalhe.pedido?.lote)}><Printer size={16}/>Romaneio de envio {nRom(envio)}</button>}
+              <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="text-base font-bold text-slate-900">{detalhe.pedido?.lote}</h2><p className="mt-1 text-xs text-slate-500">{itens.length} vouchers • Pedido interno {String(pedidoId).slice(0,8)} • {detalhe.pedido?.origem_lab==='planilha_laboratorio'?'Importação sem picking registrado':'Lote vinculado ao picking anterior'}</p></div>
+                {envio&&<button className={botao+' bg-violet-700 text-white hover:bg-violet-800'} onClick={()=>imprimirRomaneio(envio,itens,detalhe.pedido?.lote)}><Printer size={16}/>{envio.tipo==='importacao'?'Relação para conferência ':'Romaneio de envio '}{nRom(envio)}</button>}
               </div>
               <div className="mt-4 grid gap-2 sm:grid-cols-4">{[
                 ['Aguardando laboratório',contagem('aguardando_recebimento')],['Recebidos e reparando',contagem('recebido')+contagem('em_reparo')],
@@ -186,14 +188,14 @@ export default function LaboratorioReparoV2Page() {
               ['devolucao','Devolução ao warehouse',Truck],['romaneios','Romaneios',Printer]
               ].map(([k,label,Icon])=><button key={k} onClick={()=>{setAba(k);setEdicao(null);setErro('');}} className={`flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2.5 text-xs font-semibold transition-colors ${aba===k?'bg-violet-700 text-white shadow-sm':'text-slate-600 hover:bg-violet-50 hover:text-violet-700'}`}><Icon size={15}/>{label}</button>)}</div>
             {aba==='recebimento'&&<div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h3 className="text-sm font-bold text-slate-800">Recebimento físico do laboratório</h3><p className="text-sm text-slate-500">Bipe ou digite o voucher separado no picking e informe a OS fornecida pelo laboratório. Não é permitido usar uma OS já vinculada a outro aparelho.</p>
+              <h3 className="text-sm font-bold text-slate-800">Recebimento físico do laboratório</h3><p className="text-sm text-slate-500">Confira fisicamente cada aparelho e seu voucher. A OS da planilha aparece como sugestão, mas o recebimento só é efetivado ao confirmar. A importação não altera o WMS.</p>
               <form onSubmit={receber} className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
-                <label className="text-xs font-bold text-slate-600">Voucher<input autoFocus value={voucher} onChange={e=>setVoucher(e.target.value)} placeholder="Bipar voucher" className={'mt-1 '+campo} required/></label>
+                <label className="text-xs font-bold text-slate-600">Voucher<input autoFocus value={voucher} onChange={e=>{const v=e.target.value;setVoucher(v);const item=itens.find(i=>i.voucher?.trim().toUpperCase()===v.trim().toUpperCase());if(item)setOs(item.os_referencia||item.os_numero||'');}} placeholder="Bipar voucher" className={'mt-1 '+campo} required/></label>
                 <label className="text-xs font-bold text-slate-600">Número da OS (manual)<input value={os} onChange={e=>setOs(e.target.value)} placeholder="Digite a OS" className={'mt-1 '+campo} required maxLength={60}/></label>
                 <button className={botao+' self-end bg-emerald-600 text-white hover:bg-emerald-700'} disabled={busy||!voucher.trim()||!os.trim()}><PackageCheck size={16}/>Confirmar recebimento</button>
               </form>
-              <h4 className="pt-2 text-sm font-bold text-slate-700">Aguardando conferência: {filtros.pendentes.length}</h4>
-              <Tabela itens={itens} filtro={i=>i.status==='aguardando_recebimento'||i.status==='recebido'} />
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-2"><h4 className="text-sm font-bold text-slate-700">Aguardando conferência: {filtros.pendentes.length}</h4><input aria-label="Filtrar voucher, OS ou IMEI do recebimento" className={campo+' max-w-sm'} value={buscaReceb} onChange={e=>setBuscaReceb(e.target.value)} placeholder="Filtrar por voucher, OS ou IMEI"/></div>
+              <Tabela itens={itens} filtro={i=>(i.status==='aguardando_recebimento'||i.status==='recebido') && (!buscaReceb.trim()||[i.voucher,i.imei,i.os_referencia,i.os_numero,i.modelo].some(v=>String(v||'').toUpperCase().includes(buscaReceb.trim().toUpperCase())))} onSelect={i=>{setVoucher(i.voucher||'');setOs(i.os_referencia||i.os_numero||'');setErro('');}} limite={120} />
             </div>}
             {aba==='tecnicos'&&<div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <h3 className="text-sm font-bold text-slate-800">Bancada de reparos</h3>
@@ -263,7 +265,7 @@ export default function LaboratorioReparoV2Page() {
             </div>}
             {aba==='romaneios'&&<div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h3 className="text-sm font-bold text-slate-800">Romaneios do lote</h3>
               {manifests.map(r=><div key={r.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4">
-                <div><p className="font-bold text-slate-900">{nRom(r)} <span className="ml-2 text-xs font-medium text-slate-500">{r.tipo==='envio'?'Envio ao laboratório':'Devolução ao warehouse'}</span></p>
+                <div><p className="font-bold text-slate-900">{nRom(r)} <span className="ml-2 text-xs font-medium text-slate-500">{r.tipo==='importacao'?'Relação importada — aguardando conferência física':r.tipo==='envio'?'Envio ao laboratório':'Devolução ao warehouse'}</span></p>
                 <p className="text-xs text-slate-500">{formatarData(r.criado_em)} · {r.status?.replaceAll('_',' ')}</p></div>
                 <button onClick={()=>imprimirRomaneio(r,itens,detalhe.pedido?.lote)} className={botao+' border border-slate-200 bg-white text-violet-700 hover:bg-violet-50'}><Printer size={16}/>Imprimir / salvar PDF</button>
               </div>)}
@@ -271,13 +273,27 @@ export default function LaboratorioReparoV2Page() {
           </>}
         </section>
       </div>
-      <p className="text-xs text-slate-500">Piloto privado • Visualização e ações limitadas ao usuário autorizado. Os registros originais da triagem e os movimentos WMS são preservados; este módulo registra cada etapa de laboratório separadamente.</p>
+      <p className="text-xs text-slate-500">A importação de aparelhos e OS não comprova seu recebimento físico nem a expedição pelo Warehouse. A confirmação exige conferência individual; entradas com alerta WMS ou pedido ativo precisam de conciliação antes de movimentar estoque.</p>
     </div>
   </div>;
 }
-function Tabela({itens,filtro,onOpen}){
- const linhas=itens.filter(filtro);
- return <div className="overflow-x-auto rounded-xl border border-slate-200"><table className="w-full min-w-[660px] text-left text-xs text-slate-700"><thead className="bg-slate-50 text-slate-600"><tr><th className="p-3">Voucher</th><th className="p-3">IMEI / Série</th><th className="p-3">OS</th><th className="p-3">Modelo</th><th className="p-3">Situação</th><th className="p-3">Ação</th></tr></thead><tbody className="divide-y divide-slate-100">{linhas.map(i=><tr key={i.id}><td className="p-3 font-bold">{i.voucher||'—'}</td><td className="p-3 font-mono">{i.imei}</td><td className="p-3">{i.os_numero||'—'}</td><td className="p-3">{i.modelo||'—'}</td><td className="p-3">{statusNome[i.status]||i.status}</td>
- <td className="p-3">{onOpen&&['recebido','em_reparo'].includes(i.status)?<button onClick={()=>onOpen(i)} className="rounded-lg border border-violet-100 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-700 hover:bg-violet-100">Abrir</button>:'—'}</td></tr>)}
- {!linhas.length&&<tr><td colSpan={6} className="p-6 text-center text-slate-400">Nenhum aparelho nesta etapa.</td></tr>}</tbody></table></div>;
+function Tabela({itens,filtro,onOpen,onSelect,limite=200}){
+ const todas=itens.filter(filtro);
+ const linhas=todas.slice(0,limite);
+ return <div className="space-y-2">
+  {todas.length>limite&&<p className="text-xs text-amber-800">Exibindo {limite} de {todas.length} aparelhos. Use o filtro por voucher, OS ou IMEI para localizar os demais.</p>}
+  <div className="overflow-x-auto rounded-xl border border-slate-200"><table className="w-full min-w-[800px] text-left text-xs text-slate-700">
+  <thead className="bg-slate-50 text-slate-600"><tr><th className="p-3">Voucher</th><th className="p-3">IMEI / Série</th><th className="p-3">OS informada / confirmada</th><th className="p-3">Modelo / processo</th><th className="p-3">Situação</th><th className="p-3">Ação</th></tr></thead>
+  <tbody className="divide-y divide-slate-100">
+  {linhas.map(i=><tr key={i.id} className={i.alerta_origem?'bg-amber-50/40':''}>
+    <td className="p-3 font-bold">{i.voucher||'—'}</td>
+    <td className="p-3 font-mono">{i.imei}</td>
+    <td className="p-3">{i.os_numero||i.os_referencia||<span className="font-semibold text-rose-700">Conferir OS</span>}{!i.os_numero&&i.os_referencia&&<div className="mt-1 text-[10px] text-slate-400">Referência não confirmada</div>}</td>
+    <td className="p-3">{i.modelo||'—'}{i.processo_origem&&<div className="mt-1 text-[10px] font-semibold text-violet-600">{i.processo_origem}</div>}</td>
+    <td className="p-3">{statusNome[i.status]||i.status}{i.alerta_origem&&<div className="mt-1 max-w-64 text-[10px] font-medium text-amber-800">{i.alerta_origem}</div>}</td>
+    <td className="p-3">{onSelect&&i.status==='aguardando_recebimento'?<button onClick={()=>onSelect(i)} className="rounded-lg border border-violet-100 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-700 hover:bg-violet-100">Conferir</button>:onOpen&&['recebido','em_reparo'].includes(i.status)?<button onClick={()=>onOpen(i)} className="rounded-lg border border-violet-100 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-700 hover:bg-violet-100">Abrir</button>:'—'}</td>
+  </tr>)}
+  {!linhas.length&&<tr><td colSpan={6} className="p-6 text-center text-slate-400">Nenhum aparelho nesta etapa.</td></tr>}
+  </tbody></table></div>
+ </div>;
 }
