@@ -94,9 +94,8 @@ export default function ReparosRefrigeracaoV2Page() {
   const areasPendentes = useMemo(() => {
     if (!selectedOs) return [];
     const concluidas = selectedOs.areas_concluidas || [];
-    return (selectedOs.areas_reparo || []).filter(
-      (area) => AREAS.includes(area) && !concluidas.includes(area)
-    );
+    const areas = selectedOs.__especialidade_indefinida ? AREAS : (selectedOs.areas_reparo || []);
+    return areas.filter((area) => AREAS.includes(area) && !concluidas.includes(area));
   }, [selectedOs]);
 
   const configArea = areaAtual ? AREA_CONFIG[areaAtual] : null;
@@ -213,9 +212,8 @@ export default function ReparosRefrigeracaoV2Page() {
 
   function selecionarOs(os) {
     const concluidas = os.areas_concluidas || [];
-    const pendentes = (os.areas_reparo || []).filter(
-      (area) => AREAS.includes(area) && !concluidas.includes(area)
-    );
+    const areas = os.__especialidade_indefinida ? AREAS : (os.areas_reparo || []);
+    const pendentes = areas.filter((area) => AREAS.includes(area) && !concluidas.includes(area));
 
     setSelectedOsId(String(os.id));
     setAreaAtual(pendentes[0] || "");
@@ -299,7 +297,7 @@ export default function ReparosRefrigeracaoV2Page() {
     try {
       setSaving(true);
       const numeroOs = selectedOs.numero_os;
-      const haviaMaisAreas = areasPendentes.length > 1;
+      const haviaMaisAreas = !selectedOs.__especialidade_indefinida && areasPendentes.length > 1;
 
       let fotosPecas = [];
       if (execucao.reposicaoTroca && fotos.length) {
