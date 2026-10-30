@@ -14,6 +14,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "../../AuthContext.jsx";
+import { supabase } from "../../lib/supabase.js";
 import FotosEsteticasLavadora from "../../components/linha-branca/FotosEsteticasLavadora.jsx";
 import { conferirEvidenciasEsteticas } from "../../services/lavadorasPreventivaService.js";
 import {
@@ -112,7 +113,7 @@ export default function ReparosLavadorasV2Page() {
     try {
       setLoading(true);
       const resultados = await Promise.all([
-        ...AREAS.map((area) => fetchOsParaReparo(area)),
+        ...AREAS.map((area) => fetchOsParaReparo(area, false)),
         fetchOsAguardandoCmp(),
       ]);
       const mapa = new Map();
@@ -124,11 +125,11 @@ export default function ReparosLavadorasV2Page() {
       });
       // Busca as triagens em lote (OSs antigas aguardando peça não possuem triagem).
       const { data: triagens, error: triagensError } = candidatos.length
-        ? await import("../../lib/supabase.js").then(({ supabase }) => supabase
+        ? await supabase
             .from("linha_branca_triagens")
             .select("*")
             .in("os_id", candidatos.map(os => os.id))
-            .order("created_at", { ascending: false }))
+            .order("created_at", { ascending: false })
         : { data: [], error: null };
       if (triagensError) throw triagensError;
       const porOs = new Map();
