@@ -1,5 +1,5 @@
 import { supabase } from "../lib/supabase.js";
-import { fetchOsAguardandoCmp, osAguardandoCmp } from "./reparoLinhaBrancaService.js";
+import { fetchOsAguardandoCmp, osAguardandoCmp, osAguardandoPeca } from "./reparoLinhaBrancaService.js";
 import {
   atualizarNecessidadeCompraStatus,
   consultarPecaPorPn,
@@ -396,6 +396,33 @@ export async function finalizarOperacaoClimatizacao(
   return data;
 }
 
+// OSs antigas aguardando peça podem chegar sem componente cadastrado.
+export async function cadastrarComponenteParaReparo(os, tipoUnidade) {
+  if (!osAguardandoPeca(os) || os?.categoria !== "Ar-condicionado")
+    throw new Error("OS não habilitada para abertura de reparo de climatização.");
+  if (!["condensadora", "evaporadora"].includes(tipoUnidade))
+    throw new Error("Confirme se a unidade é condensadora ou evaporadora.");
+
+  const { data: atual, error: erroConsulta } = await supabase
+    .from("climatizacao_componentes").select("*").eq("os_id", os.id).maybeSingle();
+  if (erroConsulta) throw erroConsulta;
+  if (atual) return { ...atual, os };
+
+  const { data, error } = await supabase
+    .from("climatizacao_componentes")
+    .insert({
+      os_id: os.id,
+      tipo_unidade: tipoUnidade,
+      tensao: os.voltagem || null,
+      status: "em_reparo",
+      resultado_triagem: "reparo",
+      observacoes_triagem: "OS histórica aguardando peça. Unidade identificada pelo técnico na abertura do reparo.",
+    })
+    .select("*").single();
+  if (error) throw error;
+  return { ...data, os };
+}
+
 export async function fetchComponentesEmReparo() {
   const [{ data, error }, aguardandoCmp] = await Promise.all([
     supabase
@@ -425,6 +452,13 @@ export async function fetchComponentesEmReparo() {
 
   const mapa = new Map((data || []).map((item) => [String(item.id), item]));
   componentesCmp.forEach((item) => mapa.set(String(item.id), item));
+  const osExistentes = new Set([...mapa.values()].map((item) => String(item.os_id)));
+  // Uma OS sem triagem nem componente ainda precisa aparecer na fila de Reparo.
+  osCmp.filter((os) => osAguardandoPeca(os) && !osExistentes.has(String(os.id)))
+    .forEach((os) => mapa.set("os-" + os.id, {
+      id: "os-" + os.id, os_id: os.id, os, status: "em_reparo",
+      tipo_unidade: null, __pendenteCadastro: true,
+    }));
   const componentes = [...mapa.values()];
   const osIds = [...new Set(componentes.map((item) => item.os_id))];
   if (!osIds.length) return [];
@@ -561,6 +595,7 @@ export async function registrarReparoClimatizacao(componente, payload, areaExecu
   const areas = (os.areas_reparo || []).filter((area) =>
     ["Reparo Mecânico", "Reparo Elétrico", "Reparo Estético"].includes(area)
   );
+  if (!areas.length) areas.push(areaExecucao);
   const todasConcluidas = areas.length === 0 || areas.every((area) => concluidas.includes(area));
   const proximaArea = areas.find((area) => !concluidas.includes(area)) || null;
 
@@ -580,6 +615,7 @@ export async function registrarReparoClimatizacao(componente, payload, areaExecu
       status_atual: todasConcluidas ? "Triado - aguardando kit" : "Em reparo",
       etapa_atual: todasConcluidas ? "Aguardando kit" : proximaArea || areaExecucao,
       area_destino: todasConcluidas ? "Aguardando kit" : proximaArea || areaExecucao,
+      areas_reparo: areas,
       areas_concluidas: concluidas,
       tecnico_responsavel: payload.tecnico || null,
       updated_at: new Date().toISOString(),
