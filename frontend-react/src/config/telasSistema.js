@@ -1,4 +1,5 @@
 export const TELAS = [
+  { id: "/v2/assurant/laboratorio/reparos", label: "Laboratório de Reparos — Recebimento, Bancada e Retorno", grupo: "Assurant — Laboratório" },
   { id: "/v2/assurant/gestao/producao/configurar", label: "Configurar metas e efetivo diário", grupo: "Assurant — Gestão" },
   { id: "/v2/assurant/b2c/baixas", label: "B2C — Solicitar e consultar baixas manuais", grupo: "Assurant — B2C" },
   { id: "/v2/assurant/b2c/baixas/aprovar", label: "B2C — Aprovar baixas manuais", grupo: "Assurant — B2C" },
