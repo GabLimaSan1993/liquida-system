@@ -219,7 +219,13 @@ export default function TriagemLavadorasV2Page() {
 
   const [painel, setPainel] = useState({ aguardando: [], ciclos: [], osList: [] });
   const [selectedOsId, setSelectedOsId] = useState("");
-  const [selectedCicloId, setSelectedCicloId] = useState("");
+  // Ao abrir a câmera no celular, o navegador pode recriar a tela.
+  // Manter a OS/ciclo ativo para não voltar à primeira máquina da lista.
+  const chaveSelecaoCiclo = profile?.id ? "liquida:triagemLavadoras:selecionado:" + profile.id : null;
+  const [selectedCicloId, setSelectedCicloId] = useState(() => {
+    try { return profile?.id ? window.localStorage.getItem("liquida:triagemLavadoras:selecionado:" + profile.id) || "" : ""; }
+    catch { return ""; }
+  });
   const [referenciaProduto, setReferenciaProduto] = useState(null);
   const [historicoConferencia, setHistoricoConferencia] = useState([]);
   const [validacao, setValidacao] = useState({ ...EMPTY_VALIDACAO });
@@ -238,6 +244,17 @@ export default function TriagemLavadorasV2Page() {
   const [mensagem, setMensagem] = useState("");
   const [tick, setTick] = useState(() => Date.now());
   const finalizandoRef = useRef(new Set());
+  useEffect(() => {
+    if (!chaveSelecaoCiclo) return;
+    try {
+      const anterior = window.localStorage.getItem(chaveSelecaoCiclo);
+      if (anterior) setSelectedCicloId(anterior);
+    } catch {}
+  }, [chaveSelecaoCiclo]);
+  useEffect(() => {
+    if (!chaveSelecaoCiclo || !selectedCicloId) return;
+    try { window.localStorage.setItem(chaveSelecaoCiclo, String(selectedCicloId)); } catch {}
+  }, [chaveSelecaoCiclo, selectedCicloId]);
 
   const carregarPainel = useCallback(async ({ silencioso = false } = {}) => {
     try {
@@ -672,7 +689,7 @@ export default function TriagemLavadorasV2Page() {
 
       {selectedCiclo?.status==="aguardando_segundo" && Number(selectedCiclo.numero_ciclo)===1 && (
         <div className="mt-5">
-          <IntercicloLavadorasPanel key={selectedCiclo.id} ciclo={selectedCiclo} operador={operador} saving={saving}
+          <IntercicloLavadorasPanel key={selectedCiclo.id} ciclo={selectedCiclo} operador={operador} usuarioId={profile?.id} saving={saving}
             onIniciar={ciclo=>executarAcao(async ()=>{
               const novo=await iniciarSegundoCicloLavadora(ciclo,operador);
               setSelectedCicloId(String(novo.id));
