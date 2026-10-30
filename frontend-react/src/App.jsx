@@ -380,6 +380,7 @@ export default function App() {
           }
         />
         <Route path="uploads" element={<ProtectedRoute tela="/v2/linha-branca/uploads"><UploadAgingLinhaBrancaPage /></ProtectedRoute>} />
+        <Route path="reparos-outros" element={<ProtectedRoute tela="/v2/linha-branca"><ReparoLinhaBrancaPage areaExecucao="Reparo Mecânico" somenteOutros /></ProtectedRoute>} />
         <Route path="gestao/producao" element={<ProtectedRoute tela="/v2/linha-branca/gestao/producao"><GestaoProducaoLinhaBrancaPage /></ProtectedRoute>} />
         <Route path="desmembramento" element={<ProtectedRoute tela="/v2/linha-branca/desmembramento"><DesmembramentoLinhaBrancaPage /></ProtectedRoute>} />
         <Route path="gestao/estoque" element={<ProtectedRoute tela="/v2/linha-branca/gestao/estoque"><GestaoEstoqueLinhaBrancaPage /></ProtectedRoute>} />
