@@ -226,6 +226,16 @@ export function tecnicoHabilitadoLavadora(profile, nivel) {
   const id=String(profile?.id||"");
   return nivel==="N3" ? id===TECNICOS_REPARO_LAVADORAS.carlos : Object.values(TECNICOS_REPARO_LAVADORAS).includes(id);
 }
+/** Retorno de bancada após falha em reparo de Kaua/Alexandre é exclusivo de Carlos.
+ * Nível original da OS permanece N1/N2 para métricas e cor dos cartões.
+ */
+export function tecnicoPodeAtuarOsLavadora(profile, os) {
+  if (!os) return false;
+  if (os.retorno_pos_reparo_exclusivo_carlos === true) {
+    return String(profile?.id||"") === TECNICOS_REPARO_LAVADORAS.carlos;
+  }
+  return tecnicoHabilitadoLavadora(profile,nivelEfetivoLavadora(os));
+}
 export const VISUAL_NIVEIS_LAVADORAS=Object.freeze({
   N1:{card:"border-emerald-300 bg-emerald-50",bolinha:"bg-emerald-500",selo:"bg-emerald-100 text-emerald-800"},
   N2:{card:"border-amber-300 bg-amber-50",bolinha:"bg-amber-400",selo:"bg-amber-100 text-amber-800"},
