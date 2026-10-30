@@ -4,6 +4,8 @@ import { hasLinhaBrancaAccess } from "./linhaBrancaAccess.js";
 export function getUserLanding(profile) {
   if (!profile || profile.is_master) return "/sistemas";
   const telas = profile.telas_permitidas || [];
+  if (profile.area_tecnica === "laboratorio_reparo" && telas.includes("/v2/assurant/laboratorio/reparos"))
+    return "/v2/assurant/laboratorio/reparos";
   if (telas.includes("/gerenciar-usuarios")) return "/sistemas";
   const base = "/v2/linha-branca";
   const linhaBranca = hasLinhaBrancaAccess(profile, base);
