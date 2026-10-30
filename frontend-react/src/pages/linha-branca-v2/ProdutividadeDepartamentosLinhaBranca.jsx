@@ -2,6 +2,7 @@ import {useEffect,useMemo,useState} from "react";
 import {Activity,ArrowLeft,BarChart3,CalendarDays,Clock3,Download,Loader2,RefreshCw,Search,Users,Wrench} from "lucide-react";
 import {ResponsiveContainer,BarChart,Bar,XAxis,YAxis,CartesianGrid,Tooltip,Legend} from "recharts";
 import {buscarProdutividadeLinhaBranca} from "../../services/mapaDepartamentosLinhaBrancaService.js";
+import FluxoLinhaBrancaPeriodo from "./FluxoLinhaBrancaPeriodo.jsx";
 
 const hojeSP=()=>{
  const parts=new Intl.DateTimeFormat("en-US",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date());
@@ -130,6 +131,7 @@ export default function ProdutividadeDepartamentosLinhaBranca({onVoltar}){
    <p className="mt-3 text-xs text-slate-500">Período consultado: <strong>{periodo.inicio}</strong> a <strong>{periodo.fim}</strong> · {periodo.agrupar==="mes"?"agrupado por mês":"agrupado por dia"}</p>
    {(departamento||tecnico)&&<button type="button" onClick={()=>{setDepartamento("");setTecnico("")}} className="mt-2 text-xs font-bold text-violet-700">Limpar filtros de equipe e departamento</button>}
   </section>
+  <FluxoLinhaBrancaPeriodo periodo={periodo} area={area} departamento={departamento} tecnico={tecnico}/>
   {erro&&<p role="alert" className="rounded-xl bg-rose-50 p-4 text-xs font-semibold text-rose-700">{erro}</p>}
   {!dados&&carregando&&<div className="flex items-center justify-center gap-3 rounded-xl bg-violet-50 p-10 text-sm font-bold text-violet-700"><Loader2 className="h-5 w-5 animate-spin"/>Consultando produção...</div>}
   {dados&&<>
@@ -161,9 +163,9 @@ export default function ProdutividadeDepartamentosLinhaBranca({onVoltar}){
    </section>
    <div className="grid gap-4 xl:grid-cols-2">
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-     <div className="p-4"><h2 className="text-sm font-black">Produção por departamento</h2><p className="mt-1 text-xs text-slate-500">Quantidade de atividades e OS únicas, com mudanças de etapa separadas.</p></div>
+     <div className="p-4"><h2 className="text-sm font-black">Atividades executadas por departamento</h2><p className="mt-1 text-xs text-slate-500">Esta tabela mede <strong>execuções</strong> e OS distintas que receberam registros. Não representa entradas, saldo de fila nem máquinas finalizadas. Para o balanço de etapas, consulte a conciliação acima.</p></div>
      <div className="max-h-[520px] overflow-auto"><table className="w-full min-w-[580px] text-left text-xs">
-      <thead className="sticky top-0 bg-slate-50 text-[10px] uppercase text-slate-500"><tr>{["Departamento","OS únicas","Atividades","Ciclos","Reparos","Mudanças"].map(t=><th key={t} className="px-3 py-2">{t}</th>)}</tr></thead>
+      <thead className="sticky top-0 bg-slate-50 text-[10px] uppercase text-slate-500"><tr>{["Departamento","OS com registros","Execuções","Ciclos","Reparos","Trocas de etapa"].map(t=><th key={t} className="px-3 py-2">{t}</th>)}</tr></thead>
       <tbody className="divide-y divide-slate-100">{setores.map(s=><tr key={s.departamento} className="hover:bg-violet-50/40">
        <td className="px-3 py-3"><button type="button" onClick={()=>setDepartamento(s.departamento)} className="text-left font-bold text-violet-700">{s.departamento}</button></td>
        {[s.os_unicas,s.atividades,s.ciclos,s.reparos,s.movimentacoes].map((v,i)=><td key={i} className="px-3 py-3 tabular-nums">{numerar(v)}</td>)}
@@ -173,7 +175,7 @@ export default function ProdutividadeDepartamentosLinhaBranca({onVoltar}){
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
      <div className="p-4"><h2 className="text-sm font-black">Produtividade por colaborador e departamento</h2><p className="mt-1 text-xs text-slate-500">Somente registros identificados no Liquida. “Não identificado” evidencia lacunas de apontamento.</p></div>
      <div className="max-h-[520px] overflow-auto"><table className="w-full min-w-[680px] text-left text-xs">
-      <thead className="sticky top-0 bg-slate-50 text-[10px] uppercase text-slate-500"><tr>{["Técnico","Departamento","OS únicas","Atividades","Ciclos","Reparos","Diagnósticos"].map(t=><th key={t} className="px-3 py-2">{t}</th>)}</tr></thead>
+      <thead className="sticky top-0 bg-slate-50 text-[10px] uppercase text-slate-500"><tr>{["Técnico","Departamento","OS com registros","Execuções","Ciclos","Reparos","Diagnósticos"].map(t=><th key={t} className="px-3 py-2">{t}</th>)}</tr></thead>
       <tbody className="divide-y divide-slate-100">{tecnicos.map((t,i)=><tr key={t.tecnico+"-"+t.departamento+"-"+i} className="hover:bg-violet-50/40">
        <td className="px-3 py-3"><button type="button" onClick={()=>setTecnico(t.tecnico)} className="text-left font-bold text-violet-700">{t.tecnico}</button></td>
        <td className="px-3 py-3 text-slate-600">{t.departamento}</td>
