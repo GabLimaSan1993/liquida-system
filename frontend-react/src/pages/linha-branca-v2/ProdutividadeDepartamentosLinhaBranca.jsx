@@ -3,6 +3,7 @@ import {Activity,ArrowLeft,BarChart3,CalendarDays,Clock3,Download,Loader2,Refres
 import {ResponsiveContainer,BarChart,Bar,XAxis,YAxis,CartesianGrid,Tooltip,Legend} from "recharts";
 import {buscarProdutividadeLinhaBranca} from "../../services/mapaDepartamentosLinhaBrancaService.js";
 import FluxoLinhaBrancaPeriodo from "./FluxoLinhaBrancaPeriodo.jsx";
+import ReparosAnaliseNiveisLinhaBranca from "./ReparosAnaliseNiveisLinhaBranca.jsx";
 
 const hojeSP=()=>{
  const parts=new Intl.DateTimeFormat("en-US",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date());
@@ -38,6 +39,7 @@ export default function ProdutividadeDepartamentosLinhaBranca({onVoltar}){
  const [area,setArea]=useState("");
  const [departamento,setDepartamento]=useState("");
  const [tecnico,setTecnico]=useState("");
+ const [abrirReparos,setAbrirReparos]=useState(false);
  const [versao,setVersao]=useState(0);
  const [dados,setDados]=useState(null),[erro,setErro]=useState("");
  const [carregando,setCarregando]=useState(true);
@@ -83,6 +85,7 @@ export default function ProdutividadeDepartamentosLinhaBranca({onVoltar}){
   const a=document.createElement("a");a.href=url;a.download="linha-branca-produtividade-"+periodo.inicio+"-"+periodo.fim+".csv";
   document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
  };
+ if(abrirReparos)return <ReparosAnaliseNiveisLinhaBranca periodo={periodo} area={area} tecnico={tecnico} onVoltar={()=>setAbrirReparos(false)}/>;
  return <div className="space-y-5 text-slate-900">
   <header className="flex flex-wrap items-start justify-between gap-3">
    <div>
@@ -139,7 +142,9 @@ export default function ProdutividadeDepartamentosLinhaBranca({onVoltar}){
     <Stat nome="OS com ações no Liquida" valor={geral.os_movimentadas} descricao="Máquinas distintas com ações feitas nos módulos internos" Icon={Activity}/>
     <Stat nome="Atividades registradas" valor={geral.atividades_produtivas} descricao="Ciclos, reparos, diagnósticos e registros de bancada" Icon={BarChart3}/>
     <Stat nome="Ciclos executados" valor={geral.ciclos} descricao="Triagem funcional e bancada pós-reparo" Icon={Clock3}/>
-    <Stat nome="Reparos concluídos" valor={geral.reparos} descricao="Execuções técnicas encerradas" Icon={Wrench}/>
+    <button type="button" onClick={()=>setAbrirReparos(true)} className="w-full rounded-2xl text-left outline-none focus-visible:ring-2 focus-visible:ring-violet-500">
+      <Stat nome="Reparos concluídos" valor={geral.reparos} descricao="Clique: níveis N1/N2/N3, tipos e defeitos por colaborador" Icon={Wrench}/>
+    </button>
    </div>
    <div className="grid gap-3 sm:grid-cols-3">
     <div className="rounded-xl border border-slate-200 bg-white p-4 text-xs"><strong className="text-xl font-black text-slate-900">{numerar(geral.diagnosticos)}</strong><p className="mt-1 text-slate-500">Diagnósticos de triagem registrados</p></div>
@@ -167,7 +172,7 @@ export default function ProdutividadeDepartamentosLinhaBranca({onVoltar}){
      <div className="max-h-[520px] overflow-auto"><table className="w-full min-w-[580px] text-left text-xs">
       <thead className="sticky top-0 bg-slate-50 text-[10px] uppercase text-slate-500"><tr>{["Departamento","OS com registros","Execuções","Ciclos","Reparos","Etapas entregues"].map(t=><th key={t} className="px-3 py-2">{t}</th>)}</tr></thead>
       <tbody className="divide-y divide-slate-100">{setores.map(s=><tr key={s.departamento} className="hover:bg-violet-50/40">
-       <td className="px-3 py-3"><button type="button" onClick={()=>setDepartamento(s.departamento)} className="text-left font-bold text-violet-700">{s.departamento}</button></td>
+       <td className="px-3 py-3"><button type="button" onClick={()=>s.departamento==="Reparo"?setAbrirReparos(true):setDepartamento(s.departamento)} className="text-left font-bold text-violet-700">{s.departamento}{s.departamento==="Reparo"?" · Detalhar N1/N2/N3":""}</button></td>
        {[s.os_unicas,s.atividades,s.ciclos,s.reparos,s.etapas_concluidas].map((v,i)=><td key={i} className="px-3 py-3 tabular-nums">{numerar(v)}</td>)}
       </tr>)}</tbody>
      </table></div>
@@ -177,7 +182,7 @@ export default function ProdutividadeDepartamentosLinhaBranca({onVoltar}){
      <div className="max-h-[520px] overflow-auto"><table className="w-full min-w-[680px] text-left text-xs">
       <thead className="sticky top-0 bg-slate-50 text-[10px] uppercase text-slate-500"><tr>{["Técnico","Departamento","OS com registros","Execuções","Entregas","Ciclos","Reparos","Diagnósticos"].map(t=><th key={t} className="px-3 py-2">{t}</th>)}</tr></thead>
       <tbody className="divide-y divide-slate-100">{tecnicos.map((t,i)=><tr key={t.tecnico+"-"+t.departamento+"-"+i} className="hover:bg-violet-50/40">
-       <td className="px-3 py-3"><button type="button" onClick={()=>setTecnico(t.tecnico)} className="text-left font-bold text-violet-700">{t.tecnico}</button></td>
+       <td className="px-3 py-3"><button type="button" onClick={()=>{setTecnico(t.tecnico);if(t.departamento==="Reparo")setAbrirReparos(true)}} className="text-left font-bold text-violet-700">{t.tecnico}</button></td>
        <td className="px-3 py-3 text-slate-600">{t.departamento}</td>
        {[t.os_unicas,t.atividades,t.etapas_concluidas,t.ciclos,t.reparos,t.diagnosticos].map((v,j)=><td key={j} className="px-3 py-3 tabular-nums">{numerar(v)}</td>)}
       </tr>)}</tbody>
