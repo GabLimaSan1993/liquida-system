@@ -1,5 +1,6 @@
 import {
   AlertTriangle,
+  ShieldCheck,
   Check,
   CheckCircle2,
   ChevronRight,
@@ -26,6 +27,8 @@ import { useAuth } from "../../AuthContext.jsx";
 import { painelDoOperador } from "../../services/lavadorasOperador.js";
 import { nivelServicoLavadora, classificarTriagemLavadora, VISUAL_NIVEIS_LAVADORAS } from "../../services/reparosLavadorasNiveis.js";
 import OsBarcodeScanner from "../../components/OsBarcodeScanner.jsx";
+import IntercicloLavadorasPanel from "../../components/linha-branca/IntercicloLavadorasPanel.jsx";
+import { encaminharPreventivaLavadora } from "../../services/lavadorasPreventivaService.js";
 import {
   REPAROS_ELETRICOS_LAVADORAS,
   REPAROS_ESTETICOS_LAVADORAS,
@@ -666,6 +669,22 @@ export default function TriagemLavadorasV2Page() {
         <MetricCard icon={Settings2} value={`${metricas.taxa}%`} label="Aprovação final" helper="Triagem sem reparo" tone="indigo" />
       </section>
 
+
+      {selectedCiclo?.status==="aguardando_segundo" && Number(selectedCiclo.numero_ciclo)===1 && (
+        <div className="mt-5">
+          <IntercicloLavadorasPanel key={selectedCiclo.id} ciclo={selectedCiclo} operador={operador} saving={saving}
+            onIniciar={ciclo=>executarAcao(async ()=>{
+              const novo=await iniciarSegundoCicloLavadora(ciclo,operador);
+              setSelectedCicloId(String(novo.id));
+              setMensagem("Checklist concluído. Segundo ciclo iniciado com a duração correta do equipamento.");
+            })}
+            onOxidacao={ciclo=>executarAcao(async ()=>{
+              await encaminharPreventivaLavadora(ciclo.id,"oxidacao",operador);
+              setMensagem("Oxidação registrada com foto. OS encaminhada exclusivamente a Carlos Dias (N3).");
+            })}
+          />
+        </div>
+      )}
       <section className="mt-5 grid gap-5 2xl:grid-cols-[420px_minmax(0,1fr)_390px]">
         <div className="min-w-0 rounded-2xl border border-slate-200 bg-white">
           <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
@@ -845,8 +864,8 @@ export default function TriagemLavadorasV2Page() {
                       {pausado || pausadoErro ? (
                         <><button type="button" disabled={saving} onClick={(event) => { event.stopPropagation(); executarAcao(() => retomarCicloLavadora(ciclo, operador)); }} className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#5B35C9] text-[10px] font-black text-white"><RotateCcw className="h-3.5 w-3.5" /> Retomar ciclo</button>{pausadoErro ? <button type="button" onClick={(event) => { event.stopPropagation(); abrirErro(ciclo); }} className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-rose-600 text-[10px] font-black text-white"><Wrench className="h-3.5 w-3.5" /> Enviar para reparo</button> : null}</>
                       ) : null}
-                      {aguardandoSegundo ? <button type="button" disabled={saving} onClick={(event) => { event.stopPropagation(); executarAcao(async () => { const novo = await iniciarSegundoCicloLavadora(ciclo, operador); setSelectedCicloId(String(novo.id)); }); }} className="flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-[#5B35C9] text-[10px] font-black text-white"><Play className="h-3.5 w-3.5 fill-current" /> Iniciar 2º ciclo</button> : null}
-                      {aguardandoHigienizacao ? <button type="button" disabled={saving} onClick={(event) => { event.stopPropagation(); executarAcao(() => enviarTriagemParaHigienizacao(ciclo, operador)); }} className="flex h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-[10px] font-black text-emerald-700">Enviar para Higienização <ChevronRight className="h-3.5 w-3.5" /></button> : null}
+                      {aguardandoSegundo ? <button type="button" disabled={saving} onClick={(event) => { event.stopPropagation(); setSelectedCicloId(String(ciclo.id)); document.getElementById("checklist-preventiva")?.scrollIntoView({behavior:"smooth",block:"start"}); }} className="flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-[#5B35C9] text-[10px] font-black text-white"><ShieldCheck className="h-3.5 w-3.5" /> Checklist / liberar 2º ciclo</button> : null}
+                      {aguardandoHigienizacao ? <button type="button" disabled={saving} onClick={(event) => { event.stopPropagation(); executarAcao(async ()=>{const resposta=await enviarTriagemParaHigienizacao(ciclo,operador);setMensagem(resposta?.encaminhadoEstetica?"Ciclos funcionais aprovados. OS encaminhada ao reparo estético com fotos ANTES obrigatórias.":"OS encaminhada para Higienização.");}); }} className="flex h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-[10px] font-black text-emerald-700">Concluir triagem · Higienização / Estética <ChevronRight className="h-3.5 w-3.5" /></button> : null}
                     </div>
                   </div>
                 );
