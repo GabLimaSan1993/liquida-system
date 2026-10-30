@@ -36,3 +36,14 @@ export async function buscarProdutividadeLinhaBranca({inicio,fim,area="",departa
  if(error)throw error;
  return data;
 }
+
+/** Reconciliação do fluxo com transições registradas. Saldo rastreado nunca é tratado como estoque histórico completo. */
+export async function buscarFluxoLinhaBranca({inicio,fim,area="",departamento="",signal}){
+ let q=supabase.rpc("linha_branca_fluxo_periodo",{
+   p_inicio:inicio,p_fim:fim,p_area:area||null,p_departamento:departamento||null
+ });
+ if(signal)q=q.abortSignal(signal);
+ const {data,error}=await q;
+ if(error)throw error;
+ return data;
+}
