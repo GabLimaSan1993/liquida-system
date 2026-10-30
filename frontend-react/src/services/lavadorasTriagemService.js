@@ -1,6 +1,7 @@
 import { supabase } from "../lib/supabase.js";
 import { osAguardandoCmp } from "./reparoLinhaBrancaService.js";
 import { classificarTriagemLavadora } from "./reparosLavadorasNiveis.js";
+import { buscarUltimoIntercicloLavadora, encaminharPreventivaLavadora } from "./lavadorasPreventivaService.js";
 import {
   CATEGORIAS_LAVADORAS, dadosHistoricosOs, duracaoTesteLavadora,
   normalizarConferencia,
@@ -850,6 +851,8 @@ export async function concluirCicloLavadora(ciclo, operador) {
   });
 
   if (novoStatus === "aguardando_higienizacao") {
+    const { check: preventiva } = await buscarUltimoIntercicloLavadora(data.os_id);
+    const pendenciaEstetica = Boolean(preventiva?.estetica_apresenta_defeito && preventiva.defeitos_esteticos?.length);
     const { data: ciclos, error: ciclosError } = await supabase
       .from("linha_branca_lavadora_ciclos")
       .select("id, numero_ciclo, tempo_executado_segundos, iniciado_em, concluido_em, operador")
@@ -862,18 +865,18 @@ export async function concluirCicloLavadora(ciclo, operador) {
     await criarLaudo({
       osId: data.os_id,
       tipo: "triagem_sem_falhas",
-      titulo: "Laudo de Triagem - Lavadora aprovada sem falhas",
-      resumo: "Produto performou sem problemas nos dois ciclos obrigatórios de lavagem.",
-      dados: { ciclos: ciclos || [], conclusao: "Produto performou sem problemas nos dois ciclos de lavagem." },
+      titulo: pendenciaEstetica ? "Laudo dos Ciclos Funcionais - Reparo estético pendente" : "Laudo de Triagem - Lavadora aprovada sem falhas",
+      resumo: pendenciaEstetica ? "Ciclos funcionais aprovados. Defeitos estéticos constatados na preventiva pendentes de reparo e fotografia final." : "Produto performou sem problemas nos dois ciclos obrigatórios.",
+      dados: { ciclos: ciclos || [], checklist: preventiva || null, defeitos_esteticos: preventiva?.defeitos_esteticos || [], conclusao: pendenciaEstetica ? "Aprovado funcionalmente, pendente de reparo estético." : "Produto aprovado após dois ciclos funcionais." },
       operador: operador || data.operador,
     });
 
     const { error: osError } = await supabase
       .from("ordens_servico")
       .update({
-        status_atual: "Aprovado",
-        etapa_atual: "Aprovado",
-        area_destino: null,
+        status_atual: pendenciaEstetica ? "Em triagem" : "Aprovado",
+        etapa_atual: pendenciaEstetica ? "Avaliação estética" : "Aprovado",
+        area_destino: pendenciaEstetica ? "Triagem Lavadoras" : null,
         tecnico_triagem: operador || data.operador || null,
       })
       .eq("id", data.os_id);
@@ -886,6 +889,11 @@ export async function concluirCicloLavadora(ciclo, operador) {
 export async function enviarTriagemParaHigienizacao(ciclo, operador) {
   if (!ciclo?.id || ciclo.status !== "aguardando_higienizacao" || Number(ciclo.numero_ciclo) !== 2) {
     throw new Error("A lavadora precisa concluir os dois ciclos antes de seguir para Higienização.");
+  }
+  const { check } = await buscarUltimoIntercicloLavadora(ciclo.os_id);
+  if (check?.estetica_apresenta_defeito && check.defeitos_esteticos?.length) {
+    const retorno = await encaminharPreventivaLavadora(ciclo.id,"estetica",operador);
+    return {...retorno, encaminhadoEstetica:true};
   }
 
   const { data, error } = await supabase
