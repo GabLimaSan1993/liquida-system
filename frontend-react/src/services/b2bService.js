@@ -13,36 +13,97 @@ function extrairDataDoNome(nomeArquivo) {
   return `${ano}-${mes}-${dia}`;
 }
 
-// Normaliza IMEI para o match com a triagem (remove espaços e lixo invisível).
-function limparImei(v) {
-  return String(v ?? "").trim();
+// Cabeçalhos de arquivos PICKING variam entre fornecedores e podem
+// começar em qualquer uma das primeiras 35 linhas de diferentes abas.
+function cabecalhoB2B(v) {
+  return String(v ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim();
 }
-
-// Somente identificadores numéricos de aparelhos podem ocupar a coluna IMEI.
-// O Excel pode retornar números, strings com separadores ou notação científica.
+function prioridadeImeiB2B(v) {
+  const chave=cabecalhoB2B(v);
+  if (chave==="IMEI") return 100;
+  if (/^IMEI (1|01|PRINCIPAL|DO APARELHO|APARELHO|DO EQUIPAMENTO|EQUIPAMENTO)$/.test(chave)) return 95;
+  if (/^(NUM|NUMERO|NRO|N) (DE )?IMEI( 1)?$/.test(chave)) return 90;
+  if (/^(SERIAL IMEI|IMEI SERIAL|IDENTIFICADOR IMEI)$/.test(chave)) return 85;
+  // Não selecionar IMEI2 ou números de SKU como IMEI principal.
+  return -1;
+}
 function validarImei(v) {
   if (v === null || v === undefined || v === "") return "";
-  const bruto = String(v).trim().replace(/\\.0$/, "");
-  if (/^\\d+(?:\\.\\d+)?e\\+?\\d+$/i.test(bruto)) {
-    const inteiro = Number(bruto);
-    if (!Number.isSafeInteger(inteiro)) return "";
-    return String(inteiro);
+  if (typeof v==="number") {
+    const numero=String(v);
+    return Number.isSafeInteger(v)&&/^\d{14,16}$/.test(numero) ? numero : "";
   }
-  const limpo = bruto.replace(/[\\s.-]/g, "");
-  return /^\\d{14,16}$/.test(limpo) ? limpo : "";
+  let bruto=String(v).normalize("NFKC").trim().replace(/\u00A0/g," ");
+  if (/^\d+\.0+$/.test(bruto)) bruto=bruto.replace(/\.0+$/,"");
+  if (/^\d+(?:[.,]\d+)?e\+?\d+$/i.test(bruto)) {
+    // Texto científico com poucos algarismos significativos NÃO identifica
+    // unicamente o aparelho: completá-lo com zeros criaria IMEIs falsos.
+    const mantissa=bruto.split(/[eE]/)[0].replace(/\D/g,"");
+    if(mantissa.length<14) return "";
+    const n=Number(bruto.replace(",","."));
+    if(!Number.isSafeInteger(n)) return "";
+    bruto=String(n);
+  }
+  const limpo=bruto.replace(/[\s.-]/g,"");
+  return /^\d{14,16}$/.test(limpo)?limpo:"";
 }
+function limparImei(v) { return String(v??"").trim(); }
+function acharImeiLinha(linha) { return validarImei(linha?.IMEI); }
 
-function acharImeiLinha(linha) {
-  const entradas = Object.entries(linha || {});
-  const aliases = ["IMEI", "NUM_IMEI", "IMEI1", "IMEI_1", "IMEI 1", "IMEI PRINCIPAL", "SERIAL/IMEI", "SERIAL_IMEI"];
-  for (const alias of aliases) {
-    const achado = entradas.find(([chave]) => String(chave).trim().toUpperCase() === alias);
-    const imei = validarImei(achado?.[1]);
-    if (imei) return imei;
+// Ganhador continua sendo a origem obrigatória do cliente, nunca inferida.
+function extrairPlanilhaPedidoB2B(wb) {
+  const candidatos=[];
+  const resumo=[];
+  for(const nome of wb.SheetNames){
+    const ws=wb.Sheets[nome];
+    if(!ws) continue;
+    const linhas=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:true});
+    resumo.push({nome,linhas});
+    for(let indice=0;indice<Math.min(35,linhas.length);indice++){
+      const headers=linhas[indice]||[];
+      const ranks=headers.map(prioridadeImeiB2B);
+      const maior=Math.max(-1,...ranks);
+      if(maior<0) continue;
+      const imeiIdx=ranks.indexOf(maior);
+      const ganhadorIdx=headers.findIndex(h=>["GANHADOR","GANHADOR DO LOTE","CLIENTE GANHADOR"].includes(cabecalhoB2B(h)));
+      const entradas=linhas.slice(indice+1).map((celulas,posicao)=>({
+        celulas:celulas||[],numero:indice+posicao+2,
+      })).filter(({celulas})=>celulas.some(v=>v!==null&&v!==undefined&&String(v).trim()!==""));
+      if(!entradas.length) continue;
+      const validos=entradas.slice(0,25).filter(({celulas})=>Boolean(validarImei(celulas[imeiIdx]))).length;
+      candidatos.push({nome,headers,indice,imeiIdx,ganhadorIdx,entradas,
+        pontos:(ganhadorIdx>=0?1000:0)+validos*10+maior});
+    }
   }
-  // Arquivos com cabeçalhos deslocados: só usar campo identificado pelo cabeçalho,
-  // nunca inferir pelo texto de modelo ou escolher número de outra coluna.
-  return "";
+  candidatos.sort((a,b)=>b.pontos-a.pontos);
+  const sel=candidatos[0];
+  if(!sel){
+    const encontrados=resumo.map(({nome,linhas})=>nome+": "+linhas.slice(0,6)
+      .map(row=>(row||[]).filter(Boolean).slice(0,8).join(" / "))
+      .filter(Boolean).slice(0,3).join(" | ")).join("; ");
+    throw new Error("Coluna IMEI não encontrada em nenhuma aba. Identifique o cabeçalho como IMEI, IMEI 1 ou Número IMEI. Abas: "+encontrados.slice(0,320)+". Nenhum pedido foi criado.");
+  }
+  if(sel.ganhadorIdx<0){
+    throw new Error('Coluna "Ganhador" não encontrada na aba "'+sel.nome+'". É necessária para identificar o cliente. Nenhum pedido foi criado.');
+  }
+  const cols=sel.headers.map(cabecalhoB2B);
+  const aliases={
+    RESERVA:["RESERVA"],LOTE:["LOTE"],Ganhador:["GANHADOR","GANHADOR DO LOTE","CLIENTE GANHADOR"],
+    MODELO:["MODELO"],CNN:["CNN"],GRADE:["GRADE"],GRADE2:["GRADE2","GRADE 2"],
+    DESC_ITEM:["DESC ITEM","DESCRICAO ITEM","DESCRICAO DO ITEM"],
+    COD_ITEM:["COD ITEM","CODIGO ITEM","CODIGO DO ITEM"],
+  };
+  const indices=Object.fromEntries(Object.entries(aliases).map(([k,v])=>[k,cols.findIndex(c=>v.includes(c))]));
+  const registros=sel.entradas.map(({celulas,numero})=>{
+    const row={IMEI:celulas[sel.imeiIdx],__linhaExcel:numero,__celulas:celulas};
+    for(const [chave,i] of Object.entries(indices))if(i>=0)row[chave]=celulas[i];
+    return row;
+  });
+  return {
+    registros,aba:sel.nome,linhaCabecalho:sel.indice+1,
+    valorIdx:sel.headers.findIndex(h=>cabecalhoB2B(h).includes("ALOCACAO")&&String(h).includes("$")),
+  };
 }
 
 // O novo WMS e a unica fonte operacional de endereco. Gaia continua apenas
@@ -76,27 +137,22 @@ export async function importarPedidoB2B(file, userId, extras = {}) {
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
-        const wb = XLSX.read(e.target.result, { type: "binary" });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        const allRows    = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
-        const rawHeaders = allRows[1] || [];
-
-        const valorIdx = rawHeaders.findIndex(h => {
-          if (!h) return false;
-          const norm = String(h).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-          return norm.includes("alocacao") && String(h).includes("$");
-        });
-
-        const rows = XLSX.utils.sheet_to_json(ws, { defval: null, range: 1 });
-        if (!rows.length) throw new Error("Planilha vazia ou formato inválido.");
-
-        const invalidas = rows.map((row, idx) => ({ numero: idx + 3, imei: acharImeiLinha(row) }))
-          .filter(item => !item.imei);
-        if (invalidas.length) {
-          throw new Error(`Importação interrompida: ${invalidas.length} linha(s) sem IMEI numérico válido (14 a 16 dígitos). Linhas: ${invalidas.slice(0, 15).map(x => x.numero).join(", ")}. Confira o cabeçalho/coluna IMEI na planilha. Nenhum pedido foi criado.`);
+        const wb = XLSX.read(e.target.result, {type:"binary"});
+        const {registros:rows,valorIdx,aba,linhaCabecalho} = extrairPlanilhaPedidoB2B(wb);
+        if(!rows.length)throw new Error("Planilha não contém linhas de aparelhos.");
+        const invalidas=rows.map(r=>({numero:r.__linhaExcel,valor:r.IMEI,imei:acharImeiLinha(r)})).filter(r=>!r.imei);
+        if(invalidas.length){
+          const exemplo=invalidas.slice(0,12).map(r=>
+            "linha "+r.numero+" ("+(String(r.valor??"").trim().slice(0,26)||"vazio")+")").join(", ");
+          throw new Error("Importação interrompida: "+invalidas.length+
+            " IMEI(s) inválidos na aba "+aba+" (cabeçalho na linha "+linhaCabecalho+
+            "). Exemplos: "+exemplo+
+            ". IMEI deve ter 14 a 16 dígitos preservados (notação científica arredondada não é recuperável). Nenhum pedido foi criado.");
         }
-        const repetidos = rows.map(acharImeiLinha).filter((imei, idx, itens) => itens.indexOf(imei) !== idx);
-        if (repetidos.length) throw new Error("Planilha contém IMEIs duplicados. Corrija a origem antes de importar.");
+        const imeisConferidos=rows.map(acharImeiLinha);
+        const repetidos=[...new Set(imeisConferidos.filter((imei,i)=>imeisConferidos.indexOf(imei)!==i))];
+        if(repetidos.length)throw new Error("Planilha contém "+repetidos.length+
+          " IMEI(s) duplicados (ex.: "+repetidos.slice(0,5).join(", ")+"). Nenhum pedido foi criado.");
 
         const loteColuna = rows.find(r => r["RESERVA"] || r["LOTE"])?.[("RESERVA")] ||
                            rows.find(r => r["RESERVA"] || r["LOTE"])?.[("LOTE")];
@@ -149,12 +205,10 @@ export async function importarPedidoB2B(file, userId, extras = {}) {
           const wms = wmsMap.get(imei) || null;
           let valor = null;
           if (valorIdx >= 0) {
-            const rawVal = allRows[rowIdx + 2]?.[valorIdx];
-            if (rawVal != null && !isNaN(parseFloat(rawVal))) valor = parseFloat(rawVal);
-          }
-          if (valor === null) {
-            const k = Object.keys(r).find(k => k.includes("$"));
-            if (k && r[k] != null) valor = parseFloat(r[k]);
+            const rawVal = r.__celulas[valorIdx];
+            const n = typeof rawVal === "number" ? rawVal :
+              Number(String(rawVal ?? "").replace(/R\$|\s/g,"").replace(/\./g,"").replace(",","."));
+            if(rawVal!=null && rawVal!=="" && Number.isFinite(n))valor=n;
           }
           return {
             pedido_id: pedido.id, imei,
