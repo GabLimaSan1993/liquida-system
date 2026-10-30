@@ -24,6 +24,8 @@ function normalizarTelas(telas, areaTecnica) {
   return [...novas];
 }
 
+const ROTA_LABORATORIO = "/v2/assurant/laboratorio/reparos";
+const TELAS_EXCLUSIVAS_LABORATORIO = ["/v2/assurant", ROTA_LABORATORIO];
 const GRUPOS = [...new Set(TELAS.map(t => t.grupo))];
 
 function SectionCard({ children }) {
@@ -71,7 +73,7 @@ function AreaBadge({ area }) {
   );
 }
 
-function TelasSeletor({ telas, onChange }) {
+function TelasSeletor({ telas, onChange, onSomenteLaboratorio }) {
   function toggleTela(id) {
     onChange(telas.includes(id) ? telas.filter(t => t !== id) : [...telas, id]);
   }
@@ -86,8 +88,38 @@ function TelasSeletor({ telas, onChange }) {
     }
   }
 
+  const laboratorioSelecionado = telas.includes(ROTA_LABORATORIO);
+  const somenteLaboratorio = laboratorioSelecionado &&
+    telas.every(tela => TELAS_EXCLUSIVAS_LABORATORIO.includes(tela));
+
   return (
     <div className="space-y-4">
+      <div className="rounded-2xl border-2 border-violet-300 bg-violet-50/70 p-4" data-testid="permissao-laboratorio-reparos">
+        <div className="mb-3">
+          <div className="font-bold text-violet-900">Laboratório de Reparos</div>
+          <p className="mt-1 text-xs text-violet-700">
+            Recebimento de aparelhos, vínculo de OS, bancada técnica e romaneio de retorno.
+          </p>
+        </div>
+        <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-800">
+          <input
+            type="checkbox"
+            checked={laboratorioSelecionado}
+            onChange={() => toggleTela(ROTA_LABORATORIO)}
+          />
+          Permitir acesso à tela de Laboratório de Reparos
+        </label>
+        <button
+          type="button"
+          onClick={onSomenteLaboratorio}
+          className="mt-3 rounded-xl bg-violet-700 px-3 py-2 text-xs font-bold text-white hover:bg-violet-800"
+        >
+          {somenteLaboratorio ? "Acesso exclusivo ao laboratório selecionado" : "Liberar somente o fluxo de laboratório"}
+        </button>
+        <p className="mt-2 text-xs text-violet-700">
+          A opção exclusiva substitui as outras permissões de tela. O acesso ao workspace Assurant é incluído automaticamente.
+        </p>
+      </div>
       {GRUPOS.map(grupo => {
         const telasDgrupo   = TELAS.filter(t => t.grupo === grupo);
         const todosMarcados = telasDgrupo.every(t => telas.includes(t.id));
@@ -224,7 +256,11 @@ function ModalNovoUsuario({ onSave, onCancel }) {
 
               <div>
                 <div className="text-sm font-semibold text-slate-600 mb-2">Telas permitidas</div>
-                <TelasSeletor telas={telas} onChange={setTelas} />
+                <TelasSeletor
+                  telas={telas}
+                  onChange={proximas => { setTelas(proximas); if (proximas.includes(ROTA_LABORATORIO)) setAreaTecnica("assurant"); }}
+                  onSomenteLaboratorio={() => { setIsMaster(false); setAreaTecnica("assurant"); setTelas(TELAS_EXCLUSIVAS_LABORATORIO); }}
+                />
               </div>
             </>
           )}
@@ -313,7 +349,11 @@ function ModalPermissoes({ usuario, onSave, onCancel }) {
 
               <div>
                 <div className="text-sm font-semibold text-slate-600 mb-2">Telas permitidas</div>
-                <TelasSeletor telas={telas} onChange={setTelas} />
+                <TelasSeletor
+                  telas={telas}
+                  onChange={proximas => { setTelas(proximas); if (proximas.includes(ROTA_LABORATORIO)) setAreaTecnica("assurant"); }}
+                  onSomenteLaboratorio={() => { setIsMaster(false); setAreaTecnica("assurant"); setTelas(TELAS_EXCLUSIVAS_LABORATORIO); }}
+                />
               </div>
             </>
           )}
