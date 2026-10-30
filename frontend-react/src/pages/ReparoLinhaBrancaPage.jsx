@@ -5,7 +5,10 @@ import {
   fetchTriagemDaOs,
   salvarExecucaoReparo,
   condenarOs,
+  osAguardandoPeca,
 } from "../services/reparoLinhaBrancaService.js";
+import { identificarTipoLavadora } from "../services/lavadorasConferencia.js";
+import { REFRIGERACAO_CATEGORIAS } from "../services/refrigeracaoService.js";
 import {
   REPAROS_MECANICOS,
   REPAROS_ELETRICOS,
@@ -26,6 +29,7 @@ const EMPTY_EXECUCAO = {
   novaPeca: "",
   observacoes: "",
   reparos_adicionais: [],
+  servico_descricao: "",
   dt_inicio: new Date().toISOString(),
 };
 
@@ -110,7 +114,7 @@ function ModalCondenar({ onConfirm, onCancel, saving, tecnico }) {
   );
 }
 
-export default function ReparoLinhaBrancaPage({ areaExecucao }) {
+export default function ReparoLinhaBrancaPage({ areaExecucao, somenteOutros = false }) {
   const { profile } = useAuth();
   const [osList, setOsList] = useState([]);
   const [selectedOsId, setSelectedOsId] = useState("");
@@ -145,7 +149,12 @@ export default function ReparoLinhaBrancaPage({ areaExecucao }) {
     try {
       setLoading(true);
       const data = await fetchOsParaReparo(areaExecucao);
-      setOsList(data);
+      setOsList(somenteOutros
+        ? data.filter(os => osAguardandoPeca(os)
+          && !identificarTipoLavadora(os.categoria)
+          && !REFRIGERACAO_CATEGORIAS.includes(os.categoria)
+          && os.categoria !== "Ar-condicionado")
+        : data);
     } catch (err) {
       setStatus(`Erro ao carregar OS: ${err.message}`);
     } finally {
@@ -153,7 +162,7 @@ export default function ReparoLinhaBrancaPage({ areaExecucao }) {
     }
   }
 
-  useEffect(() => { loadOs(); }, [areaExecucao]);
+  useEffect(() => { loadOs(); }, [areaExecucao, somenteOutros]);
 
   async function handleSelectOs(osId) {
     setSelectedOsId(osId);
@@ -229,7 +238,7 @@ export default function ReparoLinhaBrancaPage({ areaExecucao }) {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!selectedOs || !execucao.diagnostico_final) {
+    if (!selectedOs || !execucao.diagnostico_final || (somenteOutros && !execucao.servico_descricao.trim())) {
       setStatus("Preencha a OS e o diagnóstico final.");
       return;
     }
@@ -239,7 +248,8 @@ export default function ReparoLinhaBrancaPage({ areaExecucao }) {
       const servicoCompleto = [
         ...reparosTriados,
         ...execucao.reparos_adicionais,
-      ].join(", ");
+        execucao.servico_descricao.trim(),
+      ].filter(Boolean).join(", ");
       await salvarExecucaoReparo(
         selectedOs,
         {
@@ -276,9 +286,9 @@ export default function ReparoLinhaBrancaPage({ areaExecucao }) {
         <SectionCard>
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h2 className="text-2xl font-black text-[#6B1F87]">{areaExecucao}</h2>
+              <h2 className="text-2xl font-black text-[#6B1F87]">{somenteOutros ? "Reparo · Outras Categorias" : areaExecucao}</h2>
               <p className="mt-1 text-sm text-slate-500">
-                Execute os reparos triados e registre o diagnóstico final.
+                {somenteOutros ? "OSs aguardando peça sem fluxo especializado: documente o serviço e encaminhe à bancada." : "Execute os reparos triados e registre o diagnóstico final."}
               </p>
             </div>
             <div className="flex items-center gap-4">
@@ -387,6 +397,17 @@ export default function ReparoLinhaBrancaPage({ areaExecucao }) {
                   </div>
                 )}
               </div>
+            </SectionCard>
+          )}
+
+          {selectedOs && somenteOutros && (
+            <SectionCard>
+              <label className="block">
+                <span className="text-sm font-semibold text-slate-600">Serviço executado *</span>
+                <textarea rows={3} value={execucao.servico_descricao}
+                  onChange={(e) => update("servico_descricao", e.target.value)}
+                  className={inputClass()} placeholder="Descreva o procedimento realizado nesta OS." />
+              </label>
             </SectionCard>
           )}
 
