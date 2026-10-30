@@ -18,7 +18,19 @@ export async function buscarMapaDepartamentosLinhaBranca({
 // Detalhamento sob demanda: uma única RPC carrega ciclos, responsáveis,
  // intervenções, checklist e eventos vinculados à OS específica.
 export async function detalheOSLinhaBranca(osId,signal){
- let query=supabase.rpc("linha_branca_detalhe_operacional",{p_os_id:osId});
+ let query=supabase.rpc("linha_branca_gestao_historico_os",{p_os_id:osId});
+ if(signal)query=query.abortSignal(signal);
+ const {data,error}=await query;
+ if(error)throw error;
+ return data;
+}
+
+/** KPIs de produtividade agrupados no banco: nunca baixar milhares de eventos para processar no navegador. */
+export async function buscarProdutividadeLinhaBranca({inicio,fim,area="",departamento="",tecnico="",agrupar="dia",signal}){
+ let query=supabase.rpc("linha_branca_produtividade_periodo",{
+  p_inicio:inicio,p_fim:fim,p_area:area||null,p_departamento:departamento||null,
+  p_tecnico:tecnico||null,p_agrupar:agrupar
+ });
  if(signal)query=query.abortSignal(signal);
  const {data,error}=await query;
  if(error)throw error;
