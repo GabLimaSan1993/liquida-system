@@ -155,7 +155,8 @@ function ProtectedRoute({
   }
 
   // Operadores do laboratorio nao navegam para outras rotas nem por URL direta.
-  if (profile?.area_tecnica === "laboratorio_reparo" && !profile?.is_master &&
+  if (profile?.telas_permitidas?.includes("/v2/assurant/laboratorio/reparos") &&
+      profile.telas_permitidas.every(t => t === "/v2/assurant" || t === "/v2/assurant/laboratorio/reparos") && !profile?.is_master &&
       location.pathname !== "/v2/assurant/laboratorio/reparos") {
     return <Navigate to="/v2/assurant/laboratorio/reparos" replace />;
   }
