@@ -161,6 +161,8 @@ export default function IntercicloLavadorasPanel({ciclo,operador,usuarioId,savin
      estetica_apresenta_defeito:estetica==="sim",defeitos_esteticos:defeitos,operador,
      observacoes_preventiva:observacoes
    });
+   // Após a confirmação no banco, o registro oficial prevalece sobre o rascunho local.
+   try { window.localStorage.removeItem(idRascunho); } catch {}
    setSalvo(true);setRascunhoRestaurado(false);return true;
   }catch(e){setErro(e.message);return false}finally{setOcupado(false)}
  };
