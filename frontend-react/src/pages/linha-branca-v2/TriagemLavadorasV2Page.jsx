@@ -24,6 +24,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "../../AuthContext.jsx";
 import { painelDoOperador } from "../../services/lavadorasOperador.js";
+import { nivelServicoLavadora, classificarTriagemLavadora, VISUAL_NIVEIS_LAVADORAS } from "../../services/reparosLavadorasNiveis.js";
 import OsBarcodeScanner from "../../components/OsBarcodeScanner.jsx";
 import {
   REPAROS_ELETRICOS_LAVADORAS,
@@ -186,20 +187,20 @@ function RingProgress({ percent, tone = "blue", children }) {
   );
 }
 
-function RepairGroup({ title, items, selected, onToggle }) {
+function RepairGroup({ title, area, items, selected, onToggle }) {
   return (
     <div className="rounded-xl border border-slate-200 p-3">
       <div className="mb-2 text-[11px] font-black text-slate-700">{title}</div>
       <div className="max-h-44 space-y-1 overflow-y-auto pr-1">
         {items.map((item) => (
-          <label key={item} className="flex cursor-pointer items-start gap-2 rounded-lg px-2 py-1.5 text-[10px] text-slate-600 hover:bg-slate-50">
+          <label key={item} className={`flex cursor-pointer items-start gap-2 rounded-lg border px-2 py-1.5 text-[10px] text-slate-700 hover:brightness-95 ${VISUAL_NIVEIS_LAVADORAS[nivelServicoLavadora(area,item)]?.card || "border-slate-200 bg-slate-50"}`}>
             <input
               type="checkbox"
               checked={selected.includes(item)}
               onChange={() => onToggle(item)}
               className="mt-0.5"
             />
-            <span>{item}</span>
+            <span className="flex-1">{item}</span><span className="shrink-0 font-black">{nivelServicoLavadora(area,item)||"A avaliar"}</span>
           </label>
         ))}
       </div>
@@ -863,9 +864,10 @@ export default function TriagemLavadorasV2Page() {
                 <label className="block"><span className="text-[11px] font-black text-slate-600">Código do erro</span><input value={erroForm.codigoErro} onChange={(event) => setErroForm((atual) => ({ ...atual, codigoErro: event.target.value }))} placeholder="Ex.: E3" className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-rose-400" /></label>
                 <label className="block"><span className="text-[11px] font-black text-slate-600">Observações do técnico</span><textarea rows={3} value={erroForm.observacoes} onChange={(event) => setErroForm((atual) => ({ ...atual, observacoes: event.target.value }))} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-rose-400" /></label>
                 <button type="button" onClick={salvarErro} disabled={saving || !erroForm.erroDescricao.trim()} className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 text-[11px] font-black text-slate-700 disabled:opacity-50">Salvar erro apresentado</button>
-                <RepairGroup title="Reparos Mecânicos" items={REPAROS_MECANICOS_LAVADORAS} selected={erroForm.mecanicos} onToggle={(item) => toggleLista("mecanicos", item)} />
-                <RepairGroup title="Reparos Elétricos" items={REPAROS_ELETRICOS_LAVADORAS} selected={erroForm.eletricos} onToggle={(item) => toggleLista("eletricos", item)} />
-                <RepairGroup title="Reparos Estéticos" items={REPAROS_ESTETICOS_LAVADORAS} selected={erroForm.esteticos} onToggle={(item) => toggleLista("esteticos", item)} />
+                <RepairGroup title="Reparos Mecânicos" area="Mecânico" items={REPAROS_MECANICOS_LAVADORAS} selected={erroForm.mecanicos} onToggle={(item) => toggleLista("mecanicos", item)} />
+                <RepairGroup title="Reparos Elétricos" area="Elétrico" items={REPAROS_ELETRICOS_LAVADORAS} selected={erroForm.eletricos} onToggle={(item) => toggleLista("eletricos", item)} />
+                <RepairGroup title="Reparos Estéticos" area="Estético" items={REPAROS_ESTETICOS_LAVADORAS} selected={erroForm.esteticos} onToggle={(item) => toggleLista("esteticos", item)} />
+                <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700">Complexidade do encaminhamento: <strong>{classificarTriagemLavadora({reparos_mecanicos:erroForm.mecanicos,reparos_eletricos:erroForm.eletricos,reparos_esteticos:erroForm.esteticos}).nivel || "A avaliar (restrito N3)"}</strong> · N3: somente Carlos · N1/N2: Carlos, Kaua e Alexandre</div>
                 <button type="button" onClick={enviarParaReparo} disabled={saving || !erroForm.erroDescricao.trim()} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-rose-600 text-[11px] font-black text-white disabled:opacity-50"><Wrench className="h-4 w-4" /> Enviar para reparo</button>
                 <div className="rounded-xl border border-rose-100 bg-rose-50 p-3"><div className="text-[11px] font-black text-rose-800">Condenação / Scrap</div><textarea rows={2} value={erroForm.motivoCondenacao} onChange={(event) => setErroForm((atual) => ({ ...atual, motivoCondenacao: event.target.value }))} placeholder="Justificativa obrigatória" className="mt-2 w-full rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs outline-none" /><button type="button" onClick={condenar} disabled={saving || !erroForm.motivoCondenacao.trim()} className="mt-2 flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-slate-900 text-[10px] font-black text-white disabled:opacity-40"><Trash2 className="h-3.5 w-3.5" /> Condenar e enviar para Scrap</button></div>
               </div>
