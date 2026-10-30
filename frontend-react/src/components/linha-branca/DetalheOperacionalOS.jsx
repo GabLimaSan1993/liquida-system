@@ -1,4 +1,5 @@
 import {CalendarDays,CheckCircle2,Clock3,ClipboardCheck,History,ShieldCheck,UserRound,Wrench} from "lucide-react";
+import HistoricoEtapasOS from "./HistoricoEtapasOS.jsx";
 
 const dataHora = v => v ? new Date(v).toLocaleString("pt-BR",{timeZone:"America/Sao_Paulo",dateStyle:"short",timeStyle:"short"}) : "Não informado";
 const dataBR = v => v ? new Date(v+"T12:00:00").toLocaleDateString("pt-BR") : "Não informado";
@@ -66,6 +67,7 @@ export default function DetalheOperacionalOS({detalhe}){
     <p className="mt-0.5 text-[10px] font-semibold text-slate-600">{titulo}</p>
    </div>)}
   </div>
+  <HistoricoEtapasOS detalhe={detalhe}/>
   <Secao titulo="Ciclos e bancada de testes" subtitulo="Mostra quem iniciou cada ciclo, o tempo previsto, a duração registrada, o resultado e o horário de conclusão." quantidade={ciclos.length}>
    {ciclos.length?ciclos.map(c=>{
     const eventosDoCiclo=eventos.filter(e=>String(e.ciclo_id)===String(c.id));
