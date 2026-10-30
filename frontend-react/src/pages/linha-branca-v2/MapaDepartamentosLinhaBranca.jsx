@@ -2,6 +2,7 @@ import {useEffect,useMemo,useState} from "react";
 import {Activity, AlertTriangle, ArrowRight, Boxes, ChevronLeft, ChevronRight, Clock3, Factory, Loader2, RefreshCw, Search, X} from "lucide-react";
 import {buscarMapaDepartamentosLinhaBranca,detalheOSLinhaBranca} from "../../services/mapaDepartamentosLinhaBrancaService.js";
 import DetalheOperacionalOS from "../../components/linha-branca/DetalheOperacionalOS.jsx";
+import ProdutividadeDepartamentosLinhaBranca from "./ProdutividadeDepartamentosLinhaBranca.jsx";
 
 const AREAS=["","Lavadoras","Refrigeração","Climatização","Outros / Portáteis"];
 const qtd=n=>Number(n||0).toLocaleString("pt-BR");
@@ -40,6 +41,7 @@ function Indicador({rotulo,valor,descricao,icone:Icon,atencao=false}){
  </div>;
 }
 export default function MapaDepartamentosLinhaBranca({onIndicadores}){
+ const [visao,setVisao]=useState("mapa");
  const [area,setArea]=useState(""),[departamento,setDepartamento]=useState("");
  const [busca,setBusca]=useState(""),[buscaAplicada,setBuscaAplicada]=useState("");
  const [somenteAtivos,setSomenteAtivos]=useState(true),[pagina,setPagina]=useState(1);
@@ -73,13 +75,15 @@ export default function MapaDepartamentosLinhaBranca({onIndicadores}){
  const totalPaginas=Math.max(1,Math.ceil(totalFiltrado/50));
  const mudarArea=a=>{setArea(a);setDepartamento("");setPagina(1)};
  const mudarBusca=v=>{setBusca(v);setPagina(1)};
+ if(visao==="producao")return <ProdutividadeDepartamentosLinhaBranca onVoltar={()=>setVisao("mapa")}/>;
  return <div className="space-y-5 text-slate-900">
   <header className="flex flex-wrap items-start justify-between gap-4">
    <div><p className="text-[10px] font-black uppercase tracking-[0.2em] text-violet-600">Gestão · Linha Branca</p>
     <h1 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">Mapa de máquinas por departamento</h1>
     <p className="mt-2 text-sm text-slate-500">Posição atual de cada OS, sem depender do carregamento do histórico de produção.</p>
     <p className="mt-1 text-[11px] text-slate-400">Consulta atualizada: {quando(dados?.atualizado_em)}</p></div>
-   <div className="flex gap-2">
+   <div className="flex flex-wrap gap-2">
+    <button type="button" onClick={()=>setVisao("producao")} className="inline-flex items-center gap-2 rounded-xl bg-violet-700 px-4 py-2.5 text-xs font-black text-white"><Activity className="h-4 w-4"/>Produção por colaborador / departamento</button>
     <button type="button" disabled={carregando} onClick={()=>setAtualizar(n=>n+1)}
       className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 disabled:opacity-50">
       <RefreshCw className={"h-4 w-4 "+(carregando?"animate-spin":"")}/>Atualizar</button>
