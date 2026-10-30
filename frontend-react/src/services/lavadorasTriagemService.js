@@ -1,5 +1,6 @@
 import { supabase } from "../lib/supabase.js";
 import { osAguardandoCmp } from "./reparoLinhaBrancaService.js";
+import { classificarTriagemLavadora } from "./reparosLavadorasNiveis.js";
 import {
   CATEGORIAS_LAVADORAS, dadosHistoricosOs, duracaoTesteLavadora,
   normalizarConferencia,
@@ -637,6 +638,11 @@ export async function enviarCicloParaReparo({
   if (reparosEletricos.length) areas.push("Reparo Elétrico");
   if (reparosEsteticos.length) areas.push("Reparo Estético");
   if (!areas.length) throw new Error("Selecione ao menos um reparo mecânico, elétrico ou estético.");
+  const classificacao = classificarTriagemLavadora({
+    reparos_mecanicos: reparosMecanicos,
+    reparos_eletricos: reparosEletricos,
+    reparos_esteticos: reparosEsteticos,
+  });
 
   let cicloAtual = ciclo;
   if (erroDescricao?.trim() && erroDescricao.trim() !== ciclo.erro_descricao) {
@@ -688,7 +694,8 @@ export async function enviarCicloParaReparo({
       area_destino: areas[0],
       areas_reparo: areas,
       areas_concluidas: [],
-      tecnico_responsavel: operador || null,
+      tecnico_responsavel: classificacao.nivel === "N3" || classificacao.pendente ? "Carlos Dias" : null,
+      nivel_reparo: classificacao.nivel,
       aprovado_bancada: false,
       obs_bancada: data.etapa_teste === "pos_reparo" ? resumoErro : null,
     })
