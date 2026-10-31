@@ -39,6 +39,8 @@ function TabEntrada() {
 
   const [pendentesLista, setPendentesLista]   = useState([]);
   const [concluidosLista, setConcluidosLista] = useState([]);
+  const [concluidosTotal, setConcluidosTotal] = useState(0);
+  const [limiteTabela, setLimiteTabela] = useState(200);
   const [loading, setLoading]     = useState(true);
   const [busca, setBusca]         = useState("");
   const [selecao, setSelecao]     = useState(() => new Set());
@@ -59,12 +61,24 @@ function TabEntrada() {
       ]);
       setPendentesLista(pend);
       setConcluidosLista(conc);
+      setConcluidosTotal(conc.total ?? conc.length);
       setSelecao(new Set());
     } catch (e) {
       setFeedback({ tipo: "erro", msg: e.message });
     } finally {
       setLoading(false);
     }
+  }
+
+  async function carregarMaisConcluidos() {
+    setLoading(true);
+    try {
+      const itens = await listarConfirmadosOracle({ limite: 500, offset: concluidosLista.length });
+      setConcluidosLista(prev => [...prev, ...itens]);
+      setConcluidosTotal(itens.total ?? concluidosTotal);
+    } catch (e) {
+      setFeedback({ tipo: "erro", msg: e.message });
+    } finally { setLoading(false); }
   }
 
   const base = visao === "pendente" ? pendentesLista : concluidosLista;
@@ -212,7 +226,7 @@ function TabEntrada() {
               ? "bg-[#7F2D92] text-white ring-[#7F2D92]"
               : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50"
           }`}>
-          Concluídos · {concluidosLista.length}
+          Concluídos · {concluidosTotal}
         </button>
       </div>
 
@@ -315,6 +329,13 @@ function TabEntrada() {
           className="w-full rounded-xl border border-slate-200 py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#7F2D92]" />
       </div>
 
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+        <span>Exibindo até {Math.min(filtrados.length,limiteTabela)} de {filtrados.length} itens carregados nesta visão.</span>
+        <div className="flex gap-2">
+          {filtrados.length>limiteTabela && <button type="button" onClick={()=>setLimiteTabela(n=>n+200)} className="rounded-lg border px-3 py-2 font-bold text-violet-700">Mostrar mais 200</button>}
+          {visao==='concluido' && concluidosLista.length<concluidosTotal && <button disabled={loading} type="button" onClick={carregarMaisConcluidos} className="rounded-lg border px-3 py-2 font-bold text-emerald-700">Carregar mais 500 ({concluidosLista.length}/{concluidosTotal})</button>}
+        </div>
+      </div>
       {loading ? (
         <div className="flex items-center justify-center gap-2 py-10 text-sm text-slate-400">
           <Loader className="h-4 w-4 animate-spin" /> Carregando...
@@ -348,7 +369,7 @@ function TabEntrada() {
               </tr>
             </thead>
             <tbody>
-              {filtrados.map(i => (
+              {filtrados.slice(0,limiteTabela).map(i => (
                 <tr key={i.imei} className="border-t border-slate-100 hover:bg-slate-50/60">
                   {podeSelecionar && (
                     <td className="px-3 py-2.5">
