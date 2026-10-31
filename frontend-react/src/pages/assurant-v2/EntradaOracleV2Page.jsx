@@ -443,6 +443,8 @@ function TabEntrada() {
   setConcluidosCarregados,
 ] = useState(false);
 
+  const [concluidosTotal, setConcluidosTotal] = useState(0);
+  const [limiteTabela, setLimiteTabela] = useState(200);
   const [
     loading,
     setLoading,
@@ -511,35 +513,17 @@ async function carregarPendentes() {
   }
 }
 
-async function carregarConcluidos({
-  forcar = false,
-} = {}) {
-  if (
-    concluidosCarregados &&
-    !forcar
-  ) {
-    return;
-  }
-
+async function carregarConcluidos({ forcar = false, acrescentar = false } = {}) {
+  if (concluidosCarregados && !forcar && !acrescentar) return;
   setLoading(true);
-
   try {
-    const concluidos =
-      await listarConfirmadosOracle();
-
-    setConcluidosLista(
-      concluidos
-    );
-
-    setConcluidosCarregados(
-      true
-    );
+    const offset = acrescentar ? concluidosLista.length : 0;
+    const pagina = await listarConfirmadosOracle({ limite: 500, offset });
+    setConcluidosLista(atuais => acrescentar ? [...atuais, ...pagina] : pagina);
+    setConcluidosTotal(pagina.total ?? pagina.length);
+    setConcluidosCarregados(true);
   } catch (error) {
-    setFeedback({
-      tipo: "erro",
-      msg:
-        error.message,
-    });
+    setFeedback({ tipo: "erro", msg: error.message });
   } finally {
     setLoading(false);
   }
@@ -1170,7 +1154,7 @@ await carregarPendentes();
   value={
     concluidosCarregados
       ? fmtNumber(
-          concluidosLista.length
+          concluidosTotal
         )
       : "—"
   }
@@ -1303,7 +1287,7 @@ await carregarPendentes();
               Concluídos ·{" "}
 {
   concluidosCarregados
-    ? concluidosLista.length
+    ? concluidosTotal
     : "carregar"
 }
             </button>
@@ -1596,7 +1580,7 @@ await carregarPendentes();
                   </thead>
 
                   <tbody>
-                    {filtrados.map(
+                    {filtrados.slice(0,limiteTabela).map(
                       (item) => {
                         const marcado =
                           selecao.has(
@@ -1767,26 +1751,24 @@ await carregarPendentes();
 
               <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 bg-slate-50/70 px-4 py-3">
                 <span className="text-[10px] font-semibold text-slate-500">
-                  {fmtNumber(
-                    filtrados.length
-                  )}{" "}
-                  {filtrados.length ===
-                  1
-                    ? "registro exibido"
-                    : "registros exibidos"}
+                  {fmtNumber(Math.min(filtrados.length,limiteTabela))} de {fmtNumber(filtrados.length)} registros exibidos
                 </span>
 
-                {podeSelecionar && (
-                  <span className="text-[9px] text-slate-400">
-                    Marque as linhas para confirmar a entrada no Oracle.
-                  </span>
-                )}
+                <div className="flex items-center gap-3">
+                  {filtrados.length>limiteTabela && <button type="button" onClick={()=>setLimiteTabela(n=>n+200)} className="rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs font-bold text-violet-700">Mostrar mais 200</button>}
+                  {podeSelecionar && <span className="text-[9px] text-slate-400">Seleção geral respeita os filtros. Confira os IMEIs antes de confirmar.</span>}
+                </div>
               </div>
             </div>
           )}
         </div>
       </Panel>
-
+      {visao === "concluido" && concluidosCarregados && concluidosLista.length < concluidosTotal && (
+        <button type="button" disabled={loading} onClick={() => carregarConcluidos({ acrescentar: true })}
+          className="rounded-xl border border-emerald-200 bg-white px-5 py-3 text-xs font-bold text-emerald-700 disabled:opacity-40">
+          {loading ? "Carregando…" : `Carregar mais 500 confirmações (${concluidosLista.length} de ${concluidosTotal})`}
+        </button>
+      )}
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="rounded-xl border border-amber-100 bg-amber-50/60 p-4">
           <div className="flex items-start gap-3">
