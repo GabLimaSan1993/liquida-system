@@ -219,156 +219,48 @@ function campo(obj, ...chaves) {
   return null;
 }
 
-export async function listarAguardandoOracle() {
-  // 1. Itens do Gaia aguardando Oracle. select("*") de propósito: a triagem tem
-  //    dezenas de colunas e nomes que variam, e são poucas centenas de linhas.
-  const { data: triagem, error: errT } = await supabase
-    .from("assurant_triagem")
-    .select("*")
-    .eq("status_atual", STATUS_AGUARDANDO);
-  if (errT) throw new Error(errT.message);
-  if (!triagem?.length) return [];
-
-  // 2. Dedupe por IMEI, mantendo a passagem mais recente.
-  const porImei = new Map();
-  for (const t of triagem) {
-    const atual = porImei.get(t.imei);
-    if (!atual || new Date(t.criado_em) > new Date(atual.criado_em)) {
-      porImei.set(t.imei, t);
-    }
-  }
-  const itens = [...porImei.values()];
-
-  // 3. Busca o relatório AP dos vouchers em jogo, em blocos de 200
-  //    (lista grande em .in() estoura a URL em silêncio).
-  const vouchers = [...new Set(itens.map(i => i.voucher).filter(Boolean))];
-  const apPorPo = new Map();
-  for (let i = 0; i < vouchers.length; i += BLOCO_IDS) {
-    const { data: ap, error: errAp } = await supabase
-      .from("entrada_oracle_ap")
-      .select("po_gerada, cpf_cnpj, nome, ri_numero, nota_gerada, po_status, importado_em")
-      .in("po_gerada", vouchers.slice(i, i + BLOCO_IDS));
-    if (errAp) throw new Error(errAp.message);
-    // Fica com a versão MAIS RECENTE de cada PO — é isso que faz o
-    // "Pendente RI" se resolver sozinho quando chega um download novo.
-    for (const r of (ap || [])) {
-      const atual = apPorPo.get(r.po_gerada);
-      if (!atual || new Date(r.importado_em) > new Date(atual.importado_em)) {
-        apPorPo.set(r.po_gerada, r);
-      }
-    }
-  }
-
-  // 4. Monta a linha da tela.
-  return itens.map(t => {
-    const ap = apPorPo.get(t.voucher) || null;
-    const grade = campo(t, "grade", "grade_cosmetica", "grade_final");
-    const bateria = campo(t, "status_bateria");
-    return {
-      id:            t.id,
-      imei:          t.imei,
-      voucher:       t.voucher,
-      sku:           campo(t, "sku", "cod_item"),
-      produto:       campo(t, "produto", "modelo", "descricao"),
-      grade,
-      statusBateria: bateria,
-      gradeOracle:   gradeParaOracle(grade, bateria),
-      rebaixado:     rebaixadoPorBateria(grade, bateria),
-      local:         campo(t, "local"),
-      documento:     ap?.cpf_cnpj  || null,
-      nomeCliente:   ap?.nome      || null,
-      ri:            ap?.ri_numero || null,
-      nf:            ap?.nota_gerada || null,
-      poStatus:      ap?.po_status || null,
-      temMatchAp:    !!ap,
-      pendenteRi:    !ap || !ap.ri_numero,
-    };
+// Consulta enxuta: servidor pagina o histórico, busca só a última versão
+// de cada PO e devolve apenas os campos da tela (não baixa linhas brutas do AP).
+// O índice (po_gerada, importado_em DESC) permite a correspondência rápida.
+async function consultarPaginaOracle(visao, limite = 500, offset = 0) {
+  const { data, error } = await supabase.rpc('assurant_oracle_listar', {
+    p_visao: visao,
+    p_limite: limite,
+    p_offset: offset,
   });
+  if (error) throw new Error(error.message);
+  const itens = Array.isArray(data?.itens) ? data.itens : [];
+  return { total: Number(data?.total ?? 0), itens: itens.map(t => {
+    const grade = t.grade;
+    const bateria = t.statusBateria;
+    return {
+      ...t,
+      gradeOracle: gradeParaOracle(grade, bateria),
+      rebaixado: rebaixadoPorBateria(grade, bateria),
+    };
+  }) };
 }
 
-// Lista o histórico do que já foi confirmado no Oracle. Mesmo cruzamento com o
-// relatório AP, mais quem confirmou e quando.
-export async function listarConfirmadosOracle({ limite = null } = {}) {
-  // Sem paginação a lista para no teto do PostgREST e o total congela (era 1000).
-  // Puxa em páginas até acabar, ou até o limite pedido quando houver um.
-  const PAGINA = 1000;
-  const triagem = [];
-  for (let inicio = 0; ; inicio += PAGINA) {
-    const fim = inicio + PAGINA - 1;
-    const { data, error: errT } = await supabase
-      .from("assurant_triagem")
-      .select("*")
-      .not("oracle_confirmado_em", "is", null)
-      .order("oracle_confirmado_em", { ascending: false })
-      .range(inicio, fim);
-    if (errT) throw new Error(errT.message);
-    triagem.push(...(data || []));
-    if (!data || data.length < PAGINA) break;
-    if (limite && triagem.length >= limite) break;
+// Pendentes em páginas pequenas, para manter filtros e seleção de lote completos.
+// Cada chamada recebe no máximo 500 linhas compactas, evitando timeouts e o teto de 1000 do PostgREST.
+export async function listarAguardandoOracle() {
+  const primeiro = await consultarPaginaOracle('pendentes');
+  const itens = [...primeiro.itens];
+  for (let offset = itens.length; offset < primeiro.total; offset += 500) {
+    const pagina = await consultarPaginaOracle('pendentes', 500, offset);
+    if (!pagina.itens.length) break;
+    itens.push(...pagina.itens);
   }
-  if (!triagem.length) return [];
+  return itens;
+}
 
-  // Dedupe por IMEI, mantendo a confirmação mais recente.
-  const porImei = new Map();
-  for (const t of triagem) {
-    const atual = porImei.get(t.imei);
-    if (!atual || new Date(t.oracle_confirmado_em) > new Date(atual.oracle_confirmado_em)) {
-      porImei.set(t.imei, t);
-    }
-  }
-  const itens = [...porImei.values()];
-
-  // Relatório AP dos vouchers em jogo (versão mais recente de cada PO).
-  const vouchers = [...new Set(itens.map(i => i.voucher).filter(Boolean))];
-  const apPorPo = new Map();
-  for (let i = 0; i < vouchers.length; i += BLOCO_IDS) {
-    const { data: ap, error: errAp } = await supabase
-      .from("entrada_oracle_ap")
-      .select("po_gerada, cpf_cnpj, ri_numero, nota_gerada, po_status, importado_em")
-      .in("po_gerada", vouchers.slice(i, i + BLOCO_IDS));
-    if (errAp) throw new Error(errAp.message);
-    for (const r of (ap || [])) {
-      const atual = apPorPo.get(r.po_gerada);
-      if (!atual || new Date(r.importado_em) > new Date(atual.importado_em)) {
-        apPorPo.set(r.po_gerada, r);
-      }
-    }
-  }
-
-  // Nome de quem confirmou (a triagem guarda só o uuid).
-  const userIds = [...new Set(itens.map(i => i.oracle_confirmado_por).filter(Boolean))];
-  const nomes = new Map();
-  if (userIds.length) {
-    const { data: perfis } = await supabase
-      .from("user_profiles").select("id, nome").in("id", userIds);
-    (perfis || []).forEach(p => nomes.set(p.id, p.nome));
-  }
-
-  return itens.map(t => {
-    const ap = apPorPo.get(t.voucher) || null;
-    const grade = campo(t, "grade", "grade_cosmetica", "grade_final");
-    const bateria = campo(t, "status_bateria");
-    return {
-      id:            t.id,
-      imei:          t.imei,
-      voucher:       t.voucher,
-      sku:           campo(t, "sku", "cod_item"),
-      produto:       campo(t, "produto", "modelo", "descricao"),
-      grade,
-      statusBateria: bateria,
-      gradeOracle:   gradeParaOracle(grade, bateria),
-      rebaixado:     rebaixadoPorBateria(grade, bateria),
-      local:         campo(t, "local"),
-      documento:     ap?.cpf_cnpj    || null,
-      ri:            ap?.ri_numero   || null,
-      nf:            ap?.nota_gerada || null,
-      poStatus:      ap?.po_status   || null,
-      pendenteRi:    !ap || !ap.ri_numero,
-      confirmadoEm:  t.oracle_confirmado_em,
-      confirmadoPor: nomes.get(t.oracle_confirmado_por) || null,
-      statusAtual:   t.status_atual,
-    };
-  });
+// O histórico não é mais carregado integralmente na abertura da tela.
+// Páginas de 500 com total real preservam o acesso aos registros anteriores.
+export async function listarConfirmadosOracle({ limite = 500, offset = 0 } = {}) {
+  const pagina = await consultarPaginaOracle('concluidos', Math.min(500, Math.max(1, limite)), offset);
+  const itens = pagina.itens;
+  itens.total = pagina.total;
+  return itens;
 }
 
 // Confirma a entrada no Oracle: o item vira "Produto disponível" — ou seja,
