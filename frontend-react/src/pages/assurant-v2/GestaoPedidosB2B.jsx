@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { CheckCircle2, ChevronDown, FileText, Mail, RefreshCw, Search, X } from "lucide-react";
+import { FileText, Mail, RefreshCw, Search, X } from "lucide-react";
 import { reenviarEmailConclusaoB2B } from "../../services/B2BPainelGestorService.js";
 
 const STATUS = [
@@ -22,8 +22,13 @@ const COR = {
 
 const dt = (valor) => {
   if (!valor) return "—";
-  const partes = String(valor).slice(0, 10).split("-");
-  return partes.length === 3 ? partes.reverse().join("/") : String(valor);
+  const texto = String(valor);
+  if (/T\\d{2}:\\d{2}|\\s\\d{2}:\\d{2}/.test(texto)) {
+    const data = new Date(texto);
+    if (!Number.isNaN(data.getTime())) return data.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+  }
+  const partes = texto.slice(0, 10).split("-");
+  return partes.length === 3 ? partes.reverse().join("/") : texto;
 };
 const num = (v) => Number(v || 0).toLocaleString("pt-BR");
 const moeda = (v) => v == null ? "—" : Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
