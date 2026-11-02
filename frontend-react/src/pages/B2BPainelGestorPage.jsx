@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import GestaoPedidosB2B from "./assurant-v2/GestaoPedidosB2B.jsx";
 import {
   Gauge, RefreshCw, Clock, AlertTriangle, TrendingUp,
   Package, FileText, ScanLine, PackageCheck, Search, MapPin, Ban,
@@ -211,7 +212,7 @@ export default function B2BPainelGestorPage() {
   const [periodo, setPeriodo] = useState("30d");
   const [dados, setDados]     = useState(null);
   const [loading, setLoading] = useState(true);
-  const [aba, setAba]         = useState("geral");
+  const [aba, setAba]         = useState("pedidos");
 
   // Visão geral: árvore de períodos + linhas por item, carregadas uma vez.
   const [geral, setGeral]       = useState(null);
@@ -225,6 +226,7 @@ export default function B2BPainelGestorPage() {
   // Aba Pedidos — o acompanhamento que hoje é planilha.
   const [pedidosAcomp, setPedidosAcomp] = useState(null);
   const [loadPed, setLoadPed]           = useState(false);
+  const [erroPed, setErroPed] = useState("");
   const [filtroStatus, setFiltroStatus] = useState(null);
   const [buscaPed, setBuscaPed]         = useState("");
   // Nós abertos da tabela dinâmica: "2026", "2026|Agosto", "2026|Agosto|05"
@@ -238,7 +240,7 @@ export default function B2BPainelGestorPage() {
     });
   }
 
-  useEffect(() => { carregar(); }, [periodo]);
+  useEffect(() => { if (aba !== "pedidos") carregar(); }, [periodo, aba]);
   useEffect(() => { if (aba === "geral" && !geral) carregarGeral(); }, [aba]);
   useEffect(() => { if (aba === "pedidos" && !pedidosAcomp) carregarPedidos(); }, [aba]);
 
@@ -246,8 +248,13 @@ export default function B2BPainelGestorPage() {
     setLoadPed(true);
     try {
       const r = await listarPedidosAcompanhamento();
-      setPedidosAcomp(r.ok ? r.pedidos : []);
-    } catch (e) { console.error(e); setPedidosAcomp([]); }
+      if (!r.ok) throw new Error(r.erro || "Falha ao consultar os pedidos B2B.");
+      setPedidosAcomp(r.pedidos);
+      setErroPed("");
+    } catch (e) {
+      console.error(e);
+      setErroPed(e.message || "Não foi possível carregar os pedidos.");
+    }
     finally { setLoadPed(false); }
   }
 
@@ -429,181 +436,17 @@ export default function B2BPainelGestorPage() {
       )}
 
       {aba === "pedidos" && (
-        loadPed ? (
-          <div className="flex items-center justify-center h-40">
-            <div className="h-8 w-8 border-4 border-purple-200 border-t-[#7F2D92] rounded-full animate-spin" />
-          </div>
-        ) : !pedidosAcomp?.length ? (
-          <div className="text-center py-12 text-slate-400">
-            <Package className="h-8 w-8 mx-auto mb-2 opacity-30" />
-            <p className="text-sm">Nenhum pedido encontrado.</p>
-          </div>
-        ) : (() => {
-          const cont = {};
-          pedidosAcomp.forEach(p => { cont[p.status] = (cont[p.status] || 0) + 1; });
-          const q = buscaPed.trim().toLowerCase();
-          const lista = pedidosAcomp.filter(p =>
-            (!filtroStatus || p.status === filtroStatus) &&
-            (!q || p.cliente.toLowerCase().includes(q) || String(p.lote || "").toLowerCase().includes(q))
-          );
-          return (
-            <>
-              <Card>
-                <div className="flex items-center gap-2 flex-wrap mb-3">
-                  <button onClick={() => setFiltroStatus(null)}
-                    className={`text-xs font-bold px-3 py-1.5 rounded-xl transition ${!filtroStatus ? "bg-[#7F2D92] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
-                    Todos · {pedidosAcomp.length}
-                  </button>
-                  {Object.keys(CORES_STATUS).filter(k => cont[k]).map(k => (
-                    <button key={k} onClick={() => setFiltroStatus(filtroStatus === k ? null : k)}
-                      className={`text-xs font-bold px-3 py-1.5 rounded-xl transition ${filtroStatus === k ? CORES_STATUS[k] : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
-                      {k} · {cont[k]}
-                    </button>
-                  ))}
-                </div>
-                <div className="relative">
-                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                  <input value={buscaPed} onChange={e => setBuscaPed(e.target.value)}
-                    placeholder="Buscar por cliente ou lote..."
-                    className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#7F2D92]" />
-                </div>
-              </Card>
-
-              <Card className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="text-left text-slate-500 border-b border-slate-200">
-                      <th className="px-2 py-2 font-bold">Período / cliente</th>
-                      <th className="px-2 py-2 font-bold">Data pedido</th>
-                      <th className="px-2 py-2 font-bold text-right">Pedido</th>
-                      <th className="px-2 py-2 font-bold text-right">Separado</th>
-                      <th className="px-2 py-2 font-bold text-center">Status</th>
-                      <th className="px-2 py-2 font-bold">Dt faturamento</th>
-                      <th className="px-2 py-2 font-bold text-right">Aging</th>
-                      <th className="px-2 py-2 font-bold text-right">Diferença</th>
-                      <th className="px-2 py-2 font-bold">Observações</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(() => {
-                      // Agrupa em ano › mês › dia; o pedido continua sendo a linha final,
-                      // para não perder cliente, status e observação no caminho.
-                      const arv = {};
-                      lista.forEach(p => {
-                        const [a, m, d] = (p.dataPedido || "0000-00-00").split("-");
-                        const mesNome = MESES_TABELA[Number(m) - 1] || m;
-                        ((((arv[a] ||= {})[mesNome] ||= {})[d] ||= [])).push(p);
-                      });
-
-                      const soma = (peds) => peds.reduce((s, p) => ({
-                        total: s.total + p.total, separado: s.separado + p.separado,
-                        diferenca: s.diferenca + p.diferenca, qtd: s.qtd + 1,
-                      }), { total: 0, separado: 0, diferenca: 0, qtd: 0 });
-
-                      const linhas = [];
-                      Object.keys(arv).sort((x, y) => y.localeCompare(x)).forEach(ano => {
-                        const dosAno = Object.values(arv[ano]).flatMap(m => Object.values(m).flat());
-                        const tA = soma(dosAno);
-                        const chaveA = ano;
-                        linhas.push(
-                          <tr key={chaveA} className="border-b border-slate-200 bg-slate-50 cursor-pointer hover:bg-slate-100"
-                              onClick={() => alternarNo(chaveA)}>
-                            <td className="px-2 py-2 font-black text-slate-800">
-                              {abertos.has(chaveA) ? "▾" : "▸"} {ano}
-                            </td>
-                            <td className="px-2 py-2 text-slate-400">{tA.qtd} pedidos</td>
-                            <td className="px-2 py-2 text-right font-bold">{tA.total}</td>
-                            <td className="px-2 py-2 text-right">{tA.separado}</td>
-                            <td colSpan={3} />
-                            <td className="px-2 py-2 text-right font-bold text-amber-700">{tA.diferenca || ""}</td>
-                            <td />
-                          </tr>,
-                        );
-                        if (!abertos.has(chaveA)) return;
-
-                        Object.keys(arv[ano])
-                          .sort((x, y) => MESES_TABELA.indexOf(y) - MESES_TABELA.indexOf(x))
-                          .forEach(mes => {
-                            const dosMes = Object.values(arv[ano][mes]).flat();
-                            const tM = soma(dosMes);
-                            const chaveM = `${ano}|${mes}`;
-                            linhas.push(
-                              <tr key={chaveM} className="border-b border-slate-100 cursor-pointer hover:bg-slate-50"
-                                  onClick={() => alternarNo(chaveM)}>
-                                <td className="px-2 py-2 pl-6 font-bold text-slate-700">
-                                  {abertos.has(chaveM) ? "▾" : "▸"} {mes}
-                                </td>
-                                <td className="px-2 py-2 text-slate-400">{tM.qtd} pedidos</td>
-                                <td className="px-2 py-2 text-right font-semibold">{tM.total}</td>
-                                <td className="px-2 py-2 text-right">{tM.separado}</td>
-                                <td colSpan={3} />
-                                <td className="px-2 py-2 text-right font-semibold text-amber-700">{tM.diferenca || ""}</td>
-                                <td />
-                              </tr>,
-                            );
-                            if (!abertos.has(chaveM)) return;
-
-                            Object.keys(arv[ano][mes]).sort((x, y) => y.localeCompare(x)).forEach(dia => {
-                              const peds = arv[ano][mes][dia];
-                              const tD = soma(peds);
-                              const chaveD = `${ano}|${mes}|${dia}`;
-                              linhas.push(
-                                <tr key={chaveD} className="border-b border-slate-100 cursor-pointer hover:bg-slate-50"
-                                    onClick={() => alternarNo(chaveD)}>
-                                  <td className="px-2 py-2 pl-12 font-semibold text-slate-600">
-                                    {abertos.has(chaveD) ? "▾" : "▸"} dia {dia}
-                                  </td>
-                                  <td className="px-2 py-2 text-slate-400">{tD.qtd} pedidos</td>
-                                  <td className="px-2 py-2 text-right">{tD.total}</td>
-                                  <td className="px-2 py-2 text-right">{tD.separado}</td>
-                                  <td colSpan={3} />
-                                  <td className="px-2 py-2 text-right text-amber-700">{tD.diferenca || ""}</td>
-                                  <td />
-                                </tr>,
-                              );
-                              if (!abertos.has(chaveD)) return;
-
-                              peds.forEach(p => linhas.push(
-                                <tr key={p.id} className="border-b border-slate-100 hover:bg-purple-50/40">
-                                  <td className="px-2 py-2 pl-16 font-semibold text-slate-700">
-                                    {p.cliente}
-                                    {p.lote && <span className="block text-[10px] font-normal text-slate-400">{p.lote}</span>}
-                                  </td>
-                                  <td className="px-2 py-2 text-slate-600">{fmtDia(p.dataPedido)}</td>
-                                  <td className="px-2 py-2 text-right font-semibold text-slate-700">{p.total}</td>
-                                  <td className="px-2 py-2 text-right text-slate-600">{p.separado}</td>
-                                  <td className="px-2 py-2 text-center">
-                                    <span className={`inline-block text-[10px] font-black px-2 py-1 rounded ${CORES_STATUS[p.status] || "bg-slate-200 text-slate-600"}`}>
-                                      {p.status}
-                                    </span>
-                                  </td>
-                                  <td className="px-2 py-2 text-slate-600">{fmtDia(p.dataFaturamento)}</td>
-                                  <td className={`px-2 py-2 text-right font-semibold ${p.agingAberto && p.aging > 2 ? "text-red-600" : "text-slate-600"}`}>
-                                    {p.aging != null ? `${p.aging}d` : "—"}
-                                  </td>
-                                  <td className={`px-2 py-2 text-right font-bold ${p.diferenca > 0 ? "text-amber-700" : "text-slate-400"}`}>
-                                    {p.diferenca}
-                                  </td>
-                                  <td className="px-2 py-2 text-slate-500 max-w-[220px]">{p.observacoes || "—"}</td>
-                                </tr>,
-                              ));
-                            });
-                          });
-                      });
-                      return linhas;
-                    })()}
-                  </tbody>
-                </table>
-                {lista.length === 0 && (
-                  <p className="text-xs text-slate-400 text-center py-6">Nenhum pedido com esse filtro.</p>
-                )}
-              </Card>
-            </>
-          );
-        })()
+        <>
+          {erroPed && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{erroPed}</div>}
+          <GestaoPedidosB2B
+            pedidos={pedidosAcomp || []}
+            carregando={loadPed}
+            aoAtualizar={carregarPedidos}
+          />
+        </>
       )}
 
-      {loading ? (
+            {aba !== "pedidos" && (loading ? (
         <div className="flex items-center justify-center h-40">
           <div className="h-8 w-8 border-4 border-purple-200 border-t-[#7F2D92] rounded-full animate-spin" />
         </div>
@@ -762,7 +605,7 @@ export default function B2BPainelGestorPage() {
             </div>
           </Card>
         </>
-      )}
+      ))}
     </div>
   );
 }
