@@ -505,119 +505,29 @@ export function agruparMotivos(naoFaturados, limite = 10) {
 // A coluna "observações" é o que está em análise: motivos de não faturar
 // e peças que o separador não achou e ainda não voltaram.
 // ══════════════════════════════════════════════════════════
+// Consolidação única no Supabase. Totais, NFs e exportações vêm das tabelas
+// operacionais; não dependem dos contadores do cabeçalho do pedido.
 export async function listarPedidosAcompanhamento() {
-  const { data: pedidos, error } = await supabase
-    .from("b2b_pedidos")
-    .select("id, lote, cliente, total_itens, total_bipados, data_pedido, criado_em, status, status_picking, status_faturamento, previsao_faturamento")
-    .order("data_pedido", { ascending: false, nullsFirst: false });
-  if (error) return { ok: false, erro: error.message };
-  if (!pedidos?.length) return { ok: true, pedidos: [] };
+  const { data, error } = await supabase.rpc("assurant_b2b_gestao_pedidos");
+  if (error) return { ok: false, erro: error.message, pedidos: [] };
+  return { ok: true, pedidos: Array.isArray(data) ? data : [] };
+}
 
-  const ids = pedidos.map(p => p.id);
-
-  // Contagens reais por pedido — total_bipados do cabeçalho nem sempre acompanha.
-  const contagem = {};
-  const BLOCO = 200;
-  for (let i = 0; i < ids.length; i += BLOCO) {
-    const fatia = ids.slice(i, i + BLOCO);
-    let inicio = 0;
-    while (true) {
-      const { data: itens } = await supabase
-        .from("b2b_itens")
-        .select("pedido_id, status, nf, nao_faturar_em, motivo_nao_faturar, obs_nao_faturar, nao_localizado_em, localizado_em")
-        .in("pedido_id", fatia)
-        .range(inicio, inicio + 999);
-      (itens || []).forEach(it => {
-        const c = (contagem[it.pedido_id] ||= {
-          total: 0, bipados: 0, faturados: 0, naoFaturar: 0, naoLocalizado: 0, motivos: {},
-        });
-        c.total++;
-        if (it.status === "bipado") c.bipados++;
-        if (it.nf) c.faturados++;
-        if (it.nao_faturar_em) {
-          c.naoFaturar++;
-          // A observação da planilha é justamente isto: o porquê de não ter faturado.
-          const m = (it.obs_nao_faturar || it.motivo_nao_faturar || "sem motivo").trim();
-          c.motivos[m] = (c.motivos[m] || 0) + 1;
-        }
-        // Não localizado que ainda não voltou continua pendente na rua.
-        if (it.nao_localizado_em && !it.localizado_em) c.naoLocalizado++;
-      });
-      if (!itens || itens.length < 1000) break;
-      inicio += 1000;
-    }
+// O Edge Function exige JWT do operador, permissão de Gestão B2B e pedido concluído.
+// Nunca altera as NFs: apenas reenvia o resumo comercial do lote.
+export async function reenviarEmailConclusaoB2B(pedidoId) {
+  if (!pedidoId) throw new Error("Selecione um pedido B2B.");
+  const { data, error } = await supabase.functions.invoke("email-conclusao-b2b", {
+    body: { pedido_id: pedidoId, forcar: true },
+  });
+  if (error) {
+    let mensagem = error.message;
+    try {
+      const resposta = await error.context?.json?.();
+      if (resposta?.erro) mensagem = resposta.erro;
+    } catch { /* manter mensagem original */ }
+    throw new Error(mensagem || "Não foi possível reenviar o e-mail.");
   }
-
-  // Data da primeira NF de cada pedido
-  const { data: nfs } = await supabase
-    .from("b2b_nfs")
-    .select("pedido_id, data_faturamento, importado_em");
-  const dataNf = {};
-  (nfs || []).forEach(n => {
-    const d = n.data_faturamento || n.importado_em;
-    if (!d) return;
-    if (!dataNf[n.pedido_id] || d < dataNf[n.pedido_id]) dataNf[n.pedido_id] = d;
-  });
-
-  const soData = (v) => {
-    const m = String(v || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
-    return m ? `${m[1]}-${m[2]}-${m[3]}` : null;
-  };
-  const diasEntre = (a, b) => {
-    if (!a || !b) return null;
-    const d1 = new Date(`${a}T00:00:00Z`).getTime();
-    const d2 = new Date(`${b}T00:00:00Z`).getTime();
-    return Math.round((d2 - d1) / 86400000);
-  };
-
-  const linhas = pedidos.map(p => {
-    const c = contagem[p.id] || { total: 0, bipados: 0, faturados: 0, naoFaturar: 0, naoLocalizado: 0, motivos: {} };
-    const total     = c.total || p.total_itens || 0;
-    const separado  = c.bipados;
-    const faturados = c.faturados;
-    const dtPedido  = soData(p.data_pedido || p.criado_em);
-    const dtFat     = soData(dataNf[p.id]);
-
-    // O status sai da contagem, não do campo: é o que a planilha faz na mão.
-    // Item marcado como "não faturar" saiu do fluxo — não é pendência. Então o
-    // alvo real do pedido é o total menos esses; sem isso um pedido resolvido
-    // fica eternamente "parcial" por causa de itens que nunca vão faturar.
-    const alvo = Math.max(0, total - c.naoFaturar);
-    let status;
-    if (alvo === 0 && total > 0)                status = "FATURADO";
-    else if (faturados >= alvo && alvo > 0)     status = "FATURADO";
-    else if (faturados > 0)                     status = "EM FATURAMENTO (PARCIAL)";
-    else if (separado >= alvo && alvo > 0)      status = "AGUARDANDO FATURAMENTO";
-    else                                        status = "EM SEPARAÇÃO";
-
-    return {
-      id: p.id,
-      lote: p.lote,
-      cliente: p.cliente || "—",
-      dataPedido: dtPedido,
-      total,
-      separado,
-      faturados,
-      naoFaturar: c.naoFaturar,
-      status,
-      dataFaturamento: dtFat,
-      // Aging: dias do pedido até a primeira NF; se ainda não faturou, até hoje.
-      aging: diasEntre(dtPedido, dtFat || new Date().toISOString().slice(0, 10)),
-      agingAberto: !dtFat,
-      // Diferença: o que falta separar (é assim que a planilha usa hoje).
-      alvo,
-      diferenca: Math.max(0, alvo - separado),
-      // Observações = o que ficou em análise: motivos de não faturar e peças na rua.
-      motivos: Object.entries(c.motivos)
-        .map(([motivo, qtd]) => ({ motivo, qtd }))
-        .sort((a, b) => b.qtd - a.qtd),
-      naoLocalizado: c.naoLocalizado,
-      observacoes: [
-        ...Object.entries(c.motivos).map(([m, q]) => `${q} ${m}`),
-        c.naoLocalizado ? `${c.naoLocalizado} não localizado(s)` : null,
-      ].filter(Boolean).join(" · "),
-    };
-  });
-
-  return { ok: true, pedidos: linhas };
+  if (!data?.ok) throw new Error(data?.erro || "O servidor não confirmou o reenvio.");
+  return data;
 }
