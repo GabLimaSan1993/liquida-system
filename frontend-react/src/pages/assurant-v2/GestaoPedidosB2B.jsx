@@ -23,7 +23,7 @@ const COR = {
 const dt = (valor) => {
   if (!valor) return "—";
   const texto = String(valor);
-  if (/T\\d{2}:\\d{2}|\\s\\d{2}:\\d{2}/.test(texto)) {
+  if (/T\d{2}:\d{2}|\s\d{2}:\d{2}/.test(texto)) {
     const data = new Date(texto);
     if (!Number.isNaN(data.getTime())) return data.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
   }
