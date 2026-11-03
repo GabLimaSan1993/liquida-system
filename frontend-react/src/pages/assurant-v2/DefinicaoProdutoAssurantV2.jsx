@@ -196,6 +196,10 @@ export default function DefinicaoProdutoAssurantV2({ etapa = "liquida" }) {
 
   async function confirmar() {
     if (!pedido || !opcao?.fifo || !podeDecidir) return;
+    if (etapa === "assurant" && /^WHS/i.test(String(opcao.fifo.local_subinv || "").trim())) {
+      setErro("Alocação Assurant bloqueada: estoque WHS não pode ser utilizado para pedidos.");
+      return;
+    }
     if (etapa === "liquida" && opcao.relacao === "upgrade") { setErro("Encaminhe à Assurant para aprovar o upgrade."); return; }
 
     if (opcao.relacao === "downgrade") {
@@ -328,6 +332,12 @@ export default function DefinicaoProdutoAssurantV2({ etapa = "liquida" }) {
         </div>
       </Card>
 
+      {etapa === "assurant" && (
+        <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-bold text-amber-900">
+          <Ban className="h-4 w-4 shrink-0" />
+          Trava ativa: produtos do estoque WHS não podem ser alocados a pedidos pela Assurant. Esses itens não aparecem nas opções de alocação.
+        </div>
+      )}
       {etapa === "liquida" && hasAccess(DEFINICAO_ASSURANT_ROUTE) && <Link to={DEFINICAO_ASSURANT_ROUTE} className="inline-flex rounded-xl bg-violet-50 px-4 py-2 text-sm font-bold text-violet-800">Abrir fila da Assurant e relatório</Link>}
       {etapa === "liquida" && !podeDecidir && <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800">A Liquida realiza a primeira tentativa. Os pedidos encaminhados aparecem na fila separada da Assurant.</p>}
       {erro && (
@@ -790,6 +800,7 @@ export default function DefinicaoProdutoAssurantV2({ etapa = "liquida" }) {
                   disabled={
                     salvando || buscando || !podeDecidir ||
                     !opcao ||
+                    (etapa === "assurant" && /^WHS/i.test(String(opcao?.fifo?.local_subinv || "").trim())) ||
                     (etapa === "liquida" && opcao.relacao === "upgrade") ||
                     opcao.relacao === "downgrade" ||
                     (opcao.relacao === "upgrade" && !cienteUpgrade)
