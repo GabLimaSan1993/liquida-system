@@ -1,4 +1,5 @@
 import LaboratorioReparoV2Page from "./pages/assurant-v2/LaboratorioReparoV2Page.jsx";
+import LaboratorioIndividualV2Page from "./pages/assurant-v2/LaboratorioIndividualV2Page.jsx";
 import BaixasManuaisB2CV2Page from './pages/assurant-v2/BaixasManuaisB2CV2Page.jsx';
 import UploadAgingLinhaBrancaPage from "./pages/linha-branca-v2/UploadAgingLinhaBrancaPage.jsx";
 import DivergenciasImeiV2Page from "./pages/assurant-v2/DivergenciasImeiV2Page.jsx";
@@ -528,7 +529,11 @@ export default function App() {
         {/* Fluxo piloto — laboratório de reparos, acesso restrito */}
         <Route
           path="laboratorio/reparos"
-          element={<ProtectedRoute tela="/v2/assurant/laboratorio/reparos"><LaboratorioReparoV2Page /></ProtectedRoute>}
+          element={<ProtectedRoute tela="/v2/assurant/laboratorio/reparos"><LaboratorioIndividualV2Page /></ProtectedRoute>}
+        />
+        <Route
+          path="laboratorio/reparos/romaneios-antigos"
+          element={<UserOnlyRoute userIds={["b517d70a-56be-4b4f-8b9e-a03c769dd3c3"]}><LaboratorioReparoV2Page /></UserOnlyRoute>}
         />
 
         {/* Recebimento */}
