@@ -371,7 +371,7 @@ const MENU_GROUPS = [
     { label: "Relatório de Estoque", icon: FileText, to: "/v2/assurant/gestao/relatorio-estoque", exact: true, enabled: true },
     { label: "Fechamento de Lojas", icon: FileText, to: "/v2/assurant/gestao/fechamento-lojas", exact: true, enabled: true },
     { label: "Fechamento Diário", icon: BarChart3, to: "/v2/assurant/gestao/fechamento-diario", exact: true, enabled: true, allowedUserIds: FECHAMENTO_DIARIO_ALLOWED_USERS },
-    { label: "Fechamento Mensal • Cobrança", icon: FileText, to: "/v2/assurant/gestao/fechamento-cobranca", exact: true, enabled: true, allowedUserIds: FECHAMENTO_DIARIO_ALLOWED_USERS },
+    { label: "Fechamento Mensal • Cobrança", icon: FileText, to: "/v2/assurant/gestao/fechamento-cobranca", exact: true, enabled: true },
     { label: "Produção da Esteira", icon: Activity, to: "/v2/assurant/gestao/producao", exact: true, enabled: true },
     { label: "Gestão da Esteira", icon: Activity, to: "/v2/assurant/gestao/esteira", exact: true, enabled: true },
 
