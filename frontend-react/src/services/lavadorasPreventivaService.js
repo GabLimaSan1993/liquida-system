@@ -82,3 +82,11 @@ export async function conferirEvidenciasEsteticas(osId){
     !fotos.some(f=>f.categoria==="estetico"&&f.item===item&&f.fase==="depois"));
   return {check,fotos,pendentes};
 }
+
+export async function encaminharNaoConformidadeLavadora(cicloId,operador){
+ const {data,error}=await supabase.rpc("lavadora_encaminhar_nao_conformidade",{
+  p_ciclo_id:cicloId,p_operador:operador
+ });
+ if(error)throw error;
+ return data;
+}
