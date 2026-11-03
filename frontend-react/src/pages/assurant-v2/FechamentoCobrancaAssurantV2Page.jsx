@@ -45,7 +45,7 @@ const inicial = () => ({triagemTipo:"funcional",linhas:{}});
 function resolver(it,config,apuracao) {
   const x=(config?.linhas||{})[it.id]||{};
   let auto=it.id==="triagem" ? number(apuracao?.["triagem_"+(config?.triagemTipo || "funcional")]) : number(apuracao?.[it.id]);
-  const segQt=x.qtdS==null ? it.padraoS ?? (it.seguradora ? null : 0) : x.qtdS;
+  const segQt=x.qtdS==null ? (it.estoque ? null : (it.padraoS ?? (it.seguradora ? null : 0))) : x.qtdS;
   const comQt=x.qtdC==null ? it.padraoC ?? (it.seguradora ? null : 0) : x.qtdC;
   const qtdC=it.auto && !x.substituirAuto ? (it.estoque ? Math.max(0,auto-number(segQt)) : auto) : comQt;
   const qtdS=segQt;
@@ -174,13 +174,16 @@ export default function FechamentoCobrancaAssurantV2Page() {
   const linhas=useMemo(()=>ITENS.map(it=>resolver(it,config,apuracao)),[config,apuracao]);
   const totalC=linhas.reduce((s,l)=>s+l.totalC,0),totalS=linhas.reduce((s,l)=>s+l.totalS,0);
   const pendentes=linhas.filter(l=>
-    !l.auto && (!l.revisado || (!l.direta && (l.qtdC==null || l.qtdS==null))) ||
-    l.auto && l.substituirAuto && (!l.revisado || !String(l.justificativa||"").trim())
+    !l.revisado ||
+    (!l.auto && !l.direta && (l.qtdC==null || l.qtdS==null)) ||
+    (l.direta && (l.valorC==null || l.valorS==null)) ||
+    (l.estoque && l.qtdS==null) ||
+    (l.auto && l.substituirAuto && !String(l.justificativa||"").trim())
   );
   async function persistir(acao) {
     if(!apuracao){setErro("Apuração indisponível.");return;}
     if(acao==="fechar" && pendentes.length) {
-      setErro("Revise os campos manuais, inclusive quantidades zeradas, e justifique quaisquer ajustes automáticos: "+pendentes.length+" linha(s) pendente(s).");
+      setErro("Confira todas as linhas, preencha zero explicitamente onde não houve movimento, distribua o estoque e justifique ajustes automáticos: "+pendentes.length+" linha(s) pendente(s).");
       return;
     }
     if(acao==="fechar" && !window.confirm("Fechar "+mesNome(mes)+" e bloquear alterações sem justificativa?"))return;
