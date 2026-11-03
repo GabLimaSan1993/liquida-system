@@ -636,13 +636,31 @@ export default function RastreabilidadeItemV2Page() {
     setError("");
 
     try {
-      const { data: result, error: rpcError } = await supabase.rpc(
+      // A RPC privada exige JWT do usuário: nunca fazer a busca como anon.
+      // getSession valida/renova a sessão antes de iniciar a consulta.
+      const { data: authData, error: authError } = await supabase.auth.getSession();
+      if (authError || !authData?.session?.access_token) {
+        throw new Error("Sua sessão expirou. Faça login novamente no Liquida System para consultar a rastreabilidade.");
+      }
+
+      const parametrosBusca = { p_busca: term, p_imei: imei || null };
+      let { data: result, error: rpcError } = await supabase.rpc(
         "assurant_rastreabilidade_privada_fast",
-        {
-          p_busca: term,
-          p_imei: imei || null,
-        }
+        parametrosBusca
       );
+
+      // Sessões antigas podem perder o token em uma aba aberta por muito tempo.
+      // Renova uma única vez, sem ampliar permissões no banco e sem repetição infinita.
+      if (rpcError && /permission denied for function/i.test(rpcError.message || "")) {
+        const { data: renewed, error: renewError } = await supabase.auth.refreshSession();
+        if (renewError || !renewed?.session?.access_token) {
+          throw new Error("Sua sessão expirou. Faça login novamente no Liquida System para consultar a rastreabilidade.");
+        }
+        ({ data: result, error: rpcError } = await supabase.rpc(
+          "assurant_rastreabilidade_privada_fast",
+          parametrosBusca
+        ));
+      }
 
       if (rpcError) throw rpcError;
 
