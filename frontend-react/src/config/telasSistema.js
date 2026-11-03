@@ -29,6 +29,7 @@ export const TELAS = [
   { id: "/v2/assurant/gestao/relatorio-estoque", label: "Relatório de Estoque", grupo: "Assurant — Gestão" },
   { id: "/v2/assurant/gestao/fechamento-lojas", label: "Fechamento de Lojas — Cosmética", grupo: "Assurant — Gestão" },
   { id: "/v2/assurant/gestao/producao", label: "Produção da Esteira e Ranking", grupo: "Assurant — Gestão" },
+  { id: "/v2/assurant/gestao/fechamento-cobranca", label: "Fechamento Mensal — Cobrança Assurant", grupo: "Assurant — Gestão" },
   { id: "/v2/assurant/gestao/esteira", label: "Gestão da Esteira — Trade-in até Armazenagem", grupo: "Assurant — Gestão" },
     { id: "/v2/assurant", label: "Assurant — Acesso ao Workspace", grupo: "Assurant" },
 
