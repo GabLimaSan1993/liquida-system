@@ -47,7 +47,7 @@ function resolver(it,config,apuracao) {
   let auto=it.id==="triagem" ? number(apuracao?.["triagem_"+(config?.triagemTipo || "funcional")]) : number(apuracao?.[it.id]);
   const segQt=x.qtdS==null ? (it.estoque ? null : (it.padraoS ?? (it.auto ? 0 : null))) : x.qtdS;
   const comQt=x.qtdC==null ? (it.padraoC ?? null) : x.qtdC;
-  const qtdC=it.auto && !x.substituirAuto ? (it.estoque ? Math.max(0,auto-number(segQt)) : auto) : comQt;
+  const qtdC=it.auto && !x.substituirAuto ? Math.max(0,auto-number(segQt)) : comQt;
   const qtdS=segQt;
   const preco=x.preco==null ? it.preco : number(x.preco);
   const volume=x.volume==null ? (it.volume??null) : number(x.volume);
@@ -89,7 +89,7 @@ function montarImagem(mes,linhas,estado) {
     ctx.fillStyle=j%2?"#cbdcf0":"#ffffff";ctx.fillRect(0,y,largura,alturaLinha);
     x=0;
     const cells=[
-      l.nome,l.unidade,l.percentual?"0,15%":brl(l.preco),
+      l.nome,l.unidade,l.percentual?inteiro(l.preco*100)+"%":brl(l.preco),
       l.volume!=null?brl(l.volume):"",
       l.direta?"":(l.qtdC==null?"":inteiro(l.qtdC)),
       l.direta?"":(l.qtdS==null?"":inteiro(l.qtdS)),
@@ -273,7 +273,7 @@ export default function FechamentoCobrancaAssurantV2Page() {
                 </td>
                 <td className="min-w-[155px] border border-slate-300 px-2 py-2">{l.unidade}</td>
                 <td className="w-[106px] border border-slate-300 p-1">
-                  {l.percentual ? <span className="block px-2 text-right">0,15%</span> : numInput(l.preco,v=>mudarLinha(l.id,{preco:v}),false,"0.01")}
+                  {l.percentual ? <div className="flex items-center gap-1">{numInput(Number((l.preco*100).toFixed(4)),v=>mudarLinha(l.id,{preco:v==null?null:v/100}),false,"0.01")}<span className="text-[10px]">%</span></div> : numInput(l.preco,v=>mudarLinha(l.id,{preco:v}),false,"0.01")}
                 </td>
                 <td className="w-[130px] border border-slate-300 p-1">
                   {l.volume!=null ? <div className="flex items-center gap-1">
