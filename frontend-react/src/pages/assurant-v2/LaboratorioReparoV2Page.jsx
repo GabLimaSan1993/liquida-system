@@ -6,7 +6,7 @@ import { listarDefeitos } from '../../services/triagemFuncionalService.js';
 
 const formatarData = v => v ? new Date(v).toLocaleString('pt-BR', {timeZone:'America/Sao_Paulo'}) : '—';
 const nRom = r => 'LAB-' + (r.tipo === 'envio' ? 'ENV-' : r.tipo === 'importacao' ? 'IMP-' : 'DEV-') + String(r.numero || 0).padStart(6,'0');
-const statusNome = {aguardando_recebimento:'Aguardando recebimento',recebido:'Recebido no laboratório',em_reparo:'Em reparo',concluido:'Reparo concluído',em_devolucao:'Aguardando warehouse',devolvido_warehouse:'Devolvido ao warehouse'};
+const statusNome = {aguardando_recebimento:'Aguardando recebimento',recebido:'Recebido · aguarda validação técnica',em_reparo:'Em reparo',concluido:'Reparo concluído',em_devolucao:'Aguardando warehouse',devolvido_warehouse:'Devolvido ao warehouse'};
 const escapar = v => String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const normalizarDefeito = v => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').trim();
 
@@ -43,6 +43,7 @@ export default function LaboratorioReparoV2Page() {
   const [sucesso,setSucesso]=useState('');
   const [voucher,setVoucher]=useState('');
   const [os,setOs]=useState('');
+  const [osTecnico,setOsTecnico]=useState('');
   const [buscaReceb,setBuscaReceb]=useState('');
   const [buscaTec,setBuscaTec]=useState('');
   const [buscaDevolucao,setBuscaDevolucao]=useState('');
@@ -126,9 +127,15 @@ export default function LaboratorioReparoV2Page() {
     const localizado=itens.find(i=>i.voucher?.trim().toUpperCase()===v.trim().toUpperCase()||i.imei===v.trim());
     if(!localizado){setErro('Voucher ou IMEI não encontrado neste lote.');return;}
     if(!['recebido','em_reparo'].includes(localizado.status)){setErro('Este aparelho ainda não está disponível na bancada.');return;}
-    setErro('');setEdicao(localizado);setDefeitos(Array.isArray(localizado.defeitos_atual)?[...localizado.defeitos_atual]:[]);
+    setErro('');setEdicao(localizado);setOsTecnico(localizado.os_numero||localizado.os_referencia||'');setDefeitos(Array.isArray(localizado.defeitos_atual)?[...localizado.defeitos_atual]:[]);
     setResultado(localizado.resultado||'reparado');setObservacoes(localizado.observacoes||'');setNovoDefeito('');setBuscaDefeito('');
     if(clear) setBuscaTec('');
+  }
+
+  async function validarOsTecnico(){
+    if (!edicao || !osTecnico.trim()) {setErro('Informe a OS antes de validar o aparelho.');return;}
+    const r=await executar('validar_os',{p_item_id:edicao.id,p_os:osTecnico.trim()},'OS confirmada na bancada técnica.');
+    if(r) setEdicao(r.item);
   }
 
   async function salvarDefeitos(){
@@ -138,6 +145,7 @@ export default function LaboratorioReparoV2Page() {
   }
   async function concluir(){
     if (!edicao || busy) return;
+    if(!edicao.os_numero) {setErro('Confirme a OS na validação técnica antes de fechar o reparo.');return;}
     setBusy(true);setErro('');setSucesso('');
     try {
       await laboratorioReparo('salvar_defeitos',{p_pedido_id:pedidoId,p_item_id:edicao.id,p_defeitos:defeitos});
@@ -179,7 +187,7 @@ export default function LaboratorioReparoV2Page() {
                 {envio&&<button className={botao+' bg-violet-700 text-white hover:bg-violet-800'} onClick={()=>imprimirRomaneio(envio,itens,detalhe.pedido?.lote)}><Printer size={16}/>{envio.tipo==='importacao'?'Relação para conferência ':'Romaneio de envio '}{nRom(envio)}</button>}
               </div>
               <div className="mt-4 grid gap-2 sm:grid-cols-4">{[
-                ['Aguardando laboratório',contagem('aguardando_recebimento')],['Recebidos e reparando',contagem('recebido')+contagem('em_reparo')],
+                ['Aguardando laboratório',contagem('aguardando_recebimento')],['Para validação técnica / reparando',contagem('recebido')+contagem('em_reparo')],
                 ['Concluídos',contagem('concluido')],['Devolução / warehouse',contagem('em_devolucao')+contagem('devolvido_warehouse')]
                 ].map(([k,v])=><div key={k} className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-3"><div className="text-xl font-bold leading-tight text-violet-700">{v}</div><div className="text-xs text-slate-500">{k}</div></div>)}</div>
             </div>
@@ -198,7 +206,7 @@ export default function LaboratorioReparoV2Page() {
               <Tabela itens={itens} filtro={i=>(i.status==='aguardando_recebimento'||i.status==='recebido') && (!buscaReceb.trim()||[i.voucher,i.imei,i.os_referencia,i.os_numero,i.modelo].some(v=>String(v||'').toUpperCase().includes(buscaReceb.trim().toUpperCase())))} onSelect={i=>{setVoucher(i.voucher||'');setOs(i.os_referencia||i.os_numero||'');setErro('');}} limite={120} />
             </div>}
             {aba==='tecnicos'&&<div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h3 className="text-sm font-bold text-slate-800">Bancada de reparos</h3>
+              <h3 className="text-sm font-bold text-slate-800">Bancada de reparos — validação do técnico</h3>
               <p className="text-sm text-slate-500">Bipe o voucher: os defeitos identificados na triagem serão apresentados. Você pode remover os que não se confirmarem ou acrescentar novos. O histórico original fica preservado.</p>
               <form onSubmit={e=>{e.preventDefault();abrirTecnico(buscaTec,true);}} className="flex flex-wrap gap-2">
                 <input className={campo+' min-w-56 flex-1'} value={buscaTec} onChange={e=>setBuscaTec(e.target.value)} placeholder="Bipar voucher ou IMEI / série" aria-label="Voucher para bancada"/>
@@ -208,8 +216,22 @@ export default function LaboratorioReparoV2Page() {
                 <Tabela itens={itens} filtro={i=>['recebido','em_reparo','concluido'].includes(i.status)} onOpen={i=>['recebido','em_reparo'].includes(i.status)&&abrirTecnico(i.voucher||i.imei)}/></>:
               <div className="space-y-4 rounded-2xl border border-violet-200 bg-violet-50/40 p-4">
                 <div className="flex items-start justify-between gap-3"><div><p className="text-xs text-slate-500">Voucher / OS</p>
-                  <h4 className="break-all text-base font-bold text-slate-900">{edicao.voucher||edicao.imei} · {edicao.os_numero}</h4><p className="mt-1 text-xs text-slate-500">{edicao.modelo} · {edicao.imei}</p></div>
+                  <h4 className="break-all text-base font-bold text-slate-900">{edicao.voucher||edicao.imei} · {edicao.os_numero||edicao.os_referencia||'OS pendente'}</h4><p className="mt-1 text-xs text-slate-500">{edicao.modelo} · {edicao.imei}</p></div>
                   <button className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50" title="Fechar" onClick={()=>setEdicao(null)}><X size={16}/></button></div>
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                  <p className="mb-2 text-xs font-bold text-amber-900">{edicao.os_numero?'OS confirmada na bancada':'OS pendente de validação técnica'}</p>
+                  <div className="flex flex-wrap items-end gap-2">
+                    <label className="min-w-56 flex-1 text-xs font-semibold text-slate-700">Número da OS
+                      <input value={osTecnico} onChange={e=>setOsTecnico(e.target.value)} maxLength={60}
+                        className={'mt-1 '+campo} placeholder="Confira com o aparelho e digite a OS"/>
+                    </label>
+                    <button type="button" disabled={busy||!osTecnico.trim()||osTecnico.trim()===edicao.os_numero}
+                      onClick={validarOsTecnico} className={botao+' bg-violet-700 text-white'}>
+                      <CheckCircle2 size={16}/> Confirmar OS
+                    </button>
+                  </div>
+                  {!edicao.os_numero&&<p className="mt-2 text-xs text-amber-800">A referência importada é uma sugestão. Confira-a antes de concluir o reparo. A liberação em lote não substitui a conferência física do técnico.</p>}
+                </div>
                 <div className="rounded-xl bg-white p-3"><div className="text-xs font-bold uppercase tracking-wide text-violet-700">Defeitos originais da triagem (imutáveis)</div>
                 <div className="mt-2 flex flex-wrap gap-2">{(edicao.defeitos_origem||[]).length?(edicao.defeitos_origem||[]).map((x,k)=><span key={k} className="rounded-full bg-amber-100 px-3 py-1 text-xs text-amber-900">{String(x)}</span>):<p className="text-sm text-slate-400">Nenhum defeito descrito na triagem de origem.</p>}</div></div>
                 <div><label className="mb-2 block text-xs font-bold uppercase tracking-wide text-violet-700">Defeitos confirmados após revisão</label>
@@ -251,7 +273,7 @@ export default function LaboratorioReparoV2Page() {
                   <label className="text-xs font-bold text-slate-700">Observações técnicas<textarea className={'mt-1 '+campo} rows={2} value={observacoes} onChange={e=>setObservacoes(e.target.value)} placeholder="Serviço realizado, peças, testes e pendências"/></label>
                 </div>
                 <div className="flex flex-wrap gap-2"><button className={botao+' border border-slate-200 bg-white text-violet-700 hover:bg-violet-50'} onClick={salvarDefeitos} disabled={busy}>Salvar revisão dos defeitos</button>
-                  <button className={botao+' bg-emerald-600 text-white hover:bg-emerald-700'} onClick={concluir} disabled={busy}><CheckCircle2 size={16}/>Fechar reparo</button></div>
+                  <button className={botao+' bg-emerald-600 text-white hover:bg-emerald-700'} onClick={concluir} disabled={busy||!edicao.os_numero}><CheckCircle2 size={16}/>Fechar reparo</button></div>
               </div>}
             </div>}
             {aba==='devolucao'&&<div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
