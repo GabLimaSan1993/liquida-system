@@ -114,6 +114,7 @@ export async function listarAguardandoCosmetica() {
       modelo:   r?.produto?.modelo || t.modelo || null,
       bateria:  t.status_bateria,
       defeito:  t.resultado_triagem_funcional === "BAD" || defeitoExigeQuebrado(t.defeitos_adicionais),
+      naoLigaDivergencia: r?.destino?.nao_liga_para_triagem === true,
       desde:    t.data_funcional,
     };
   });
@@ -147,6 +148,7 @@ export async function carregarParaCosmetica(voucher) {
     bateria: t.status_bateria,
     bateriaPercentual: t.bateria_percentual,
     temDefeitoFuncional: t.resultado_triagem_funcional === "BAD" || defeitoExigeQuebrado(t.defeitos_adicionais),
+    naoLigaDivergencia: r?.destino?.nao_liga_para_triagem === true,
     defeitos: t.defeitos_adicionais
       ? t.defeitos_adicionais.split(";").map(s => s.trim()).filter(Boolean)
       : [],
