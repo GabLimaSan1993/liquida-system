@@ -28,7 +28,7 @@ import { painelDoOperador } from "../../services/lavadorasOperador.js";
 import { nivelServicoLavadora, classificarTriagemLavadora, VISUAL_NIVEIS_LAVADORAS } from "../../services/reparosLavadorasNiveis.js";
 import OsBarcodeScanner from "../../components/OsBarcodeScanner.jsx";
 import IntercicloLavadorasPanel from "../../components/linha-branca/IntercicloLavadorasPanel.jsx";
-import { encaminharPreventivaLavadora } from "../../services/lavadorasPreventivaService.js";
+import { encaminharPreventivaLavadora, encaminharNaoConformidadeLavadora } from "../../services/lavadorasPreventivaService.js";
 import {
   REPAROS_ELETRICOS_LAVADORAS,
   REPAROS_ESTETICOS_LAVADORAS,
@@ -698,6 +698,10 @@ export default function TriagemLavadorasV2Page() {
             onOxidacao={ciclo=>executarAcao(async ()=>{
               await encaminharPreventivaLavadora(ciclo.id,"oxidacao",operador);
               setMensagem("Oxidação registrada com foto. OS encaminhada exclusivamente a Carlos Dias (N3).");
+            })}
+            onNaoConforme={ciclo=>executarAcao(async ()=>{
+              await encaminharNaoConformidadeLavadora(ciclo.id,operador);
+              setMensagem("Preventiva não conforme registrada com fotos. OS encaminhada para avaliação e reparo N3 com Carlos Dias.");
             })}
           />
         </div>
