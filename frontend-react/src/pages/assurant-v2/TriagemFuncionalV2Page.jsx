@@ -1420,11 +1420,14 @@ export default function TriagemFuncionalV2Page() {
     ) {
       const anteriores =
         ctx.ultimaTriagem
-          .respostas;
+          .respostas
+          .filter(item => item && typeof item === "object");
 
       const preenchidas =
         lista.map(
           (pergunta) => {
+            // A bateria tem sua própria etapa e não gera resposta Sim/Não.
+            if (pergunta.tipo_resposta === "bateria") return null;
             const anterior =
               anteriores.find(
                 (item) =>
@@ -1450,7 +1453,8 @@ export default function TriagemFuncionalV2Page() {
                       .toUpperCase()
               );
 
-            if (!anterior) {
+            if (!anterior ||
+              !["sim", "nao"].includes(String(anterior.resposta || "").trim().toLowerCase())) {
               return null;
             }
 
@@ -1659,12 +1663,13 @@ export default function TriagemFuncionalV2Page() {
     percentual = null
   ) {
     setFinalizacaoPendente({
-      lista:
-        Array.isArray(
-          lista
-        )
-          ? lista
-          : [],
+      // Retriagens podem ter perguntas novas e um marcador nulo na
+      // posição de bateria; nenhuma posição nula chega à conclusão.
+      lista: (Array.isArray(lista) ? lista : []).filter(
+        r => r && typeof r === "object" &&
+        (r.perguntaId || r.pergunta_id) &&
+        ["sim", "nao"].includes(String(r.resposta || "").trim().toLowerCase())
+      ),
 
       bateria:
         bateria ||
@@ -1717,6 +1722,26 @@ export default function TriagemFuncionalV2Page() {
     bateria,
     percentual = null
   ) {
+    const respostasValidas = (Array.isArray(lista) ? lista : [])
+      .filter(r => r && typeof r === "object" &&
+        (r.perguntaId || r.pergunta_id) &&
+        ["sim", "nao"].includes(String(r.resposta || "").trim().toLowerCase()));
+
+    // A conclusão só é liberada quando todas as perguntas funcionais
+    // ativas foram respondidas; bateria é tratada separadamente.
+    const primeiraPendente = perguntas.find(pergunta =>
+      pergunta?.tipo_resposta !== "bateria" &&
+      !respostasValidas.some(r =>
+        String(r.perguntaId || r.pergunta_id) === String(pergunta.id)
+      )
+    );
+    if (primeiraPendente) {
+      setIdx(perguntas.indexOf(primeiraPendente));
+      setEtapa("perguntas");
+      mostrarErro("Há uma pergunta funcional sem resposta. Confirme-a antes de concluir a retriagem.");
+      return;
+    }
+
     setCarregando(
       true
     );
@@ -1768,7 +1793,7 @@ export default function TriagemFuncionalV2Page() {
           },
 
           respostas:
-            lista,
+            respostasValidas,
 
           bateria,
 
@@ -1807,7 +1832,7 @@ export default function TriagemFuncionalV2Page() {
         bateriaPercentual:
           percentual,
         respostas:
-          lista,
+          respostasValidas,
         defeitos:
           defeitosTodos,
       });
