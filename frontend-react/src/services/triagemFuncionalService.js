@@ -276,7 +276,18 @@ export async function salvarTriagemFuncional({
   if (erroCodigo) return { ok: false, erro: erroCodigo };
   const defeitosRegistrados = [...new Set([...filtrarDefeitosAdicionais(defeitos), ...(danosTela ? ["Danos da tela"] : [])])];
 
-  const lista = Array.isArray(respostas) ? respostas : [];
+  // Retriagens antigas podem conter posições null para perguntas de bateria ou
+  // perguntas adicionadas ao catálogo posteriormente. Nunca serializar null
+  // como resposta funcional e preservar apenas respostas com ID e valor válidos.
+  const lista = (Array.isArray(respostas) ? respostas : [])
+    .filter(r => r && typeof r === "object" &&
+      (r.perguntaId || r.pergunta_id) &&
+      ["sim", "nao"].includes(String(r.resposta || "").trim().toLowerCase()))
+    .map(r => ({
+      ...r,
+      perguntaId: r.perguntaId || r.pergunta_id,
+      resposta: String(r.resposta).trim().toLowerCase(),
+    }));
   const negativas = lista.filter(respostaFuncionalNegativa);
   const decisao   = decidirDestino({
     condicaoDeclarada: tradein?.condicao_aparelho,
