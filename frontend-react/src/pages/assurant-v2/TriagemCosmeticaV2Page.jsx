@@ -770,6 +770,11 @@ function FilaCosmetica({
                         </span>
                       )}
 
+                      {item.naoLigaDivergencia && (
+                        <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[9px] font-black text-amber-900">
+                          DIVERGÊNCIA · NÃO LIGA
+                        </span>
+                      )}
                       {item.defeito ? (
                         <span className="rounded-md bg-rose-50 px-1.5 py-0.5 text-[9px] font-bold text-rose-700">
                           Com defeito funcional
@@ -1449,6 +1454,18 @@ export default function TriagemCosmeticaV2Page() {
             "perguntas" &&
             dados && (
               <div className="space-y-5">
+                {dados.naoLigaDivergencia && (
+                  <Aviso tipo="aviso">
+                    <div>
+                      <div className="font-black">Divergência funcional — APARELHO NÃO LIGA</div>
+                      <p className="mt-2 text-xs font-medium">
+                        Encaminhado diretamente da Triagem Funcional, sem Análise Assurant.
+                        Avalie tela, laterais e traseira, mantendo grade QUEBRADO.
+                        O IMEI não foi confirmado fisicamente; não trate a referência do cadastro como IMEI bipado.
+                      </p>
+                    </div>
+                  </Aviso>
+                )}
                 {!!dados.defeitos?.length && (
                   <Aviso tipo="aviso"><div><div className="font-black">Defeitos adicionais da triagem funcional</div>
                     <ul className="mt-2 list-disc pl-5">{dados.defeitos.map(defeito => <li key={defeito}>{defeito}</li>)}</ul>
