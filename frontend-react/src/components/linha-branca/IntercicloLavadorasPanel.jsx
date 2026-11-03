@@ -201,7 +201,7 @@ export default function IntercicloLavadorasPanel({ciclo,operador,usuarioId,savin
    <ShieldCheck className="h-6 w-6 text-violet-700"/>
    <div className="flex-1"><h2 className="text-base font-bold text-slate-900">Preventiva obrigatória entre ciclos · OS {ciclo.os?.numero_os}</h2>
      <p className="mt-1 text-xs text-slate-500">Conclua a conferência física, registre as fotos e verifique defeitos estéticos antes do ciclo 2.</p></div>
-   <span className={`rounded-lg px-3 py-1 text-xs font-bold ${salvo?"bg-emerald-100 text-emerald-800":"bg-amber-100 text-amber-800"}`}>{salvo?"Checklist registrado":"Pendente"}</span>
+   <span className={`rounded-lg px-3 py-1 text-xs font-bold ${salvo?"bg-emerald-100 text-emerald-800":"bg-amber-100 text-amber-800"}`}>{salvo&&pronto?"Checklist registrado":"Pendente"}</span>
    <span className="rounded-lg bg-slate-100 px-3 py-1 text-[10px] font-semibold text-slate-600">{rascunhoRestaurado?"Rascunho recuperado":"Rascunho protegido automaticamente"}</span>
   </div>
   <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -268,7 +268,7 @@ export default function IntercicloLavadorasPanel({ciclo,operador,usuarioId,savin
     {faltas.map((x,i)=><li key={i}>{x}</li>)}
    </ul>
   </div>}
-  {salvo&&<p className="mt-3 text-xs font-bold text-emerald-700">
+  {salvo&&pronto&&<p className="mt-3 text-xs font-bold text-emerald-700">
    Checklist confirmado no banco de dados. {oxidação?"Encaminhe a oxidação N3.":naoConforme?"Encaminhe a não conformidade para reparo N3.":"Segundo ciclo liberado."}
   </p>}
   {erro&&<p role="alert" className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700">{erro}</p>}
@@ -277,13 +277,13 @@ export default function IntercicloLavadorasPanel({ciclo,operador,usuarioId,savin
      className="inline-flex h-11 items-center gap-2 rounded-xl border border-violet-300 bg-violet-50 px-5 text-xs font-bold text-violet-800 disabled:opacity-40">
     {ocupado?<Loader2 className="h-4 w-4 animate-spin"/>:<CheckCircle2 className="h-4 w-4"/>} Salvar checklist e evidências
    </button>
-   {oxidação?<button type="button" disabled={!salvo||saving||ocupado} onClick={()=>onOxidacao(ciclo)}
+   {oxidação?<button type="button" disabled={!salvo||!pronto||saving||ocupado} onClick={()=>onOxidacao(ciclo)}
      className="inline-flex h-11 items-center gap-2 rounded-xl bg-rose-600 px-5 text-xs font-bold text-white disabled:opacity-40">
      <Wrench className="h-4 w-4"/> Encaminhar oxidação para Carlos N3
-    </button>:naoConforme?<button type="button" disabled={!salvo||saving||ocupado} onClick={()=>onNaoConforme(ciclo)}
+    </button>:naoConforme?<button type="button" disabled={!salvo||!pronto||saving||ocupado} onClick={()=>onNaoConforme(ciclo)}
       className="inline-flex h-11 items-center gap-2 rounded-xl bg-amber-600 px-5 text-xs font-bold text-white disabled:opacity-40">
       <Wrench className="h-4 w-4"/> Encaminhar não conformidade para reparo N3
-    </button>:<button type="button" disabled={!salvo||saving||ocupado} onClick={()=>onIniciar(ciclo)}
+    </button>:<button type="button" disabled={!salvo||!pronto||saving||ocupado} onClick={()=>onIniciar(ciclo)}
      className="inline-flex h-11 items-center gap-2 rounded-xl bg-violet-700 px-5 text-xs font-bold text-white disabled:opacity-40">
      <Play className="h-4 w-4"/> Iniciar 2º ciclo
     </button>}
