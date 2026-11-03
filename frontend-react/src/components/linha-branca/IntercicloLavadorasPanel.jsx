@@ -42,6 +42,7 @@ function restaurarRolagem(chave) {
 
 function FotoObrigatoria({osId,cicloId,categoria,item,fase="antes",fotos,onUploaded,disabled,onCameraOpen,onCameraReturn}) {
  const [arquivoCarregando,setArquivoCarregando]=useState(false);
+ const [erroFoto,setErroFoto]=useState("");
  const [url,setUrl]=useState("");
  const foto=useMemo(()=>fotos.find(f=>f.categoria===categoria&&f.item===item&&f.fase===fase),[fotos,categoria,item,fase]);
  useEffect(()=>{
@@ -53,23 +54,30 @@ function FotoObrigatoria({osId,cicloId,categoria,item,fase="antes",fotos,onUploa
  async function upload(e){
    const file=e.target.files?.[0]; if(!file)return;
    try{
-     setArquivoCarregando(true);
+     setArquivoCarregando(true);setErroFoto("");
      const dado=await anexarFotoLavadora({osId,cicloPrimeiroId:cicloId,categoria,item,fase,arquivo:file});
      onUploaded(dado);
-   }catch(err){onUploaded(null,err.message)}finally{setArquivoCarregando(false);e.target.value="";onCameraReturn?.();}
+   }catch(err){
+     const mensagem=err?.message||"Falha ao enviar a foto. Tente novamente.";
+     setErroFoto(mensagem);
+     onUploaded(null,"Foto "+item+": "+mensagem);
+   }finally{setArquivoCarregando(false);e.target.value="";onCameraReturn?.();}
  }
  return <label className="flex min-h-16 cursor-pointer flex-wrap items-center gap-3 rounded-xl border border-dashed border-violet-200 bg-white p-3">
    <Camera className="h-5 w-5 text-violet-600"/>
    <span className="flex-1 text-xs font-semibold text-slate-700">Foto {fase.toUpperCase()} · {item} <span className="text-rose-600">*</span>
-     <span className="mt-0.5 block text-[10px] text-slate-500">{foto?"Foto vinculada à OS":"Toque para fotografar ou selecionar"}</span>
+     <span className="mt-0.5 block text-[10px] text-slate-500">{foto?"Foto confirmada no Liquida (vinculada à OS)":"Toque para fotografar ou selecionar"}</span>
    </span>
    {url&&<img src={url} alt={"Evidência "+item} className="h-14 w-14 rounded-lg object-cover"/>}
    {arquivoCarregando?<Loader2 className="h-5 w-5 animate-spin text-violet-600"/>:<span className={foto?"text-xs font-bold text-emerald-700":"text-xs text-violet-700"}>{foto?"Registrada":"Adicionar"}</span>}
+   {erroFoto&&<span role="alert" className="w-full rounded-lg bg-rose-50 p-2 text-[11px] font-bold text-rose-700">
+     Foto não registrada: {erroFoto}. Toque para tentar novamente.
+   </span>}
    <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="sr-only" disabled={disabled||arquivoCarregando} onClick={onCameraOpen} onChange={upload}/>
  </label>;
 }
 
-export default function IntercicloLavadorasPanel({ciclo,operador,usuarioId,saving,onIniciar,onOxidacao}) {
+export default function IntercicloLavadorasPanel({ciclo,operador,usuarioId,saving,onIniciar,onOxidacao,onNaoConforme}) {
  const [checklist,setChecklist]=useState({});
  const [vazamento,setVazamento]=useState("");
  const [lgAplicada,setLgAplicada]=useState("");
@@ -77,6 +85,7 @@ export default function IntercicloLavadorasPanel({ciclo,operador,usuarioId,savin
  const [defeitos,setDefeitos]=useState([]);
  const [fotos,setFotos]=useState([]);
  const [carregando,setCarregando]=useState(true);
+ const [sincronizandoFotos,setSincronizandoFotos]=useState(false);
  const [ocupado,setOcupado]=useState(false);
  const [salvo,setSalvo]=useState(false);
  const [erro,setErro]=useState("");
@@ -150,10 +159,28 @@ export default function IntercicloLavadorasPanel({ciclo,operador,usuarioId,savin
   && vazamento!=="" && estetica!=="" && (!lg || lgAplicada!=="")
   && (estetica!=="sim"||defeitos.length>0)
   && (!lg || lgAplicada!=="nao" || Boolean(observacoes.trim()));
+ const faltas=[
+  ...pendentes.map(x=>"Checklist: "+x.label),
+  ...faltandoFoto.map(x=>"Foto: "+x.label),
+  ...fotosEsteticasPendentes.map(x=>"Foto ANTES: "+x),
+  ...(vazamento===""?["Resposta: apresentou vazamento?"]:[]),
+  ...(estetica===""?["Resposta: apresentou defeito estético?"]:[]),
+  ...(estetica==="sim"&&!defeitos.length?["Selecione o(s) defeito(s) estético(s)"]:[]),
+  ...(lg&&lgAplicada===""?["LG: preventiva aplicada?"]:[]),
+  ...(lg&&lgAplicada==="nao"&&!observacoes.trim()?["LG: justificar preventiva não aplicada"]:[])
+ ];
  const alterado=()=>setSalvo(false);
+ const sincronizarFotos=async()=>{
+  setSincronizandoFotos(true);setErro("");
+  try{
+   const atual=await buscarIntercicloLavadora(ciclo.id);
+   setFotos(atual.fotos||[]);
+  }catch(e){setErro("Erro ao atualizar fotos: "+e.message)}
+  finally{setSincronizandoFotos(false)}
+ };
  const selectClass="mt-1.5 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700";
  const salvar=async()=>{
-  if(!pronto){setErro("Preencha o checklist, a avaliação estética e todas as fotos obrigatórias.");return false}
+  if(!pronto){setErro("Não é possível salvar ainda. Faltam: "+faltas.join("; "));return false}
   try{
    setOcupado(true);setErro("");
    await salvarIntercicloLavadora(ciclo,{
@@ -166,7 +193,7 @@ export default function IntercicloLavadorasPanel({ciclo,operador,usuarioId,savin
    setSalvo(true);setRascunhoRestaurado(false);return true;
   }catch(e){setErro(e.message);return false}finally{setOcupado(false)}
  };
- const fotoProps={osId:ciclo.os_id,cicloId:ciclo.id,fotos,disabled:saving||ocupado,onCameraOpen:antesDaCamera,onCameraReturn:depoisDaCamera,
+ const fotoProps={osId:ciclo.os_id,cicloId:ciclo.id,fotos,disabled:saving||ocupado||sincronizandoFotos,onCameraOpen:antesDaCamera,onCameraReturn:depoisDaCamera,
   onUploaded:(d,err)=>{if(err)setErro(err);if(d){setFotos(p=>[d,...p]);alterado();}}};
  if(carregando)return <section className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Carregando checklist entre ciclos...</section>;
  return <section id="checklist-preventiva" className="rounded-2xl border border-violet-200 bg-white p-4 shadow-sm md:p-6">
@@ -200,6 +227,15 @@ export default function IntercicloLavadorasPanel({ciclo,operador,usuarioId,savin
   <label className="mt-3 block text-xs font-bold text-slate-800">Observações da preventiva {lg&&lgAplicada==="nao"?"(obrigatórias para LG sem aplicação)":"(opcionais)"}
    <textarea rows={2} value={observacoes} onChange={e=>{setObservacoes(e.target.value);alterado()}} className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs" placeholder="Registrar correções realizadas, motivos e particularidades da máquina..."/>
   </label>
+  <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 p-3">
+   <span className="text-xs font-bold text-slate-700">
+    Fotos preventivas confirmadas: {2-faltandoFoto.length}/2
+   </span>
+   <button type="button" onClick={sincronizarFotos} disabled={sincronizandoFotos||ocupado}
+    className="rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs font-bold text-violet-700 disabled:opacity-40">
+    {sincronizandoFotos?"Conferindo fotos...":"Conferir fotos enviadas"}
+   </button>
+  </div>
   <div className="mt-3 grid gap-3 md:grid-cols-2">
    <FotoObrigatoria {...fotoProps} categoria="preventiva" item="PÉ NIVELADOR"/>
    <FotoObrigatoria {...fotoProps} categoria="preventiva" item="OXIDAÇÃO"/>
@@ -223,17 +259,31 @@ export default function IntercicloLavadorasPanel({ciclo,operador,usuarioId,savin
    </>}
   </div>
   {oxidação&&<p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-bold text-rose-800"><AlertTriangle className="mr-2 inline h-4 w-4"/>Oxidação identificada: não iniciar o 2º ciclo. Encaminhamento obrigatório para Carlos, reparo N3, com foto.</p>}
-  {naoConforme&&!oxidação&&<p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-800">Há não conformidade preventiva ou vazamento. Corrija e atualize o checklist antes de liberar o segundo ciclo.</p>}
+  {naoConforme&&!oxidação&&<p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-800">
+   Há não conformidade ou vazamento. Caso corrigido, atualize o checklist para OK. Se não puder corrigir na triagem, salve as evidências e encaminhe para avaliação e reparo N3 com Carlos Dias.
+  </p>}
+  {faltas.length>0&&<div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
+   <p className="text-xs font-black text-amber-900">Pendências para salvar e liberar o próximo passo ({faltas.length}):</p>
+   <ul className="mt-2 list-disc space-y-1 pl-5 text-[11px] text-amber-900">
+    {faltas.map((x,i)=><li key={i}>{x}</li>)}
+   </ul>
+  </div>}
+  {salvo&&<p className="mt-3 text-xs font-bold text-emerald-700">
+   Checklist confirmado no banco de dados. {oxidação?"Encaminhe a oxidação N3.":naoConforme?"Encaminhe a não conformidade para reparo N3.":"Segundo ciclo liberado."}
+  </p>}
   {erro&&<p role="alert" className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700">{erro}</p>}
   <div className="mt-4 flex flex-wrap items-center gap-3">
-   <button type="button" onClick={salvar} disabled={saving||ocupado||!pronto}
+   <button type="button" onClick={salvar} disabled={saving||ocupado||sincronizandoFotos}
      className="inline-flex h-11 items-center gap-2 rounded-xl border border-violet-300 bg-violet-50 px-5 text-xs font-bold text-violet-800 disabled:opacity-40">
     {ocupado?<Loader2 className="h-4 w-4 animate-spin"/>:<CheckCircle2 className="h-4 w-4"/>} Salvar checklist e evidências
    </button>
    {oxidação?<button type="button" disabled={!salvo||saving||ocupado} onClick={()=>onOxidacao(ciclo)}
      className="inline-flex h-11 items-center gap-2 rounded-xl bg-rose-600 px-5 text-xs font-bold text-white disabled:opacity-40">
      <Wrench className="h-4 w-4"/> Encaminhar oxidação para Carlos N3
-    </button>:<button type="button" disabled={!salvo||saving||ocupado||naoConforme} onClick={()=>onIniciar(ciclo)}
+    </button>:naoConforme?<button type="button" disabled={!salvo||saving||ocupado} onClick={()=>onNaoConforme(ciclo)}
+      className="inline-flex h-11 items-center gap-2 rounded-xl bg-amber-600 px-5 text-xs font-bold text-white disabled:opacity-40">
+      <Wrench className="h-4 w-4"/> Encaminhar não conformidade para reparo N3
+    </button>:<button type="button" disabled={!salvo||saving||ocupado} onClick={()=>onIniciar(ciclo)}
      className="inline-flex h-11 items-center gap-2 rounded-xl bg-violet-700 px-5 text-xs font-bold text-white disabled:opacity-40">
      <Play className="h-4 w-4"/> Iniciar 2º ciclo
     </button>}
