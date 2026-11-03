@@ -45,8 +45,8 @@ const inicial = () => ({triagemTipo:"funcional",linhas:{}});
 function resolver(it,config,apuracao) {
   const x=(config?.linhas||{})[it.id]||{};
   let auto=it.id==="triagem" ? number(apuracao?.["triagem_"+(config?.triagemTipo || "funcional")]) : number(apuracao?.[it.id]);
-  const segQt=x.qtdS==null ? (it.estoque ? null : (it.padraoS ?? (it.seguradora ? null : 0))) : x.qtdS;
-  const comQt=x.qtdC==null ? it.padraoC ?? (it.seguradora ? null : 0) : x.qtdC;
+  const segQt=x.qtdS==null ? (it.estoque ? null : (it.padraoS ?? (it.auto ? 0 : null))) : x.qtdS;
+  const comQt=x.qtdC==null ? (it.padraoC ?? null) : x.qtdC;
   const qtdC=it.auto && !x.substituirAuto ? (it.estoque ? Math.max(0,auto-number(segQt)) : auto) : comQt;
   const qtdS=segQt;
   const preco=x.preco==null ? it.preco : number(x.preco);
