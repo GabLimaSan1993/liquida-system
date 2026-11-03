@@ -2161,7 +2161,7 @@ export default function TriagemFuncionalV2Page() {
                           <option value="danos_tela">Danos da tela</option>
                         </select>
                         <p className="mt-2 text-xs text-slate-600">
-                          {condicaoInicial === "nao_liga" ? "Ao continuar, o produto será encaminhado para Divergências, aguardando decisão da Assurant." : aparelhoBloqueado ? "Informe um IMEI somente quando for possível consultá-lo fisicamente. Se não houver acesso pelo slot do chip, continue sem IMEI. O sistema preservará a referência cadastral sem considerá-la bipada. O laudo seguirá a condição original da compra." : danosTela ? "Continue a triagem com um IMEI opcional. Se a tela impedir a leitura, deixe o campo vazio. Danos da tela será registrado como defeito adicional, sem encaminhamento para Divergências." : "Preencha os dados físicos e siga para a identificação do aparelho."}
+                          {condicaoInicial === "nao_liga" ? "Ao continuar, o aparelho seguirá à Triagem Cosmética com a divergência funcional Não liga registrada. Não será enviado para Análise Assurant nem considerado IMEI conferido." : aparelhoBloqueado ? "Informe um IMEI somente quando for possível consultá-lo fisicamente. Se não houver acesso pelo slot do chip, continue sem IMEI. O sistema preservará a referência cadastral sem considerá-la bipada. O laudo seguirá a condição original da compra." : danosTela ? "Continue a triagem com um IMEI opcional. Se a tela impedir a leitura, deixe o campo vazio. Danos da tela será registrado como defeito adicional, sem encaminhamento para Divergências." : "Preencha os dados físicos e siga para a identificação do aparelho."}
                         </p>
                       </Campo>
                       {modoRetriagem && (
@@ -2423,7 +2423,7 @@ export default function TriagemFuncionalV2Page() {
                           }
                           className="inline-flex h-10 items-center gap-2 rounded-xl bg-violet-700 px-5 text-xs font-bold text-white shadow-sm transition hover:bg-violet-800 disabled:cursor-not-allowed disabled:opacity-40"
                         >
-                          {condicaoInicial === "nao_liga" ? "Encaminhar à Assurant" : "Salvar e continuar"}
+                          {condicaoInicial === "nao_liga" ? "Registrar divergência e enviar à triagem" : "Salvar e continuar"}
 
                           <ChevronRight className="h-4 w-4" />
                         </button>
@@ -3074,7 +3074,7 @@ export default function TriagemFuncionalV2Page() {
                     <Aviso tipo="aviso">
                       <div>
                         <div className="font-black">
-                          {resultado.tipo_problema === "nao_liga" ? "Aparelho não liga" : resultado.tipo_problema === "sem_ordem" ? "Sem Ordem" : "IMEI divergente"} — aguardando decisão da Assurant.
+                          {resultado.nao_liga_local ? "Aparelho não liga — enviado para Triagem Cosmética (divergência funcional)" : (resultado.tipo_problema === "nao_liga" ? "Aparelho não liga" : resultado.tipo_problema === "sem_ordem" ? "Sem Ordem" : "IMEI divergente") + " — aguardando decisão da Assurant."}
                           <div className="mt-3 flex gap-2">
                             <button className="rounded-lg border px-3 py-2" onClick={() => etiquetaDivergencia(resultado)}>Reimprimir etiqueta</button>
                             <button className="rounded-lg border px-3 py-2" onClick={() => etiquetaDivergencia(resultado,{baixar:true})}>Baixar etiqueta PDF</button>
@@ -3082,7 +3082,7 @@ export default function TriagemFuncionalV2Page() {
                         </div>
 
                         <div className="mt-1 font-medium">
-                          O aparelho está segregado e bloqueado até a decisão da Assurant. Cole a etiqueta de divergência.
+                          {resultado.nao_liga_local ? "Encaminhe à bancada de Triagem Cosmética com a etiqueta de divergência funcional. O IMEI ainda não foi conferido fisicamente e não deve ser presumido para armazenagem." : "O aparelho está segregado e bloqueado até a decisão da Assurant. Cole a etiqueta de divergência."}
                           {resultado.motivo && <p className="mt-2">{resultado.motivo}</p>}
                         </div>
                       </div>
