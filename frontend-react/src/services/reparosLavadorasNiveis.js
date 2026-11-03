@@ -204,6 +204,7 @@ const chave = v => String(v??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"")
 const mapa = new Map(Object.entries(CATALOGO_REPAROS_LAVADORAS).flatMap(([grupo, itens]) =>
   itens.map(item=>[chave(grupo+"|"+item.nome),item.nivel])));
 mapa.set(chave("Elétrico|OXIDAÇÃO - AVALIAÇÃO TÉCNICA"),"N3");
+mapa.set(chave("Elétrico|AVALIAÇÃO PREVENTIVA ELÉTRICA"),"N3");
 mapa.set(chave("Estético|GABINETE"),"N3"); // legado, tipo de reparo nao especificado
 mapa.set(chave("Estético|BASE DO GABINETE"),"N3");
 export function nivelServicoLavadora(area, nome) {
