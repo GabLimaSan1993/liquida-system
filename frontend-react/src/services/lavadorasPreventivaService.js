@@ -27,14 +27,39 @@ export async function buscarUltimoIntercicloLavadora(osId){
   if(!check)return {check:null,fotos:[]};
   return buscarIntercicloLavadora(check.ciclo_primeiro_id);
 }
+// Fotos grandes dos celulares são reduzidas antes do envio, mantendo a
+// qualidade suficiente para evidenciar peças, corrosão e avarias.
+async function prepararFotoLavadora(arquivo){
+ const formatosPermitidos=["image/jpeg","image/png","image/webp"];
+ const podeConverter=["image/heic","image/heif"].includes(arquivo?.type);
+ if(!formatosPermitidos.includes(arquivo?.type)&&!podeConverter)
+   throw new Error("Foto incompatível. Use JPG, PNG ou WebP.");
+ if(arquivo.size<=8*1024*1024&&!podeConverter)return arquivo;
+ if(typeof createImageBitmap!=="function")
+   throw new Error("Foto muito grande ou incompatível. Selecione uma foto JPG menor que 10 MB.");
+ let bitmap;
+ try{
+  bitmap=await createImageBitmap(arquivo);
+  const fator=Math.min(1,1920/Math.max(bitmap.width,bitmap.height));
+  const canvas=document.createElement("canvas");
+  canvas.width=Math.max(1,Math.round(bitmap.width*fator));
+  canvas.height=Math.max(1,Math.round(bitmap.height*fator));
+  const context=canvas.getContext("2d");
+  if(!context)throw new Error("Não foi possível processar a imagem");
+  context.drawImage(bitmap,0,0,canvas.width,canvas.height);
+  const blob=await new Promise(resolve=>canvas.toBlob(resolve,"image/jpeg",0.82));
+  if(!blob||blob.size>10*1024*1024)throw new Error("Falha ao compactar a foto");
+  return new File([blob],(arquivo.name||"foto").replace(/\.[^.]+$/,"")+".jpg",{type:"image/jpeg"});
+ }catch(error){
+  throw new Error("Não foi possível preparar a foto do celular. Fotografe em JPG ou selecione outra imagem. "+(error.message||""));
+ }finally{bitmap?.close?.()}
+}
 export async function anexarFotoLavadora({osId,cicloPrimeiroId,categoria,item,fase,arquivo}){
-  if(!arquivo?.type?.startsWith("image/") || !["image/jpeg","image/png","image/webp"].includes(arquivo.type))
-    throw new Error("Selecione foto JPG, PNG ou WebP.");
-  if(arquivo.size>10*1024*1024)throw new Error("Foto acima de 10 MB. Reduza o arquivo.");
-  const ext=arquivo.type==="image/png"?"png":arquivo.type==="image/webp"?"webp":"jpg";
+  const fotoPronta=await prepararFotoLavadora(arquivo);
+  const ext=fotoPronta.type==="image/png"?"png":fotoPronta.type==="image/webp"?"webp":"jpg";
   const caminho=`${osId}/${cicloPrimeiroId}/${categoria}/${crypto.randomUUID()}.${ext}`;
   const {error:uploadError}=await supabase.storage.from(BUCKET_EVIDENCIAS_LAVADORA)
-    .upload(caminho,arquivo,{contentType:arquivo.type,upsert:false});
+    .upload(caminho,fotoPronta,{contentType:fotoPronta.type,upsert:false});
   if(uploadError)throw uploadError;
   const {data,error}=await supabase.from("linha_branca_lavadora_evidencias")
     .insert({os_id:osId,ciclo_primeiro_id:cicloPrimeiroId,categoria,item,fase,caminho})
