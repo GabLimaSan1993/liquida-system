@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../../AuthContext.jsx';
 import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, FileSpreadsheet, PackageCheck, RefreshCw, Search, Upload, Wrench, X } from 'lucide-react';
 import { laboratorioIndividual } from '../../services/laboratorioIndividualService.js';
 import { laboratorioReparo } from '../../services/laboratorioReparoService.js';
@@ -56,23 +57,24 @@ async function lerPlanilha(arquivo) {
     : 0;
   const comeco = indiceCabecalho>=0 ? indiceCabecalho+1 : 0;
   const unicos = new Set(), invalidos = [], repetidos = [];
-  let naoVazios=0;
+  let naoVazios=0, invalidosContagem=0, repetidosContagem=0;
   matriz.slice(comeco).forEach((linha,k)=>{
     const voucher=limpo(linha[indiceColuna]);
     if (!voucher) return;
     naoVazios++;
-    if(!regraVoucher.test(voucher)) {if(invalidos.length<12) invalidos.push('Linha '+(comeco+k+1)+': '+voucher);return;}
-    if(unicos.has(voucher)) {if(repetidos.length<12) repetidos.push(voucher);return;}
+    if(!regraVoucher.test(voucher)) {invalidosContagem++;if(invalidos.length<12) invalidos.push('Linha '+(comeco+k+1)+': '+voucher);return;}
+    if(unicos.has(voucher)) {repetidosContagem++;if(repetidos.length<12) repetidos.push(voucher);return;}
     unicos.add(voucher);
   });
   if(!unicos.size) throw new Error('Nenhum voucher válido encontrado. Confira a coluna Voucher.');
   return {vouchers:Array.from(unicos),total:naoVazios,
-    invalidos,invalidosQuantidade:naoVazios-Array.from(unicos).length-repetidos.length,
-    repetidos,repetidosQuantidade:naoVazios-Array.from(unicos).length-invalidos.length,
+    invalidos,invalidosQuantidade:invalidosContagem,
+    repetidos,repetidosQuantidade:repetidosContagem,
     arquivo:arquivo.name,aba:livro.SheetNames[0]};
 }
 
 export default function LaboratorioIndividualV2Page() {
+  const {user}=useAuth();
   const [dados,setDados]=useState({itens:[],total:0,resumo:{}});
   const [texto,setTexto]=useState('');
   const [busca,setBusca]=useState('');
@@ -221,9 +223,9 @@ export default function LaboratorioIndividualV2Page() {
           <button type="button" onClick={carregar} disabled={ocupado||carregando} className={BOTAO+' border-slate-300 bg-white text-slate-700'}>
             <RefreshCw size={15} className={carregando?'animate-spin':''}/> Atualizar
           </button>
-          <Link to="/v2/assurant/laboratorio/reparos/romaneios-antigos" className={BOTAO+' border-slate-200 bg-white text-slate-600'}>
+          {user?.id==='b517d70a-56be-4b4f-8b9e-a03c769dd3c3'&&<Link to="/v2/assurant/laboratorio/reparos/romaneios-antigos" className={BOTAO+' border-slate-200 bg-white text-slate-600'}>
             Romaneios anteriores
-          </Link>
+          </Link>}
         </div>
       </header>
       {erro&&<div role="alert" className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-800"><AlertTriangle size={17} className="mt-0.5 shrink-0"/>{erro}</div>}
@@ -246,8 +248,8 @@ export default function LaboratorioIndividualV2Page() {
             <p className="break-all text-xs font-bold text-slate-900">{previa.arquivo} · aba {previa.aba}</p>
             <div className="mt-2 flex flex-wrap gap-3 text-xs">
               <span className="font-semibold text-emerald-700">{previa.vouchers.length} vouchers válidos e distintos</span>
-              <span className="text-amber-700">{previa.repetidos.length} repetidos no arquivo (exemplos)</span>
-              <span className="text-rose-700">{previa.invalidos.length} inválidos (exemplos)</span>
+              <span className="text-amber-700">{previa.repetidosQuantidade} repetidos no arquivo</span>
+              <span className="text-rose-700">{previa.invalidosQuantidade} inválidos no arquivo</span>
             </div>
             {!!previa.invalidos.length&&<p className="mt-2 text-[11px] text-rose-700">Inválidos ignorados: {previa.invalidos.join('; ')}</p>}
             <div className="mt-3 flex flex-wrap items-center gap-2">
