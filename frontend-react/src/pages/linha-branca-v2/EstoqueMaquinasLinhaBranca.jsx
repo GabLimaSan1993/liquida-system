@@ -183,7 +183,7 @@ export default function EstoqueMaquinasLinhaBranca() {
 
     <div className={BOX+" space-y-3"}>
       <div className="flex flex-wrap gap-2">
-        {[["INVENTARIO","Conferência física: Lavadoras"],["LIQUIDA","Operação Liquida: todas as famílias"],["HISTORICO","Histórico a conciliar"],["TODOS","Tudo (auditoria)"]].map(([v,n])=><button key={v} type="button" onClick={()=>{setEscopo(v);setPagina(1);}} className={"rounded-lg px-3 py-2 text-xs font-bold "+(escopo===v?"bg-[#43284F] text-white":"bg-slate-100 text-slate-700")}>{n}</button>)}
+        {[["INVENTARIO","Conferência física: Lavadoras"],["LIQUIDA","Operação Liquida: todas as famílias"],["HISTORICO","Histórico a conciliar"],["TODOS","Tudo (auditoria)"]].map(([v,n])=><button key={v} type="button" onClick={()=>{setEscopo(v);setPagina(1);setFamilia("");setTipo("");setMarca("");setStatus("");setBusca("");setDigitado("");}} className={"rounded-lg px-3 py-2 text-xs font-bold "+(escopo===v?"bg-[#43284F] text-white":"bg-slate-100 text-slate-700")}>{n}</button>)}
       </div>
       <p className="text-[11px] text-slate-500">{escopo==="INVENTARIO"?"Conferência física de 04/11/2026. As entradas do próximo relatório diário ainda não foram contabilizadas; statuses técnicos originais são preservados.":escopo==="LIQUIDA"?"Todas as famílias que passaram pelo Liquida, sem confirmação de presença física atual.":escopo==="HISTORICO"?"OSs sem evidência operacional no Liquida, a conciliar com o inventário físico.":"Visão histórica completa para auditoria; não equivale ao estoque atual."}</p>
       <div className="flex flex-wrap gap-2">
@@ -233,20 +233,20 @@ export default function EstoqueMaquinasLinhaBranca() {
             <tr><th className="px-3 py-3">OS / Série</th><th className="px-3 py-3">Máquina / Marca / Modelo</th>
               <th className="px-3 py-3">Etapa operacional</th><th className="px-3 py-3">Situação do estoque</th>
               <th className="px-3 py-3">Origem / Local</th><th className="px-3 py-3 text-right">Aging</th>
-              <th className="px-3 py-3">Atualização GAIA</th><th className="px-3 py-3">Ação</th></tr>
+              <th className="px-3 py-3">{escopo==="INVENTARIO"?"Data-base física":"Atualização GAIA"}</th><th className="px-3 py-3">Ação</th></tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {(dados?.itens||[]).map(i=><tr key={i.id} className="hover:bg-purple-50/40">
+            {(dados?.itens||[]).map(i=><tr key={i.id||i.numero_os} className="hover:bg-purple-50/40">
               <td className="px-3 py-2.5">
-                <button className="font-black text-[#43284F] hover:underline" type="button" onClick={()=>abrir(i)}>{i.numero_os}</button>
+                {i.id?<button className="font-black text-[#43284F] hover:underline" type="button" onClick={()=>abrir(i)}>{i.numero_os}</button>:<span className="font-black text-rose-700">{i.numero_os} · Sem cadastro</span>}
                 <p className="mt-1 max-w-[150px] break-all font-mono text-[10px] text-slate-500">{i.serial||"Sem serial"}</p>
               </td>
               <td className="max-w-[255px] px-3 py-2.5">
                 <p className="font-bold">{i.marca||"—"} · {i.modelo||"Sem modelo"}</p>
-                <p className="mt-1 text-[10px] text-slate-500">{i.categoria} · {i.sku||"Sem SKU"}</p>
+                <p className="mt-1 text-[10px] text-slate-500">{i.categoria} · {i.sku||"Sem SKU"}</p>{i.categoria_divergente&&<p className="mt-1 text-[10px] font-bold text-amber-700">Categoria divergente</p>}
               </td>
               <td className="px-3 py-2.5">
-                <p className="font-semibold">{i.status_os||"—"}</p>
+                {escopo==="INVENTARIO"&&<p className="font-black text-[#43284F]">Físico: {i.situacao_inventario}</p>}<p className="font-semibold">{escopo==="INVENTARIO"?"Sistema: ":""}{i.status_os||"Sem cadastro"}</p>
                 <p className="mt-1 text-[10px] text-slate-500">{i.etapa_os||"—"}</p>
               </td>
               <td className="px-3 py-2.5">
@@ -256,14 +256,13 @@ export default function EstoqueMaquinasLinhaBranca() {
                 {i.movimentacao_confirmada&&<p className="mt-1 text-[10px] font-semibold text-emerald-700">Conferência registrada</p>}
               </td>
               <td className="max-w-[215px] px-3 py-2.5">
-                <p className="text-[10px]">{i.etapa_gaia||"Etapa GAIA não informada"}</p>
-                <p className="mt-1 text-[10px] text-slate-500">{i.destino_movimentacao||i.endereco_movimentacao||i.local_gaia||i.fornecedor||"Local não validado"}</p>
+                <p className="text-[10px]">{escopo==="INVENTARIO"?"Relação física de "+DIA(i.data_inventario):i.etapa_gaia||"Etapa GAIA não informada"}</p>
+                <p className="mt-1 text-[10px] text-slate-500">{escopo==="INVENTARIO"?"Posição física não detalhada":i.destino_movimentacao||i.endereco_movimentacao||i.local_gaia||i.fornecedor||"Local não validado"}</p>
               </td>
               <td className="px-3 py-2.5 text-right font-bold tabular-nums">{i.aging_dias==null?"—":i.aging_dias+"d"}</td>
-              <td className="whitespace-nowrap px-3 py-2.5 text-[10px]">{DIA(i.referencia_aging)}</td>
+              <td className="whitespace-nowrap px-3 py-2.5 text-[10px]">{DIA(escopo==="INVENTARIO"?i.data_inventario:i.referencia_aging)}</td>
               <td className="px-3 py-2.5">
-                <button type="button" onClick={()=>abrir(i)}
-                  className={BOTAO+" border-violet-200 bg-violet-50 text-[#43284F]"}>Conferir / Histórico</button>
+                {i.id?<button type="button" onClick={()=>abrir(i)} className={BOTAO+" border-violet-200 bg-violet-50 text-[#43284F]"}>Conferir / Histórico</button>:<span className="text-[10px] font-bold text-rose-700">Regularizar cadastro</span>}
               </td>
             </tr>)}
             {carregando&&<tr><td colSpan={8} className="px-4 py-12 text-center text-slate-500">Consultando as máquinas...</td></tr>}
