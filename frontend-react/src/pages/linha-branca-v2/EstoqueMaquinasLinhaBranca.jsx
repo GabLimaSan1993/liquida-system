@@ -346,11 +346,11 @@ export default function EstoqueMaquinasLinhaBranca() {
           <button type="button" disabled={salvando} onClick={()=>setItem(null)}
             aria-label="Fechar" className={BOTAO+" border-slate-200"}><X size={17}/></button>
         </div>
-        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">
+        {item.situacao!=="AGUARDANDO_CMP"&&<div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">
           <b>Conciliação logística:</b> a OS pode estar finalizada tecnicamente sem registro de saída.
           Registre somente movimentações verificadas fisicamente ou com documento. Esta tela não efetua venda,
           transferência de estoque contábil nem altera a etapa de reparo da OS.
-        </div>
+        </div>}
         {item.situacao==="AGUARDANDO_CMP"&&<section className="mt-5 space-y-4 rounded-xl border border-amber-200 bg-amber-50/40 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -466,7 +466,9 @@ export default function EstoqueMaquinasLinhaBranca() {
             </p>}
           {rastreio?.total_eventos>400&&<p className="text-xs text-amber-700">Mostrando os 400 eventos mais recentes de {FORMAT(rastreio.total_eventos)}. A consulta permanece preservada no banco.</p>}
         </section>
-        <form onSubmit={registrar} className="mt-4 space-y-3 rounded-xl border border-slate-200 p-4">
+        <details className="mt-5 rounded-xl border border-slate-200 bg-slate-50/50 p-3">
+          <summary className="cursor-pointer text-xs font-black text-slate-700">Movimentações físicas documentadas (opcional)</summary>
+          <form onSubmit={registrar} className="mt-3 space-y-3 rounded-xl border border-slate-200 bg-white p-4">
           <h4 className="text-sm font-black">Registrar situação física/comercial</h4>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="text-xs font-bold text-slate-600">Situação confirmada
@@ -519,6 +521,7 @@ export default function EstoqueMaquinasLinhaBranca() {
               Nenhuma saída ou conferência física confirmada nesta OS. O status técnico é apenas indicação operacional.
             </p>}
         </section>
+        </details>
         <div className="mt-4 flex justify-end"><button type="button" disabled={salvando}
           onClick={()=>setItem(null)} className={BOTAO+" border-slate-200"}>Fechar</button></div>
       </div>
