@@ -34,6 +34,13 @@ import {
 } from "../../services/linhaBrancaService.js";
 import { fetchHistoricoLavadora } from "../../services/lavadorasTriagemService.js";
 import { identificarTipoLavadora } from "../../services/lavadorasConferencia.js";
+import {
+  carregarPendenciasLavadora,
+  diasDeAging,
+  pendenciaAberta,
+  registrarNecessidadePeca,
+  salvarDiagnosticoPendente,
+} from "../../services/lavadorasPendenciasService.js";
 import { classificarTriagemLavadora, nivelEfetivoLavadora, nivelServicoLavadora, tecnicoHabilitadoLavadora, tecnicoPodeAtuarOsLavadora, VISUAL_NIVEIS_LAVADORAS } from "../../services/reparosLavadorasNiveis.js";
 
 const AREA_CONFIG = {
@@ -72,6 +79,13 @@ export default function ReparosLavadorasV2Page() {
   const [saving, setSaving] = useState(false);
   const [fotosEsteticasPendentes,setFotosEsteticasPendentes]=useState(false);
   const [mensagem, setMensagem] = useState("");
+  const [pendencias, setPendencias] = useState({ diagnosticos: [], requisicoes: [], compras: [], estoque: [] });
+  const [pendenciasVersao, setPendenciasVersao] = useState(0);
+  const [carregandoPendencias, setCarregandoPendencias] = useState(false);
+  const [buscaPeca, setBuscaPeca] = useState("");
+  const [pecaSelecionadaId, setPecaSelecionadaId] = useState("");
+  const [quantidadePeca, setQuantidadePeca] = useState("1");
+  const [defeitoVinculado, setDefeitoVinculado] = useState("");
 
   const selectedOs = useMemo(
     () => osList.find((item) => String(item.id) === String(selectedOsId)) || null,
@@ -102,6 +116,24 @@ export default function ReparosLavadorasV2Page() {
       && tecnicoHabilitadoLavadora(profile, nivelDaExecucao)
     : false;
   const verTodos = profile?.is_master === true;
+  const diagnosticoSalvo = pendencias.diagnosticos.find((item) => item.area_reparo === areaAtual);
+  const todasNecessidades = useMemo(() => [
+    ...pendencias.requisicoes.map((item) => ({ ...item, tipo: "estoque" })),
+    ...pendencias.compras.map((item) => ({ ...item, tipo: "compra" })),
+  ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)), [pendencias.requisicoes, pendencias.compras]);
+  const necessidadesAbertas = todasNecessidades.filter((item) =>
+    pendenciaAberta(item, item.tipo));
+  const pecaSelecionada = pendencias.estoque.find((item) => String(item.id) === String(pecaSelecionadaId));
+  const sugestoesPecas = useMemo(() => {
+    const termo = buscaPeca.trim().toLocaleLowerCase("pt-BR");
+    if (termo.length < 2) return [];
+    return pendencias.estoque
+      .filter((item) => [item.descricao, item.pn, item.marca].some((campo) =>
+        String(campo || "").toLocaleLowerCase("pt-BR").includes(termo)))
+      .sort((a, b) => Number(b.marca?.toLowerCase() === selectedOs?.marca?.toLowerCase()) -
+        Number(a.marca?.toLowerCase() === selectedOs?.marca?.toLowerCase()))
+      .slice(0, 8);
+  }, [buscaPeca, pendencias.estoque, selectedOs?.marca]);
 
   const osFiltradas = useMemo(() => {
     const termo=busca.trim().toLowerCase();
@@ -163,6 +195,30 @@ export default function ReparosLavadorasV2Page() {
   }, [profile?.id, profile?.is_master]);
 
   useEffect(() => {
+    let ativo = true;
+    if (!selectedOs?.id) {
+      setPendencias({ diagnosticos: [], requisicoes: [], compras: [], estoque: [] });
+      return undefined;
+    }
+    setCarregandoPendencias(true);
+    carregarPendenciasLavadora(selectedOs.id)
+      .then((dados) => { if (ativo) setPendencias(dados); })
+      .catch((error) => { if (ativo) setMensagem("Erro ao consultar peças e diagnósticos: " + error.message); })
+      .finally(() => { if (ativo) setCarregandoPendencias(false); });
+    return () => { ativo = false; };
+  }, [selectedOs?.id, pendenciasVersao]);
+
+  useEffect(() => {
+    const registro = pendencias.diagnosticos.find((item) => item.area_reparo === areaAtual);
+    setExecucao((atual) => ({
+      ...atual,
+      diagnostico_final: registro?.diagnostico || "",
+      observacoes: registro?.observacoes || "",
+      servicos: registro?.servicos || [],
+    }));
+  }, [selectedOs?.id, areaAtual, pendencias.diagnosticos]);
+
+  useEffect(() => {
     let cancelado = false;
     async function carregarHistorico() {
       if (!selectedOs?.id) {
@@ -184,6 +240,11 @@ export default function ReparosLavadorasV2Page() {
     const concluidas = os.areas_concluidas || [];
     const areas = os.__especialidade_indefinida ? AREAS : (os.areas_reparo || []);
     const pendentes = areas.filter((area) => AREAS.includes(area) && !concluidas.includes(area));
+    setPendencias({ diagnosticos: [], requisicoes: [], compras: [], estoque: [] });
+    setBuscaPeca("");
+    setPecaSelecionadaId("");
+    setQuantidadePeca("1");
+    setDefeitoVinculado("");
     setSelectedOsId(String(os.id));
     setAreaAtual(pendentes[0] || "");
     setBusca("");
@@ -196,6 +257,11 @@ export default function ReparosLavadorasV2Page() {
     setAreaAtual("");
     setBusca("");
     setHistorico(null);
+    setPendencias({ diagnosticos: [], requisicoes: [], compras: [], estoque: [] });
+    setBuscaPeca("");
+    setPecaSelecionadaId("");
+    setQuantidadePeca("1");
+    setDefeitoVinculado("");
     setExecucao({ ...EMPTY, dt_inicio: new Date().toISOString() });
   }
 
@@ -214,10 +280,67 @@ export default function ReparosLavadorasV2Page() {
     setExecucao((atual) => ({ ...atual, pecas: [...atual.pecas, peca], novaPeca: "" }));
   }
 
+  async function salvarDiagnostico() {
+    if (!selectedOs || !areaAtual || !execucao.diagnostico_final.trim()) {
+      return setMensagem("Selecione uma especialidade e registre o defeito encontrado.");
+    }
+    try {
+      setSaving(true);
+      const registro = await salvarDiagnosticoPendente(selectedOs, areaAtual, execucao, profile);
+      setPendencias((atual) => ({
+        ...atual,
+        diagnosticos: [...atual.diagnosticos.filter((d) => d.area_reparo !== areaAtual), registro],
+      }));
+      setMensagem(`Diagnóstico da OS ${selectedOs.numero_os} salvo sem concluir o reparo. O equipamento permanece na etapa atual.`);
+    } catch (error) {
+      setMensagem("Erro ao salvar diagnóstico: " + error.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function requisitarPeca() {
+    if (!selectedOs || !areaAtual || !execucao.diagnostico_final.trim()) {
+      return setMensagem("Registre o diagnóstico para vincular a necessidade de peça.");
+    }
+    if (!buscaPeca.trim() || !Number.isFinite(Number(quantidadePeca)) || Number(quantidadePeca) <= 0) {
+      return setMensagem("Informe a peça necessária e a quantidade.");
+    }
+    try {
+      setSaving(true);
+      const diagnostico = await salvarDiagnosticoPendente(selectedOs, areaAtual, execucao, profile);
+      const resultado = await registrarNecessidadePeca({
+        os: selectedOs,
+        diagnostico,
+        descricao: buscaPeca,
+        estoqueId: pecaSelecionadaId,
+        quantidade: quantidadePeca,
+        defeito: defeitoVinculado || (execucao.servicos.length === 1 ? execucao.servicos[0] : ""),
+        profile,
+        estoque: pendencias.estoque,
+      });
+      setBuscaPeca("");
+      setPecaSelecionadaId("");
+      setQuantidadePeca("1");
+      setDefeitoVinculado("");
+      setPendenciasVersao((v) => v + 1);
+      await carregarOs();
+      setMensagem(resultado.destino === "requisicao"
+        ? `Requisição de estoque #${resultado.registro.id} criada para a OS ${selectedOs.numero_os}. Sem conclusão de reparo.`
+        : `Necessidade de compra #${resultado.registro.id} registrada para a OS ${selectedOs.numero_os}. Aging iniciado e reparo pendente.`);
+      if (resultado.aviso) setMensagem((msg) => msg + " Atenção ao status da OS: " + resultado.aviso);
+    } catch (error) {
+      setMensagem("Erro ao registrar necessidade: " + error.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function salvar() {
     if (!selectedOs || !areaAtual || !execucao.diagnostico_final.trim() || !execucao.servicos.length) {
       return setMensagem("Informe o diagnóstico e selecione ao menos um serviço executado.");
     }
+    if (necessidadesAbertas.length) return setMensagem("Há requisições de peças ou compras em aberto. Receba o material e conclua o serviço somente após executá-lo.");
     if (!podeExecutar) return setMensagem(selectedOs?.retorno_pos_reparo_exclusivo_carlos ? "Retorno reprovado na bancada: somente Carlos Dias pode refazer este reparo." : "Nível N3 exclusivo de Carlos Dias; N1/N2 disponíveis para Carlos, Kaua e Alexandre.");
     if(areaAtual==="Reparo Estético"){
       try{
@@ -302,21 +425,89 @@ export default function ReparosLavadorasV2Page() {
         </div>
 
         <div className="space-y-5">
-          {selectedOs ? <div className="rounded-2xl border border-rose-100 bg-rose-50 p-5"><div className="flex items-center gap-2 text-sm font-black text-rose-800"><AlertTriangle className="h-4 w-4" /> Origem da falha / Triagem</div><div className="mt-3 text-sm leading-6 text-rose-700">{selectedOs.__triagem?.observacoes_triagem || "Sem observação de falha na triagem."}</div><div className="mt-4 grid gap-2 md:grid-cols-3"><div className="rounded-xl bg-white p-3"><div className="text-[10px] font-black text-slate-500">Mecânicos solicitados</div><div className="mt-2 text-[10px] text-slate-600">{(selectedOs.__triagem?.reparos_mecanicos || []).join(", ") || "—"}</div></div><div className="rounded-xl bg-white p-3"><div className="text-[10px] font-black text-slate-500">Elétricos solicitados</div><div className="mt-2 text-[10px] text-slate-600">{(selectedOs.__triagem?.reparos_eletricos || []).join(", ") || "—"}</div></div><div className="rounded-xl bg-white p-3"><div className="text-[10px] font-black text-slate-500">Estéticos solicitados</div><div className="mt-2 text-[10px] text-slate-600">{(selectedOs.__triagem?.reparos_esteticos || []).join(", ") || "—"}</div></div></div></div> : null}
+          {selectedOs ? <div className="rounded-2xl border border-rose-100 bg-rose-50 p-5"><div className="flex items-center gap-2 text-sm font-black text-rose-800"><AlertTriangle className="h-4 w-4" /> Origem da falha / Triagem</div><div className="mt-3 text-sm leading-6 text-rose-700">{selectedOs.__triagem?.observacoes_triagem || "Sem triagem cadastrada para esta OS. O defeito pode ser registrado diretamente na bancada, sem avançar a OS."}</div><div className="mt-4 grid gap-2 md:grid-cols-3"><div className="rounded-xl bg-white p-3"><div className="text-[10px] font-black text-slate-500">Mecânicos solicitados</div><div className="mt-2 text-[10px] text-slate-600">{(selectedOs.__triagem?.reparos_mecanicos || []).join(", ") || "—"}</div></div><div className="rounded-xl bg-white p-3"><div className="text-[10px] font-black text-slate-500">Elétricos solicitados</div><div className="mt-2 text-[10px] text-slate-600">{(selectedOs.__triagem?.reparos_eletricos || []).join(", ") || "—"}</div></div><div className="rounded-xl bg-white p-3"><div className="text-[10px] font-black text-slate-500">Estéticos solicitados</div><div className="mt-2 text-[10px] text-slate-600">{(selectedOs.__triagem?.reparos_esteticos || []).join(", ") || "—"}</div></div></div></div> : null}
 
           <div className={`rounded-2xl border p-5 ${selectedOs ? VISUAL_NIVEIS_LAVADORAS[nivelDaOs].card : "border-slate-200 bg-white opacity-40 pointer-events-none"}`}>
             {selectedOs && <p className="mb-3 text-xs font-bold text-slate-700">Complexidade: {nivelDaExecucao} · {selectedOs.retorno_pos_reparo_exclusivo_carlos ? "Reprovado no pós-reparo: revisão exclusiva de Carlos Dias" : podeExecutar ? "Técnico habilitado" : "Execução restrita ao técnico habilitado."}</p>}
-            {selectedOs?.__especialidade_indefinida && <p className="mb-3 text-xs font-bold text-amber-800">OS importada aguardando peça: selecione a especialidade conforme o reparo realizado. A escolha será registrada na conclusão.</p>}
-             <div className="flex flex-wrap gap-2">{areasPendentes.map((area) => <button key={area} type="button" onClick={() => { setAreaAtual(area); setExecucao((a) => ({ ...a, servicos: [] })); }} className={`rounded-xl px-4 py-2 text-xs font-black ${areaAtual === area ? "bg-[#5B35C9] text-white" : "bg-slate-100 text-slate-600"}`}>{area}</button>)}</div>{configArea ? <div className="mt-5"><div className="text-sm font-black text-slate-900">Serviços — {configArea.titulo}</div><div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{configArea.lista.map((item) => <label key={item} className={`flex cursor-pointer items-center gap-2 rounded-xl border p-3 text-[10px] font-bold ${VISUAL_NIVEIS_LAVADORAS[nivelServicoLavadora(areaAtual,item)]?.card || "border-slate-200 bg-slate-50"}`}>
+            {selectedOs?.__especialidade_indefinida && <p className="mb-3 text-xs font-bold text-amber-800">OS sem triagem cadastrada: selecione a especialidade, salve o diagnóstico e registre as peças necessárias. Não é preciso concluir o serviço.</p>}
+             <div className="flex flex-wrap gap-2">{areasPendentes.map((area) => <button key={area} type="button" onClick={() => { setAreaAtual(area); setDefeitoVinculado(""); setExecucao((a) => ({ ...a, servicos: [] })); }} className={`rounded-xl px-4 py-2 text-xs font-black ${areaAtual === area ? "bg-[#5B35C9] text-white" : "bg-slate-100 text-slate-600"}`}>{area}</button>)}</div>{configArea ? <div className="mt-5"><div className="text-sm font-black text-slate-900">Serviços — {configArea.titulo}</div><div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{configArea.lista.map((item) => <label key={item} className={`flex cursor-pointer items-center gap-2 rounded-xl border p-3 text-[10px] font-bold ${VISUAL_NIVEIS_LAVADORAS[nivelServicoLavadora(areaAtual,item)]?.card || "border-slate-200 bg-slate-50"}`}>
               <input type="checkbox" checked={execucao.servicos.includes(item)} onChange={() => toggleServico(item)} />
               <span className="flex-1">{item}</span><span className="font-black">{nivelServicoLavadora(areaAtual,item)||"A avaliar"}</span>
             </label>)}</div></div> : null}
             {selectedOs && areaAtual==="Reparo Estético" && <div className="mt-4">
                <FotosEsteticasLavadora key={selectedOs.id} osId={selectedOs.id} onEstado={setFotosEsteticasPendentes}/>
              </div>}
-             <div className="mt-5 grid gap-4 lg:grid-cols-2"><label><span className="text-[11px] font-black text-slate-600">Diagnóstico final *</span><textarea rows={4} value={execucao.diagnostico_final} onChange={(e) => setExecucao((a) => ({ ...a, diagnostico_final: e.target.value }))} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" /></label><label><span className="text-[11px] font-black text-slate-600">Observações</span><textarea rows={4} value={execucao.observacoes} onChange={(e) => setExecucao((a) => ({ ...a, observacoes: e.target.value }))} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" /></label></div>
-            <div className="mt-4"><div className="text-[11px] font-black text-slate-600">Peças utilizadas</div><div className="mt-2 flex gap-2"><input value={execucao.novaPeca} onChange={(e) => setExecucao((a) => ({ ...a, novaPeca: e.target.value }))} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); adicionarPeca(); } }} placeholder="Digite a peça" className="h-10 flex-1 rounded-xl border border-slate-200 px-3 text-sm" /><button type="button" onClick={adicionarPeca} className="flex h-10 items-center gap-2 rounded-xl border border-slate-200 px-3 text-xs font-black"><PackagePlus className="h-4 w-4" /> Adicionar</button></div><div className="mt-2 flex flex-wrap gap-2">{execucao.pecas.map((peca, index) => <span key={`${peca}-${index}`} className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-bold text-slate-600">{peca}</span>)}</div></div>
-            <button type="button" onClick={salvar} disabled={saving || !selectedOs || !podeExecutar || (areaAtual==="Reparo Estético" && fotosEsteticasPendentes) || !areaAtual || !execucao.diagnostico_final.trim() || !execucao.servicos.length} className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#5B35C9] text-xs font-black text-white disabled:bg-slate-300"><Save className="h-4 w-4" /> Salvar reparo desta área</button>
+             <div className="mt-5 grid gap-4 lg:grid-cols-2"><label><span className="text-[11px] font-black text-slate-600">Diagnóstico / defeito encontrado *</span><textarea rows={4} value={execucao.diagnostico_final} onChange={(e) => setExecucao((a) => ({ ...a, diagnostico_final: e.target.value }))} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" /></label><label><span className="text-[11px] font-black text-slate-600">Observações</span><textarea rows={4} value={execucao.observacoes} onChange={(e) => setExecucao((a) => ({ ...a, observacoes: e.target.value }))} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" /></label></div>
+            <section className="mt-5 rounded-xl border border-violet-200 bg-white/80 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div><h3 className="text-sm font-black text-slate-900">Diagnóstico e peças necessárias</h3>
+                    <p className="mt-1 text-xs text-slate-500">Salve mesmo sem possuir a peça. Este registro não conclui o reparo nem baixa o estoque.</p></div>
+                  {diagnosticoSalvo && <span className="rounded-lg bg-emerald-100 px-2 py-1 text-xs font-bold text-emerald-800">Diagnóstico salvo</span>}
+                </div>
+                <button type="button" onClick={salvarDiagnostico}
+                  disabled={saving || carregandoPendencias || !execucao.diagnostico_final.trim() || !areaAtual}
+                  className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-lg bg-violet-700 px-4 text-xs font-black text-white disabled:opacity-40">
+                  <Save className="h-4 w-4" /> Salvar diagnóstico sem concluir
+                </button>
+                <div className="mt-5 border-t border-slate-200 pt-4">
+                  <h4 className="text-xs font-black text-slate-900">Requisição de peças / necessidade de compra</h4>
+                  <p className="mt-1 text-xs text-slate-500">Consulte por nome ou PN. Se não houver saldo disponível, será aberta uma necessidade de compra vinculada ao defeito.</p>
+                  <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_110px]">
+                    <label className="text-xs font-bold text-slate-600">Peça necessária
+                      <input value={buscaPeca} onChange={(e) => { setBuscaPeca(e.target.value); setPecaSelecionadaId(""); }}
+                        placeholder="Ex.: tambor, placa ou código PN" className="mt-1 w-full rounded-lg border border-slate-200 p-2.5 text-sm" />
+                    </label>
+                    <label className="text-xs font-bold text-slate-600">Quantidade
+                      <input type="number" min="0.001" step="0.001" value={quantidadePeca}
+                        onChange={(e) => setQuantidadePeca(e.target.value)}
+                        className="mt-1 w-full rounded-lg border border-slate-200 p-2.5 text-sm" />
+                    </label>
+                  </div>
+                  {sugestoesPecas.length > 0 && !pecaSelecionada && <div className="mt-2 max-h-44 space-y-1 overflow-y-auto rounded-lg border border-slate-200 bg-white p-2">
+                    {sugestoesPecas.map((peca) => <button key={peca.id} type="button"
+                      onClick={() => { setPecaSelecionadaId(String(peca.id)); setBuscaPeca(peca.descricao || peca.pn); }}
+                      className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-2 text-left text-xs hover:bg-violet-50">
+                      <span><b>{peca.descricao || peca.pn}</b> · {peca.pn} {peca.marca ? "· " + peca.marca : ""}</span>
+                      <span className={peca.disponivel > 0 ? "font-bold text-emerald-700" : "font-bold text-amber-700"}>
+                        Disponível: {peca.disponivel}
+                      </span>
+                    </button>)}
+                  </div>}
+                  {pecaSelecionada && <p className="mt-2 rounded-lg bg-slate-100 p-2 text-xs text-slate-700">
+                    <b>Peça cadastrada:</b> {pecaSelecionada.pn} · Saldo físico: {pecaSelecionada.saldo} · Disponível após requisições: {pecaSelecionada.disponivel}
+                    {Number(quantidadePeca) > pecaSelecionada.disponivel ? " · Sem quantidade suficiente: compra necessária" : " · Requisição de estoque"}
+                  </p>}
+                  <label className="mt-3 block text-xs font-bold text-slate-600">Defeito / serviço relacionado à peça
+                    <select value={defeitoVinculado} onChange={(e) => setDefeitoVinculado(e.target.value)}
+                      className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2.5 text-sm">
+                      <option value="">Diagnóstico geral{execucao.servicos.length === 1 ? " (serviço selecionado automaticamente)" : ""}</option>
+                      {execucao.servicos.map((servico) => <option key={servico} value={servico}>{servico}</option>)}
+                    </select>
+                  </label>
+                  <button type="button" onClick={requisitarPeca}
+                    disabled={saving || carregandoPendencias || !execucao.diagnostico_final.trim() || !buscaPeca.trim() || Number(quantidadePeca) <= 0}
+                    className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-lg border border-amber-400 bg-amber-50 px-4 text-xs font-black text-amber-900 disabled:opacity-40">
+                    <PackagePlus className="h-4 w-4" /> Registrar necessidade de peça
+                  </button>
+                </div>
+                <div className="mt-5 border-t border-slate-200 pt-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h4 className="text-xs font-black text-slate-900">Requisições vinculadas à OS</h4>
+                    <span className="text-xs font-bold text-amber-800">{necessidadesAbertas.length} em aberto{necessidadesAbertas.length ? " · Maior aging: " + Math.max(...necessidadesAbertas.map((p) => diasDeAging(p.created_at))) + " dias" : ""}</span>
+                  </div>
+                  {carregandoPendencias ? <p className="mt-2 text-xs text-slate-500">Consultando necessidades...</p>
+                    : todasNecessidades.length === 0 ? <p className="mt-2 text-xs text-slate-500">Nenhuma peça requisitada nesta OS.</p>
+                    : <div className="mt-2 space-y-2">{todasNecessidades.map((item) => <div key={item.tipo + item.id}
+                      className="flex flex-wrap justify-between gap-2 rounded-lg border border-slate-200 bg-white p-3 text-xs">
+                      <div><p className="font-bold text-slate-900">{item.tipo === "compra" ? "Compra" : "Estoque"} #{item.id} · {item.descricao || item.pn}</p>
+                        <p className="mt-1 text-slate-600">Qtd. {item.quantidade} · {item.defeito_referente || "Diagnóstico geral"} · {item.status.replaceAll("_", " ")}</p></div>
+                      <div className="font-bold text-slate-700">{pendenciaAberta(item, item.tipo) ? "Aging: " + diasDeAging(item.created_at) + " dias" : "Encerrada"}</div>
+                    </div>)}</div>}
+                </div>
+              </section>
+              <div className="mt-4"><div className="text-[11px] font-black text-slate-600">Peças utilizadas</div><div className="mt-2 flex gap-2"><input value={execucao.novaPeca} onChange={(e) => setExecucao((a) => ({ ...a, novaPeca: e.target.value }))} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); adicionarPeca(); } }} placeholder="Digite a peça" className="h-10 flex-1 rounded-xl border border-slate-200 px-3 text-sm" /><button type="button" onClick={adicionarPeca} className="flex h-10 items-center gap-2 rounded-xl border border-slate-200 px-3 text-xs font-black"><PackagePlus className="h-4 w-4" /> Adicionar</button></div><div className="mt-2 flex flex-wrap gap-2">{execucao.pecas.map((peca, index) => <span key={`${peca}-${index}`} className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-bold text-slate-600">{peca}</span>)}</div></div>
+            <button type="button" onClick={salvar} disabled={saving || !selectedOs || !podeExecutar || necessidadesAbertas.length > 0 || (areaAtual==="Reparo Estético" && fotosEsteticasPendentes) || !areaAtual || !execucao.diagnostico_final.trim() || !execucao.servicos.length} className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#5B35C9] text-xs font-black text-white disabled:bg-slate-300"><Check className="h-4 w-4" /> Concluir reparo executado desta área</button>
+             {necessidadesAbertas.length > 0 && <p className="mt-2 text-xs font-bold text-amber-800">Conclusão bloqueada: existem peças requisitadas ou compras pendentes para esta OS.</p>}
           </div>
 
           {historico ? <div className="rounded-2xl border border-slate-200 bg-white p-5"><div className="flex items-center gap-2 text-sm font-black text-slate-900"><History className="h-4 w-4 text-[#5B35C9]" /> Histórico técnico</div><div className="mt-4 grid gap-3 md:grid-cols-4"><div className="rounded-xl bg-violet-50 p-3"><div className="text-[10px] font-black text-violet-500">Retornos de loja</div>{historico.retornos.map((item) => <div key={item.id} className="mt-2 text-[10px] text-violet-700">Retorno #{item.numero_retorno} · {item.motivo} · {item.status}</div>)}</div><div className="rounded-xl bg-slate-50 p-3"><div className="text-[10px] font-black text-slate-400">Ciclos</div>{historico.ciclos.slice(-4).map((item) => <div key={item.id} className="mt-2 text-[10px] text-slate-600">{item.etapa_teste} · ciclo {item.numero_ciclo} · {item.status}</div>)}</div><div className="rounded-xl bg-slate-50 p-3"><div className="text-[10px] font-black text-slate-400">Reparos anteriores</div>{historico.reparos.slice(-4).map((item) => <div key={item.id} className="mt-2 text-[10px] text-slate-600">{item.area_execucao} · {item.servico_executado || item.diagnostico_final}</div>)}</div><div className="rounded-xl bg-slate-50 p-3"><div className="text-[10px] font-black text-slate-400">Laudos</div>{historico.laudos.slice(-4).map((item) => <div key={item.id} className="mt-2 text-[10px] text-slate-600">{item.titulo}</div>)}</div></div></div> : null}
