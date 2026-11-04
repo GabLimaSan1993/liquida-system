@@ -13,6 +13,8 @@ import {
   ChevronUp,
   Clock3,
   DollarSign,
+  FileSpreadsheet,
+  Download,
   PackageCheck,
   RefreshCw,
   Store,
@@ -24,6 +26,7 @@ import {
   formatarDataHoraSP,
   hojeEmSaoPaulo,
 } from "../services/B2CPainelGestorService.js";
+import { baixarRelatorioPainelGestorB2C } from "../services/B2CPainelGestorExportService.js";
 
 function Card({
   children,
@@ -809,6 +812,11 @@ export default function B2CPainelGestorPage() {
     setCorteAberto,
   ] = useState(null);
 
+  const [exportando, setExportando] = useState(false);
+  const [progressoExportacao, setProgressoExportacao] = useState("");
+  const [erroExportacao, setErroExportacao] = useState("");
+  const [sucessoExportacao, setSucessoExportacao] = useState("");
+
   const consultaPorPeriodo =
     modoConsulta === "periodo";
 
@@ -827,6 +835,32 @@ export default function B2CPainelGestorPage() {
     !dataFinalConsulta ||
     dataInicialConsulta >
       dataFinalConsulta;
+
+  async function exportarPeriodo() {
+    if (periodoInvalido || exportando) return;
+    setExportando(true);
+    setErroExportacao("");
+    setSucessoExportacao("");
+    setProgressoExportacao("Buscando os pedidos do período...");
+    try {
+      const resultado = await baixarRelatorioPainelGestorB2C(
+        dataInicialConsulta,
+        dataFinalConsulta,
+        setProgressoExportacao
+      );
+      setSucessoExportacao(
+        "Excel gerado: " + resultado.pedidos.toLocaleString("pt-BR") +
+        " pedidos AnyMarket, " + resultado.itens.toLocaleString("pt-BR") +
+        " itens e " + resultado.cortes.toLocaleString("pt-BR") +
+        " cortes. O arquivo está disponível nos downloads do navegador."
+      );
+    } catch (error) {
+      setErroExportacao(error?.message || "Não foi possível gerar o Excel.");
+    } finally {
+      setExportando(false);
+      setProgressoExportacao("");
+    }
+  }
 
   const carregar = useCallback(
     async (
@@ -1171,10 +1205,32 @@ export default function B2CPainelGestorPage() {
           Atualizar
         </button>
 
+        <button
+          type="button"
+          onClick={exportarPeriodo}
+          disabled={exportando || periodoInvalido}
+          className="inline-flex items-center gap-2 rounded-xl border border-emerald-700 bg-emerald-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
+          title="Exportar todos os pedidos e itens do período em Excel para conciliação com o AnyMarket"
+        >
+          {exportando ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+          {exportando ? "Gerando Excel..." : "Baixar relatório Excel"}
+          <FileSpreadsheet className="h-4 w-4" />
+        </button>
+
         <span className="rounded-xl bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 ring-1 ring-blue-200">
           Atualização automática a cada hora
         </span>
       </div>
+
+      {progressoExportacao && (
+        <p role="status" className="text-xs font-semibold text-violet-700">{progressoExportacao}</p>
+      )}
+      {erroExportacao && (
+        <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-800">{erroExportacao}</p>
+      )}
+      {sucessoExportacao && (
+        <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800">{sucessoExportacao}</p>
+      )}
 
       <p className="text-xs text-slate-500">
         {
