@@ -607,7 +607,7 @@ export default function TriagemLavadorasV2Page() {
       });
       setErroCiclo(null);
       setErroForm({ ...EMPTY_ERRO });
-      setMensagem("OS encaminhada para reparo com o escopo selecionado.");
+      setMensagem("OS encaminhada para reparo. Componentes do diagnóstico registrados como requisições abertas com aging iniciado.");
     });
   }
 
@@ -907,6 +907,7 @@ export default function TriagemLavadorasV2Page() {
                 <RepairGroup title="Reparos Mecânicos" area="Mecânico" items={REPAROS_MECANICOS_LAVADORAS} selected={erroForm.mecanicos} onToggle={(item) => toggleLista("mecanicos", item)} />
                 <RepairGroup title="Reparos Elétricos" area="Elétrico" items={REPAROS_ELETRICOS_LAVADORAS} selected={erroForm.eletricos} onToggle={(item) => toggleLista("eletricos", item)} />
                 <RepairGroup title="Reparos Estéticos" area="Estético" items={REPAROS_ESTETICOS_LAVADORAS} selected={erroForm.esteticos} onToggle={(item) => toggleLista("esteticos", item)} />
+                 <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-[11px] font-semibold leading-5 text-amber-950">Cada componente selecionado no diagnóstico e enviado para reparo será registrado automaticamente como <strong>requisição de peça</strong>, vinculada à OS, ao técnico e à data do diagnóstico. O aging começa no lançamento e permanece aberto até o atendimento registrado na Gestão de Estoque.</p>
                 <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700">Complexidade do encaminhamento: <strong>{classificarTriagemLavadora({reparos_mecanicos:erroForm.mecanicos,reparos_eletricos:erroForm.eletricos,reparos_esteticos:erroForm.esteticos}).nivel || "A avaliar (restrito N3)"}</strong> · N3: somente Carlos · N1/N2: Carlos, Kaua e Alexandre</div>
                 <button type="button" onClick={enviarParaReparo} disabled={saving || !erroForm.erroDescricao.trim()} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-rose-600 text-[11px] font-black text-white disabled:opacity-50"><Wrench className="h-4 w-4" /> Enviar para reparo</button>
                 <div className="rounded-xl border border-rose-100 bg-rose-50 p-3"><div className="text-[11px] font-black text-rose-800">Condenação / Scrap</div><textarea rows={2} value={erroForm.motivoCondenacao} onChange={(event) => setErroForm((atual) => ({ ...atual, motivoCondenacao: event.target.value }))} placeholder="Justificativa obrigatória" className="mt-2 w-full rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs outline-none" /><button type="button" onClick={condenar} disabled={saving || !erroForm.motivoCondenacao.trim()} className="mt-2 flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-slate-900 text-[10px] font-black text-white disabled:opacity-40"><Trash2 className="h-3.5 w-3.5" /> Condenar e enviar para Scrap</button></div>
