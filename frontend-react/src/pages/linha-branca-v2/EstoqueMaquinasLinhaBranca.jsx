@@ -9,20 +9,18 @@ const BOX="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm";
 const BOTAO="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-40";
 const CAMPO="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 outline-none focus:border-violet-400";
 const ESTADOS=[
+  ["RECEBIMENTO","Recebimento","bg-sky-100 text-sky-800"],
   ["TRIAGEM","Triagem","bg-sky-100 text-sky-800"],
-  ["AGUARDANDO_CMP","CMP / Peças","bg-amber-100 text-amber-800"],
-  ["REPARO","Em reparo","bg-violet-100 text-violet-800"],
-  ["POS_REPARO","Testes / Qualidade","bg-indigo-100 text-indigo-800"],
-  ["APROVADO","Aprovados / A transferir","bg-cyan-100 text-cyan-800"],
-  ["ESTOQUE_CONFIRMADO","Estoque físico conferido","bg-emerald-100 text-emerald-800"],
-  ["FINALIZADA_CONCILIAR","Finalizadas a conciliar","bg-orange-100 text-orange-900"],
-  ["SAIDA_INDICADA_GAIA","Expedição indicada no GAIA","bg-slate-100 text-slate-700"],
-  ["LOJA_POR_CONCILIACAO","Loja por conciliação (sem comprovante)","bg-slate-100 text-slate-700"],
-  ["SAIDA_CONFIRMADA","Saídas confirmadas","bg-slate-200 text-slate-800"],
-  ["SCRAP_CONDENADO","Scrap / Condenado","bg-rose-100 text-rose-800"],
-  ["DESCARTE_CONFIRMADO","Descarte confirmado","bg-rose-200 text-rose-900"],
-  ["CONFERENCIA","Em conferência","bg-amber-100 text-amber-900"],
-  ["A_CONFERIR","Outros / A conferir","bg-slate-100 text-slate-700"]
+  ["AGUARDANDO_CMP","CMP / Aguardando peça","bg-amber-100 text-amber-900"],
+  ["REPARO","Reparo","bg-violet-100 text-violet-800"],
+  ["TESTES","Bancada de testes","bg-indigo-100 text-indigo-800"],
+  ["LIMPEZA","Limpeza","bg-teal-100 text-teal-800"],
+  ["QUALIDADE","Qualidade","bg-cyan-100 text-cyan-800"],
+  ["APROVADO","Aprovado","bg-emerald-100 text-emerald-800"],
+  ["CONCLUIDA_LOJA","Concluída / Loja","bg-emerald-100 text-emerald-800"],
+  ["SAIDA_CONFIRMADA","Saída comprovada","bg-emerald-200 text-emerald-950"],
+  ["SCRAP_CONDENADO","Scrap","bg-rose-100 text-rose-800"],
+  ["SEM_ETAPA","Etapa a confirmar","bg-slate-100 text-slate-700"]
 ];
 const MOVIMENTOS=[
   ["ESTOQUE_CONFIRMADO","Conferir presença em estoque físico"],
@@ -83,23 +81,18 @@ export default function EstoqueMaquinasLinhaBranca() {
   const carregar=useCallback(async()=>{
     setCarregando(true);setErro("");
     try{
-      const filtros={pagina,tamanho,busca,marca,categoria:familia,tipo,situacao:status};
-      const res=escopo==="INVENTARIO"
-        ? await (async()=>{
-          const {data,error}=await supabase.rpc("linha_branca_inventario_fisico",{p_dados:filtros});
-          if(error)throw Error(error.message);
-          return data;
-        })()
-        : await rpc("listar",{...filtros,escopo});
-      setDados(res||null);
+      const filtros={pagina,tamanho,busca,marca,categoria:familia,tipo,situacao:status,
+        escopo:escopo==="CONCLUIDAS"?"CONCLUIDAS":"TODOS"};
+      const {data,error}=await supabase.rpc("linha_branca_inventario_fisico",{p_dados:filtros});
+      if(error)throw new Error(error.message);
+      setDados(data||null);
     }catch(e){setErro("Não foi possível carregar o estoque de máquinas: "+e.message);}
     finally{setCarregando(false);}
   },[pagina,busca,marca,familia,tipo,status,escopo]);
   useEffect(()=>{void carregar();},[carregar]);
   const resumo=dados?.resumo||{};
   const somar=(...states)=>states.reduce((v,k)=>v+Number(resumo[k]||0),0);
-  const emProcesso=somar("TRIAGEM","AGUARDANDO_CMP","REPARO","POS_REPARO","A_CONFERIR");
-  const pendentesSaida=somar("FINALIZADA_CONCILIAR","SAIDA_INDICADA_GAIA");
+  const emProcesso=somar("RECEBIMENTO","TRIAGEM","REPARO","TESTES","LIMPEZA","QUALIDADE","APROVADO");
   const filtroAtivo=!!(busca||marca||familia||tipo||status);
   const totalPaginas=Math.max(1,Math.ceil(Number(dados?.total_filtrado||0)/tamanho));
   const marcas=useMemo(()=>dados?.por_marca||[],[dados]);
@@ -189,7 +182,7 @@ export default function EstoqueMaquinasLinhaBranca() {
         <div>
           <h2 className="text-base font-black text-[#43284F]">Estoque</h2>
           <p className="mt-1 text-xs leading-5 text-slate-600">
-            Máquinas de lavar e lava e seca: CMP, triagem, scrap e concluídas para loja, com requisições de peças e acompanhamento das OSs.
+            Linha Branca completa: lavadoras, refrigeração, climatização e demais produtos com passagem pelo Liquida. Etapa atual e rastreabilidade por OS, sem inflar os saldos com o Aging importado.
            </p>
         </div>
         <button type="button" onClick={carregar} disabled={carregando}
@@ -199,7 +192,9 @@ export default function EstoqueMaquinasLinhaBranca() {
       </div>
       <p className="mt-3 text-[11px] text-amber-900">
         <AlertTriangle size={14} className="mr-1 inline"/>
-        {escopo==="INVENTARIO"?"O estoque foi conciliado com a relação enviada. "+FORMAT(dados?.cadastros_pendentes||0)+" OSs da lista ainda não têm ficha no Liquida; para essas OSs, diagnóstico, técnico e etapas não podem ser consultados até localizar o cadastro original. O resumo do arquivo aponta 54 CMP, mas identifica 51.":"As OSs encaminhadas à loja foram separadas do estoque atual por conciliação, sem presumir expedição física documentada."}
+        {escopo==="INVENTARIO"
+            ? "A movimentação real do Liquida determina a etapa; listas físicas antigas são somente referência. "+FORMAT(dados?.divergencias_situacao||0)+" OSs têm divergência com a listagem anterior; "+FORMAT(dados?.cadastros_pendentes||0)+" OSs não possuem ficha operacional."
+            : "Concluídas no Liquida, sem pressupor saída documental: transferência e expedição exigem comprovante registrado."}
        </p>
     </section>
 
@@ -208,15 +203,16 @@ export default function EstoqueMaquinasLinhaBranca() {
 
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {(escopo==="INVENTARIO" ? [
-        [Warehouse,"CMP",dados?.total_cmp,"Máquinas aguardando atendimento das peças"],
-        [Wrench,"Triagem",dados?.total_triagem,"Equipamentos ainda em análise"],
-        [AlertTriangle,"Scrap",dados?.total_scrap,"Segregados do estoque produtivo"],
-        [ClipboardList,"Requisições abertas",dados?.total_requisicoes_abertas,"Geradas pelos componentes do diagnóstico"],
-        [Clock3,"Maior aging de requisição (dias)",dados?.maior_aging_pecas,"Dias corridos desde a abertura"],
-        [AlertTriangle,"CMP sem peça identificada",dados?.cmp_sem_requisicao,"OSs que precisam ter a requisição registrada"]
+        [Warehouse,"OSs com evidência",dados?.os_escopo,"Operação Liquida + lista física; não é saldo disponível para venda"],
+        [Wrench,"Em produção",emProcesso,"Triagem, reparo, testes, limpeza, qualidade e aprovação"],
+        [Clock3,"Aguardando CMP",dados?.total_cmp,"Somente OSs ainda aguardando peça/reparo"],
+        [CheckCircle2,"Concluídas / Loja",dados?.total_concluidas,"Finalizadas na operação; comprovantes comerciais à parte"],
+        [AlertTriangle,"Scrap",dados?.total_scrap,"Segregadas do estoque produtivo"],
+        [ClipboardList,"Requisições abertas",dados?.total_requisicoes_abertas,
+          "Maior aging: "+FORMAT(dados?.maior_aging_pecas||0)+" dias desde o diagnóstico"]
       ] : [
-        [Truck,"Concluídas / Loja",dados?.total_filtrado,"Fora da relação física atual por conciliação"],
-        [ClipboardList,"Acompanhar OS",dados?.total_filtrado,"Consulte etapas, diagnósticos e técnicos por OS"]
+        [CheckCircle2,"Concluídas / Loja",dados?.total_filtrado,"Total de OSs concluídas no filtro"],
+        [Truck,"Saídas confirmadas",resumo.SAIDA_CONFIRMADA||0,"Com movimentação e referência documentadas"]
       ]).map(([Icon,nome,valor,desc])=><div key={nome} className={BOX}>
         <div className="flex items-center gap-2"><Icon size={17} className="text-[#765D81]"/><p className="text-[11px] font-bold text-slate-500">{nome}</p></div>
         <p className="mt-2 text-2xl font-black text-slate-900">{valor==null?"—":FORMAT(valor)}</p>
@@ -228,7 +224,9 @@ export default function EstoqueMaquinasLinhaBranca() {
       <div className="flex flex-wrap gap-2">
         {[["INVENTARIO","Estoque"],["CONCLUIDAS","Concluídas / Loja"]].map(([v,n])=><button key={v} type="button" onClick={()=>{setEscopo(v);setPagina(1);setFamilia("");setTipo("");setMarca("");setStatus("");setBusca("");setDigitado("");}} className={"rounded-lg px-3 py-2 text-xs font-bold "+(escopo===v?"bg-[#43284F] text-white":"bg-slate-100 text-slate-700")}>{n}</button>)}
       </div>
-      <p className="text-[11px] text-slate-500">{escopo==="INVENTARIO"?"Somente estoque e scrap da relação enviada; o próximo relatório diário atualizará as novas entradas. Para CMP, a peça do diagnóstico equivale à requisição, com aging desde o registro.":"Máquinas enviadas para loja por conciliação gerencial, fora do estoque físico atual. A classificação não substitui o comprovante de expedição."}</p>
+      <p className="text-[11px] text-slate-500">{escopo==="INVENTARIO"
+        ? "Todos os produtos com atividade registrada no Liquida ou conferência física identificada. O status atualizado prevalece sobre a etapa antiga do relatório; concluídas também aparecem aqui."
+        : "Exibe somente as OSs finalizadas ou com saída confirmada. A ausência de comprovante de transferência continua indicada."}</p>
       <div className="flex flex-wrap gap-2">
         <form onSubmit={e=>{e.preventDefault();mudarFiltro(setBusca,digitado.trim());}}
           className="flex min-w-[235px] flex-1 gap-2">
@@ -239,6 +237,11 @@ export default function EstoqueMaquinasLinhaBranca() {
           </div>
           <button className={BOTAO+" bg-[#43284F] text-white"} type="submit">Buscar</button>
         </form>
+        <select value={familia} onChange={e=>{setFamilia(e.target.value);setTipo("");setPagina(1);}}
+          aria-label="Filtrar linha de produtos" className={CAMPO+" max-w-[195px]"}>
+          <option value="">Todas as linhas</option>
+          {familias.map(f=><option key={f.nome} value={f.nome}>{f.nome} ({FORMAT(f.total)})</option>)}
+        </select>
         <select value={tipo} onChange={e=>mudarFiltro(setTipo,e.target.value)}
           aria-label="Filtrar tipo de produto" className={CAMPO+" max-w-[240px]"}>
           <option value="">Todos os tipos de produto</option>
@@ -252,16 +255,17 @@ export default function EstoqueMaquinasLinhaBranca() {
         {filtroAtivo&&<button type="button" className={BOTAO+" border-slate-200"}
           onClick={()=>{setBusca("");setDigitado("");setMarca("");setFamilia("");setTipo("");setStatus("");setPagina(1);}}>Limpar filtros</button>}
       </div>
-      {escopo==="INVENTARIO"&&<div className="flex flex-wrap items-center gap-2">
-        <label className="text-xs font-bold text-slate-600" htmlFor="filtro-etapa-lb">Situação</label>
-        <select id="filtro-etapa-lb" value={status} onChange={e=>mudarFiltro(setStatus,e.target.value)} className={CAMPO+" max-w-[300px]"}>
-          <option value="">Todas as situações</option>
-          {ESTADOS.filter(x=>["TRIAGEM","AGUARDANDO_CMP","SCRAP_CONDENADO"].includes(x[0]))
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="text-xs font-bold text-slate-600" htmlFor="filtro-etapa-lb">Etapa atual</label>
+        <select id="filtro-etapa-lb" value={status} onChange={e=>mudarFiltro(setStatus,e.target.value)}
+          className={CAMPO+" max-w-[300px]"}>
+          <option value="">Todas as etapas</option>
+          {ESTADOS.filter(([id])=>Number(resumo[id]||0)>0 || id===status)
             .map(([id,nome])=><option key={id} value={id}>{nome} ({FORMAT(resumo[id]||0)})</option>)}
         </select>
-      </div>}
+      </div>
       <p className="text-[11px] text-slate-500">
-        Resultados: <b>{FORMAT(dados?.total_filtrado||0)}</b> OSs · página {pagina} de {totalPaginas}. Peças e insumos são controlados separadamente.
+        Resultados: <b>{FORMAT(dados?.total_filtrado||0)}</b> OSs · página {pagina} de {totalPaginas}. Status determinado pelo fluxo atual; somente registros com evidência operacional ou conferência identificada.
       </p>
     </div>
 
@@ -289,25 +293,28 @@ export default function EstoqueMaquinasLinhaBranca() {
               <td className="px-3 py-3">
                 <span className={"inline-block rounded-md px-2 py-1 text-[10px] font-bold "+classeEstado(i.situacao)}>{labelEstado(i.situacao)}</span>
                 {i.status_os&&<p className="mt-1 text-[10px] text-slate-500">Etapa sistema: {i.status_os}{i.etapa_os&&i.etapa_os!==i.status_os?" · "+i.etapa_os:""}</p>}
-                {i.situacao==="LOJA_POR_CONCILIACAO"&&<p className="mt-1 text-[10px] text-slate-500">Saída gerencial; sem comprovante de envio</p>}
+                {i.divergencia_etapa&&<p className="mt-1 text-[10px] font-semibold text-amber-800">
+                  Lista anterior: {i.situacao_inventario} · Liquida: {i.status_os} (prevalece)
+                </p>}
+                {i.situacao==="CONCLUIDA_LOJA"&&<p className="mt-1 text-[10px] text-slate-500">Finalizada no Liquida · saída não comprovada</p>}
               </td>
               <td className="px-3 py-3">
                 <p className="font-semibold text-slate-800">{i.responsavel||"Não atribuído"}</p>
-                {i.situacao==="AGUARDANDO_CMP"&&i.pecas_abertas?.[0]?.solicitante&&
+                {i.pecas_abertas?.[0]?.solicitante&&
                   <p className="mt-1 text-[10px] text-slate-500">Solicitou: {i.pecas_abertas[0].solicitante}</p>}
               </td>
               <td className="min-w-[230px] px-3 py-3">
-                {i.situacao==="AGUARDANDO_CMP" ? (
-                  i.pecas_abertas?.length ?
-                    <div className="space-y-1.5">
-                      {i.pecas_abertas.map(p=><div key={p.id} className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="max-w-[200px] font-semibold text-slate-800">{p.peca}</span>
-                        <span className="whitespace-nowrap rounded-md bg-amber-100 px-2 py-0.5 font-black text-amber-900">{FORMAT(p.aging_dias)} dias</span>
-                      </div>)}
-                      <p className="text-[10px] text-slate-500">{FORMAT(i.requisicoes_abertas)} aberta(s) · da data do diagnóstico</p>
-                    </div>
-                    : <span className="font-semibold text-rose-700">Peça não informada no diagnóstico</span>
-                ) : <span className="text-slate-400">—</span>}
+                {i.pecas_abertas?.length ?
+                  <div className="space-y-1.5">
+                    {i.pecas_abertas.map(p=><div key={p.id} className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="max-w-[200px] font-semibold text-slate-800">{p.peca}</span>
+                      <span className="whitespace-nowrap rounded-md bg-amber-100 px-2 py-0.5 font-black text-amber-900">{FORMAT(p.aging_dias)} dias</span>
+                    </div>)}
+                    <p className="text-[10px] text-slate-500">{FORMAT(i.requisicoes_abertas)} requisição(ões) aberta(s)</p>
+                  </div>
+                  :i.situacao==="AGUARDANDO_CMP"?
+                    <span className="font-semibold text-rose-700">Sem peça registrada no diagnóstico</span>
+                  :<span className="text-slate-400">—</span>}
               </td>
               <td className="px-3 py-3">
                 {i.id ? <button type="button" onClick={()=>abrir(i)}
