@@ -229,51 +229,63 @@ export default function EstoqueMaquinasLinhaBranca() {
 
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[1120px] text-left text-xs">
+        <table className="w-full min-w-[900px] text-left text-xs">
           <thead className="bg-slate-100 text-[10px] font-black uppercase tracking-wide text-slate-600">
-            <tr><th className="px-3 py-3">OS / Série</th><th className="px-3 py-3">Máquina / Marca / Modelo</th>
-              <th className="px-3 py-3">Etapa operacional</th><th className="px-3 py-3">Situação do estoque</th>
-              <th className="px-3 py-3">Origem / Local</th><th className="px-3 py-3 text-right">Aging</th>
-              <th className="px-3 py-3">{escopo==="INVENTARIO"?"Data-base física":"Atualização GAIA"}</th><th className="px-3 py-3">Ação</th></tr>
+            <tr>
+              <th className="px-3 py-3">OS / Equipamento</th>
+              <th className="px-3 py-3">Situação / Etapa</th>
+              <th className="px-3 py-3">Técnico</th>
+              <th className="px-3 py-3">Requisições de peças / Aging</th>
+              <th className="px-3 py-3">Detalhes</th>
+            </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {(dados?.itens||[]).map(i=><tr key={i.id||i.numero_os} className="hover:bg-purple-50/40">
-              <td className="px-3 py-2.5">
-                {i.id?<button className="font-black text-[#43284F] hover:underline" type="button" onClick={()=>abrir(i)}>{i.numero_os}</button>:<span className="font-black text-rose-700">{i.numero_os} · Sem cadastro</span>}
-                <p className="mt-1 max-w-[150px] break-all font-mono text-[10px] text-slate-500">{i.serial||"Sem serial"}</p>
+              <td className="px-3 py-3">
+                <p className="font-black text-[#43284F]">OS {i.numero_os}</p>
+                <p className="mt-1 max-w-[260px] font-semibold text-slate-700">{i.marca||"Marca não informada"} · {i.modelo||"Modelo não informado"}</p>
+                <p className="mt-1 text-[10px] text-slate-500">{i.categoria||"—"} · Série {i.serial||"não informada"}</p>
+                {i.categoria_divergente&&<p className="mt-1 text-[10px] font-bold text-amber-700">Categoria diferente da relação</p>}
+                {i.cadastro_pendente&&<p className="mt-1 text-[10px] font-bold text-rose-700">OS da lista sem ficha no Liquida</p>}
               </td>
-              <td className="max-w-[255px] px-3 py-2.5">
-                <p className="font-bold">{i.marca||"—"} · {i.modelo||"Sem modelo"}</p>
-                <p className="mt-1 text-[10px] text-slate-500">{i.categoria} · {i.sku||"Sem SKU"}</p>{i.categoria_divergente&&<p className="mt-1 text-[10px] font-bold text-amber-700">Categoria divergente</p>}
+              <td className="px-3 py-3">
+                <span className={"inline-block rounded-md px-2 py-1 text-[10px] font-bold "+classeEstado(i.situacao)}>{labelEstado(i.situacao)}</span>
+                {i.status_os&&<p className="mt-1 text-[10px] text-slate-500">Etapa sistema: {i.status_os}{i.etapa_os&&i.etapa_os!==i.status_os?" · "+i.etapa_os:""}</p>}
+                {i.situacao==="LOJA_POR_CONCILIACAO"&&<p className="mt-1 text-[10px] text-slate-500">Saída gerencial; sem comprovante de envio</p>}
               </td>
-              <td className="px-3 py-2.5">
-                {escopo==="INVENTARIO"&&<p className="font-black text-[#43284F]">Físico: {i.situacao_inventario}</p>}<p className="font-semibold">{escopo==="INVENTARIO"?"Sistema: ":""}{i.status_os||"Sem cadastro"}</p>
-                <p className="mt-1 text-[10px] text-slate-500">{i.etapa_os||"—"}</p>
+              <td className="px-3 py-3">
+                <p className="font-semibold text-slate-800">{i.responsavel||"Não atribuído"}</p>
+                {i.situacao==="AGUARDANDO_CMP"&&i.pecas_abertas?.[0]?.solicitante&&
+                  <p className="mt-1 text-[10px] text-slate-500">Solicitou: {i.pecas_abertas[0].solicitante}</p>}
               </td>
-              <td className="px-3 py-2.5">
-                <span className={"inline-block whitespace-nowrap rounded-md px-2 py-1 text-[10px] font-bold "+classeEstado(i.situacao)}>
-                  {labelEstado(i.situacao)}
-                </span>
-                {i.movimentacao_confirmada&&<p className="mt-1 text-[10px] font-semibold text-emerald-700">Conferência registrada</p>}
-                 {i.situacao==="LOJA_POR_CONCILIACAO"&&<p className="mt-1 text-[10px] font-semibold text-slate-500">Saída gerencial inferida; sem NF/romaneio comprovado</p>}
+              <td className="min-w-[230px] px-3 py-3">
+                {i.situacao==="AGUARDANDO_CMP" ? (
+                  i.pecas_abertas?.length ?
+                    <div className="space-y-1.5">
+                      {i.pecas_abertas.map(p=><div key={p.id} className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="max-w-[200px] font-semibold text-slate-800">{p.peca}</span>
+                        <span className="whitespace-nowrap rounded-md bg-amber-100 px-2 py-0.5 font-black text-amber-900">{FORMAT(p.aging_dias)} dias</span>
+                      </div>)}
+                      <p className="text-[10px] text-slate-500">{FORMAT(i.requisicoes_abertas)} aberta(s) · da data do diagnóstico</p>
+                    </div>
+                    : <span className="font-semibold text-rose-700">Peça não informada no diagnóstico</span>
+                ) : <span className="text-slate-400">—</span>}
               </td>
-              <td className="max-w-[215px] px-3 py-2.5">
-                <p className="text-[10px]">{escopo==="INVENTARIO"?"Relação física de "+DIA(i.data_inventario):i.etapa_gaia||"Etapa GAIA não informada"}</p>
-                <p className="mt-1 text-[10px] text-slate-500">{escopo==="INVENTARIO"?"Posição física não detalhada":i.destino_movimentacao||i.endereco_movimentacao||i.local_gaia||i.fornecedor||"Local não validado"}</p>
-              </td>
-              <td className="px-3 py-2.5 text-right font-bold tabular-nums">{i.aging_dias==null?"—":i.aging_dias+"d"}</td>
-              <td className="whitespace-nowrap px-3 py-2.5 text-[10px]">{DIA(escopo==="INVENTARIO"?i.data_inventario:i.referencia_aging)}</td>
-              <td className="px-3 py-2.5">
-                {i.id?<button type="button" onClick={()=>abrir(i)} className={BOTAO+" border-violet-200 bg-violet-50 text-[#43284F]"}>Conferir / Histórico</button>:<span className="text-[10px] font-bold text-rose-700">Regularizar cadastro</span>}
+              <td className="px-3 py-3">
+                {i.id ? <button type="button" onClick={()=>abrir(i)}
+                  className={BOTAO+" border-violet-200 bg-violet-50 text-[#43284F]"}>
+                    {i.situacao==="AGUARDANDO_CMP"?"Peças e diagnóstico":"Ver trajetória"}
+                  </button>
+                  : <span className="text-[10px] font-semibold text-rose-700">Sem registro técnico no Liquida</span>}
               </td>
             </tr>)}
-            {carregando&&<tr><td colSpan={8} className="px-4 py-12 text-center text-slate-500">Consultando as máquinas...</td></tr>}
-            {!carregando&&!(dados?.itens||[]).length&&<tr><td colSpan={8} className="px-4 py-12 text-center text-slate-500">Nenhuma OS encontrada com estes filtros.</td></tr>}
+            {carregando&&<tr><td colSpan={5} className="px-4 py-12 text-center text-slate-500">Carregando estoque...</td></tr>}
+            {!carregando&&!(dados?.itens||[]).length&&<tr><td colSpan={5} className="px-4 py-12 text-center text-slate-500">Nenhuma OS encontrada.</td></tr>}
           </tbody>
         </table>
       </div>
       <div className="flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 p-3">
-        <p className="text-[11px] text-slate-500">50 OSs por página; filtros aplicados a todo o escopo selecionado.</p>
+        <p className="text-[11px] text-slate-500">{FORMAT(dados?.total_filtrado||0)} OSs no filtro · página {pagina} de {totalPaginas} · 50 por página.</p>
         <div className="flex gap-2">
           <button type="button" onClick={()=>setPagina(v=>Math.max(1,v-1))}
             disabled={carregando||pagina===1} className={BOTAO+" bg-white"}>Anterior</button>
