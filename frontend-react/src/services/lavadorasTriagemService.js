@@ -721,69 +721,51 @@ export async function enviarCicloParaReparo({
   return data;
 }
 
-export async function condenarLavadora({ ciclo, os, motivo, operador }) {
-  const osId = os?.id || ciclo?.os_id;
-  if (!osId) throw new Error("OS inválida.");
-  if (!String(motivo || "").trim()) throw new Error("Informe a justificativa da condenação / scrap.");
-
-  if (ciclo?.id) {
-    const tempo = calcularTempoExecutado(ciclo);
-    const { error: cicloError } = await supabase
-      .from("linha_branca_lavadora_ciclos")
-      .update({
-        status: "reprovado",
-        resultado: "reprovado",
-        tempo_executado_segundos: tempo,
-        ultimo_inicio_em: null,
-        concluido_em: nowIso(),
-      })
-      .eq("id", ciclo.id);
-    if (cicloError) throw cicloError;
-
-    await registrarEventoLavadora({
-      cicloId: ciclo.id,
-      osId,
-      tipoEvento: "Produto condenado / scrap",
-      detalhes: motivo.trim(),
-      tempoExecutado: tempo,
-      operador,
-    });
+export async function condenarLavadora({ ciclo, os, motivo, aproveitaPecas, fotos }) {
+  const osId = Number(os?.id || ciclo?.os_id);
+  const cicloId = Number(ciclo?.id);
+  if (!osId || !cicloId) throw new Error("Selecione um ciclo válido para condenar a OS.");
+  if (String(motivo || "").trim().length < 10) {
+    throw new Error("Informe a justificativa técnica da condenação (mínimo 10 caracteres).");
+  }
+  if (typeof aproveitaPecas !== "boolean") {
+    throw new Error("Indique se existem peças aproveitáveis.");
+  }
+  if (!Array.isArray(fotos) || fotos.length < 2 || fotos.length > 10) {
+    throw new Error("Anexe de 2 a 10 fotos dos motivos da condenação.");
   }
 
-  const { error: execError } = await supabase.from("ordens_servico_execucao").insert({
-    os_id: osId,
-    area_execucao: ciclo?.etapa_teste === "pos_reparo" ? "Bancada de Testes" : "Triagem Lavadoras",
-    tecnico: operador || null,
-    dt_inicio: nowIso(),
-    dt_fim: nowIso(),
-    aprovado: false,
-    condenado: true,
-    motivo_condenacao: motivo.trim(),
-    observacoes: motivo.trim(),
-  });
-  if (execError) throw execError;
+  const bucket = supabase.storage.from("linha-branca-condenacoes");
+  const caminhos = [];
+  for (const arquivo of fotos) {
+    const mime = String(arquivo?.type || "").toLowerCase();
+    const ext = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" }[mime];
+    if (!ext || !arquivo?.size || arquivo.size > 10 * 1024 * 1024) {
+      throw new Error("Cada foto deve ser JPG, PNG ou WebP e ter no máximo 10 MB.");
+    }
+  }
+  // As fotos são enviadas antes da decisão; a transição de OS/ciclo ocorre
+  // somente pela função transacional que valida a presença de todas elas.
+  for (const arquivo of fotos) {
+    const ext = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" }[arquivo.type.toLowerCase()];
+    const caminho = `${osId}/${crypto.randomUUID()}.${ext}`;
+    const { error } = await bucket.upload(caminho, arquivo, {
+      contentType: arquivo.type, upsert: false,
+    });
+    if (error) throw new Error("Falha no envio da foto: " + error.message);
+    caminhos.push(caminho);
+  }
 
-  const { error: osError } = await supabase
-    .from("ordens_servico")
-    .update({
-      status_atual: "Condenado",
-      etapa_atual: "Scrap",
-      area_destino: "Scrap",
-      tecnico_responsavel: operador || null,
-      aprovado_bancada: false,
-    })
-    .eq("id", osId);
-  if (osError) throw osError;
-
-  await criarLaudo({
-    osId,
-    tipo: "condenacao_scrap",
-    titulo: "Laudo de condenação / Scrap",
-    resumo: motivo.trim(),
-    dados: { motivo: motivo.trim(), ciclo: ciclo || null },
-    operador,
+  const { data, error } = await supabase.rpc("linha_branca_lavadora_registrar_condenacao", {
+    p_os_id: osId,
+    p_ciclo_id: cicloId,
+    p_motivo: motivo.trim(),
+    p_aproveita_pecas: aproveitaPecas,
+    p_fotos: caminhos,
   });
-  return true;
+  if (error) throw new Error("Condenação não registrada: " + error.message);
+  if (!data?.ok) throw new Error("O sistema não confirmou a condenação.");
+  return data;
 }
 
 export async function concluirCicloLavadora(ciclo, operador) {
