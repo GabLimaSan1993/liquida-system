@@ -9,6 +9,8 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   TestTubeDiagonal,
+  Trash2,
+  PackageOpen,
   User,
   WashingMachine,
   Wrench,
@@ -44,6 +46,18 @@ const MENU = [
     label: "Bancada de Testes",
     icon: TestTubeDiagonal,
     to: "/v2/linha-branca/lavadoras/testes",
+  },
+  {
+    label: "Scrap",
+    icon: Trash2,
+    to: "/v2/linha-branca/lavadoras/scrap",
+    permissao: "/v2/linha-branca/lavadoras/triagem",
+  },
+  {
+    label: "Desmembramento",
+    icon: PackageOpen,
+    to: "/v2/linha-branca/desmembramento",
+    permissao: "/v2/linha-branca/desmembramento",
   },
 ];
 
@@ -202,7 +216,7 @@ export default function LavadorasWorkspaceLayout() {
               : "mt-4 flex-1 space-y-1 px-4"
           }
         >
-          {MENU.filter(item => hasAccess(item.to)).map((item) => (
+          {MENU.filter(item => hasAccess(item.permissao || item.to)).map((item) => (
             <MenuItem
               key={item.label}
               item={item}
@@ -352,7 +366,7 @@ export default function LavadorasWorkspaceLayout() {
             </button>
 
             <nav className="space-y-1">
-              {MENU.filter(item => hasAccess(item.to)).map((item) => {
+              {MENU.filter(item => hasAccess(item.permissao || item.to)).map((item) => {
                 const Icon = item.icon;
 
                 return (
