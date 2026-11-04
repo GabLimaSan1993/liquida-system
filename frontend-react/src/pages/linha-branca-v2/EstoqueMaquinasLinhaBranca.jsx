@@ -14,13 +14,18 @@ const ESTADOS=[
   ["AGUARDANDO_REPARO","Aguardando Reparo","bg-violet-100 text-violet-800"],
   ["AGUARDANDO_CMP","Aguardando CMP","bg-amber-100 text-amber-900"],
   ["EM_REPARO","Em Reparo","bg-purple-100 text-purple-800"],
+  ["BANCADA_TESTES","Bancada de Testes","bg-cyan-100 text-cyan-800"],
+  ["LIMPEZA","Limpeza","bg-teal-100 text-teal-800"],
+  ["QUALIDADE","Qualidade","bg-indigo-100 text-indigo-800"],
+  ["APROVADO","Aprovado / Liberação","bg-emerald-50 text-emerald-800"],
   ["CONCLUIDO","Concluído","bg-emerald-100 text-emerald-800"],
   ["SCRAP","Scrap","bg-rose-100 text-rose-800"],
   ["PENDENTE_CLASSIFICACAO","Etapa a identificar","bg-slate-100 text-slate-700"]
 ];
 const GRUPOS=[
   {nome:"Triagem",estados:["AGUARDANDO_TRIAGEM","EM_TRIAGEM"],nota:"Aguardando Triagem e Em Triagem"},
-  {nome:"Reparo",estados:["AGUARDANDO_REPARO","AGUARDANDO_CMP","EM_REPARO"],nota:"Aguardando Reparo, CMP ou Em Reparo"},
+  {nome:"Reparo",estados:["AGUARDANDO_REPARO","AGUARDANDO_CMP","EM_REPARO"],nota:"Apenas máquinas em reparo ou aguardando atendimento"},
+  {nome:"Pós-reparo",estados:["BANCADA_TESTES","LIMPEZA","QUALIDADE","APROVADO"],nota:"Testes, limpeza e qualidade; fora do total de Reparo"},
   {nome:"Concluído",estados:["CONCLUIDO"],nota:"Finalizados e conciliados para loja; conferir comprovantes"},
   {nome:"Scrap",estados:["SCRAP"],nota:"Segregado da operação produtiva"}
 ];
@@ -194,7 +199,7 @@ export default function EstoqueMaquinasLinhaBranca() {
     {erro&&<div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-800">{erro}</div>}
     {ok&&<div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">{ok}</div>}
 
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
       {GRUPOS.map(grupo=><div key={grupo.nome} className={BOX}>
         <p className="text-[11px] font-bold text-slate-500">{grupo.nome}</p>
         <p className="mt-2 text-3xl font-black tabular-nums text-slate-900">
@@ -258,6 +263,12 @@ export default function EstoqueMaquinasLinhaBranca() {
               <option value="AGUARDANDO_CMP">Aguardando CMP ({FORMAT(resumo.AGUARDANDO_CMP)})</option>
               <option value="EM_REPARO">Em Reparo ({FORMAT(resumo.EM_REPARO)})</option>
             </optgroup>
+            <optgroup label="Pós-reparo">
+              <option value="BANCADA_TESTES">Bancada de Testes ({FORMAT(resumo.BANCADA_TESTES)})</option>
+              <option value="LIMPEZA">Limpeza ({FORMAT(resumo.LIMPEZA)})</option>
+              <option value="QUALIDADE">Qualidade ({FORMAT(resumo.QUALIDADE)})</option>
+              <option value="APROVADO">Aprovado / Liberação ({FORMAT(resumo.APROVADO)})</option>
+            </optgroup>
             <optgroup label="Finalização">
               <option value="CONCLUIDO">Concluído ({FORMAT(resumo.CONCLUIDO)})</option>
               {Number(resumo.SCRAP||0)>0&&<option value="SCRAP">Scrap ({FORMAT(resumo.SCRAP)})</option>}
@@ -268,8 +279,9 @@ export default function EstoqueMaquinasLinhaBranca() {
         </label>
       </form>
       <p className="text-[11px] text-slate-500">
-        Reparo inclui testes, limpeza, qualidade e aprovação enquanto a OS não estiver finalizada.
-        Em reparo com peça pendente recebe a indicação específica de CMP, sem ser reclassificado automaticamente.
+        Reparo contabiliza somente Aguardando Reparo, Aguardando CMP e Em Reparo.
+        Bancada de Testes, Limpeza, Qualidade e Liberação ficam em Pós-reparo, sem inflar a fila de Reparo.
+        Máquinas fora da relação física continuam consultáveis na etapa atual, mas sem comprovar presença física.
       </p>
     </section>
 
