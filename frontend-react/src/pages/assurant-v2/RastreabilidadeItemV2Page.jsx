@@ -1210,9 +1210,18 @@ export default function RastreabilidadeItemV2Page() {
       )}
 
       {actionError && (
-        <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-semibold text-rose-700">
-          <XCircle size={16} className="mt-0.5 shrink-0" />
-          {actionError}
+        <div className={`flex items-start gap-2 rounded-xl border px-4 py-3 text-xs font-semibold ${/reprovado nos testes MELI/i.test(actionError) ? "border-amber-200 bg-amber-50 text-amber-900" : "border-rose-200 bg-rose-50 text-rose-700"}`}>
+          {/reprovado nos testes MELI/i.test(actionError) ? <AlertTriangle size={16} className="mt-0.5 shrink-0" /> : <XCircle size={16} className="mt-0.5 shrink-0" />}
+          <div>
+            {actionError}
+            {/reprovado nos testes MELI/i.test(actionError) && <div className="mt-2 text-xs font-medium">
+              O bloqueio impede apenas a saída comercial nesta condição. O aparelho pode passar por retriagem e reclassificação de SKU, bateria e grade.
+              <div className="mt-2 flex flex-wrap gap-3 font-bold">
+                <a className="underline" href="/v2/assurant/triagens/funcional">Triagem Funcional</a>
+                <a className="underline" href="/v2/assurant/triagens/cosmetica">Triagem Cosmética</a>
+              </div>
+            </div>}
+          </div>
         </div>
       )}
 
