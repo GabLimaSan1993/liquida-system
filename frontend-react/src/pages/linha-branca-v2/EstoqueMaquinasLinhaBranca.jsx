@@ -26,7 +26,7 @@ const ESTADOS=[
 ];
 const GRUPOS=[
   {nome:"Triagem",estados:["AGUARDANDO_TRIAGEM","EM_TRIAGEM"],nota:"Aguardando Triagem e Em Triagem"},
-  {nome:"Reparo",estados:["AGUARDANDO_REPARO","AGUARDANDO_CMP","EM_REPARO"],nota:"Apenas máquinas em reparo ou aguardando atendimento"},
+  {nome:"Oficina / CMP",estados:["AGUARDANDO_REPARO","AGUARDANDO_CMP","EM_REPARO"],nota:"CMP = peça pendente; Em Reparo = execução sem peça pendente"},
   {nome:"Pós-reparo",estados:["BANCADA_TESTES","LIMPEZA","QUALIDADE","APROVADO"],nota:"Testes, limpeza e qualidade; fora do total de Reparo"},
   {nome:"Concluído",estados:["CONCLUIDO"],nota:"Finalizados e conciliados para loja; conferir comprovantes"},
   {nome:"Destinação",estados:["AGUARDANDO_DESMEMBRAMENTO","SCRAP"],nota:"Desmembramento com aproveitamento ou Scrap"}
@@ -291,9 +291,9 @@ export default function EstoqueMaquinasLinhaBranca() {
         </label>
       </form>
       <p className="text-[11px] text-slate-500">
-        Reparo contabiliza somente Aguardando Reparo, Aguardando CMP e Em Reparo.
-        Bancada de Testes, Limpeza, Qualidade e Liberação ficam em Pós-reparo, sem inflar a fila de Reparo.
-        Máquinas fora da relação física continuam consultáveis na etapa atual, mas sem comprovar presença física.
+        Com requisição de peça aberta, a OS fica em Aguardando CMP — não em Em Reparo.
+        Em Reparo significa execução sem peça bloqueando o serviço. Testes, Limpeza e Qualidade ficam em Pós-reparo.
+        OSs aguardando peça sem requisição aberta ficam sinalizadas para revisão; registros fora da relação física não comprovam presença na operação.
       </p>
     </section>
 
@@ -363,7 +363,7 @@ export default function EstoqueMaquinasLinhaBranca() {
                     </div>)}
                   </div>
                 :i.status_lavadora==="AGUARDANDO_CMP"?
-                  <span className="font-semibold text-rose-700">Necessidade sem peça vinculada</span>
+                  <span className="font-semibold text-rose-700">Aguardando peça sem requisição aberta — revisar vínculo</span>
                 :<span className="text-slate-400">—</span>}
               </td>
               <td className="px-3 py-3">
