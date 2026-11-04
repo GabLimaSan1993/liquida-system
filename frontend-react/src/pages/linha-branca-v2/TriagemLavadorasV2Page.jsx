@@ -559,6 +559,8 @@ export default function TriagemLavadorasV2Page() {
         ciclo.status === "em_ciclo" ? await pausarCicloLavadora(ciclo, operador, true) : ciclo;
       const atualizado = { ...ciclo, ...pausado, os: ciclo.os };
       setErroCiclo(atualizado);
+      setFotosCondenacao([]);
+      setDestinoPecasCondenacao("");
       setErroForm({
         ...EMPTY_ERRO,
         erroDescricao: atualizado.erro_descricao || "",
@@ -642,6 +644,8 @@ export default function TriagemLavadorasV2Page() {
 
   function selecionarCiclo(ciclo) {
     setSelectedCicloId(String(ciclo.id));
+    setFotosCondenacao([]);
+    setDestinoPecasCondenacao("");
     if (ciclo.status === "pausado_erro") {
       setErroCiclo(ciclo);
       setErroForm({
@@ -911,7 +915,7 @@ export default function TriagemLavadorasV2Page() {
         <div className="min-w-0 rounded-2xl border border-slate-200 bg-white">
           {erroCiclo ? (
             <>
-              <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4"><div><h2 className="flex items-center gap-2 text-sm font-black text-slate-900"><AlertTriangle className="h-4 w-4 text-rose-600" /> Erro e encaminhamento</h2><p className="mt-1 text-[11px] font-semibold text-slate-400">{erroCiclo.os?.numero_os || `OS #${erroCiclo.os_id}`}</p></div><button type="button" onClick={() => setErroCiclo(null)} className="text-slate-400 hover:text-slate-700"><X className="h-4 w-4" /></button></div>
+              <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4"><div><h2 className="flex items-center gap-2 text-sm font-black text-slate-900"><AlertTriangle className="h-4 w-4 text-rose-600" /> Erro e encaminhamento</h2><p className="mt-1 text-[11px] font-semibold text-slate-400">{erroCiclo.os?.numero_os || `OS #${erroCiclo.os_id}`}</p></div><button type="button" onClick={() => {setErroCiclo(null);setFotosCondenacao([]);setDestinoPecasCondenacao("");}} className="text-slate-400 hover:text-slate-700"><X className="h-4 w-4" /></button></div>
               <div className="space-y-4 p-5">
                 <label className="block"><span className="text-[11px] font-black text-slate-600">Erro apresentado *</span><input value={erroForm.erroDescricao} onChange={(event) => setErroForm((atual) => ({ ...atual, erroDescricao: event.target.value }))} placeholder="Digite exatamente o erro apresentado pela lavadora" className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-rose-400" /></label>
                 <label className="block"><span className="text-[11px] font-black text-slate-600">Código do erro</span><input value={erroForm.codigoErro} onChange={(event) => setErroForm((atual) => ({ ...atual, codigoErro: event.target.value }))} placeholder="Ex.: E3" className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-rose-400" /></label>
