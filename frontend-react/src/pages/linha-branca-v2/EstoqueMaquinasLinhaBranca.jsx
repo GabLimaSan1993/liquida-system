@@ -17,7 +17,8 @@ const ESTADOS=[
   ["LIMPEZA","Limpeza","bg-teal-100 text-teal-800"],
   ["QUALIDADE","Qualidade","bg-cyan-100 text-cyan-800"],
   ["APROVADO","Aprovado","bg-emerald-100 text-emerald-800"],
-  ["CONCLUIDA_LOJA","Concluída / Loja","bg-emerald-100 text-emerald-800"],
+  ["CONCLUIDA_LOJA","Finalizada no Liquida","bg-emerald-100 text-emerald-800"],
+  ["LOJA_POR_CONCILIACAO","Loja por conciliação","bg-slate-100 text-slate-800"],
   ["SAIDA_CONFIRMADA","Saída comprovada","bg-emerald-200 text-emerald-950"],
   ["SCRAP_CONDENADO","Scrap","bg-rose-100 text-rose-800"],
   ["SEM_ETAPA","Etapa a confirmar","bg-slate-100 text-slate-700"]
@@ -206,12 +207,14 @@ export default function EstoqueMaquinasLinhaBranca() {
         [Warehouse,"OSs com evidência",dados?.os_escopo,"Operação Liquida + lista física; não é saldo disponível para venda"],
         [Wrench,"Em produção",emProcesso,"Triagem, reparo, testes, limpeza, qualidade e aprovação"],
         [Clock3,"Aguardando CMP",dados?.total_cmp,"Somente OSs ainda aguardando peça/reparo"],
-        [CheckCircle2,"Concluídas / Loja",dados?.total_concluidas,"Finalizadas na operação; comprovantes comerciais à parte"],
+        [CheckCircle2,"Concluídas / Loja",dados?.total_concluidas,
+          FORMAT(dados?.total_finalizadas_confirmadas||0)+" finalizadas no Liquida · "+FORMAT(dados?.total_loja_por_conciliacao||0)+" por conciliação (sem comprovante)"],
         [AlertTriangle,"Scrap",dados?.total_scrap,"Segregadas do estoque produtivo"],
         [ClipboardList,"Requisições abertas",dados?.total_requisicoes_abertas,
           "Maior aging: "+FORMAT(dados?.maior_aging_pecas||0)+" dias desde o diagnóstico"]
       ] : [
-        [CheckCircle2,"Concluídas / Loja",dados?.total_filtrado,"Total de OSs concluídas no filtro"],
+        [CheckCircle2,"Concluídas / Loja",dados?.total_filtrado,
+          "Finalizadas no sistema ou classificadas para loja pela conciliação da lista física"],
         [Truck,"Saídas confirmadas",resumo.SAIDA_CONFIRMADA||0,"Com movimentação e referência documentadas"]
       ]).map(([Icon,nome,valor,desc])=><div key={nome} className={BOX}>
         <div className="flex items-center gap-2"><Icon size={17} className="text-[#765D81]"/><p className="text-[11px] font-bold text-slate-500">{nome}</p></div>
@@ -225,8 +228,8 @@ export default function EstoqueMaquinasLinhaBranca() {
         {[["INVENTARIO","Estoque"],["CONCLUIDAS","Concluídas / Loja"]].map(([v,n])=><button key={v} type="button" onClick={()=>{setEscopo(v);setPagina(1);setFamilia("");setTipo("");setMarca("");setStatus("");setBusca("");setDigitado("");}} className={"rounded-lg px-3 py-2 text-xs font-bold "+(escopo===v?"bg-[#43284F] text-white":"bg-slate-100 text-slate-700")}>{n}</button>)}
       </div>
       <p className="text-[11px] text-slate-500">{escopo==="INVENTARIO"
-        ? "Todos os produtos com atividade registrada no Liquida ou conferência física identificada. O status atualizado prevalece sobre a etapa antiga do relatório; concluídas também aparecem aqui."
-        : "Exibe somente as OSs finalizadas ou com saída confirmada. A ausência de comprovante de transferência continua indicada."}</p>
+        ? "Todos os produtos com atividade registrada no Liquida ou conferência física identificada. O fluxo atual prevalece sobre a etapa antiga; OSs de lavadoras fora da lista física e sem nova movimentação são conciliadas como loja."
+        : "Finalizadas no Liquida, saídas confirmadas e lavadoras destinadas à loja por conciliação da lista física. A inferência não substitui NF ou romaneio."}</p>
       <div className="flex flex-wrap gap-2">
         <form onSubmit={e=>{e.preventDefault();mudarFiltro(setBusca,digitado.trim());}}
           className="flex min-w-[235px] flex-1 gap-2">
@@ -297,6 +300,9 @@ export default function EstoqueMaquinasLinhaBranca() {
                   Lista anterior: {i.situacao_inventario} · Liquida: {i.status_os} (prevalece)
                 </p>}
                 {i.situacao==="CONCLUIDA_LOJA"&&<p className="mt-1 text-[10px] text-slate-500">Finalizada no Liquida · saída não comprovada</p>}
+                {i.situacao==="LOJA_POR_CONCILIACAO"&&<p className="mt-1 text-[10px] text-slate-500">
+                  Ausente da relação física, sem movimentação recente · destino gerencial inferido. Última etapa no Liquida: {i.status_os||"não registrada"}.
+                </p>}
               </td>
               <td className="px-3 py-3">
                 <p className="font-semibold text-slate-800">{i.responsavel||"Não atribuído"}</p>
