@@ -239,6 +239,9 @@ export default function TriagemLavadorasV2Page() {
   const [eventos, setEventos] = useState([]);
   const [erroCiclo, setErroCiclo] = useState(null);
   const [erroForm, setErroForm] = useState({ ...EMPTY_ERRO });
+  const [fotosCondenacao, setFotosCondenacao] = useState([]);
+  const [destinoPecasCondenacao, setDestinoPecasCondenacao] = useState("");
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [mensagem, setMensagem] = useState("");
@@ -607,23 +610,33 @@ export default function TriagemLavadorasV2Page() {
       });
       setErroCiclo(null);
       setErroForm({ ...EMPTY_ERRO });
+      setFotosCondenacao([]);
+      setDestinoPecasCondenacao("");
       setMensagem("OS encaminhada para reparo. Componentes do diagnóstico registrados como requisições abertas com aging iniciado.");
     });
   }
 
   async function condenar() {
     if (!erroCiclo) return;
-    if (!erroForm.motivoCondenacao.trim()) return setMensagem("Informe a justificativa da condenação / scrap.");
+    if (erroForm.motivoCondenacao.trim().length < 10)
+      return setMensagem("Informe uma justificativa técnica com pelo menos 10 caracteres.");
+    if (fotosCondenacao.length < 2)
+      return setMensagem("Anexe pelo menos duas fotos dos motivos da condenação.");
+    if (!["sim","nao"].includes(destinoPecasCondenacao))
+      return setMensagem("Indique se há peças aproveitáveis para desmembramento.");
     await executarAcao(async () => {
-      await condenarLavadora({
+      const resultado = await condenarLavadora({
         ciclo: erroCiclo,
         os: erroCiclo.os,
         motivo: erroForm.motivoCondenacao,
-        operador,
+        aproveitaPecas: destinoPecasCondenacao === "sim",
+        fotos: fotosCondenacao,
       });
       setErroCiclo(null);
       setErroForm({ ...EMPTY_ERRO });
-      setMensagem("Produto condenado e encaminhado para Scrap.");
+      setFotosCondenacao([]);
+      setDestinoPecasCondenacao("");
+      setMensagem(`Condenação registrada com ${resultado.fotos_confirmadas} fotos. OS encaminhada para ${resultado.status}.`);
     });
   }
 
@@ -910,7 +923,73 @@ export default function TriagemLavadorasV2Page() {
                  <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-[11px] font-semibold leading-5 text-amber-950">Cada componente selecionado no diagnóstico e enviado para reparo será registrado automaticamente como <strong>requisição de peça</strong>, vinculada à OS, ao técnico e à data do diagnóstico. O aging começa no lançamento e permanece aberto até o atendimento registrado na Gestão de Estoque.</p>
                 <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700">Complexidade do encaminhamento: <strong>{classificarTriagemLavadora({reparos_mecanicos:erroForm.mecanicos,reparos_eletricos:erroForm.eletricos,reparos_esteticos:erroForm.esteticos}).nivel || "A avaliar (restrito N3)"}</strong> · N3: somente Carlos · N1/N2: Carlos, Kaua e Alexandre</div>
                 <button type="button" onClick={enviarParaReparo} disabled={saving || !erroForm.erroDescricao.trim()} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-rose-600 text-[11px] font-black text-white disabled:opacity-50"><Wrench className="h-4 w-4" /> Enviar para reparo</button>
-                <div className="rounded-xl border border-rose-100 bg-rose-50 p-3"><div className="text-[11px] font-black text-rose-800">Condenação / Scrap</div><textarea rows={2} value={erroForm.motivoCondenacao} onChange={(event) => setErroForm((atual) => ({ ...atual, motivoCondenacao: event.target.value }))} placeholder="Justificativa obrigatória" className="mt-2 w-full rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs outline-none" /><button type="button" onClick={condenar} disabled={saving || !erroForm.motivoCondenacao.trim()} className="mt-2 flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-slate-900 text-[10px] font-black text-white disabled:opacity-40"><Trash2 className="h-3.5 w-3.5" /> Condenar e enviar para Scrap</button></div>
+                <div className="rounded-xl border border-rose-100 bg-rose-50 p-4">
+                  <h3 className="text-sm font-black text-rose-800">Condenação</h3>
+                  <p className="mt-1 text-xs text-rose-700">
+                    Documente o motivo da condenação com fotos e defina o destino do equipamento.
+                  </p>
+                  <label className="mt-3 block text-xs font-bold text-slate-700">
+                    Justificativa técnica da condenação *
+                    <textarea rows={3} value={erroForm.motivoCondenacao}
+                      onChange={(event) => setErroForm((atual) => ({ ...atual, motivoCondenacao: event.target.value }))}
+                      placeholder="Explique o defeito e o motivo da inviabilidade do reparo"
+                      maxLength={2000}
+                      className="mt-1.5 w-full rounded-lg border border-rose-200 bg-white px-3 py-2 text-sm outline-none focus:border-rose-400"/>
+                  </label>
+                  <div className="mt-3 rounded-xl border border-rose-200 bg-white p-3">
+                    <label htmlFor="fotos-condenacao-lavadora" className="block text-xs font-black text-slate-700">
+                      Fotos dos motivos de condenação * (mínimo 2, máximo 10)
+                    </label>
+                    <p className="mt-1 text-[11px] text-slate-500">JPG, PNG ou WebP · até 10 MB por foto. As fotos ficam vinculadas à OS e ao laudo.</p>
+                    <input id="fotos-condenacao-lavadora" type="file" multiple
+                      accept="image/jpeg,image/png,image/webp" disabled={saving}
+                      onChange={(event) => {
+                        const arquivos = Array.from(event.target.files || []);
+                        if (arquivos.length > 10 || arquivos.some(f => !["image/jpeg","image/png","image/webp"].includes(f.type) || f.size > 10 * 1024 * 1024)) {
+                          setMensagem("Selecione de 2 a 10 fotos JPG, PNG ou WebP de até 10 MB cada.");
+                          setFotosCondenacao([]);
+                        } else {
+                          setFotosCondenacao(arquivos);
+                          setMensagem("");
+                        }
+                      }}
+                      className="mt-2 block w-full text-xs text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-rose-100 file:px-3 file:py-2 file:font-bold file:text-rose-800"/>
+                    <p className={"mt-2 text-[11px] font-semibold " + (fotosCondenacao.length>=2?"text-emerald-700":"text-rose-700")}>
+                      {fotosCondenacao.length} foto(s) selecionada(s)
+                    </p>
+                    {!!fotosCondenacao.length&&
+                      <ul className="mt-1 list-inside list-disc text-[11px] text-slate-600">
+                        {fotosCondenacao.map((arquivo,i)=><li key={i} className="truncate">{arquivo.name}</li>)}
+                      </ul>}
+                  </div>
+                  <fieldset className="mt-3 rounded-xl border border-rose-200 bg-white p-3">
+                    <legend className="px-1 text-xs font-black text-slate-700">Há peças aproveitáveis para desmembramento? *</legend>
+                    <div className="mt-2 flex flex-wrap gap-5">
+                      <label className="flex cursor-pointer items-center gap-2 text-xs font-bold text-slate-700">
+                        <input type="radio" name="condenacao-aproveitamento" value="sim"
+                          checked={destinoPecasCondenacao==="sim"}
+                          onChange={()=>setDestinoPecasCondenacao("sim")} disabled={saving}
+                          className="h-4 w-4 accent-violet-700"/> Sim, aproveitar peças
+                      </label>
+                      <label className="flex cursor-pointer items-center gap-2 text-xs font-bold text-slate-700">
+                        <input type="radio" name="condenacao-aproveitamento" value="nao"
+                          checked={destinoPecasCondenacao==="nao"}
+                          onChange={()=>setDestinoPecasCondenacao("nao")} disabled={saving}
+                          className="h-4 w-4 accent-violet-700"/> Não, enviar para Scrap
+                      </label>
+                    </div>
+                    {!!destinoPecasCondenacao&&<p className="mt-2 text-[11px] font-semibold text-slate-600">
+                      Destino: {destinoPecasCondenacao==="sim"?"Aguardando desmembramento":"Scrap"}.
+                    </p>}
+                  </fieldset>
+                  <button type="button" onClick={condenar}
+                    disabled={saving || erroForm.motivoCondenacao.trim().length<10 || fotosCondenacao.length<2 || !destinoPecasCondenacao}
+                    className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-rose-700 px-3 py-2 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-40">
+                    {saving?<Loader2 className="h-4 w-4 animate-spin"/>:<Trash2 className="h-4 w-4"/>}
+                    {destinoPecasCondenacao==="sim"?"Condenar e enviar para desmembramento":
+                      destinoPecasCondenacao==="nao"?"Condenar e enviar para Scrap":"Registrar condenação"}
+                  </button>
+                </div>
               </div>
             </>
           ) : (
