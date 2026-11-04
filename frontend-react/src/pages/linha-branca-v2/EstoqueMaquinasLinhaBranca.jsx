@@ -63,6 +63,8 @@ export default function EstoqueMaquinasLinhaBranca() {
   const [marca,setMarca]=useState("");
   const [familia,setFamilia]=useState("");
   const [status,setStatus]=useState("");
+  const [escopo,setEscopo]=useState("LIQUIDA");
+  const [tipo,setTipo]=useState("");
   const [pagina,setPagina]=useState(1);
   const [item,setItem]=useState(null);
   const [historico,setHistorico]=useState([]);
@@ -74,21 +76,22 @@ export default function EstoqueMaquinasLinhaBranca() {
     setCarregando(true);setErro("");
     try{
       const res=await rpc("listar",{
-        pagina,tamanho,busca,marca,categoria:familia,situacao:status
+        pagina,tamanho,busca,marca,categoria:familia,tipo,situacao:status,escopo
       });
       setDados(res||null);
     }catch(e){setErro("Não foi possível carregar o estoque de máquinas: "+e.message);}
     finally{setCarregando(false);}
-  },[pagina,busca,marca,familia,status]);
+  },[pagina,busca,marca,familia,tipo,status,escopo]);
   useEffect(()=>{void carregar();},[carregar]);
   const resumo=dados?.resumo||{};
   const somar=(...states)=>states.reduce((v,k)=>v+Number(resumo[k]||0),0);
   const emProcesso=somar("TRIAGEM","AGUARDANDO_CMP","REPARO","POS_REPARO","A_CONFERIR");
   const pendentesSaida=somar("FINALIZADA_CONCILIAR","SAIDA_INDICADA_GAIA");
-  const filtroAtivo=!!(busca||marca||familia||status);
+  const filtroAtivo=!!(busca||marca||familia||tipo||status);
   const totalPaginas=Math.max(1,Math.ceil(Number(dados?.total_filtrado||0)/tamanho));
   const marcas=useMemo(()=>dados?.por_marca||[],[dados]);
   const familias=useMemo(()=>dados?.por_familia||[],[dados]);
+  const tipos=useMemo(()=>dados?.por_tipo||[],[dados]);
 
   function mudarFiltro(fn,v){fn(v);setPagina(1);}
   async function abrir(i) {
@@ -133,9 +136,8 @@ export default function EstoqueMaquinasLinhaBranca() {
         <div>
           <h2 className="text-base font-black text-[#43284F]">Estoque de máquinas completas — Linha Branca</h2>
           <p className="mt-1 text-xs leading-5 text-slate-600">
-            Visão de produtos por <b>OS</b> e etapa técnica, separada dos saldos de peças e insumos.
-            Situação de saída/loja/venda é registrada com evidência, sem presumir que uma OS finalizada foi vendida.
-          </p>
+            Acompanhe todas as famílias de eletrodomésticos por OS e etapa. Por padrão aparecem somente OSs com atividade registrada no Liquida; o histórico fica separado para conciliação.
+           </p>
         </div>
         <button type="button" onClick={carregar} disabled={carregando}
           className={BOTAO+" border-slate-200 bg-white text-slate-700"}>
@@ -144,24 +146,21 @@ export default function EstoqueMaquinasLinhaBranca() {
       </div>
       <p className="mt-3 text-[11px] text-amber-900">
         <AlertTriangle size={14} className="mr-1 inline"/>
-        Quantidade de OSs não equivale necessariamente à quantidade física de máquinas:
-        pode haver retornos com séries repetidas, itens em expedição e movimentações ainda não conciliadas.
-      </p>
+        OSs com atividade no Liquida não equivalem automaticamente a estoque físico. A confirmação depende de conferência; registros antigos ficam separados.
+       </p>
     </section>
 
     {erro&&<div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-800">{erro}</div>}
     {ok&&<div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">{ok}</div>}
 
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {[
-        [Warehouse,"OSs de máquinas",dados?.os_maquinas,"Registro de máquinas/eletrodomésticos, não saldo confirmado"],
-        [Wrench,"Em operação / reparo",emProcesso,"Triagem, CMP, reparo, qualidade, testes e outras etapas"],
-        [PackageCheck,"Aprovadas / a transferir",resumo.APROVADO||0,"Aguardando confirmação de estoque ou destino"],
-        [ClipboardList,"Finalizadas a conciliar",pendentesSaida,"Sem saída confirmada ou somente indicada pelo GAIA"],
-        [CheckCircle2,"Estoque físico conferido",resumo.ESTOQUE_CONFIRMADO||0,"Somente conferências físicas registradas"],
-        [Truck,"Saídas confirmadas",resumo.SAIDA_CONFIRMADA||0,"Transferência à loja, venda ou expedição documentada"],
-        [AlertTriangle,"CMP / aguardando peça",resumo.AGUARDANDO_CMP||0,"Máquinas aguardando componente para reparo"],
-        [History,"OSs com série repetida",dados?.seriais_repetidos||0,"Possíveis retornos; precisam de conciliação"]
+        [ClipboardList,"OSs no recorte",dados?.os_escopo,"Registros com evidência no escopo, não estoque físico"],
+        [Wrench,"Em processo",emProcesso,"Triagem, reparo e demais etapas"],
+        [AlertTriangle,"Aguardando peça / CMP",resumo.AGUARDANDO_CMP||0,"Pendência de peça"],
+        [PackageCheck,"Aprovadas",resumo.APROVADO||0,"Pendentes de destinação ou conferência"],
+        [CheckCircle2,"Estoque físico confirmado",resumo.ESTOQUE_CONFIRMADO||0,"Conferência física registrada"],
+        [Truck,"Saídas confirmadas",resumo.SAIDA_CONFIRMADA||0,"Transferência, venda ou expedição comprovada"]
       ].map(([Icon,nome,valor,desc])=><div key={nome} className={BOX}>
         <div className="flex items-center gap-2"><Icon size={17} className="text-[#765D81]"/><p className="text-[11px] font-bold text-slate-500">{nome}</p></div>
         <p className="mt-2 text-2xl font-black text-slate-900">{valor==null?"—":FORMAT(valor)}</p>
@@ -170,6 +169,10 @@ export default function EstoqueMaquinasLinhaBranca() {
     </div>
 
     <div className={BOX+" space-y-3"}>
+      <div className="flex flex-wrap gap-2">
+        {[["LIQUIDA","Operação Liquida"],["HISTORICO","Histórico a conciliar"],["TODOS","Tudo (auditoria)"]].map(([v,n])=><button key={v} type="button" onClick={()=>{setEscopo(v);setPagina(1);}} className={"rounded-lg px-3 py-2 text-xs font-bold "+(escopo===v?"bg-[#43284F] text-white":"bg-slate-100 text-slate-700")}>{n}</button>)}
+      </div>
+      <p className="text-[11px] text-slate-500">{escopo==="LIQUIDA"?"OSs com atividade registrada na operação, não estoque físico confirmado.":escopo==="HISTORICO"?"OSs sem evidência operacional no Liquida, a conciliar com o inventário físico.":"Visão histórica completa para auditoria; não equivale ao estoque atual."}</p>
       <div className="flex flex-wrap gap-2">
         <form onSubmit={e=>{e.preventDefault();mudarFiltro(setBusca,digitado.trim());}}
           className="flex min-w-[235px] flex-1 gap-2">
@@ -180,10 +183,15 @@ export default function EstoqueMaquinasLinhaBranca() {
           </div>
           <button className={BOTAO+" bg-[#43284F] text-white"} type="submit">Buscar</button>
         </form>
-        <select value={familia} onChange={e=>mudarFiltro(setFamilia,e.target.value)}
+        <select value={familia} onChange={e=>{setFamilia(e.target.value);setTipo("");setPagina(1);}}
           aria-label="Filtrar tipo de máquina" className={CAMPO+" max-w-[225px]"}>
           <option value="">Todas as famílias</option>
           {familias.map(f=><option key={f.nome} value={f.nome}>{f.nome} ({FORMAT(f.total)})</option>)}
+        </select>
+        <select value={tipo} onChange={e=>mudarFiltro(setTipo,e.target.value)}
+          aria-label="Filtrar tipo de produto" className={CAMPO+" max-w-[240px]"}>
+          <option value="">Todos os tipos de produto</option>
+          {tipos.map(f=><option key={f.nome} value={f.nome}>{f.nome} ({FORMAT(f.total)})</option>)}
         </select>
         <select value={marca} onChange={e=>mudarFiltro(setMarca,e.target.value)}
           aria-label="Filtrar marca" className={CAMPO+" max-w-[195px]"}>
@@ -191,21 +199,17 @@ export default function EstoqueMaquinasLinhaBranca() {
           {marcas.map(f=><option key={f.nome} value={f.nome==="Sem marca"?"":f.nome}>{f.nome} ({FORMAT(f.total)})</option>)}
         </select>
         {filtroAtivo&&<button type="button" className={BOTAO+" border-slate-200"}
-          onClick={()=>{setBusca("");setDigitado("");setMarca("");setFamilia("");setStatus("");setPagina(1);}}>Limpar filtros</button>}
+          onClick={()=>{setBusca("");setDigitado("");setMarca("");setFamilia("");setTipo("");setStatus("");setPagina(1);}}>Limpar filtros</button>}
       </div>
-      <div className="flex flex-wrap gap-1.5">
-        <button type="button" onClick={()=>mudarFiltro(setStatus,"")}
-          className={"rounded-lg px-2.5 py-1.5 text-[11px] font-bold "+(!status?"bg-[#43284F] text-white":"bg-slate-100 text-slate-600")}>
-          Todas
-        </button>
-        {ESTADOS.map(([id,nome,cor])=><button type="button" key={id}
-          onClick={()=>mudarFiltro(setStatus,status===id?"":id)}
-          className={"rounded-lg px-2.5 py-1.5 text-[10px] font-bold "+(status===id?"bg-[#43284F] text-white":cor)}>
-          {nome} · {FORMAT(resumo[id]||0)}
-        </button>)}
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="text-xs font-bold text-slate-600" htmlFor="filtro-etapa-lb">Etapa / situação</label>
+        <select id="filtro-etapa-lb" value={status} onChange={e=>mudarFiltro(setStatus,e.target.value)} className={CAMPO+" max-w-[320px]"}>
+          <option value="">Todas as etapas</option>
+          {ESTADOS.map(([id,nome])=><option key={id} value={id}>{nome} ({FORMAT(resumo[id]||0)})</option>)}
+        </select>
       </div>
       <p className="text-[11px] text-slate-500">
-        Resultados: <b>{FORMAT(dados?.total_filtrado||0)}</b> OSs · {FORMAT(dados?.os_nao_maquinas||0)} acessórios/componentes separados deste inventário · página {pagina} de {totalPaginas}.
+        Resultados: <b>{FORMAT(dados?.total_filtrado||0)}</b> OSs · página {pagina} de {totalPaginas}. Peças e insumos são controlados separadamente.
       </p>
     </div>
 
@@ -255,7 +259,7 @@ export default function EstoqueMaquinasLinhaBranca() {
         </table>
       </div>
       <div className="flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 p-3">
-        <p className="text-[11px] text-slate-500">50 máquinas por página; filtro aplicado a toda a base, não apenas aos registros visíveis.</p>
+        <p className="text-[11px] text-slate-500">50 OSs por página; filtros aplicados a todo o escopo selecionado.</p>
         <div className="flex gap-2">
           <button type="button" onClick={()=>setPagina(v=>Math.max(1,v-1))}
             disabled={carregando||pagina===1} className={BOTAO+" bg-white"}>Anterior</button>
