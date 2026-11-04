@@ -97,6 +97,7 @@ import DesvinculacoesLiquidaV2Page from "./pages/assurant-v2/DesvinculacoesLiqui
 
 import GestaoProducaoLinhaBrancaPage from "./pages/linha-branca-v2/GestaoProducaoLinhaBrancaPage.jsx";
 import DesmembramentoLinhaBrancaPage from "./pages/linha-branca-v2/DesmembramentoLinhaBrancaPage.jsx";
+import ScrapLavadorasV2Page from "./pages/linha-branca-v2/ScrapLavadorasV2Page.jsx";
 import GestaoEstoqueLinhaBrancaPage from "./pages/linha-branca-v2/GestaoEstoqueLinhaBrancaPage.jsx";
 import LinhaBrancaHomePage from "./pages/linha-branca-v2/LinhaBrancaHomePage.jsx";
 import RefrigeracaoV2Page from "./pages/linha-branca-v2/RefrigeracaoV2Page.jsx";
@@ -508,6 +509,12 @@ export default function App() {
           path="testes"
           element={
             <ProtectedRoute tela="/v2/linha-branca/lavadoras/testes"><BancadaTestesLavadorasV2Page /></ProtectedRoute>
+          }
+        />
+        <Route
+          path="scrap"
+          element={
+            <ProtectedRoute tela="/v2/linha-branca/lavadoras/triagem"><ScrapLavadorasV2Page /></ProtectedRoute>
           }
         />
       </Route>
