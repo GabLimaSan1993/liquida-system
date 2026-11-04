@@ -79,7 +79,7 @@ export default function HistoricoEtapasOS({detalhe}){
       <p className={texto}>Entrada: <strong className="text-slate-700">{dataHora(item.iniciou_em)}</strong></p>
       <p className={texto}>{item.medicao==="em_andamento"?"Até agora":"Saída"}: <strong className="text-slate-700">{item.medicao==="em_andamento"?"Em andamento":dataHora(item.terminou_em)}</strong></p>
      </div>
-     <div className="mt-2 flex items-start gap-2 text-xs"><UserRound className="mt-0.5 h-3.5 w-3.5 text-slate-400"/><TécnicoEtapa item={item} detalhe={detalhe}/></div>
+     <div className="mt-2 flex items-start gap-2 text-xs"><UserRound className="mt-0.5 h-3.5 w-3.5 text-slate-400"/><TecnicoEtapa item={item} detalhe={detalhe}/></div>
      {item.observacao&&<p className="mt-2 text-xs text-slate-600">{item.observacao}</p>}
     </div>)}</div>
    </>:<p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-800">Não existem transições suficientes para mensurar o tempo por etapa desta OS. Os testes e reparos disponíveis continuam listados nas seções seguintes.</p>}
