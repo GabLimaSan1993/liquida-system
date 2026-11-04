@@ -59,8 +59,8 @@ export default function ValidacaoMeliV2Page() {
       setFeedback({ erro: false, texto: resultado.resultado === 'aprovado'
         ? 'Aparelho aprovado. Liberado para faturamento após a aprovação dos demais itens do mesmo pedido.'
         : resultado.imei_substituto
-          ? `Aparelho reprovado e bloqueado para venda. Próximo FIFO: ${resultado.imei_substituto}. Pedido retornou ao picking; o substituto também passará pelos testes. Retorne o reprovado ao estoque para análise/armazenagem.`
-          : 'Aparelho reprovado e bloqueado para venda. Sem substituto elegível no FIFO: pedido enviado para Aguardando definição. Retorne o reprovado ao estoque para análise/armazenagem.' });
+          ? `Aparelho reprovado. Encaminhado para retriagem funcional e reclassificação (grade, SKU e defeitos). Venda do IMEI reprovado bloqueada até regularização. Próximo FIFO do pedido: ${resultado.imei_substituto}. O substituto também passará pelos testes.`
+          : 'Aparelho reprovado. Encaminhado para retriagem funcional e reclassificação (grade, SKU e defeitos). Venda do IMEI reprovado bloqueada até regularização. Sem substituto FIFO: pedido enviado para Aguardando definição.' });
     } catch (e) { setFeedback({ erro: true, texto: e.message }); }
     finally { setSalvando(false); }
   }
@@ -72,7 +72,13 @@ export default function ValidacaoMeliV2Page() {
         <p className="mt-1 text-sm text-slate-500">Picking → testes de bancada → faturamento. Na dúvida, não sai.</p></div>
       <button type="button" onClick={carregar} disabled={loading || salvando} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold disabled:opacity-50"><RefreshCw size={16} /> Atualizar</button>
     </div>
-    {feedback && <div role="alert" className={`rounded-xl border p-4 text-sm ${feedback.erro ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>{feedback.texto}</div>}
+    {feedback && <div role="alert" className={`rounded-xl border p-4 text-sm ${feedback.erro ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>
+      {feedback.texto}
+      {!feedback.erro && feedback.texto.includes('Encaminhado para retriagem') && <div className="mt-2 flex flex-wrap gap-3 text-xs font-bold">
+        <a className="underline" href="/v2/assurant/triagens/funcional">Abrir Triagem Funcional</a>
+        <a className="underline" href="/v2/assurant/triagens/cosmetica">Abrir Triagem Cosmética</a>
+      </div>}
+    </div>}
     <div className="grid gap-3 sm:grid-cols-3">
       {[['Aguardando testes', fila.length], ['Aprovados no histórico', historico.filter(h => h.resultado === 'aprovado').length], ['Reprovados no histórico', historico.filter(h => h.resultado === 'reprovado').length]].map(([label, value]) => <div key={label} className="rounded-2xl border border-slate-200 bg-white p-4"><div className="text-2xl font-black text-slate-900">{value}</div><div className="text-sm text-slate-500">{label}</div></div>)}
     </div>
