@@ -70,6 +70,12 @@ export default function EstoqueMaquinasLinhaBranca() {
   const [item,setItem]=useState(null);
   const [historico,setHistorico]=useState([]);
   const [rastreio,setRastreio]=useState(null);
+  const [cmpDetalhes,setCmpDetalhes]=useState(null);
+  const [requisicoes,setRequisicoes]=useState([]);
+  const [requisicaoAtenderId,setRequisicaoAtenderId]=useState(null);
+  const [comprovanteReq,setComprovanteReq]=useState("");
+  const [salvandoReq,setSalvandoReq]=useState(false);
+  const [mensagemReq,setMensagemReq]=useState("");
   const [carregandoHistorico,setCarregandoHistorico]=useState(false);
   const [form,setForm]=useState(FORM);
   const tamanho=50;
@@ -102,20 +108,52 @@ export default function EstoqueMaquinasLinhaBranca() {
 
   function mudarFiltro(fn,v){fn(v);setPagina(1);}
   async function abrir(i) {
-    if(!i?.id){setErro("Esta OS consta na relação física, mas não possui cadastro operacional. Regularize o cadastro antes de registrar movimentações.");return;}
+    if(!i?.id){setErro("Esta OS está na planilha, mas o Liquida não possui a ficha operacional correspondente. Não há histórico técnico disponível para consultar.");return;}
     setItem(i);setForm(FORM());setHistorico([]);setRastreio(null);
+    setCmpDetalhes(null);setRequisicoes([]);
+    setRequisicaoAtenderId(null);setComprovanteReq("");setMensagemReq("");
     setCarregandoHistorico(true);setErro("");setOk("");
     try{
-      const [h,t]=await Promise.all([
+      const isCmp=i.situacao==="AGUARDANDO_CMP";
+      const [h,t,c,q]=await Promise.all([
         rpc("historico",{os_id:i.id}),
-        supabase.rpc("linha_branca_rastreabilidade_os",{p_os_id:i.id})
+        supabase.rpc("linha_branca_rastreabilidade_os",{p_os_id:i.id}),
+        isCmp?supabase.rpc("linha_branca_cmp_detalhes",{p_os_id:i.id}):Promise.resolve({data:null,error:null}),
+        isCmp?supabase.rpc("linha_branca_requisicoes_diagnostico",{p_acao:"listar_os",p_dados:{os_id:i.id}}):Promise.resolve({data:null,error:null})
       ]);
-      if(t.error)throw new Error(t.error.message);
+      for(const v of [t,c,q])if(v.error)throw new Error(v.error.message);
       setHistorico(Array.isArray(h)?h:[]);
       setRastreio(t.data||null);
-    }catch(e){setErro("Rastreabilidade da OS: "+e.message);}
+      setCmpDetalhes(c.data||null);
+      setRequisicoes(q.data?.requisicoes||[]);
+    }catch(e){setMensagemReq("Falha ao carregar os detalhes: "+e.message);}
     finally{setCarregandoHistorico(false);}
   }
+  async function confirmarAtendimentoRequisicao(req){
+    if(!item||!req||salvandoReq)return;
+    if(comprovanteReq.trim().length<8){
+      setMensagemReq("Informe o que comprova que a peça foi atendida (mínimo de 8 caracteres).");
+      return;
+    }
+    setSalvandoReq(true);setMensagemReq("");
+    try{
+      const {error}=await supabase.rpc("linha_branca_requisicoes_diagnostico",{
+        p_acao:"atender",
+        p_dados:{os_id:item.id,requisicao_id:req.id,justificativa:comprovanteReq.trim()}
+      });
+      if(error)throw new Error(error.message);
+      const {data,error:refreshError}=await supabase.rpc("linha_branca_requisicoes_diagnostico",{
+        p_acao:"listar_os",p_dados:{os_id:item.id}
+      });
+      if(refreshError)throw new Error(refreshError.message);
+      setRequisicoes(data?.requisicoes||[]);
+      setRequisicaoAtenderId(null);setComprovanteReq("");
+      setMensagemReq("Atendimento da peça registrado. O aging da requisição foi encerrado; a etapa técnica da OS não foi alterada.");
+      await carregar();
+    }catch(e){setMensagemReq("Não foi possível registrar o atendimento: "+e.message);}
+    finally{setSalvandoReq(false);}
+  }
+
   async function registrar(e){
     e.preventDefault();
     if(!item||salvando)return;
