@@ -351,6 +351,80 @@ export default function EstoqueMaquinasLinhaBranca() {
           Registre somente movimentações verificadas fisicamente ou com documento. Esta tela não efetua venda,
           transferência de estoque contábil nem altera a etapa de reparo da OS.
         </div>
+        {item.situacao==="AGUARDANDO_CMP"&&<section className="mt-5 space-y-4 rounded-xl border border-amber-200 bg-amber-50/40 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h4 className="flex items-center gap-2 text-sm font-black text-amber-950"><Wrench size={17}/> CMP — Requisições de peças</h4>
+              <p className="mt-1 text-[11px] text-slate-600">A peça selecionada no diagnóstico abre a requisição. O aging conta dias corridos desde o lançamento original, até o atendimento documentado.</p>
+            </div>
+            <span className="rounded-lg bg-white px-3 py-1 text-xs font-black text-amber-900">
+              {FORMAT(requisicoes.filter(r=>r.status==="aberta").length)} aberta(s)
+            </span>
+          </div>
+          <div className="rounded-lg bg-white p-3 text-xs text-slate-700">
+            <strong>Responsável registrado:</strong> {cmpDetalhes?.responsavel_atual||"Não atribuído"}
+            <span className="ml-3"><strong>Triagem:</strong> {cmpDetalhes?.triagem_responsavel||"Não informado"}</span>
+            {cmpDetalhes?.area_destino&&<span className="ml-3"><strong>Área:</strong> {cmpDetalhes.area_destino}</span>}
+          </div>
+          {mensagemReq&&<p role="status" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold">{mensagemReq}</p>}
+          {carregandoHistorico?<p className="text-xs text-slate-500">Carregando requisições...</p>:
+            requisicoes.length?
+              <div className="space-y-2">
+                {requisicoes.map(req=><div key={req.id} className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <strong className="text-xs text-[#43284F]">{req.descricao} <span className="font-normal text-slate-500">· {req.area}</span></strong>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={"rounded px-2 py-1 text-[10px] font-black "+(req.status==="aberta"?"bg-amber-100 text-amber-900":"bg-slate-100 text-slate-600")}>{req.status==="aberta"?"Em aberto":req.status==="atendida"?"Atendida":req.status==="substituida"?"Substituída em retriagem":"Cancelada"}</span>
+                      <span className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-black text-amber-900">{FORMAT(req.aging_dias)} dias</span>
+                    </div>
+                  </div>
+                  <p className="mt-2 text-[11px] text-slate-700">Abertura: <strong>{DIA(req.aberta_em)}</strong> · Solicitante: <strong>{req.solicitante||"Não informado"}</strong></p>
+                  {req.diagnostico&&<p className="mt-1 whitespace-pre-wrap text-[11px] text-slate-600">Diagnóstico: {req.diagnostico}</p>}
+                  {req.status!=="aberta"&&req.motivo_encerramento&&<p className="mt-1 text-[11px] text-slate-600">Encerramento: {req.motivo_encerramento} · {DIA(req.encerrada_em)}</p>}
+                  {req.status==="aberta"&&<div className="mt-2">
+                    {requisicaoAtenderId===req.id?
+                      <div className="space-y-2 rounded-lg bg-slate-50 p-3">
+                        <label className="block text-[11px] font-bold text-slate-700">Comprovação do atendimento da peça
+                          <textarea value={comprovanteReq} onChange={e=>setComprovanteReq(e.target.value)}
+                            className={CAMPO+" mt-1 min-h-[70px]"} rows={2}
+                            placeholder="Informe a entrega, retirada ou documento que comprova o atendimento."/>
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                          <button type="button" disabled={salvandoReq||comprovanteReq.trim().length<8}
+                            onClick={()=>void confirmarAtendimentoRequisicao(req)}
+                            className={BOTAO+" border-emerald-200 bg-emerald-50 text-emerald-800"}>
+                            {salvandoReq?<Loader2 size={14} className="animate-spin"/>:<CheckCircle2 size={14}/>} Confirmar atendimento
+                          </button>
+                          <button type="button" disabled={salvandoReq}
+                            onClick={()=>{setRequisicaoAtenderId(null);setComprovanteReq("");}}
+                            className={BOTAO+" bg-white"}>Cancelar</button>
+                        </div>
+                      </div>
+                    :<button type="button" onClick={()=>{setRequisicaoAtenderId(req.id);setComprovanteReq("");setMensagemReq("");}}
+                      className={BOTAO+" border-slate-200 bg-slate-50 text-slate-700"}>Registrar peça atendida</button>}
+                  </div>}
+                </div>)}
+              </div>
+            :<p className="rounded-lg border border-amber-200 bg-white p-3 text-xs font-semibold text-amber-900">
+              Nenhuma requisição encontrada nesta OS. A classificação CMP veio da relação operacional, mas não há componente lançado no diagnóstico da triagem para gerar a requisição. É necessário lançar o componente correto no fluxo técnico.
+            </p>}
+          <div className="rounded-xl border border-slate-200 bg-white p-3">
+            <h5 className="mb-2 text-xs font-black text-slate-800">Diagnósticos e técnicos responsáveis</h5>
+            {cmpDetalhes?.diagnosticos?.length?
+              <div className="max-h-56 space-y-2 overflow-y-auto">
+                {cmpDetalhes.diagnosticos.map((d,k)=><div key={k} className="border-b border-slate-100 pb-2 text-[11px] last:border-0">
+                  <p className="font-bold text-slate-700">{d.origem} · {DIA(d.data)} · {d.tecnico||"Técnico não informado"}</p>
+                  <p className="mt-1 whitespace-pre-wrap text-slate-600">{d.diagnostico||"Diagnóstico sem descrição"}</p>
+                </div>)}
+              </div>
+            : <p className="text-[11px] text-slate-500">Sem diagnóstico técnico registrado no Liquida.</p>}
+            {cmpDetalhes?.tecnicos?.length>0&&<details className="mt-3 text-[11px]">
+              <summary className="cursor-pointer font-bold text-violet-700">Ver todos os técnicos e participações</summary>
+              <div className="mt-2 space-y-1">{cmpDetalhes.tecnicos.map((t,k)=><p key={k}>{t.nome} — {t.papel}</p>)}</div>
+            </details>}
+          </div>
+        </section>}
+
         <section className="mt-5 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h4 className="flex items-center gap-2 text-sm font-black"><History size={17}/> Rastreabilidade operacional da OS</h4>
