@@ -149,9 +149,9 @@ export default function EstoqueMaquinasLinhaBranca() {
     <section className="rounded-2xl border border-violet-200 bg-gradient-to-r from-[#F6F0F8] to-white p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-black text-[#43284F]">Estoque de máquinas completas — Linha Branca</h2>
+          <h2 className="text-base font-black text-[#43284F]">Estoque</h2>
           <p className="mt-1 text-xs leading-5 text-slate-600">
-            A conferência física é a referência atual das lavadoras. CMP, Triagem e Scrap ficam segregados; o Aging e os históricos ficam para auditoria.
+            Máquinas de lavar e lava e seca: CMP, triagem, scrap e concluídas para loja, com requisições de peças e acompanhamento das OSs.
            </p>
         </div>
         <button type="button" onClick={carregar} disabled={carregando}
@@ -161,7 +161,7 @@ export default function EstoqueMaquinasLinhaBranca() {
       </div>
       <p className="mt-3 text-[11px] text-amber-900">
         <AlertTriangle size={14} className="mr-1 inline"/>
-        {escopo==="INVENTARIO"?"Base física "+DIA(dados?.data_base)+": "+FORMAT(dados?.cadastros_pendentes||0)+" OSs sem cadastro e "+FORMAT(dados?.categorias_divergentes||0)+" com categoria divergente. O resumo do arquivo informa 54 CMP, mas a coluna tem 51.":"OSs com atividade no Liquida não equivalem automaticamente a estoque físico. O histórico não prova presença atual."}
+        {escopo==="INVENTARIO"?"O estoque foi conciliado com a relação enviada. "+FORMAT(dados?.cadastros_pendentes||0)+" OSs da lista ainda não têm ficha no Liquida; para essas OSs, diagnóstico, técnico e etapas não podem ser consultados até localizar o cadastro original. O resumo do arquivo aponta 54 CMP, mas identifica 51.":"As OSs encaminhadas à loja foram separadas do estoque atual por conciliação, sem presumir expedição física documentada."}
        </p>
     </section>
 
@@ -170,20 +170,15 @@ export default function EstoqueMaquinasLinhaBranca() {
 
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {(escopo==="INVENTARIO" ? [
-        [ClipboardList,"OSs na lista física",dados?.os_escopo,"Relação recebida em "+DIA(dados?.data_base)],
-        [Warehouse,"Máquinas presentes em processo",dados?.total_presente,"CMP + triagem; não representam estoque disponível para venda"],
-        [Clock3,"Aguardando CMP",dados?.total_cmp,"Classificação da conferência física"],
-        [Wrench,"Em triagem",dados?.total_triagem,"Classificação da conferência física"],
-        [AlertTriangle,"Scrap segregado",dados?.total_scrap,"Fora do saldo em processo"],
-        [AlertTriangle,"Cadastro pendente",dados?.cadastros_pendentes,"OSs da planilha ainda ausentes no Liquida"]
+        [Warehouse,"CMP",dados?.total_cmp,"Máquinas aguardando atendimento das peças"],
+        [Wrench,"Triagem",dados?.total_triagem,"Equipamentos ainda em análise"],
+        [AlertTriangle,"Scrap",dados?.total_scrap,"Segregados do estoque produtivo"],
+        [ClipboardList,"Requisições abertas",dados?.total_requisicoes_abertas,"Geradas pelos componentes do diagnóstico"],
+        [Clock3,"Maior aging de requisição (dias)",dados?.maior_aging_pecas,"Dias corridos desde a abertura"],
+        [AlertTriangle,"CMP sem peça identificada",dados?.cmp_sem_requisicao,"OSs que precisam ter a requisição registrada"]
       ] : [
-        [ClipboardList,"OSs no recorte",dados?.os_escopo,"Registros do escopo selecionado, não estoque físico"],
-        [Wrench,"Em processo",emProcesso,"Triagem, reparo e demais etapas"],
-        [AlertTriangle,"Aguardando peça / CMP",resumo.AGUARDANDO_CMP||0,"Pendência de peça"],
-        [PackageCheck,"Aprovadas",resumo.APROVADO||0,"Pendentes de destinação ou conferência"],
-        [CheckCircle2,"Estoque físico confirmado",resumo.ESTOQUE_CONFIRMADO||0,"Conferência física registrada"],
-        [Truck,"Saídas confirmadas",resumo.SAIDA_CONFIRMADA||0,"Transferência, venda ou expedição comprovada"],
-        [Truck,"Para loja por conciliação",resumo.LOJA_POR_CONCILIACAO||0,"Critério informado pelo gestor; sem comprovante de transferência"]
+        [Truck,"Concluídas / Loja",dados?.total_filtrado,"Fora da relação física atual por conciliação"],
+        [ClipboardList,"Acompanhar OS",dados?.total_filtrado,"Consulte etapas, diagnósticos e técnicos por OS"]
       ]).map(([Icon,nome,valor,desc])=><div key={nome} className={BOX}>
         <div className="flex items-center gap-2"><Icon size={17} className="text-[#765D81]"/><p className="text-[11px] font-bold text-slate-500">{nome}</p></div>
         <p className="mt-2 text-2xl font-black text-slate-900">{valor==null?"—":FORMAT(valor)}</p>
@@ -193,9 +188,9 @@ export default function EstoqueMaquinasLinhaBranca() {
 
     <div className={BOX+" space-y-3"}>
       <div className="flex flex-wrap gap-2">
-        {[["INVENTARIO","Conferência física: Lavadoras"],["CONCLUIDAS","Concluídas / Loja (lavadoras)"],["LIQUIDA","Operação Liquida: todas as famílias"],["HISTORICO","Histórico a conciliar"],["TODOS","Tudo (auditoria)"]].map(([v,n])=><button key={v} type="button" onClick={()=>{setEscopo(v);setPagina(1);setFamilia("");setTipo("");setMarca("");setStatus("");setBusca("");setDigitado("");}} className={"rounded-lg px-3 py-2 text-xs font-bold "+(escopo===v?"bg-[#43284F] text-white":"bg-slate-100 text-slate-700")}>{n}</button>)}
+        {[["INVENTARIO","Estoque"],["CONCLUIDAS","Concluídas / Loja"]].map(([v,n])=><button key={v} type="button" onClick={()=>{setEscopo(v);setPagina(1);setFamilia("");setTipo("");setMarca("");setStatus("");setBusca("");setDigitado("");}} className={"rounded-lg px-3 py-2 text-xs font-bold "+(escopo===v?"bg-[#43284F] text-white":"bg-slate-100 text-slate-700")}>{n}</button>)}
       </div>
-      <p className="text-[11px] text-slate-500">{escopo==="INVENTARIO"?"Conferência física de 04/11/2026. As entradas do próximo relatório diário ainda não foram contabilizadas; statuses técnicos originais são preservados.":escopo==="CONCLUIDAS"?"Lavadoras fora da lista física com passagem operacional no Liquida: separadas para loja por conciliação. Esta classificação gerencial não prova conclusão técnica, expedição ou entrega; abra uma OS para consultar os eventos registrados.":escopo==="LIQUIDA"?"Todas as famílias que passaram pelo Liquida, sem confirmação de presença física atual.":escopo==="HISTORICO"?"OSs sem evidência operacional no Liquida, a conciliar com o inventário físico.":"Visão histórica completa para auditoria; não equivale ao estoque atual."}</p>
+      <p className="text-[11px] text-slate-500">{escopo==="INVENTARIO"?"Somente estoque e scrap da relação enviada; o próximo relatório diário atualizará as novas entradas. Para CMP, a peça do diagnóstico equivale à requisição, com aging desde o registro.":"Máquinas enviadas para loja por conciliação gerencial, fora do estoque físico atual. A classificação não substitui o comprovante de expedição."}</p>
       <div className="flex flex-wrap gap-2">
         <form onSubmit={e=>{e.preventDefault();mudarFiltro(setBusca,digitado.trim());}}
           className="flex min-w-[235px] flex-1 gap-2">
@@ -206,11 +201,6 @@ export default function EstoqueMaquinasLinhaBranca() {
           </div>
           <button className={BOTAO+" bg-[#43284F] text-white"} type="submit">Buscar</button>
         </form>
-        <select value={familia} onChange={e=>{setFamilia(e.target.value);setTipo("");setPagina(1);}}
-          aria-label="Filtrar tipo de máquina" className={CAMPO+" max-w-[225px]"}>
-          <option value="">Todas as famílias</option>
-          {familias.map(f=><option key={f.nome} value={f.nome}>{f.nome} ({FORMAT(f.total)})</option>)}
-        </select>
         <select value={tipo} onChange={e=>mudarFiltro(setTipo,e.target.value)}
           aria-label="Filtrar tipo de produto" className={CAMPO+" max-w-[240px]"}>
           <option value="">Todos os tipos de produto</option>
@@ -224,13 +214,14 @@ export default function EstoqueMaquinasLinhaBranca() {
         {filtroAtivo&&<button type="button" className={BOTAO+" border-slate-200"}
           onClick={()=>{setBusca("");setDigitado("");setMarca("");setFamilia("");setTipo("");setStatus("");setPagina(1);}}>Limpar filtros</button>}
       </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <label className="text-xs font-bold text-slate-600" htmlFor="filtro-etapa-lb">Etapa / situação</label>
-        <select id="filtro-etapa-lb" value={status} onChange={e=>mudarFiltro(setStatus,e.target.value)} className={CAMPO+" max-w-[320px]"}>
-          <option value="">Todas as etapas</option>
-          {ESTADOS.map(([id,nome])=><option key={id} value={id}>{nome} ({FORMAT(resumo[id]||0)})</option>)}
+      {escopo==="INVENTARIO"&&<div className="flex flex-wrap items-center gap-2">
+        <label className="text-xs font-bold text-slate-600" htmlFor="filtro-etapa-lb">Situação</label>
+        <select id="filtro-etapa-lb" value={status} onChange={e=>mudarFiltro(setStatus,e.target.value)} className={CAMPO+" max-w-[300px]"}>
+          <option value="">Todas as situações</option>
+          {ESTADOS.filter(x=>["TRIAGEM","AGUARDANDO_CMP","SCRAP_CONDENADO"].includes(x[0]))
+            .map(([id,nome])=><option key={id} value={id}>{nome} ({FORMAT(resumo[id]||0)})</option>)}
         </select>
-      </div>
+      </div>}
       <p className="text-[11px] text-slate-500">
         Resultados: <b>{FORMAT(dados?.total_filtrado||0)}</b> OSs · página {pagina} de {totalPaginas}. Peças e insumos são controlados separadamente.
       </p>
