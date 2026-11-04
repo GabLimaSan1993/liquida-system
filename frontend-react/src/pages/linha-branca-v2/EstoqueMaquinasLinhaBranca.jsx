@@ -63,7 +63,7 @@ export default function EstoqueMaquinasLinhaBranca() {
   const [marca,setMarca]=useState("");
   const [familia,setFamilia]=useState("");
   const [status,setStatus]=useState("");
-  const [escopo,setEscopo]=useState("LIQUIDA");
+  const [escopo,setEscopo]=useState("INVENTARIO");
   const [tipo,setTipo]=useState("");
   const [pagina,setPagina]=useState(1);
   const [item,setItem]=useState(null);
@@ -75,9 +75,14 @@ export default function EstoqueMaquinasLinhaBranca() {
   const carregar=useCallback(async()=>{
     setCarregando(true);setErro("");
     try{
-      const res=await rpc("listar",{
-        pagina,tamanho,busca,marca,categoria:familia,tipo,situacao:status,escopo
-      });
+      const filtros={pagina,tamanho,busca,marca,categoria:familia,tipo,situacao:status};
+      const res=escopo==="INVENTARIO"
+        ? await (async()=>{
+          const {data,error}=await supabase.rpc("linha_branca_inventario_fisico",{p_dados:filtros});
+          if(error)throw Error(error.message);
+          return data;
+        })()
+        : await rpc("listar",{...filtros,escopo});
       setDados(res||null);
     }catch(e){setErro("Não foi possível carregar o estoque de máquinas: "+e.message);}
     finally{setCarregando(false);}
@@ -95,6 +100,7 @@ export default function EstoqueMaquinasLinhaBranca() {
 
   function mudarFiltro(fn,v){fn(v);setPagina(1);}
   async function abrir(i) {
+    if(!i?.id){setErro("Esta OS consta na relação física, mas não possui cadastro operacional. Regularize o cadastro antes de registrar movimentações.");return;}
     setItem(i);setForm(FORM());setHistorico([]);
     setCarregandoHistorico(true);setErro("");setOk("");
     try{const h=await rpc("historico",{os_id:i.id});setHistorico(Array.isArray(h)?h:[]);}
@@ -136,7 +142,7 @@ export default function EstoqueMaquinasLinhaBranca() {
         <div>
           <h2 className="text-base font-black text-[#43284F]">Estoque de máquinas completas — Linha Branca</h2>
           <p className="mt-1 text-xs leading-5 text-slate-600">
-            Acompanhe todas as famílias de eletrodomésticos por OS e etapa. Por padrão aparecem somente OSs com atividade registrada no Liquida; o histórico fica separado para conciliação.
+            A conferência física é a referência atual das lavadoras. CMP, Triagem e Scrap ficam segregados; o Aging e os históricos ficam para auditoria.
            </p>
         </div>
         <button type="button" onClick={carregar} disabled={carregando}
@@ -146,7 +152,7 @@ export default function EstoqueMaquinasLinhaBranca() {
       </div>
       <p className="mt-3 text-[11px] text-amber-900">
         <AlertTriangle size={14} className="mr-1 inline"/>
-        OSs com atividade no Liquida não equivalem automaticamente a estoque físico. A confirmação depende de conferência; registros antigos ficam separados.
+        {escopo==="INVENTARIO"?"Base física "+DIA(dados?.data_base)+": "+FORMAT(dados?.cadastros_pendentes||0)+" OSs sem cadastro e "+FORMAT(dados?.categorias_divergentes||0)+" com categoria divergente. O resumo do arquivo informa 54 CMP, mas a coluna tem 51.":"OSs com atividade no Liquida não equivalem automaticamente a estoque físico. O histórico não prova presença atual."}
        </p>
     </section>
 
@@ -154,14 +160,21 @@ export default function EstoqueMaquinasLinhaBranca() {
     {ok&&<div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">{ok}</div>}
 
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-      {[
-        [ClipboardList,"OSs no recorte",dados?.os_escopo,"Registros com evidência no escopo, não estoque físico"],
+      {(escopo==="INVENTARIO" ? [
+        [ClipboardList,"OSs na lista física",dados?.os_escopo,"Relação recebida em "+DIA(dados?.data_base)],
+        [Warehouse,"Máquinas presentes em processo",dados?.total_presente,"CMP + triagem; não representam estoque disponível para venda"],
+        [Clock3,"Aguardando CMP",dados?.total_cmp,"Classificação da conferência física"],
+        [Wrench,"Em triagem",dados?.total_triagem,"Classificação da conferência física"],
+        [AlertTriangle,"Scrap segregado",dados?.total_scrap,"Fora do saldo em processo"],
+        [AlertTriangle,"Cadastro pendente",dados?.cadastros_pendentes,"OSs da planilha ainda ausentes no Liquida"]
+      ] : [
+        [ClipboardList,"OSs no recorte",dados?.os_escopo,"Registros do escopo selecionado, não estoque físico"],
         [Wrench,"Em processo",emProcesso,"Triagem, reparo e demais etapas"],
         [AlertTriangle,"Aguardando peça / CMP",resumo.AGUARDANDO_CMP||0,"Pendência de peça"],
         [PackageCheck,"Aprovadas",resumo.APROVADO||0,"Pendentes de destinação ou conferência"],
         [CheckCircle2,"Estoque físico confirmado",resumo.ESTOQUE_CONFIRMADO||0,"Conferência física registrada"],
         [Truck,"Saídas confirmadas",resumo.SAIDA_CONFIRMADA||0,"Transferência, venda ou expedição comprovada"]
-      ].map(([Icon,nome,valor,desc])=><div key={nome} className={BOX}>
+      ]).map(([Icon,nome,valor,desc])=><div key={nome} className={BOX}>
         <div className="flex items-center gap-2"><Icon size={17} className="text-[#765D81]"/><p className="text-[11px] font-bold text-slate-500">{nome}</p></div>
         <p className="mt-2 text-2xl font-black text-slate-900">{valor==null?"—":FORMAT(valor)}</p>
         <p className="mt-1 text-[10px] leading-4 text-slate-500">{desc}</p>
@@ -170,9 +183,9 @@ export default function EstoqueMaquinasLinhaBranca() {
 
     <div className={BOX+" space-y-3"}>
       <div className="flex flex-wrap gap-2">
-        {[["LIQUIDA","Operação Liquida"],["HISTORICO","Histórico a conciliar"],["TODOS","Tudo (auditoria)"]].map(([v,n])=><button key={v} type="button" onClick={()=>{setEscopo(v);setPagina(1);}} className={"rounded-lg px-3 py-2 text-xs font-bold "+(escopo===v?"bg-[#43284F] text-white":"bg-slate-100 text-slate-700")}>{n}</button>)}
+        {[["INVENTARIO","Conferência física: Lavadoras"],["LIQUIDA","Operação Liquida: todas as famílias"],["HISTORICO","Histórico a conciliar"],["TODOS","Tudo (auditoria)"]].map(([v,n])=><button key={v} type="button" onClick={()=>{setEscopo(v);setPagina(1);}} className={"rounded-lg px-3 py-2 text-xs font-bold "+(escopo===v?"bg-[#43284F] text-white":"bg-slate-100 text-slate-700")}>{n}</button>)}
       </div>
-      <p className="text-[11px] text-slate-500">{escopo==="LIQUIDA"?"OSs com atividade registrada na operação, não estoque físico confirmado.":escopo==="HISTORICO"?"OSs sem evidência operacional no Liquida, a conciliar com o inventário físico.":"Visão histórica completa para auditoria; não equivale ao estoque atual."}</p>
+      <p className="text-[11px] text-slate-500">{escopo==="INVENTARIO"?"Conferência física de 04/11/2026. As entradas do próximo relatório diário ainda não foram contabilizadas; statuses técnicos originais são preservados.":escopo==="LIQUIDA"?"Todas as famílias que passaram pelo Liquida, sem confirmação de presença física atual.":escopo==="HISTORICO"?"OSs sem evidência operacional no Liquida, a conciliar com o inventário físico.":"Visão histórica completa para auditoria; não equivale ao estoque atual."}</p>
       <div className="flex flex-wrap gap-2">
         <form onSubmit={e=>{e.preventDefault();mudarFiltro(setBusca,digitado.trim());}}
           className="flex min-w-[235px] flex-1 gap-2">
