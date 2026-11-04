@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { CheckCircle2, ClipboardCheck, RefreshCw, Search, ShieldCheck, XCircle } from 'lucide-react';
 import { CHECKLIST_MELI, MELI_ITENS, finalizarValidacaoMeli, listarFilaMeli, listarHistoricoMeli } from '../../services/meliValidacaoService.js';
 
@@ -75,8 +76,8 @@ export default function ValidacaoMeliV2Page() {
     {feedback && <div role="alert" className={`rounded-xl border p-4 text-sm ${feedback.erro ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>
       {feedback.texto}
       {!feedback.erro && feedback.texto.includes('Encaminhado para retriagem') && <div className="mt-2 flex flex-wrap gap-3 text-xs font-bold">
-        <a className="underline" href="/v2/assurant/triagens/funcional">Abrir Triagem Funcional</a>
-        <a className="underline" href="/v2/assurant/triagens/cosmetica">Abrir Triagem Cosmética</a>
+        <Link className="underline" to="/v2/assurant/triagens/funcional">Abrir Triagem Funcional</Link>
+        <Link className="underline" to="/v2/assurant/triagens/cosmetica">Abrir Triagem Cosmética</Link>
       </div>}
     </div>}
     <div className="grid gap-3 sm:grid-cols-3">
