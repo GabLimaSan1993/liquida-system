@@ -69,6 +69,7 @@ export default function ReparosLavadorasV2Page() {
   const tecnico = profile?.nome || "Operação";
 
   const [osList, setOsList] = useState([]);
+  const [pecasResumo, setPecasResumo] = useState({});
   const [busca, setBusca] = useState("");
   const [filtroNivel, setFiltroNivel] = useState("todos");
   const [selectedOsId, setSelectedOsId] = useState("");
@@ -180,9 +181,19 @@ export default function ReparosLavadorasV2Page() {
         if (triagem?.tipo_produto !== "Lavadoras" && !(pendente && deLavadora)) return null;
         return { ...os, __especialidade_indefinida: pendente && semArea, __triagem: triagem };
       });
-      setOsList(filtradas.filter(Boolean).filter(os =>
+      const visiveis=filtradas.filter(Boolean).filter(os =>
         verTodos || os.__especialidade_indefinida || tecnicoPodeAtuarOsLavadora(profile, os)
-      ));
+      );
+      setOsList(visiveis);
+      const grupos=[];
+      for(let k=0;k<visiveis.length;k+=200)grupos.push(visiveis.slice(k,k+200).map(os=>Number(os.id)));
+      if(grupos.length){
+        const responses=await Promise.all(grupos.map(ids=>
+          supabase.rpc("linha_branca_reparo_pecas_resumo",{p_os_ids:ids})
+        ));
+        for(const res of responses)if(res.error)throw new Error("Requisições de peças: "+res.error.message);
+        setPecasResumo(Object.assign({},...responses.map(x=>x.data||{})));
+      }else setPecasResumo({});
     } catch (error) {
       setMensagem(`Erro ao carregar OS: ${error.message}`);
     } finally {
@@ -407,6 +418,8 @@ export default function ReparosLavadorasV2Page() {
               const nivel=nivelEfetivoLavadora(os), estilo=VISUAL_NIVEIS_LAVADORAS[nivel];
               const pendente=classificarTriagemLavadora(os.__triagem).pendente;
               const retrabalhoCarlos=os.retorno_pos_reparo_exclusivo_carlos===true;
+              const req=pecasResumo[String(os.id)]||{};
+              const abertas=Number(req.abertas||0);
               return <button type="button" key={os.id} onClick={()=>selecionarOs(os)}
                 className={`w-full rounded-xl border p-3 text-left transition-colors ${estilo.card} ${String(os.id)===selectedOsId?"ring-2 ring-violet-500":""}`}>
                 <div className="flex items-center gap-2">
@@ -415,6 +428,11 @@ export default function ReparosLavadorasV2Page() {
                   <span className={`ml-auto rounded-md px-2 py-0.5 text-[10px] font-black ${estilo.selo}`}>{pendente?"A avaliar / N3":nivel}</span>
                 </div>
                 <div className="mt-1 pl-4 text-xs text-slate-600">{os.marca||"—"} {os.modelo||""}</div>
+                {os.tecnico_responsavel&&<div className="mt-1 pl-4 text-[10px] font-semibold text-slate-600">Responsável: {os.tecnico_responsavel}</div>}
+                {abertas>0&&<div className="mt-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] font-bold text-amber-900">
+                  <span>Peça necessária · {abertas} requisição(ões) · maior aging: {req.aging_max_dias??"—"} dias</span>
+                  <span className="mt-0.5 block font-medium">{(req.pecas||[]).map(p=>p.nome).join(", ")}</span>
+                </div>}
                 {retrabalhoCarlos&&<div className="mt-1.5 pl-4 text-[10px] font-bold text-rose-800">Retorno da bancada · exclusivo Carlos</div>}
                 <div className="mt-1 pl-4 text-[10px] text-slate-500">{os.__especialidade_indefinida ? "Definir especialidade do reparo" : (os.areas_reparo||[]).join(" • ")}</div>
               </button>;
@@ -425,6 +443,15 @@ export default function ReparosLavadorasV2Page() {
         </div>
 
         <div className="space-y-5">
+          {selectedOs&&Number(pecasResumo[String(selectedOs.id)]?.abertas||0)>0&&
+            <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-xs text-amber-950">
+              <p className="font-black">Peças necessárias — requisições em aberto</p>
+              {(pecasResumo[String(selectedOs.id)]?.pecas||[]).map((p,i)=>
+                <p key={i} className="mt-1">
+                  {p.nome} · Requisição original: {p.data_original?.split("-").reverse().join("/")||new Date(p.aberta_em).toLocaleDateString("pt-BR")} · <strong>{p.aging_dias} dias de aging</strong>
+                </p>)}
+              <p className="mt-2 text-[11px]">Responsável pela OS: {selectedOs.tecnico_responsavel||"Não atribuído"}. O registro da requisição não comprova entrega da peça.</p>
+            </div>}
           {selectedOs ? <div className="rounded-2xl border border-rose-100 bg-rose-50 p-5"><div className="flex items-center gap-2 text-sm font-black text-rose-800"><AlertTriangle className="h-4 w-4" /> Origem da falha / Triagem</div><div className="mt-3 text-sm leading-6 text-rose-700">{selectedOs.__triagem?.observacoes_triagem || "Sem triagem cadastrada para esta OS. O defeito pode ser registrado diretamente na bancada, sem avançar a OS."}</div><div className="mt-4 grid gap-2 md:grid-cols-3"><div className="rounded-xl bg-white p-3"><div className="text-[10px] font-black text-slate-500">Mecânicos solicitados</div><div className="mt-2 text-[10px] text-slate-600">{(selectedOs.__triagem?.reparos_mecanicos || []).join(", ") || "—"}</div></div><div className="rounded-xl bg-white p-3"><div className="text-[10px] font-black text-slate-500">Elétricos solicitados</div><div className="mt-2 text-[10px] text-slate-600">{(selectedOs.__triagem?.reparos_eletricos || []).join(", ") || "—"}</div></div><div className="rounded-xl bg-white p-3"><div className="text-[10px] font-black text-slate-500">Estéticos solicitados</div><div className="mt-2 text-[10px] text-slate-600">{(selectedOs.__triagem?.reparos_esteticos || []).join(", ") || "—"}</div></div></div></div> : null}
 
           <div className={`rounded-2xl border p-5 ${selectedOs ? VISUAL_NIVEIS_LAVADORAS[nivelDaOs].card : "border-slate-200 bg-white opacity-40 pointer-events-none"}`}>
