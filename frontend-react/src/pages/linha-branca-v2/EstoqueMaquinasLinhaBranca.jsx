@@ -206,7 +206,7 @@ export default function EstoqueMaquinasLinhaBranca() {
       {(escopo==="INVENTARIO" ? [
         [Warehouse,"OSs com evidência",dados?.os_escopo,"Operação Liquida + lista física; não é saldo disponível para venda"],
         [Wrench,"Em produção",emProcesso,"Triagem, reparo, testes, limpeza, qualidade e aprovação"],
-        [Clock3,"Aguardando CMP",dados?.total_cmp,"Somente OSs ainda aguardando peça/reparo"],
+        [Clock3,"Aguardando CMP",dados?.total_cmp,"Somente OSs da relação de CMP recebida; as que avançaram seguem a etapa atual"],
         [CheckCircle2,"Concluídas / Loja",dados?.total_concluidas,
           FORMAT(dados?.total_finalizadas_confirmadas||0)+" finalizadas no Liquida · "+FORMAT(dados?.total_loja_por_conciliacao||0)+" por conciliação (sem comprovante)"],
         [AlertTriangle,"Scrap",dados?.total_scrap,"Segregadas do estoque produtivo"],
@@ -228,7 +228,7 @@ export default function EstoqueMaquinasLinhaBranca() {
         {[["INVENTARIO","Estoque"],["CONCLUIDAS","Concluídas / Loja"]].map(([v,n])=><button key={v} type="button" onClick={()=>{setEscopo(v);setPagina(1);setFamilia("");setTipo("");setMarca("");setStatus("");setBusca("");setDigitado("");}} className={"rounded-lg px-3 py-2 text-xs font-bold "+(escopo===v?"bg-[#43284F] text-white":"bg-slate-100 text-slate-700")}>{n}</button>)}
       </div>
       <p className="text-[11px] text-slate-500">{escopo==="INVENTARIO"
-        ? "Todos os produtos com atividade registrada no Liquida ou conferência física identificada. O fluxo atual prevalece sobre a etapa antiga; OSs de lavadoras fora da lista física e sem nova movimentação são conciliadas como loja."
+        ? "CMP das lavadoras restrito à relação de 51 OSs enviada. Máquinas que avançaram aparecem na etapa atual; o Aging antigo não inclui máquinas adicionais. Concluídas e outras etapas continuam consultáveis."
         : "Finalizadas no Liquida, saídas confirmadas e lavadoras destinadas à loja por conciliação da lista física. A inferência não substitui NF ou romaneio."}</p>
       <div className="flex flex-wrap gap-2">
         <form onSubmit={e=>{e.preventDefault();mudarFiltro(setBusca,digitado.trim());}}
