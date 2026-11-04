@@ -20,6 +20,7 @@ import { conferirEvidenciasEsteticas } from "../../services/lavadorasPreventivaS
 import {
   condenarOs,
   fetchOsAguardandoCmp,
+  fetchOsSemEspecialidadeParaReparo,
   fetchOsParaReparo,
   fetchTriagemDaOs,
   osAguardandoCmp,
@@ -115,12 +116,14 @@ export default function ReparosLavadorasV2Page() {
       const resultados = await Promise.all([
         ...AREAS.map((area) => fetchOsParaReparo(area, false)),
         fetchOsAguardandoCmp(),
+        fetchOsSemEspecialidadeParaReparo(),
       ]);
       const mapa = new Map();
       resultados.flat().forEach((os) => mapa.set(os.id, os));
       // Somente as OSs da família de lavadoras entram nesta tela.
       const candidatos = [...mapa.values()].filter((os) => {
-        const pendente = osAguardandoPeca(os) || osAguardandoCmp(os);
+        const pendente = osAguardandoPeca(os) || osAguardandoCmp(os) ||
+          (os.status_atual === "Em reparo" && !(os.areas_reparo || []).length);
         return !pendente || Boolean(identificarTipoLavadora(os.categoria));
       });
       // Busca as triagens em lote (OSs antigas aguardando peça não possuem triagem).
@@ -137,7 +140,8 @@ export default function ReparosLavadorasV2Page() {
         if (!porOs.has(String(triagem.os_id))) porOs.set(String(triagem.os_id), triagem);
       });
       const filtradas = candidatos.map((os) => {
-        const pendente = osAguardandoPeca(os) || osAguardandoCmp(os);
+        const pendente = osAguardandoPeca(os) || osAguardandoCmp(os) ||
+          (os.status_atual === "Em reparo" && !(os.areas_reparo || []).length);
         const semArea = !(os.areas_reparo || []).length;
         const deLavadora = Boolean(identificarTipoLavadora(os.categoria));
         const triagem = porOs.get(String(os.id)) || null;
