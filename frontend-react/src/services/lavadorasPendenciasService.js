@@ -49,7 +49,7 @@ export async function carregarPendenciasLavadora(osId) {
 // Não cria execução concluída, não movimenta peças e não altera a fase da OS.
 // O mesmo diagnóstico é reeditável, mas a data de criação não é reiniciada.
 export async function salvarDiagnosticoPendente(os, area, execucao, profile) {
-  const diagnostico = String(execucao.diagnostico_final || "").trim();
+  const diagnostico = String(execucao.diagnostico_final || "").trim() || (execucao.servicos || []).join(", ");
   if (!os?.id || !area || !diagnostico) throw new Error("Selecione a área e preencha o diagnóstico.");
   if (!profile?.id) throw new Error("Identifique o usuário antes de registrar o diagnóstico.");
   const original = verificar(await supabase.from("linha_branca_reparo_diagnosticos")
