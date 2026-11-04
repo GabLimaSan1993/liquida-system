@@ -99,7 +99,7 @@ export default function DesmembramentoLinhaBrancaPage(){
   <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
     <div><h2 className="text-sm font-black">OSs indicadas para desmembramento</h2>
-     <p className="mt-1 text-xs text-slate-500">As quatro OSs autorizadas para o piloto podem ser desmembradas em paralelo, sem alterar o fluxo atual. Peças registradas entram no estoque com rastreabilidade.</p>
+     <p className="mt-1 text-xs text-slate-500">OSs com condenação aprovada e peças aproveitáveis ficam aqui como Aguardando desmembramento. O piloto anterior também permanece disponível. Peças recuperadas entram no estoque com vínculo à OS de origem.</p>
     </div>
     <span className="rounded-full bg-violet-50 px-3 py-1 text-xs font-black text-violet-700">{fila.length} OS(s)</span>
    </div>
