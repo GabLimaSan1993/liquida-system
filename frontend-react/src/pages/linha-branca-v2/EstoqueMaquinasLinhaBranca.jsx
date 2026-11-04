@@ -17,6 +17,7 @@ const ESTADOS=[
   ["ESTOQUE_CONFIRMADO","Estoque físico conferido","bg-emerald-100 text-emerald-800"],
   ["FINALIZADA_CONCILIAR","Finalizadas a conciliar","bg-orange-100 text-orange-900"],
   ["SAIDA_INDICADA_GAIA","Expedição indicada no GAIA","bg-slate-100 text-slate-700"],
+  ["LOJA_POR_CONCILIACAO","Loja por conciliação (sem comprovante)","bg-slate-100 text-slate-700"],
   ["SAIDA_CONFIRMADA","Saídas confirmadas","bg-slate-200 text-slate-800"],
   ["SCRAP_CONDENADO","Scrap / Condenado","bg-rose-100 text-rose-800"],
   ["DESCARTE_CONFIRMADO","Descarte confirmado","bg-rose-200 text-rose-900"],
@@ -173,7 +174,8 @@ export default function EstoqueMaquinasLinhaBranca() {
         [AlertTriangle,"Aguardando peça / CMP",resumo.AGUARDANDO_CMP||0,"Pendência de peça"],
         [PackageCheck,"Aprovadas",resumo.APROVADO||0,"Pendentes de destinação ou conferência"],
         [CheckCircle2,"Estoque físico confirmado",resumo.ESTOQUE_CONFIRMADO||0,"Conferência física registrada"],
-        [Truck,"Saídas confirmadas",resumo.SAIDA_CONFIRMADA||0,"Transferência, venda ou expedição comprovada"]
+        [Truck,"Saídas confirmadas",resumo.SAIDA_CONFIRMADA||0,"Transferência, venda ou expedição comprovada"],
+        [Truck,"Para loja por conciliação",resumo.LOJA_POR_CONCILIACAO||0,"Critério informado pelo gestor; sem comprovante de transferência"]
       ]).map(([Icon,nome,valor,desc])=><div key={nome} className={BOX}>
         <div className="flex items-center gap-2"><Icon size={17} className="text-[#765D81]"/><p className="text-[11px] font-bold text-slate-500">{nome}</p></div>
         <p className="mt-2 text-2xl font-black text-slate-900">{valor==null?"—":FORMAT(valor)}</p>
@@ -254,6 +256,7 @@ export default function EstoqueMaquinasLinhaBranca() {
                   {labelEstado(i.situacao)}
                 </span>
                 {i.movimentacao_confirmada&&<p className="mt-1 text-[10px] font-semibold text-emerald-700">Conferência registrada</p>}
+                 {i.situacao==="LOJA_POR_CONCILIACAO"&&<p className="mt-1 text-[10px] font-semibold text-slate-500">Saída gerencial inferida; sem NF/romaneio comprovado</p>}
               </td>
               <td className="max-w-[215px] px-3 py-2.5">
                 <p className="text-[10px]">{escopo==="INVENTARIO"?"Relação física de "+DIA(i.data_inventario):i.etapa_gaia||"Etapa GAIA não informada"}</p>
