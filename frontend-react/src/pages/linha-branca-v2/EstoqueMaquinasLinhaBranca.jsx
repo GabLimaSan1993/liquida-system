@@ -20,7 +20,8 @@ const ESTADOS=[
   ["APROVADO","Aprovado / Liberação","bg-emerald-50 text-emerald-800"],
   ["CONCLUIDO","Concluído","bg-emerald-100 text-emerald-800"],
   ["SCRAP","Scrap","bg-rose-100 text-rose-800"],
-  ["PENDENTE_CLASSIFICACAO","Etapa a identificar","bg-slate-100 text-slate-700"]
+  ["PENDENTE_CLASSIFICACAO","Etapa a identificar","bg-slate-100 text-slate-700"],
+  ["FORA_CONFERENCIA","Fora da relação física","bg-slate-100 text-slate-700"]
 ];
 const GRUPOS=[
   {nome:"Triagem",estados:["AGUARDANDO_TRIAGEM","EM_TRIAGEM"],nota:"Aguardando Triagem e Em Triagem"},
@@ -212,6 +213,12 @@ export default function EstoqueMaquinasLinhaBranca() {
           </p>}
       </div>)}
     </div>
+    {Number(resumo.FORA_CONFERENCIA||0)>0&&
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+        <span><strong>{FORMAT(resumo.FORA_CONFERENCIA)} OSs</strong> registradas no Liquida, mas não presentes na relação física de Reparo. Permanecem disponíveis para conferência e não entram no total de Reparo.</span>
+        <button type="button" onClick={()=>mudarFiltro(setStatus,"FORA_CONFERENCIA")}
+          className={BOTAO+" bg-white"}>Consultar OSs</button>
+      </div>}
 
     <section className={BOX+" space-y-4"}>
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -274,6 +281,8 @@ export default function EstoqueMaquinasLinhaBranca() {
               {Number(resumo.SCRAP||0)>0&&<option value="SCRAP">Scrap ({FORMAT(resumo.SCRAP)})</option>}
               {Number(resumo.PENDENTE_CLASSIFICACAO||0)>0&&
                 <option value="PENDENTE_CLASSIFICACAO">A identificar ({FORMAT(resumo.PENDENTE_CLASSIFICACAO)})</option>}
+              {Number(resumo.FORA_CONFERENCIA||0)>0&&
+                <option value="FORA_CONFERENCIA">Fora da relação física ({FORMAT(resumo.FORA_CONFERENCIA)})</option>}
             </optgroup>
           </select>
         </label>
@@ -320,6 +329,10 @@ export default function EstoqueMaquinasLinhaBranca() {
                 {i.status_lavadora==="CONCLUIDO"&&i.situacao==="LOJA_POR_CONCILIACAO"&&
                   <p className="mt-1 text-[10px] font-semibold text-amber-800">
                     Concluído por conciliação gerencial, sem comprovante de saída
+                  </p>}
+                {i.status_lavadora==="FORA_CONFERENCIA"&&
+                  <p className="mt-1 text-[10px] font-semibold text-amber-800">
+                    Cadastro operacional sem confirmação na lista física de Reparo
                   </p>}
                 {i.status_lavadora==="CONCLUIDO"&&i.situacao==="SAIDA_CONFIRMADA"&&
                   <p className="mt-1 text-[10px] font-semibold text-emerald-800">
