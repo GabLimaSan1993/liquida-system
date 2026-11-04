@@ -20,6 +20,7 @@ const ESTADOS=[
   ["APROVADO","Aprovado / Liberação","bg-emerald-50 text-emerald-800"],
   ["CONCLUIDO","Concluído","bg-emerald-100 text-emerald-800"],
   ["SCRAP","Scrap","bg-rose-100 text-rose-800"],
+  ["AGUARDANDO_DESMEMBRAMENTO","Aguardando desmembramento","bg-orange-100 text-orange-800"],
   ["PENDENTE_CLASSIFICACAO","Etapa a identificar","bg-slate-100 text-slate-700"],
   ["FORA_CONFERENCIA","Fora da relação física","bg-slate-100 text-slate-700"]
 ];
@@ -28,7 +29,7 @@ const GRUPOS=[
   {nome:"Reparo",estados:["AGUARDANDO_REPARO","AGUARDANDO_CMP","EM_REPARO"],nota:"Apenas máquinas em reparo ou aguardando atendimento"},
   {nome:"Pós-reparo",estados:["BANCADA_TESTES","LIMPEZA","QUALIDADE","APROVADO"],nota:"Testes, limpeza e qualidade; fora do total de Reparo"},
   {nome:"Concluído",estados:["CONCLUIDO"],nota:"Finalizados e conciliados para loja; conferir comprovantes"},
-  {nome:"Scrap",estados:["SCRAP"],nota:"Segregado da operação produtiva"}
+  {nome:"Destinação",estados:["AGUARDANDO_DESMEMBRAMENTO","SCRAP"],nota:"Desmembramento com aproveitamento ou Scrap"}
 ];
 const MOVIMENTOS=[
   ["ESTOQUE_CONFIRMADO","Conferir presença em estoque físico"],
@@ -278,6 +279,8 @@ export default function EstoqueMaquinasLinhaBranca() {
             </optgroup>
             <optgroup label="Finalização">
               <option value="CONCLUIDO">Concluído ({FORMAT(resumo.CONCLUIDO)})</option>
+              {Number(resumo.AGUARDANDO_DESMEMBRAMENTO||0)>0&&
+                <option value="AGUARDANDO_DESMEMBRAMENTO">Aguardando desmembramento ({FORMAT(resumo.AGUARDANDO_DESMEMBRAMENTO)})</option>}
               {Number(resumo.SCRAP||0)>0&&<option value="SCRAP">Scrap ({FORMAT(resumo.SCRAP)})</option>}
               {Number(resumo.PENDENTE_CLASSIFICACAO||0)>0&&
                 <option value="PENDENTE_CLASSIFICACAO">A identificar ({FORMAT(resumo.PENDENTE_CLASSIFICACAO)})</option>}
