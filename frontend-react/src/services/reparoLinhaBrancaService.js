@@ -33,6 +33,23 @@ export async function fetchOsAguardandoPeca() {
 // Compatibilidade com as telas que já utilizavam a fila de Aguardando CMP.
 export const fetchOsAguardandoCmp = fetchOsAguardandoPeca;
 
+// OS importadas como "Em reparo" e sem especialidade definida não podem ficar
+// invisíveis: a bancada técnica deverá confirmar se é mecânico, elétrico ou estético.
+// Nunca inferir a especialidade, nem declarar o reparo realizado.
+export async function fetchOsSemEspecialidadeParaReparo() {
+  const { data, error } = await supabase
+    .from("ordens_servico")
+    .select("*")
+    .eq("linha_produto", "Linha Branca")
+    .in("status_atual", ["Aguardando peça", "Em reparo"])
+    .order("dt_entrada", { ascending: true });
+  if (error) throw error;
+  return (data || []).filter((os) =>
+    !(os.areas_reparo || []).length && !(os.areas_concluidas || []).length
+  );
+}
+
+
 export async function fetchOsParaReparo(areaExecucao, incluirPendentesSemArea = true) {
   const { data, error } = await supabase
     .from("ordens_servico")
@@ -44,10 +61,9 @@ export async function fetchOsParaReparo(areaExecucao, incluirPendentesSemArea = 
   if (error) throw error;
   if (!incluirPendentesSemArea || areaExecucao !== "Reparo Mecânico") return data || [];
 
-  const aguardandoPeca = await fetchOsAguardandoPeca();
+  const pendentesSemArea = await fetchOsSemEspecialidadeParaReparo();
   const mapa = new Map((data || []).map((os) => [String(os.id), os]));
-  aguardandoPeca.filter((os) => !(os.areas_reparo || []).length)
-    .forEach((os) => mapa.set(String(os.id), os));
+  pendentesSemArea.forEach((os) => mapa.set(String(os.id), os));
   return [...mapa.values()].sort((a, b) =>
     String(a.dt_entrada || "").localeCompare(String(b.dt_entrada || "")));
 }
