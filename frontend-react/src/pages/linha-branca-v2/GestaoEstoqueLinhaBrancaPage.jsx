@@ -5,6 +5,7 @@ import {
   PackagePlus, Plus, RefreshCcw, Search, ShoppingCart, Trash2, Truck, Warehouse, Wrench
 } from "lucide-react";
 import { supabase } from "../../lib/supabase.js";
+import EstoqueMaquinasLinhaBranca from "./EstoqueMaquinasLinhaBranca.jsx";
 
 const INPUT="mt-1 block w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-100";
 const BTN="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#43284F] px-4 py-2.5 text-xs font-black text-white transition hover:bg-[#583869] disabled:cursor-not-allowed disabled:opacity-50";
@@ -21,6 +22,7 @@ const ETAPAS=[
  ["BLOQUEADO","Bloqueado"]
 ];
 const ABAS=[
+ ["maquinas","Estoque de Máquinas",Warehouse],
  ["pecas","Estoque de Peças",Boxes],["insumos","Estoque de Insumos",Package],
  ["requisicoes","Requisições",ClipboardList],["compras","Compras",ShoppingCart],
  ["notas","Entradas NF",FileText],["wip","WIP / Pré-entrada",Warehouse],
@@ -47,7 +49,7 @@ function Tabela({colunas,linhas}) {
 const TD=({children,forte=false})=><td className={"px-3 py-3 align-top "+(forte?"font-bold text-slate-800":"text-slate-600")}>{children??"—"}</td>;
 
 export default function GestaoEstoqueLinhaBrancaPage() {
- const [aba,setAba]=useState("pecas");
+ const [aba,setAba]=useState("maquinas");
  const [painel,setPainel]=useState({});
  const [loading,setLoading]=useState(false),[saving,setSaving]=useState(false);
  const [erro,setErro]=useState(""),[ok,setOk]=useState("");
@@ -127,20 +129,20 @@ export default function GestaoEstoqueLinhaBrancaPage() {
     <Link to="/v2/linha-branca" className="inline-flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-[#43284F]"><ArrowLeft size={16}/> Linha Branca</Link>
     <p className="mt-5 text-[10px] font-black uppercase tracking-[.2em] text-[#765D81]">Liquida System · Linha Branca</p>
     <h1 className="mt-1 text-3xl font-black tracking-tight">Gestão de Estoque</h1>
-    <p className="mt-1 text-sm text-slate-500">Peças, insumos, requisições, notas fiscais e movimentações de produtos na operação.</p>
+    <p className="mt-1 text-sm text-slate-500">Máquinas completas por OS, peças, insumos, CMP e movimentações — controles separados na mesma gestão.</p>
    </div>
    <button type="button" onClick={atualizar} disabled={loading} className={SOFT}>
     {loading?<Loader2 size={15} className="animate-spin"/>:<RefreshCcw size={15}/>} Atualizar dados
    </button>
   </header>
-  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+  {aba!=="maquinas"&&<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
    {[[Boxes,"Peças cadastradas",pecas.length,"pecas"],[Package,"Insumos cadastrados",insumos.length,"insumos"],
       [ClipboardList,"Requisições pendentes",pendencias,"requisicoes"],[Warehouse,"WIP / pré-entrada",wipPrev,"wip"]].map(([Icon,nome,valor,destino])=>
     <button type="button" key={nome} onClick={()=>{setAba(destino);setBusca("");setErro("");}} className={BOX+" text-left transition hover:border-[#765D81] hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#765D81]"}>
      <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-[#F3EFF5] text-[#43284F]"><Icon size={19}/></div>
      <p className="text-xs font-bold text-slate-500">{nome}</p><p className="mt-1 text-3xl font-black">{fmt(valor)}</p>
      <span className="mt-2 block text-[11px] font-semibold text-[#765D81]">Ver detalhes</span></button>)}
-  </div>
+  </div>}
   {erro&&<div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">{erro}</div>}
   {ok&&<div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">{ok}</div>}
   <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
@@ -148,6 +150,7 @@ export default function GestaoEstoqueLinhaBrancaPage() {
       className={"flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-xs font-bold transition "+(aba===id?"bg-[#43284F] text-white":"text-slate-500 hover:bg-slate-50")}>
       <Icon size={15}/>{nome}</button>)}
   </div>
+  {aba==="maquinas"&&<EstoqueMaquinasLinhaBranca/>}
   {["pecas","insumos","requisicoes","compras","wip","movimentos"].includes(aba)&&<div className="flex justify-between gap-3">
     <p className="text-xs text-slate-500">Consulta operacional</p>
     <label className="relative w-full max-w-xs"><Search size={15} className="absolute left-3 top-2.5 text-slate-400"/>
