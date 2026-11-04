@@ -281,7 +281,7 @@ export default function ReparosLavadorasV2Page() {
   }
 
   async function salvarDiagnostico() {
-    if (!selectedOs || !areaAtual || !execucao.diagnostico_final.trim()) {
+    if (!selectedOs || !areaAtual || !(execucao.diagnostico_final.trim() || execucao.servicos.length)) {
       return setMensagem("Selecione uma especialidade e registre o defeito encontrado.");
     }
     try {
@@ -300,7 +300,7 @@ export default function ReparosLavadorasV2Page() {
   }
 
   async function requisitarPeca() {
-    if (!selectedOs || !areaAtual || !execucao.diagnostico_final.trim()) {
+    if (!selectedOs || !areaAtual || !(execucao.diagnostico_final.trim() || execucao.servicos.length)) {
       return setMensagem("Registre o diagnóstico para vincular a necessidade de peça.");
     }
     if (!buscaPeca.trim() || !Number.isFinite(Number(quantidadePeca)) || Number(quantidadePeca) <= 0) {
@@ -437,7 +437,7 @@ export default function ReparosLavadorasV2Page() {
             {selectedOs && areaAtual==="Reparo Estético" && <div className="mt-4">
                <FotosEsteticasLavadora key={selectedOs.id} osId={selectedOs.id} onEstado={setFotosEsteticasPendentes}/>
              </div>}
-             <div className="mt-5 grid gap-4 lg:grid-cols-2"><label><span className="text-[11px] font-black text-slate-600">Diagnóstico / defeito encontrado *</span><textarea rows={4} value={execucao.diagnostico_final} onChange={(e) => setExecucao((a) => ({ ...a, diagnostico_final: e.target.value }))} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" /></label><label><span className="text-[11px] font-black text-slate-600">Observações</span><textarea rows={4} value={execucao.observacoes} onChange={(e) => setExecucao((a) => ({ ...a, observacoes: e.target.value }))} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" /></label></div>
+             <div className="mt-5 grid gap-4 lg:grid-cols-2"><label><span className="text-[11px] font-black text-slate-600">Diagnóstico / defeito encontrado (ou selecione o serviço)</span><textarea rows={4} value={execucao.diagnostico_final} onChange={(e) => setExecucao((a) => ({ ...a, diagnostico_final: e.target.value }))} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" /></label><label><span className="text-[11px] font-black text-slate-600">Observações</span><textarea rows={4} value={execucao.observacoes} onChange={(e) => setExecucao((a) => ({ ...a, observacoes: e.target.value }))} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" /></label></div>
             <section className="mt-5 rounded-xl border border-violet-200 bg-white/80 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div><h3 className="text-sm font-black text-slate-900">Diagnóstico e peças necessárias</h3>
@@ -445,7 +445,7 @@ export default function ReparosLavadorasV2Page() {
                   {diagnosticoSalvo && <span className="rounded-lg bg-emerald-100 px-2 py-1 text-xs font-bold text-emerald-800">Diagnóstico salvo</span>}
                 </div>
                 <button type="button" onClick={salvarDiagnostico}
-                  disabled={saving || carregandoPendencias || !execucao.diagnostico_final.trim() || !areaAtual}
+                  disabled={saving || carregandoPendencias || !(execucao.diagnostico_final.trim() || execucao.servicos.length) || !areaAtual}
                   className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-lg bg-violet-700 px-4 text-xs font-black text-white disabled:opacity-40">
                   <Save className="h-4 w-4" /> Salvar diagnóstico sem concluir
                 </button>
@@ -485,7 +485,7 @@ export default function ReparosLavadorasV2Page() {
                     </select>
                   </label>
                   <button type="button" onClick={requisitarPeca}
-                    disabled={saving || carregandoPendencias || !execucao.diagnostico_final.trim() || !buscaPeca.trim() || Number(quantidadePeca) <= 0}
+                    disabled={saving || carregandoPendencias || !(execucao.diagnostico_final.trim() || execucao.servicos.length) || !buscaPeca.trim() || Number(quantidadePeca) <= 0}
                     className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-lg border border-amber-400 bg-amber-50 px-4 text-xs font-black text-amber-900 disabled:opacity-40">
                     <PackagePlus className="h-4 w-4" /> Registrar necessidade de peça
                   </button>
@@ -505,7 +505,7 @@ export default function ReparosLavadorasV2Page() {
                     </div>)}</div>}
                 </div>
               </section>
-              <div className="mt-4"><div className="text-[11px] font-black text-slate-600">Peças utilizadas</div><div className="mt-2 flex gap-2"><input value={execucao.novaPeca} onChange={(e) => setExecucao((a) => ({ ...a, novaPeca: e.target.value }))} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); adicionarPeca(); } }} placeholder="Digite a peça" className="h-10 flex-1 rounded-xl border border-slate-200 px-3 text-sm" /><button type="button" onClick={adicionarPeca} className="flex h-10 items-center gap-2 rounded-xl border border-slate-200 px-3 text-xs font-black"><PackagePlus className="h-4 w-4" /> Adicionar</button></div><div className="mt-2 flex flex-wrap gap-2">{execucao.pecas.map((peca, index) => <span key={`${peca}-${index}`} className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-bold text-slate-600">{peca}</span>)}</div></div>
+              <div className="mt-4"><div className="text-[11px] font-black text-slate-600">Peças efetivamente utilizadas na execução</div><div className="mt-2 flex gap-2"><input value={execucao.novaPeca} onChange={(e) => setExecucao((a) => ({ ...a, novaPeca: e.target.value }))} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); adicionarPeca(); } }} placeholder="Digite a peça" className="h-10 flex-1 rounded-xl border border-slate-200 px-3 text-sm" /><button type="button" onClick={adicionarPeca} className="flex h-10 items-center gap-2 rounded-xl border border-slate-200 px-3 text-xs font-black"><PackagePlus className="h-4 w-4" /> Adicionar</button></div><div className="mt-2 flex flex-wrap gap-2">{execucao.pecas.map((peca, index) => <span key={`${peca}-${index}`} className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-bold text-slate-600">{peca}</span>)}</div></div>
             <button type="button" onClick={salvar} disabled={saving || !selectedOs || !podeExecutar || necessidadesAbertas.length > 0 || (areaAtual==="Reparo Estético" && fotosEsteticasPendentes) || !areaAtual || !execucao.diagnostico_final.trim() || !execucao.servicos.length} className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#5B35C9] text-xs font-black text-white disabled:bg-slate-300"><Check className="h-4 w-4" /> Concluir reparo executado desta área</button>
              {necessidadesAbertas.length > 0 && <p className="mt-2 text-xs font-bold text-amber-800">Conclusão bloqueada: existem peças requisitadas ou compras pendentes para esta OS.</p>}
           </div>
