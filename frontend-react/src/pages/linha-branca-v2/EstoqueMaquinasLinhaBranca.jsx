@@ -64,6 +64,7 @@ export default function EstoqueMaquinasLinhaBranca() {
   const [familia,setFamilia]=useState("");
   const [status,setStatus]=useState("");
   const [escopo,setEscopo]=useState("INVENTARIO");
+  const [soRelacao,setSoRelacao]=useState(false);
   const [tipo,setTipo]=useState("");
   const [pagina,setPagina]=useState(1);
   const [item,setItem]=useState(null);
@@ -83,13 +84,13 @@ export default function EstoqueMaquinasLinhaBranca() {
     setCarregando(true);setErro("");
     try{
       const filtros={pagina,tamanho,busca,marca,categoria:familia,tipo,situacao:status,
-        escopo:escopo==="CONCLUIDAS"?"CONCLUIDAS":"TODOS"};
+        escopo:escopo==="CONCLUIDAS"?"CONCLUIDAS":"TODOS",origem_fisica:soRelacao?"CMP":null};
       const {data,error}=await supabase.rpc("linha_branca_inventario_fisico",{p_dados:filtros});
       if(error)throw new Error(error.message);
       setDados(data||null);
     }catch(e){setErro("Não foi possível carregar o estoque de máquinas: "+e.message);}
     finally{setCarregando(false);}
-  },[pagina,busca,marca,familia,tipo,status,escopo]);
+  },[pagina,busca,marca,familia,tipo,status,escopo,soRelacao]);
   useEffect(()=>{void carregar();},[carregar]);
   const resumo=dados?.resumo||{};
   const somar=(...states)=>states.reduce((v,k)=>v+Number(resumo[k]||0),0);
@@ -108,7 +109,7 @@ export default function EstoqueMaquinasLinhaBranca() {
     setRequisicaoAtenderId(null);setComprovanteReq("");setMensagemReq("");
     setCarregandoHistorico(true);setErro("");setOk("");
     try{
-      const isCmp=i.situacao==="AGUARDANDO_CMP";
+      const isCmp=i.situacao==="AGUARDANDO_CMP" || (i.situacao_inventario==="CMP" && i.precisa_peca);
       const [h,t,c,q]=await Promise.all([
         rpc("historico",{os_id:i.id}),
         supabase.rpc("linha_branca_rastreabilidade_os",{p_os_id:i.id}),
@@ -206,12 +207,13 @@ export default function EstoqueMaquinasLinhaBranca() {
       {(escopo==="INVENTARIO" ? [
         [Warehouse,"OSs com evidência",dados?.os_escopo,"Operação Liquida + lista física; não é saldo disponível para venda"],
         [Wrench,"Em produção",emProcesso,"Triagem, reparo, testes, limpeza, qualidade e aprovação"],
-        [Clock3,"Aguardando CMP",dados?.total_cmp,"Somente OSs da relação de CMP recebida; as que avançaram seguem a etapa atual"],
+        [Clock3,"Aguardando CMP",dados?.total_cmp,"Peça pendente; separado das máquinas em reparo"],
         [CheckCircle2,"Concluídas / Loja",dados?.total_concluidas,
           FORMAT(dados?.total_finalizadas_confirmadas||0)+" finalizadas no Liquida · "+FORMAT(dados?.total_loja_por_conciliacao||0)+" por conciliação (sem comprovante)"],
         [AlertTriangle,"Scrap",dados?.total_scrap,"Segregadas do estoque produtivo"],
         [ClipboardList,"Requisições abertas",dados?.total_requisicoes_abertas,
-          "Maior aging: "+FORMAT(dados?.maior_aging_pecas||0)+" dias desde o diagnóstico"]
+          "Maior aging: "+FORMAT(dados?.maior_aging_pecas||0)+" dias desde o diagnóstico"],
+        [AlertTriangle,"OSs sem peça vinculada (54)",dados?.total_sem_peca_vinculada,"Precisam de conferência de vínculo; não representam necessariamente compra"]
       ] : [
         [CheckCircle2,"Concluídas / Loja",dados?.total_filtrado,
           "Finalizadas no sistema ou classificadas para loja pela conciliação da lista física"],
@@ -225,12 +227,13 @@ export default function EstoqueMaquinasLinhaBranca() {
 
     <div className={BOX+" space-y-3"}>
       <div className="flex flex-wrap gap-2">
-        {[["INVENTARIO","Estoque"],["CONCLUIDAS","Concluídas / Loja"]].map(([v,n])=><button key={v} type="button" onClick={()=>{setEscopo(v);setPagina(1);setFamilia("");setTipo("");setMarca("");setStatus("");setBusca("");setDigitado("");}} className={"rounded-lg px-3 py-2 text-xs font-bold "+(escopo===v?"bg-[#43284F] text-white":"bg-slate-100 text-slate-700")}>{n}</button>)}
+        {[["INVENTARIO","Estoque"],["CONCLUIDAS","Concluídas / Loja"]].map(([v,n])=><button key={v} type="button" onClick={()=>{setEscopo(v);setPagina(1);setSoRelacao(false);setFamilia("");setTipo("");setMarca("");setStatus("");setBusca("");setDigitado("");}} className={"rounded-lg px-3 py-2 text-xs font-bold "+(escopo===v?"bg-[#43284F] text-white":"bg-slate-100 text-slate-700")}>{n}</button>)}
       </div>
       <p className="text-[11px] text-slate-500">{escopo==="INVENTARIO"
-        ? "CMP das lavadoras restrito à relação de 51 OSs enviada. Máquinas que avançaram aparecem na etapa atual; o Aging antigo não inclui máquinas adicionais. Concluídas e outras etapas continuam consultáveis."
+        ? "Lista atualizada para 54 OSs. Aguardando CMP indica necessidade de peça; demais ficam em Reparo, sem retroceder quem já avançou."
         : "Finalizadas no Liquida, saídas confirmadas e lavadoras destinadas à loja por conciliação da lista física. A inferência não substitui NF ou romaneio."}</p>
       <div className="flex flex-wrap gap-2">
+        {escopo==="INVENTARIO"&&<label className="flex cursor-pointer items-center gap-2 text-xs font-bold text-[#43284F]"><input type="checkbox" checked={soRelacao} onChange={e=>{setSoRelacao(e.target.checked);setPagina(1);setStatus("");}} className="h-4 w-4 accent-[#43284F]"/>Apenas as 54 OSs da relação enviada</label>}
         <form onSubmit={e=>{e.preventDefault();mudarFiltro(setBusca,digitado.trim());}}
           className="flex min-w-[235px] flex-1 gap-2">
           <div className="relative min-w-0 flex-1"><Search size={16} className="absolute left-3 top-2.5 text-slate-400"/>
@@ -292,10 +295,13 @@ export default function EstoqueMaquinasLinhaBranca() {
                 <p className="mt-1 text-[10px] text-slate-500">{i.categoria||"—"} · Série {i.serial||"não informada"}</p>
                 {i.categoria_divergente&&<p className="mt-1 text-[10px] font-bold text-amber-700">Categoria diferente da relação</p>}
                 {i.cadastro_pendente&&<p className="mt-1 text-[10px] font-bold text-rose-700">OS da lista sem ficha no Liquida</p>}
+                {i.origem?.includes("cadastro incompleto")&&<p className="mt-1 text-[10px] font-bold text-amber-700">Cadastro mínimo; confirmar marca, modelo e serial</p>}
               </td>
               <td className="px-3 py-3">
                 <span className={"inline-block rounded-md px-2 py-1 text-[10px] font-bold "+classeEstado(i.situacao)}>{labelEstado(i.situacao)}</span>
                 {i.status_os&&<p className="mt-1 text-[10px] text-slate-500">Etapa sistema: {i.status_os}{i.etapa_os&&i.etapa_os!==i.status_os?" · "+i.etapa_os:""}</p>}
+                {i.precisa_peca&&<span className="mt-1 inline-block rounded-md bg-amber-100 px-2 py-1 text-[10px] font-bold text-amber-900">Precisa de peça / CMP</span>}
+                {i.sem_peca_vinculada&&<span className="mt-1 ml-1 inline-block rounded-md bg-rose-50 px-2 py-1 text-[10px] font-bold text-rose-700">Sem peça vinculada</span>}
                 {i.divergencia_etapa&&<p className="mt-1 text-[10px] font-semibold text-amber-800">
                   Lista anterior: {i.situacao_inventario} · Liquida: {i.status_os} (prevalece)
                 </p>}
@@ -319,7 +325,7 @@ export default function EstoqueMaquinasLinhaBranca() {
                     <p className="text-[10px] text-slate-500">{FORMAT(i.requisicoes_abertas)} requisição(ões) aberta(s)</p>
                   </div>
                   :i.situacao==="AGUARDANDO_CMP"?
-                    <span className="font-semibold text-rose-700">Sem peça registrada no diagnóstico</span>
+                    <span className="font-semibold text-rose-700">Peça pendente sem requisição registrada</span>
                   :<span className="text-slate-400">—</span>}
               </td>
               <td className="px-3 py-3">
