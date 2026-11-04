@@ -69,6 +69,7 @@ export default function EstoqueMaquinasLinhaBranca() {
   const [pagina,setPagina]=useState(1);
   const [item,setItem]=useState(null);
   const [historico,setHistorico]=useState([]);
+  const [rastreio,setRastreio]=useState(null);
   const [carregandoHistorico,setCarregandoHistorico]=useState(false);
   const [form,setForm]=useState(FORM);
   const tamanho=50;
@@ -102,10 +103,17 @@ export default function EstoqueMaquinasLinhaBranca() {
   function mudarFiltro(fn,v){fn(v);setPagina(1);}
   async function abrir(i) {
     if(!i?.id){setErro("Esta OS consta na relação física, mas não possui cadastro operacional. Regularize o cadastro antes de registrar movimentações.");return;}
-    setItem(i);setForm(FORM());setHistorico([]);
+    setItem(i);setForm(FORM());setHistorico([]);setRastreio(null);
     setCarregandoHistorico(true);setErro("");setOk("");
-    try{const h=await rpc("historico",{os_id:i.id});setHistorico(Array.isArray(h)?h:[]);}
-    catch(e){setErro("Histórico da OS: "+e.message);}
+    try{
+      const [h,t]=await Promise.all([
+        rpc("historico",{os_id:i.id}),
+        supabase.rpc("linha_branca_rastreabilidade_os",{p_os_id:i.id})
+      ]);
+      if(t.error)throw new Error(t.error.message);
+      setHistorico(Array.isArray(h)?h:[]);
+      setRastreio(t.data||null);
+    }catch(e){setErro("Rastreabilidade da OS: "+e.message);}
     finally{setCarregandoHistorico(false);}
   }
   async function registrar(e){
@@ -185,9 +193,9 @@ export default function EstoqueMaquinasLinhaBranca() {
 
     <div className={BOX+" space-y-3"}>
       <div className="flex flex-wrap gap-2">
-        {[["INVENTARIO","Conferência física: Lavadoras"],["LIQUIDA","Operação Liquida: todas as famílias"],["HISTORICO","Histórico a conciliar"],["TODOS","Tudo (auditoria)"]].map(([v,n])=><button key={v} type="button" onClick={()=>{setEscopo(v);setPagina(1);setFamilia("");setTipo("");setMarca("");setStatus("");setBusca("");setDigitado("");}} className={"rounded-lg px-3 py-2 text-xs font-bold "+(escopo===v?"bg-[#43284F] text-white":"bg-slate-100 text-slate-700")}>{n}</button>)}
+        {[["INVENTARIO","Conferência física: Lavadoras"],["CONCLUIDAS","Concluídas / Loja (lavadoras)"],["LIQUIDA","Operação Liquida: todas as famílias"],["HISTORICO","Histórico a conciliar"],["TODOS","Tudo (auditoria)"]].map(([v,n])=><button key={v} type="button" onClick={()=>{setEscopo(v);setPagina(1);setFamilia("");setTipo("");setMarca("");setStatus("");setBusca("");setDigitado("");}} className={"rounded-lg px-3 py-2 text-xs font-bold "+(escopo===v?"bg-[#43284F] text-white":"bg-slate-100 text-slate-700")}>{n}</button>)}
       </div>
-      <p className="text-[11px] text-slate-500">{escopo==="INVENTARIO"?"Conferência física de 04/11/2026. As entradas do próximo relatório diário ainda não foram contabilizadas; statuses técnicos originais são preservados.":escopo==="LIQUIDA"?"Todas as famílias que passaram pelo Liquida, sem confirmação de presença física atual.":escopo==="HISTORICO"?"OSs sem evidência operacional no Liquida, a conciliar com o inventário físico.":"Visão histórica completa para auditoria; não equivale ao estoque atual."}</p>
+      <p className="text-[11px] text-slate-500">{escopo==="INVENTARIO"?"Conferência física de 04/11/2026. As entradas do próximo relatório diário ainda não foram contabilizadas; statuses técnicos originais são preservados.":escopo==="CONCLUIDAS"?"Lavadoras fora da lista física com passagem operacional no Liquida: separadas para loja por conciliação. Esta classificação gerencial não prova conclusão técnica, expedição ou entrega; abra uma OS para consultar os eventos registrados.":escopo==="LIQUIDA"?"Todas as famílias que passaram pelo Liquida, sem confirmação de presença física atual.":escopo==="HISTORICO"?"OSs sem evidência operacional no Liquida, a conciliar com o inventário físico.":"Visão histórica completa para auditoria; não equivale ao estoque atual."}</p>
       <div className="flex flex-wrap gap-2">
         <form onSubmit={e=>{e.preventDefault();mudarFiltro(setBusca,digitado.trim());}}
           className="flex min-w-[235px] flex-1 gap-2">
@@ -302,6 +310,47 @@ export default function EstoqueMaquinasLinhaBranca() {
           Registre somente movimentações verificadas fisicamente ou com documento. Esta tela não efetua venda,
           transferência de estoque contábil nem altera a etapa de reparo da OS.
         </div>
+        <section className="mt-5 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h4 className="flex items-center gap-2 text-sm font-black"><History size={17}/> Rastreabilidade operacional da OS</h4>
+            <span className="rounded-lg bg-violet-50 px-3 py-1 text-xs font-bold text-[#43284F]">
+              {FORMAT(rastreio?.total_eventos||0)} eventos registrados
+            </span>
+          </div>
+          <p className="text-[11px] leading-5 text-slate-600">
+            Histórico cronológico dos eventos efetivamente registrados: triagem, reparos, peças, ciclos e testes,
+            evidências, laudos, qualidade, retornos, mudanças de status e movimentações. Eventos ausentes não são presumidos.
+          </p>
+          {item.situacao==="LOJA_POR_CONCILIACAO"&&
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              Encaminhamento para loja classificado por conciliação gerencial, sem comprovante de saída confirmado.
+              Consulte os registros abaixo antes de afirmar que houve expedição ou entrega.
+            </p>}
+          {carregandoHistorico?<p className="text-xs text-slate-500">Carregando rastreabilidade...</p>:
+            rastreio?.eventos?.length?
+              <div className="max-h-[350px] divide-y overflow-y-auto rounded-xl border border-slate-200">
+                {rastreio.eventos.map((ev,k)=><div key={k} className="px-3 py-3 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="rounded bg-slate-100 px-2 py-1 text-[10px] font-black text-slate-600">{ev.tipo}</span>
+                      <strong className="text-[#43284F]">{ev.titulo}</strong>
+                    </div>
+                    <span className="text-[10px] text-slate-500">{DIA(ev.data)}</span>
+                  </div>
+                  {ev.descricao&&<p className="mt-1.5 whitespace-pre-wrap text-slate-700">{ev.descricao}</p>}
+                  {ev.tecnico&&<p className="mt-1 text-[11px] text-slate-500">Registrado por: {ev.tecnico}</p>}
+                  {ev.detalhes&&Object.keys(ev.detalhes).length>0&&
+                    <details className="mt-2 text-[11px] text-slate-600">
+                      <summary className="cursor-pointer font-bold text-violet-700">Ver dados e origem do registro</summary>
+                      <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-slate-50 p-2 text-[10px]">{JSON.stringify(ev.detalhes,null,2)}</pre>
+                    </details>}
+                </div>)}
+              </div>
+            :<p className="rounded-lg border border-dashed border-slate-200 p-4 text-xs text-slate-500">
+              Não existem eventos operacionais disponíveis para esta OS nas tabelas consultadas.
+            </p>}
+          {rastreio?.total_eventos>400&&<p className="text-xs text-amber-700">Mostrando os 400 eventos mais recentes de {FORMAT(rastreio.total_eventos)}. A consulta permanece preservada no banco.</p>}
+        </section>
         <form onSubmit={registrar} className="mt-4 space-y-3 rounded-xl border border-slate-200 p-4">
           <h4 className="text-sm font-black">Registrar situação física/comercial</h4>
           <div className="grid gap-3 sm:grid-cols-2">
