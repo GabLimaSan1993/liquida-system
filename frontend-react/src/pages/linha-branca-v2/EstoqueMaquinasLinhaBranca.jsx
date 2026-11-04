@@ -9,19 +9,20 @@ const BOX="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm";
 const BOTAO="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-40";
 const CAMPO="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 outline-none focus:border-violet-400";
 const ESTADOS=[
-  ["RECEBIMENTO","Recebimento","bg-sky-100 text-sky-800"],
-  ["TRIAGEM","Triagem","bg-sky-100 text-sky-800"],
-  ["AGUARDANDO_CMP","CMP / Aguardando peça","bg-amber-100 text-amber-900"],
-  ["REPARO","Reparo","bg-violet-100 text-violet-800"],
-  ["TESTES","Bancada de testes","bg-indigo-100 text-indigo-800"],
-  ["LIMPEZA","Limpeza","bg-teal-100 text-teal-800"],
-  ["QUALIDADE","Qualidade","bg-cyan-100 text-cyan-800"],
-  ["APROVADO","Aprovado","bg-emerald-100 text-emerald-800"],
-  ["CONCLUIDA_LOJA","Finalizada no Liquida","bg-emerald-100 text-emerald-800"],
-  ["LOJA_POR_CONCILIACAO","Loja por conciliação","bg-slate-100 text-slate-800"],
-  ["SAIDA_CONFIRMADA","Saída comprovada","bg-emerald-200 text-emerald-950"],
-  ["SCRAP_CONDENADO","Scrap","bg-rose-100 text-rose-800"],
-  ["SEM_ETAPA","Etapa a confirmar","bg-slate-100 text-slate-700"]
+  ["AGUARDANDO_TRIAGEM","Aguardando Triagem","bg-sky-100 text-sky-800"],
+  ["EM_TRIAGEM","Em Triagem","bg-blue-100 text-blue-800"],
+  ["AGUARDANDO_REPARO","Aguardando Reparo","bg-violet-100 text-violet-800"],
+  ["AGUARDANDO_CMP","Aguardando CMP","bg-amber-100 text-amber-900"],
+  ["EM_REPARO","Em Reparo","bg-purple-100 text-purple-800"],
+  ["CONCLUIDO","Concluído","bg-emerald-100 text-emerald-800"],
+  ["SCRAP","Scrap","bg-rose-100 text-rose-800"],
+  ["PENDENTE_CLASSIFICACAO","Etapa a identificar","bg-slate-100 text-slate-700"]
+];
+const GRUPOS=[
+  {nome:"Triagem",estados:["AGUARDANDO_TRIAGEM","EM_TRIAGEM"],nota:"Aguardando Triagem e Em Triagem"},
+  {nome:"Reparo",estados:["AGUARDANDO_REPARO","AGUARDANDO_CMP","EM_REPARO"],nota:"Aguardando Reparo, CMP ou Em Reparo"},
+  {nome:"Concluído",estados:["CONCLUIDO"],nota:"Finalizados e conciliados para loja; conferir comprovantes"},
+  {nome:"Scrap",estados:["SCRAP"],nota:"Segregado da operação produtiva"}
 ];
 const MOVIMENTOS=[
   ["ESTOQUE_CONFIRMADO","Conferir presença em estoque físico"],
@@ -61,11 +62,7 @@ export default function EstoqueMaquinasLinhaBranca() {
   const [digitado,setDigitado]=useState("");
   const [busca,setBusca]=useState("");
   const [marca,setMarca]=useState("");
-  const [familia,setFamilia]=useState("");
   const [status,setStatus]=useState("");
-  const [escopo,setEscopo]=useState("INVENTARIO");
-  const [soRelacao,setSoRelacao]=useState(false);
-  const [tipo,setTipo]=useState("");
   const [pagina,setPagina]=useState(1);
   const [item,setItem]=useState(null);
   const [historico,setHistorico]=useState([]);
@@ -83,23 +80,22 @@ export default function EstoqueMaquinasLinhaBranca() {
   const carregar=useCallback(async()=>{
     setCarregando(true);setErro("");
     try{
-      const filtros={pagina,tamanho,busca,marca,categoria:familia,tipo,situacao:status,
-        escopo:escopo==="CONCLUIDAS"?"CONCLUIDAS":"TODOS",origem_fisica:soRelacao?"CMP":null};
+      const filtros={pagina,tamanho,busca,marca,categoria:"Lavadoras",
+        status_lavadora:status,escopo:"TODOS"};
       const {data,error}=await supabase.rpc("linha_branca_inventario_fisico",{p_dados:filtros});
       if(error)throw new Error(error.message);
       setDados(data||null);
     }catch(e){setErro("Não foi possível carregar o estoque de máquinas: "+e.message);}
     finally{setCarregando(false);}
-  },[pagina,busca,marca,familia,tipo,status,escopo,soRelacao]);
+  },[pagina,busca,marca,status]);
   useEffect(()=>{void carregar();},[carregar]);
-  const resumo=dados?.resumo||{};
+  const resumo=dados?.resumo_lavadoras||{};
+  const resumoDetalhes=dados?.resumo||{};
   const somar=(...states)=>states.reduce((v,k)=>v+Number(resumo[k]||0),0);
-  const emProcesso=somar("RECEBIMENTO","TRIAGEM","REPARO","TESTES","LIMPEZA","QUALIDADE","APROVADO");
-  const filtroAtivo=!!(busca||marca||familia||tipo||status);
+
+  const filtroAtivo=!!(busca||marca||status);
   const totalPaginas=Math.max(1,Math.ceil(Number(dados?.total_filtrado||0)/tamanho));
   const marcas=useMemo(()=>dados?.por_marca||[],[dados]);
-  const familias=useMemo(()=>dados?.por_familia||[],[dados]);
-  const tipos=useMemo(()=>dados?.por_tipo||[],[dados]);
 
   function mudarFiltro(fn,v){fn(v);setPagina(1);}
   async function abrir(i) {
@@ -109,7 +105,7 @@ export default function EstoqueMaquinasLinhaBranca() {
     setRequisicaoAtenderId(null);setComprovanteReq("");setMensagemReq("");
     setCarregandoHistorico(true);setErro("");setOk("");
     try{
-      const isCmp=i.situacao==="AGUARDANDO_CMP" || (i.situacao_inventario==="CMP" && i.precisa_peca);
+      const isCmp=i.status_lavadora==="AGUARDANDO_CMP" || Boolean(i.pecas_abertas?.length) || Boolean(i.precisa_peca);
       const [h,t,c,q]=await Promise.all([
         rpc("historico",{os_id:i.id}),
         supabase.rpc("linha_branca_rastreabilidade_os",{p_os_id:i.id}),
@@ -121,7 +117,7 @@ export default function EstoqueMaquinasLinhaBranca() {
       setRastreio(t.data||null);
       setCmpDetalhes(c.data||null);
       setRequisicoes(q.data?.requisicoes||[]);
-    }catch(e){setMensagemReq("Falha ao carregar os detalhes: "+e.message);}
+    }catch(e){setMensagemReq("Falha ao carregar os detalhes: "+e.message);setErro("Falha na consulta da OS: "+e.message);}
     finally{setCarregandoHistorico(false);}
   }
   async function confirmarAtendimentoRequisicao(req){
@@ -178,171 +174,189 @@ export default function EstoqueMaquinasLinhaBranca() {
     finally{setSalvando(false);}
   }
 
-  return <div className="space-y-4">
+  return <div className="space-y-5">
     <section className="rounded-2xl border border-violet-200 bg-gradient-to-r from-[#F6F0F8] to-white p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-black text-[#43284F]">Estoque</h2>
-          <p className="mt-1 text-xs leading-5 text-slate-600">
-            Linha Branca completa: lavadoras, refrigeração, climatização e demais produtos com passagem pelo Liquida. Etapa atual e rastreabilidade por OS, sem inflar os saldos com o Aging importado.
-           </p>
+          <h2 className="text-base font-black text-[#43284F]">Visão operacional das lavadoras</h2>
+          <p className="mt-1 max-w-[850px] text-xs leading-5 text-slate-600">
+            Somente lavadoras e lava e seca. Consulte todas as OSs identificadas, incluindo
+            triagem, reparo, CMP, concluídas e scrap. Cada máquina permanece com sua rastreabilidade.
+          </p>
         </div>
         <button type="button" onClick={carregar} disabled={carregando}
           className={BOTAO+" border-slate-200 bg-white text-slate-700"}>
           {carregando?<Loader2 size={15} className="animate-spin"/>:<RefreshCcw size={15}/>} Atualizar
         </button>
       </div>
-      <p className="mt-3 text-[11px] text-amber-900">
-        <AlertTriangle size={14} className="mr-1 inline"/>
-        {escopo==="INVENTARIO"
-            ? "A movimentação real do Liquida determina a etapa; listas físicas antigas são somente referência. "+FORMAT(dados?.divergencias_situacao||0)+" OSs têm divergência com a listagem anterior; "+FORMAT(dados?.cadastros_pendentes||0)+" OSs não possuem ficha operacional."
-            : "Concluídas no Liquida, sem pressupor saída documental: transferência e expedição exigem comprovante registrado."}
-       </p>
     </section>
 
     {erro&&<div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-800">{erro}</div>}
     {ok&&<div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">{ok}</div>}
 
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-      {(escopo==="INVENTARIO" ? [
-        [Warehouse,"OSs com evidência",dados?.os_escopo,"Operação Liquida + lista física; não é saldo disponível para venda"],
-        [Wrench,"Em produção",emProcesso,"Triagem, reparo, testes, limpeza, qualidade e aprovação"],
-        [Clock3,"Aguardando CMP",dados?.total_cmp,"Peça pendente; separado das máquinas em reparo"],
-        [CheckCircle2,"Concluídas / Loja",dados?.total_concluidas,
-          FORMAT(dados?.total_finalizadas_confirmadas||0)+" finalizadas no Liquida · "+FORMAT(dados?.total_loja_por_conciliacao||0)+" por conciliação (sem comprovante)"],
-        [AlertTriangle,"Scrap",dados?.total_scrap,"Segregadas do estoque produtivo"],
-        [ClipboardList,"Requisições abertas",dados?.total_requisicoes_abertas,
-          "Maior aging: "+FORMAT(dados?.maior_aging_pecas||0)+" dias desde o diagnóstico"],
-        [AlertTriangle,"OSs sem peça vinculada (54)",dados?.total_sem_peca_vinculada,"Precisam de conferência de vínculo; não representam necessariamente compra"]
-      ] : [
-        [CheckCircle2,"Concluídas / Loja",dados?.total_filtrado,
-          "Finalizadas no sistema ou classificadas para loja pela conciliação da lista física"],
-        [Truck,"Saídas confirmadas",resumo.SAIDA_CONFIRMADA||0,"Com movimentação e referência documentadas"]
-      ]).map(([Icon,nome,valor,desc])=><div key={nome} className={BOX}>
-        <div className="flex items-center gap-2"><Icon size={17} className="text-[#765D81]"/><p className="text-[11px] font-bold text-slate-500">{nome}</p></div>
-        <p className="mt-2 text-2xl font-black text-slate-900">{valor==null?"—":FORMAT(valor)}</p>
-        <p className="mt-1 text-[10px] leading-4 text-slate-500">{desc}</p>
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {GRUPOS.map(grupo=><div key={grupo.nome} className={BOX}>
+        <p className="text-[11px] font-bold text-slate-500">{grupo.nome}</p>
+        <p className="mt-2 text-3xl font-black tabular-nums text-slate-900">
+          {FORMAT(grupo.estados.reduce((total,estado)=>total+Number(resumo[estado]||0),0))}
+        </p>
+        <p className="mt-1 text-[11px] leading-4 text-slate-600">{grupo.nota}</p>
+        {grupo.nome==="Concluído"&&Number(resumoDetalhes.LOJA_POR_CONCILIACAO||0)>0&&
+          <p className="mt-2 text-[10px] text-amber-800">
+            {FORMAT(resumoDetalhes.LOJA_POR_CONCILIACAO)} classificados por conciliação, sem expedição comprovada
+          </p>}
       </div>)}
     </div>
 
-    <div className={BOX+" space-y-3"}>
-      <div className="flex flex-wrap gap-2">
-        {[["INVENTARIO","Estoque"],["CONCLUIDAS","Concluídas / Loja"]].map(([v,n])=><button key={v} type="button" onClick={()=>{setEscopo(v);setPagina(1);setSoRelacao(false);setFamilia("");setTipo("");setMarca("");setStatus("");setBusca("");setDigitado("");}} className={"rounded-lg px-3 py-2 text-xs font-bold "+(escopo===v?"bg-[#43284F] text-white":"bg-slate-100 text-slate-700")}>{n}</button>)}
+    <section className={BOX+" space-y-4"}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-black text-[#43284F]">Lavadoras por status</h3>
+          <p className="mt-1 text-[11px] text-slate-500">
+            {FORMAT(dados?.total_lavadoras||0)} lavadoras identificadas ·
+            {FORMAT(dados?.total_filtrado||0)} no filtro atual
+          </p>
+        </div>
+        {filtroAtivo&&<button type="button" className={BOTAO+" bg-white"}
+          onClick={()=>{setBusca("");setDigitado("");setMarca("");setStatus("");setPagina(1);}}>
+          Limpar filtros
+        </button>}
       </div>
-      <p className="text-[11px] text-slate-500">{escopo==="INVENTARIO"
-        ? "Lista atualizada para 54 OSs. Aguardando CMP indica necessidade de peça; demais ficam em Reparo, sem retroceder quem já avançou."
-        : "Finalizadas no Liquida, saídas confirmadas e lavadoras destinadas à loja por conciliação da lista física. A inferência não substitui NF ou romaneio."}</p>
-      <div className="flex flex-wrap gap-2">
-        {escopo==="INVENTARIO"&&<label className="flex cursor-pointer items-center gap-2 text-xs font-bold text-[#43284F]"><input type="checkbox" checked={soRelacao} onChange={e=>{setSoRelacao(e.target.checked);setPagina(1);setStatus("");}} className="h-4 w-4 accent-[#43284F]"/>Apenas as 54 OSs da relação enviada</label>}
-        <form onSubmit={e=>{e.preventDefault();mudarFiltro(setBusca,digitado.trim());}}
-          className="flex min-w-[235px] flex-1 gap-2">
-          <div className="relative min-w-0 flex-1"><Search size={16} className="absolute left-3 top-2.5 text-slate-400"/>
+      <form onSubmit={e=>{e.preventDefault();mudarFiltro(setBusca,digitado.trim());}}
+        className="flex flex-wrap items-end gap-3">
+        <label className="min-w-[220px] flex-1 text-[11px] font-bold text-slate-600">
+          Localizar OS ou equipamento
+          <span className="relative mt-1 block">
+            <Search size={16} className="absolute left-3 top-2.5 text-slate-400"/>
             <input value={digitado} onChange={e=>setDigitado(e.target.value)}
-              placeholder="Buscar OS, número de série, marca, modelo ou SKU"
+              placeholder="Número da OS, marca, modelo ou serial"
               className={CAMPO+" pl-9"}/>
-          </div>
-          <button className={BOTAO+" bg-[#43284F] text-white"} type="submit">Buscar</button>
-        </form>
-        <select value={familia} onChange={e=>{setFamilia(e.target.value);setTipo("");setPagina(1);}}
-          aria-label="Filtrar linha de produtos" className={CAMPO+" max-w-[195px]"}>
-          <option value="">Todas as linhas</option>
-          {familias.map(f=><option key={f.nome} value={f.nome}>{f.nome} ({FORMAT(f.total)})</option>)}
-        </select>
-        <select value={tipo} onChange={e=>mudarFiltro(setTipo,e.target.value)}
-          aria-label="Filtrar tipo de produto" className={CAMPO+" max-w-[240px]"}>
-          <option value="">Todos os tipos de produto</option>
-          {tipos.map(f=><option key={f.nome} value={f.nome}>{f.nome} ({FORMAT(f.total)})</option>)}
-        </select>
-        <select value={marca} onChange={e=>mudarFiltro(setMarca,e.target.value)}
-          aria-label="Filtrar marca" className={CAMPO+" max-w-[195px]"}>
-          <option value="">Todas as marcas</option>
-          {marcas.map(f=><option key={f.nome} value={f.nome==="Sem marca"?"":f.nome}>{f.nome} ({FORMAT(f.total)})</option>)}
-        </select>
-        {filtroAtivo&&<button type="button" className={BOTAO+" border-slate-200"}
-          onClick={()=>{setBusca("");setDigitado("");setMarca("");setFamilia("");setTipo("");setStatus("");setPagina(1);}}>Limpar filtros</button>}
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <label className="text-xs font-bold text-slate-600" htmlFor="filtro-etapa-lb">Etapa atual</label>
-        <select id="filtro-etapa-lb" value={status} onChange={e=>mudarFiltro(setStatus,e.target.value)}
-          className={CAMPO+" max-w-[300px]"}>
-          <option value="">Todas as etapas</option>
-          {ESTADOS.filter(([id])=>Number(resumo[id]||0)>0 || id===status)
-            .map(([id,nome])=><option key={id} value={id}>{nome} ({FORMAT(resumo[id]||0)})</option>)}
-        </select>
-      </div>
+          </span>
+        </label>
+        <button type="submit" className={BOTAO+" border-[#43284F] bg-[#43284F] text-white"}>Buscar</button>
+        <label className="min-w-[165px] text-[11px] font-bold text-slate-600">
+          Marca
+          <select value={marca} onChange={e=>mudarFiltro(setMarca,e.target.value)}
+            className={CAMPO+" mt-1"}>
+            <option value="">Todas as marcas</option>
+            {marcas.map(f=><option key={f.nome} value={f.nome==="Sem marca"?"":f.nome}>
+              {f.nome} ({FORMAT(f.total)})
+            </option>)}
+          </select>
+        </label>
+        <label className="min-w-[210px] text-[11px] font-bold text-slate-600">
+          Status da máquina
+          <select value={status} onChange={e=>mudarFiltro(setStatus,e.target.value)}
+            className={CAMPO+" mt-1"}>
+            <option value="">Todos os status</option>
+            <optgroup label="Triagem">
+              <option value="AGUARDANDO_TRIAGEM">Aguardando Triagem ({FORMAT(resumo.AGUARDANDO_TRIAGEM)})</option>
+              <option value="EM_TRIAGEM">Em Triagem ({FORMAT(resumo.EM_TRIAGEM)})</option>
+            </optgroup>
+            <optgroup label="Reparo">
+              <option value="AGUARDANDO_REPARO">Aguardando Reparo ({FORMAT(resumo.AGUARDANDO_REPARO)})</option>
+              <option value="AGUARDANDO_CMP">Aguardando CMP ({FORMAT(resumo.AGUARDANDO_CMP)})</option>
+              <option value="EM_REPARO">Em Reparo ({FORMAT(resumo.EM_REPARO)})</option>
+            </optgroup>
+            <optgroup label="Finalização">
+              <option value="CONCLUIDO">Concluído ({FORMAT(resumo.CONCLUIDO)})</option>
+              {Number(resumo.SCRAP||0)>0&&<option value="SCRAP">Scrap ({FORMAT(resumo.SCRAP)})</option>}
+              {Number(resumo.PENDENTE_CLASSIFICACAO||0)>0&&
+                <option value="PENDENTE_CLASSIFICACAO">A identificar ({FORMAT(resumo.PENDENTE_CLASSIFICACAO)})</option>}
+            </optgroup>
+          </select>
+        </label>
+      </form>
       <p className="text-[11px] text-slate-500">
-        Resultados: <b>{FORMAT(dados?.total_filtrado||0)}</b> OSs · página {pagina} de {totalPaginas}. Status determinado pelo fluxo atual; somente registros com evidência operacional ou conferência identificada.
+        Reparo inclui testes, limpeza, qualidade e aprovação enquanto a OS não estiver finalizada.
+        Em reparo com peça pendente recebe a indicação específica de CMP, sem ser reclassificado automaticamente.
       </p>
-    </div>
+    </section>
 
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[900px] text-left text-xs">
+        <table className="w-full min-w-[890px] text-left text-xs">
           <thead className="bg-slate-100 text-[10px] font-black uppercase tracking-wide text-slate-600">
             <tr>
-              <th className="px-3 py-3">OS / Equipamento</th>
-              <th className="px-3 py-3">Situação / Etapa</th>
-              <th className="px-3 py-3">Técnico</th>
-              <th className="px-3 py-3">Requisições de peças / Aging</th>
-              <th className="px-3 py-3">Detalhes</th>
+              <th className="px-3 py-3">OS / Lavadora</th>
+              <th className="px-3 py-3">Status</th>
+              <th className="px-3 py-3">Etapa operacional</th>
+              <th className="px-3 py-3">Responsável</th>
+              <th className="px-3 py-3">Peças / Aging</th>
+              <th className="px-3 py-3">Consultar</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {(dados?.itens||[]).map(i=><tr key={i.id||i.numero_os} className="hover:bg-purple-50/40">
+            {(dados?.itens||[]).map(i=><tr key={i.id||i.numero_os}
+              className="hover:bg-purple-50/40">
               <td className="px-3 py-3">
                 <p className="font-black text-[#43284F]">OS {i.numero_os}</p>
-                <p className="mt-1 max-w-[260px] font-semibold text-slate-700">{i.marca||"Marca não informada"} · {i.modelo||"Modelo não informado"}</p>
-                <p className="mt-1 text-[10px] text-slate-500">{i.categoria||"—"} · Série {i.serial||"não informada"}</p>
-                {i.categoria_divergente&&<p className="mt-1 text-[10px] font-bold text-amber-700">Categoria diferente da relação</p>}
-                {i.cadastro_pendente&&<p className="mt-1 text-[10px] font-bold text-rose-700">OS da lista sem ficha no Liquida</p>}
-                {i.origem?.includes("cadastro incompleto")&&<p className="mt-1 text-[10px] font-bold text-amber-700">Cadastro mínimo; confirmar marca, modelo e serial</p>}
+                <p className="mt-1 max-w-[230px] font-semibold text-slate-700">
+                  {i.marca||"Marca não informada"} · {i.modelo||"Modelo não informado"}
+                </p>
+                {i.serial&&<p className="mt-1 text-[10px] text-slate-500">Série: {i.serial}</p>}
+                {i.origem?.includes("cadastro incompleto")&&
+                  <p className="mt-1 text-[10px] font-bold text-amber-700">Cadastro técnico incompleto</p>}
+                {i.cadastro_pendente&&
+                  <p className="mt-1 text-[10px] font-bold text-rose-700">Ficha operacional não localizada</p>}
               </td>
               <td className="px-3 py-3">
-                <span className={"inline-block rounded-md px-2 py-1 text-[10px] font-bold "+classeEstado(i.situacao)}>{labelEstado(i.situacao)}</span>
-                {i.status_os&&<p className="mt-1 text-[10px] text-slate-500">Etapa sistema: {i.status_os}{i.etapa_os&&i.etapa_os!==i.status_os?" · "+i.etapa_os:""}</p>}
-                {i.precisa_peca&&<span className="mt-1 inline-block rounded-md bg-amber-100 px-2 py-1 text-[10px] font-bold text-amber-900">Precisa de peça / CMP</span>}
-                {i.sem_peca_vinculada&&<span className="mt-1 ml-1 inline-block rounded-md bg-rose-50 px-2 py-1 text-[10px] font-bold text-rose-700">Sem peça vinculada</span>}
-                {i.divergencia_etapa&&<p className="mt-1 text-[10px] font-semibold text-amber-800">
-                  Lista anterior: {i.situacao_inventario} · Liquida: {i.status_os} (prevalece)
-                </p>}
-                {i.situacao==="CONCLUIDA_LOJA"&&<p className="mt-1 text-[10px] text-slate-500">Finalizada no Liquida · saída não comprovada</p>}
-                {i.situacao==="LOJA_POR_CONCILIACAO"&&<p className="mt-1 text-[10px] text-slate-500">
-                  Ausente da relação física, sem movimentação recente · destino gerencial inferido. Última etapa no Liquida: {i.status_os||"não registrada"}.
-                </p>}
+                <span className={"inline-block rounded-md px-2 py-1 text-[10px] font-black "+
+                  classeEstado(i.status_lavadora)}>
+                  {labelEstado(i.status_lavadora)}
+                </span>
+                {i.status_lavadora==="CONCLUIDO"&&i.situacao==="LOJA_POR_CONCILIACAO"&&
+                  <p className="mt-1 text-[10px] font-semibold text-amber-800">
+                    Concluído por conciliação gerencial, sem comprovante de saída
+                  </p>}
+                {i.status_lavadora==="CONCLUIDO"&&i.situacao==="SAIDA_CONFIRMADA"&&
+                  <p className="mt-1 text-[10px] font-semibold text-emerald-800">
+                    Saída documentada
+                  </p>}
               </td>
               <td className="px-3 py-3">
-                <p className="font-semibold text-slate-800">{i.responsavel||"Não atribuído"}</p>
-                {i.pecas_abertas?.[0]?.solicitante&&
-                  <p className="mt-1 text-[10px] text-slate-500">Solicitou: {i.pecas_abertas[0].solicitante}</p>}
+                <p className="font-semibold text-slate-800">{i.status_os||"Sem registro"}</p>
+                {i.etapa_os&&i.etapa_os!==i.status_os&&
+                  <p className="mt-1 text-[10px] text-slate-600">{i.etapa_os}</p>}
+                {i.precisa_peca&&i.status_lavadora!=="AGUARDANDO_CMP"&&
+                  <span className="mt-1 inline-block rounded-md bg-amber-100 px-2 py-1 text-[10px] font-bold text-amber-900">
+                    Peça pendente / CMP
+                  </span>}
               </td>
-              <td className="min-w-[230px] px-3 py-3">
-                {i.pecas_abertas?.length ?
-                  <div className="space-y-1.5">
-                    {i.pecas_abertas.map(p=><div key={p.id} className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="max-w-[200px] font-semibold text-slate-800">{p.peca}</span>
-                      <span className="whitespace-nowrap rounded-md bg-amber-100 px-2 py-0.5 font-black text-amber-900">{FORMAT(p.aging_dias)} dias</span>
+              <td className="px-3 py-3 font-semibold text-slate-700">{i.responsavel||"Não atribuído"}</td>
+              <td className="min-w-[205px] px-3 py-3">
+                {i.pecas_abertas?.length?
+                  <div className="space-y-1">
+                    {i.pecas_abertas.map(p=><div key={p.id} className="flex flex-wrap gap-2 text-[11px]">
+                      <span className="font-semibold text-slate-800">{p.peca}</span>
+                      <span className="rounded bg-amber-100 px-1.5 py-0.5 font-bold text-amber-900">
+                        {FORMAT(p.aging_dias)} dias
+                      </span>
                     </div>)}
-                    <p className="text-[10px] text-slate-500">{FORMAT(i.requisicoes_abertas)} requisição(ões) aberta(s)</p>
                   </div>
-                  :i.situacao==="AGUARDANDO_CMP"?
-                    <span className="font-semibold text-rose-700">Peça pendente sem requisição registrada</span>
-                  :<span className="text-slate-400">—</span>}
+                :i.status_lavadora==="AGUARDANDO_CMP"?
+                  <span className="font-semibold text-rose-700">Necessidade sem peça vinculada</span>
+                :<span className="text-slate-400">—</span>}
               </td>
               <td className="px-3 py-3">
-                {i.id ? <button type="button" onClick={()=>abrir(i)}
-                  className={BOTAO+" border-violet-200 bg-violet-50 text-[#43284F]"}>
-                    {i.situacao==="AGUARDANDO_CMP"?"Peças e diagnóstico":"Ver trajetória"}
+                {i.id?<button type="button" onClick={()=>abrir(i)}
+                    className={BOTAO+" border-violet-200 bg-violet-50 text-[#43284F]"}>
+                    Ver OS
                   </button>
-                  : <span className="text-[10px] font-semibold text-rose-700">Sem registro técnico no Liquida</span>}
+                  :<span className="text-[10px] text-slate-500">Sem ficha</span>}
               </td>
             </tr>)}
-            {carregando&&<tr><td colSpan={5} className="px-4 py-12 text-center text-slate-500">Carregando estoque...</td></tr>}
-            {!carregando&&!(dados?.itens||[]).length&&<tr><td colSpan={5} className="px-4 py-12 text-center text-slate-500">Nenhuma OS encontrada.</td></tr>}
+            {carregando&&<tr><td colSpan={6}
+              className="px-4 py-12 text-center text-slate-500">Carregando lavadoras...</td></tr>}
+            {!carregando&&!(dados?.itens||[]).length&&<tr><td colSpan={6}
+              className="px-4 py-12 text-center text-slate-500">Nenhuma lavadora encontrada.</td></tr>}
           </tbody>
         </table>
       </div>
       <div className="flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 p-3">
-        <p className="text-[11px] text-slate-500">{FORMAT(dados?.total_filtrado||0)} OSs no filtro · página {pagina} de {totalPaginas} · 50 por página.</p>
+        <p className="text-[11px] text-slate-500">
+          {FORMAT(dados?.total_filtrado||0)} OSs · página {pagina} de {totalPaginas}
+        </p>
         <div className="flex gap-2">
           <button type="button" onClick={()=>setPagina(v=>Math.max(1,v-1))}
             disabled={carregando||pagina===1} className={BOTAO+" bg-white"}>Anterior</button>
@@ -365,15 +379,15 @@ export default function EstoqueMaquinasLinhaBranca() {
           <button type="button" disabled={salvando} onClick={()=>setItem(null)}
             aria-label="Fechar" className={BOTAO+" border-slate-200"}><X size={17}/></button>
         </div>
-        {item.situacao!=="AGUARDANDO_CMP"&&<div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">
+        {item.status_lavadora==="CONCLUIDO"&&<div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">
           <b>Conciliação logística:</b> a OS pode estar finalizada tecnicamente sem registro de saída.
           Registre somente movimentações verificadas fisicamente ou com documento. Esta tela não efetua venda,
           transferência de estoque contábil nem altera a etapa de reparo da OS.
         </div>}
-        {item.situacao==="AGUARDANDO_CMP"&&<section className="mt-5 space-y-4 rounded-xl border border-amber-200 bg-amber-50/40 p-4">
+        {(item.status_lavadora==="AGUARDANDO_CMP" || Boolean(item.pecas_abertas?.length) || item.precisa_peca)&&<section className="mt-5 space-y-4 rounded-xl border border-amber-200 bg-amber-50/40 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h4 className="flex items-center gap-2 text-sm font-black text-amber-950"><Wrench size={17}/> CMP — Requisições de peças</h4>
+              <h4 className="flex items-center gap-2 text-sm font-black text-amber-950"><Wrench size={17}/> Peças necessárias — Requisições</h4>
               <p className="mt-1 text-[11px] text-slate-600">A peça selecionada no diagnóstico abre a requisição. O aging conta dias corridos desde o lançamento original, até o atendimento documentado.</p>
             </div>
             <span className="rounded-lg bg-white px-3 py-1 text-xs font-black text-amber-900">
