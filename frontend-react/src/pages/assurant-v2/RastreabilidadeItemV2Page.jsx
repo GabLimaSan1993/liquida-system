@@ -31,7 +31,7 @@ import {
   Zap,
 } from "lucide-react";
 
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { supabase } from "../../lib/supabase.js";
 import { ehProdutoOutlet } from "../../services/estoqueWmsService.js";
@@ -1217,8 +1217,8 @@ export default function RastreabilidadeItemV2Page() {
             {/reprovado nos testes MELI/i.test(actionError) && <div className="mt-2 text-xs font-medium">
               O bloqueio impede apenas a saída comercial nesta condição. O aparelho pode passar por retriagem e reclassificação de SKU, bateria e grade.
               <div className="mt-2 flex flex-wrap gap-3 font-bold">
-                <a className="underline" href="/v2/assurant/triagens/funcional">Triagem Funcional</a>
-                <a className="underline" href="/v2/assurant/triagens/cosmetica">Triagem Cosmética</a>
+                <Link className="underline" to="/v2/assurant/triagens/funcional">Triagem Funcional</Link>
+                <Link className="underline" to="/v2/assurant/triagens/cosmetica">Triagem Cosmética</Link>
               </div>
             </div>}
           </div>
