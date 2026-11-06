@@ -10,13 +10,12 @@ import { listarDefeitos } from '../../services/triagemFuncionalService.js';
 const BOTAO = 'inline-flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-40';
 const CAMPO = 'rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-violet-500';
 const ESTADOS = [
-  ['','Todos'],['aguardando_recebimento','Aguardando recebimento (legado)'],
+  ['','Todos'],
   ['recebido','Aguardando técnico'],['em_reparo','Em reparo'],
   ['concluido','Concluído'],['em_devolucao','Em devolução'],
   ['devolvido_warehouse','Devolvido ao Warehouse']
 ];
 const rotulo = {
-  aguardando_recebimento:'Aguardando recebimento (legado)',
   recebido:'Aguardando técnico',
   em_reparo:'Em reparo',
   concluido:'Reparo concluído',
@@ -24,7 +23,6 @@ const rotulo = {
   devolvido_warehouse:'Devolvido ao Warehouse'
 };
 const cor = {
-  aguardando_recebimento:'bg-amber-100 text-amber-800',
   recebido:'bg-sky-100 text-sky-800',
   em_reparo:'bg-violet-100 text-violet-800',
   concluido:'bg-emerald-100 text-emerald-800',
@@ -397,7 +395,7 @@ export default function LaboratorioIndividualV2Page() {
                 <td className="p-3">
                   <button type="button" onClick={()=>abrir(i)}
                     className={BOTAO+' border-violet-200 bg-violet-50 text-violet-700'}>
-                    {i.status==='aguardando_recebimento'?'Conferir':i.status==='concluido'?'Ver registro':'Abrir técnico'}
+                    {i.status==='concluido'?'Ver registro':'Abrir técnico'}
                   </button>
                 </td>
               </tr>)}
@@ -433,14 +431,10 @@ export default function LaboratorioIndividualV2Page() {
           </div>
           {item.alerta_origem&&<div className="mt-3 flex gap-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-800"><AlertTriangle size={16} className="shrink-0"/>{item.alerta_origem}</div>}
 
-          {item.status==='aguardando_recebimento'&&<section className="mt-4 rounded-xl border border-sky-200 bg-sky-50 p-4">
-            <h3 className="text-sm font-black">Recebimento pendente de fluxo antigo</h3>
-            <p className="mt-1 text-xs text-slate-600">Este voucher foi importado antes da mudança de fluxo. Reenvie a planilha original para confirmar o recebimento e liberar o técnico, ou confirme individualmente aqui.</p>
-            <button disabled={ocupado} type="button" onClick={()=>executar(item,'receber',{},'Voucher '+item.voucher+' recebido fisicamente e enviado à validação do técnico.')}
-              className={BOTAO+' mt-3 border-emerald-700 bg-emerald-600 text-white'}>
-              <PackageCheck size={16}/> Confirmar recebimento por voucher
-            </button>
-          </section>}
+          {item.status==='aguardando_recebimento'&&
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-900">
+              Cadastro de um fluxo antigo. Reenvie a planilha para liberação automática à bancada técnica, sem nova confirmação.
+            </div>}
 
           {['recebido','em_reparo','concluido'].includes(item.status)&&<>
             <section className="mt-4 rounded-xl border border-slate-200 p-4">
