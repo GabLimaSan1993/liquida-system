@@ -118,9 +118,9 @@ export async function carregarParaLaudo(voucher) {
   // em texto, não em JSON. Sem esta leitura a tela mostrava "Nenhuma
   // ocorrência" mesmo com defeitos e respostas negativas cadastrados.
   const negativasLegado = !respostas && t.respostas_funcional
-    ? String(t.respostas_funcional).split(/;\\s*(?=[^;]+?:\\s*Resposta\\s*:)/i)
+    ? String(t.respostas_funcional).split(/;\s*(?=[^;]+?:\s*Resposta\s*:)/i)
       .map(item => {
-        const m = item.match(/^\\s*(.*?)\\s*:\\s*Resposta\\s*:\\s*(Não|Nao|Sim|Yes|No)\\s*$/i);
+        const m = item.match(/^\s*(.*?)\s*:\s*Resposta\s*:\s*(Não|Nao|Sim|Yes|No)\s*$/i);
         if (!m) return null;
         const negativa = /^(n[aã]o|no)$/i.test(m[2]);
         return negativa ? { pergunta: m[1].trim(), resposta: "NÃO" } : null;
