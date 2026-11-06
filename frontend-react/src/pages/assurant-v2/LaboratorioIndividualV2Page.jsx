@@ -236,7 +236,7 @@ export default function LaboratorioIndividualV2Page() {
         await importar(arquivo.vouchers, arquivo.arquivo,
           { automatico: true, origem: dadosArquivo });
       } else if (conferencia) {
-        setErro('Sem novos cadastros nesta planilha: '+conferencia.total+
+        setSucesso('Planilha conferida: sem novos cadastros. '+conferencia.total+
           ' vouchers já constam no Laboratório ou no histórico. '+
           'O contador permanece igual para não duplicar aparelhos. Veja a relação abaixo.');
       }
@@ -268,7 +268,7 @@ export default function LaboratorioIndividualV2Page() {
       const ignorados=contexto?.vouchers?.length===vouchers.length
         ? Number(contexto.invalidosQuantidade||0)+Number(contexto.repetidosQuantidade||0):0;
       if (incluidos===0 && liberados===0) {
-        setErro('O total não aumentou: nenhum voucher novo foi cadastrado. '+
+        setSucesso('Planilha conferida: nenhum voucher novo foi cadastrado. '+
           existentes+' voucher(s) já constam no Laboratório (cadastro individual ou histórico). '+
           'Confira a relação da planilha para saber o status de cada um. '+
           'Não duplicamos o recebimento de aparelhos já existentes.');
