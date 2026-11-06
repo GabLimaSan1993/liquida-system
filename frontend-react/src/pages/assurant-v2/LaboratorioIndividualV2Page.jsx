@@ -3,7 +3,7 @@ import * as XLSX from 'xlsx';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../AuthContext.jsx';
 import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, FileSpreadsheet, PackageCheck, RefreshCw, Search, Upload, Wrench, X } from 'lucide-react';
-import { laboratorioIndividual } from '../../services/laboratorioIndividualService.js';
+import { laboratorioIndividual, conferirVouchersLaboratorio } from '../../services/laboratorioIndividualService.js';
 import { laboratorioReparo } from '../../services/laboratorioReparoService.js';
 import { listarDefeitos } from '../../services/triagemFuncionalService.js';
 
@@ -203,9 +203,19 @@ export default function LaboratorioIndividualV2Page() {
     const file=e.target.files?.[0];
     if(!file)return;
     setPrevia(null);setErro('');setSucesso('');setOcupado(true);
-    try{setPrevia(await lerPlanilha(file));}
-    catch(err){setErro(err.message);}
-    finally{setOcupado(false);e.target.value='';}
+    try {
+      const arquivo = await lerPlanilha(file);
+      let conferencia = null;
+      let avisoConferencia = '';
+      try {
+        conferencia = await conferirVouchersLaboratorio(arquivo.vouchers);
+      } catch (erroConferencia) {
+        avisoConferencia = erroConferencia?.message || 'Conferência indisponível';
+      }
+      setPrevia({ ...arquivo, conferencia, avisoConferencia });
+    } catch (err) {
+      setErro(err.message);
+    } finally { setOcupado(false); e.target.value=''; }
   }
 
   async function importar(vouchers,rotuloImportacao) {
@@ -229,12 +239,19 @@ export default function LaboratorioIndividualV2Page() {
       }
       const ignorados=previa?.vouchers?.length===vouchers.length
         ? Number(previa.invalidosQuantidade||0)+Number(previa.repetidosQuantidade||0):0;
-      setSucesso(rotuloImportacao+': '+incluidos+' voucher(s) novo(s) recebido(s), '+
-        liberados+' pendente(s) liberado(s) para o técnico e '+
-        existentes+' já cadastrado(s), sem duplicação.'+
-        (ignorados?' '+ignorados+' linha(s) inválida(s)/repetida(s) ignorada(s).':'')+
-        ' Não é necessária outra confirmação de recebimento.');
-      setPrevia(null);setVoucherManual('');setPagina(0);setBusca('');setTexto('');setFiltro('recebido');
+      if (incluidos===0 && liberados===0) {
+        setErro('O total não aumentou: nenhum voucher novo foi cadastrado. '+
+          existentes+' voucher(s) já constam no Laboratório (cadastro individual ou histórico). '+
+          'Confira a relação da planilha para saber o status de cada um. '+
+          'Não duplicamos o recebimento de aparelhos já existentes.');
+      } else {
+        setSucesso(rotuloImportacao+': '+incluidos+' NOVO(S) cadastrado(s), '+
+          liberados+' pendente(s) liberado(s) para o técnico e '+
+          existentes+' já cadastrado(s), sem duplicação.'+
+          (ignorados?' '+ignorados+' linha(s) inválida(s)/repetida(s) ignorada(s).':'')+
+          ' O total aumenta somente pelos novos cadastros.');
+        setPrevia(null);setVoucherManual('');setPagina(0);setBusca('');setTexto('');setFiltro('recebido');
+      }
       await carregar();
     } catch(e){
       const mensagem=String(e?.message||'Erro de importação');
@@ -319,10 +336,56 @@ export default function LaboratorioIndividualV2Page() {
             </div>
             {!!previa.invalidos.length&&<p className="mt-2 text-[11px] text-rose-700">Inválidos ignorados: {previa.invalidos.join('; ')}</p>}
             {!!previa.repetidos.length&&<p className="mt-2 text-[11px] text-amber-800">Repetidos ignorados: {previa.repetidos.join('; ')}</p>}
+            {previa.conferencia ? (
+              <div className="mt-3 rounded-xl border border-violet-200 bg-white p-3 text-xs">
+                <p className="font-black text-slate-800">Conferência do banco antes de importar</p>
+                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
+                  <span className="font-bold text-emerald-700">{previa.conferencia.novos} novos (incrementam o total)</span>
+                  <span className="font-bold text-slate-700">{previa.conferencia.ja_cadastrados} já cadastrados</span>
+                  <span className="font-bold text-amber-800">{previa.conferencia.ja_no_historico} no histórico</span>
+                  <span className="font-bold text-violet-700">{previa.conferencia.liberar_pendentes} para liberar</span>
+                </div>
+                {previa.conferencia.novos===0 && previa.conferencia.liberar_pendentes===0 && (
+                  <p className="mt-2 rounded-lg bg-amber-50 p-2 font-semibold text-amber-900">
+                    Essa planilha não possui cadastros novos. Reenviá-la não aumenta o total:
+                    os vouchers já estão na fila ou no histórico do Laboratório.
+                  </p>
+                )}
+                <details className="mt-2">
+                  <summary className="cursor-pointer font-bold text-violet-800">
+                    Ver voucher a voucher e por que incrementa (ou não)
+                  </summary>
+                  <div className="mt-2 max-h-56 overflow-auto rounded-lg border border-slate-200 bg-slate-50">
+                    {(previa.conferencia.itens || []).map(item => (
+                      <div key={item.voucher} className="flex flex-wrap justify-between gap-2 border-b border-slate-100 px-3 py-2 last:border-b-0">
+                        <span className="font-mono font-bold">{item.voucher}</span>
+                        <span className="text-slate-600">
+                          {item.situacao==='NOVO'?'Novo cadastro'
+                            :item.situacao==='LIBERAR_PENDENTE'?'Liberação pendente'
+                            :item.situacao==='JA_NO_HISTORICO'?'Já no histórico'
+                            :'Já cadastrado'} {item.status_atual?'· '+item.status_atual:''}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              </div>
+            ) : !!previa.avisoConferencia && (
+              <p className="mt-3 rounded-lg bg-amber-50 p-2 text-xs font-semibold text-amber-900">
+                Não foi possível conferir os vouchers antes da importação: {previa.avisoConferencia}.
+                A importação ainda está disponível.
+              </p>
+            )}
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <button type="button" disabled={ocupado} onClick={()=>importar(previa.vouchers,previa.arquivo)}
+              <button type="button"
+                disabled={ocupado || (previa.conferencia &&
+                  previa.conferencia.novos===0 && previa.conferencia.liberar_pendentes===0)}
+                onClick={()=>importar(previa.vouchers,previa.arquivo)}
                 className={BOTAO+' border-violet-700 bg-violet-700 text-white'}>
-                <Upload size={16}/> Receber e liberar {previa.vouchers.length} voucher(s) para técnico
+                <Upload size={16}/>
+                {previa.conferencia
+                  ? 'Importar '+previa.conferencia.novos+' novo(s) e liberar '+previa.conferencia.liberar_pendentes
+                  : 'Receber e liberar '+previa.vouchers.length+' voucher(s)'}
               </button>
               <button type="button" disabled={ocupado} onClick={()=>setPrevia(null)} className={BOTAO+' border-slate-200 text-slate-700'}>Cancelar</button>
             </div>
