@@ -259,6 +259,22 @@ export async function registrarDivergenciaImei(voucher, imeiBipado, userId, imei
   return { ok: true, status: STATUS_DIVERGENCIA };
 }
 
+// Nunca manter posições nulas da retriagem (perguntas alteradas ou etapa bateria)
+// nem enviar uma resposta sem identidade para as regras de destino e ao banco.
+// O catálogo pode ser revisado sem invalidar as respostas já preenchidas.
+export function normalizarRespostasFuncionais(respostas) {
+  if (!Array.isArray(respostas)) return [];
+  return respostas.flatMap(item => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+    const id = String(item.perguntaId ?? item.pergunta_id ?? "").trim();
+    const resposta = String(item.resposta ?? "")
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .trim().toLowerCase();
+    if (!id || (resposta !== "sim" && resposta !== "nao")) return [];
+    return [{ ...item, perguntaId: id, resposta }];
+  });
+}
+
 // ══════════════════════════════════════════════════════════
 // DESTINO APÓS A FUNCIONAL
 // Laudo depende da condição de compra; defeitos adicionais continuam definindo BAD.
@@ -279,15 +295,7 @@ export async function salvarTriagemFuncional({
   // Retriagens antigas podem conter posições null para perguntas de bateria ou
   // perguntas adicionadas ao catálogo posteriormente. Nunca serializar null
   // como resposta funcional e preservar apenas respostas com ID e valor válidos.
-  const lista = (Array.isArray(respostas) ? respostas : [])
-    .filter(r => r && typeof r === "object" &&
-      (r.perguntaId || r.pergunta_id) &&
-      ["sim", "nao"].includes(String(r.resposta || "").trim().toLowerCase()))
-    .map(r => ({
-      ...r,
-      perguntaId: r.perguntaId || r.pergunta_id,
-      resposta: String(r.resposta).trim().toLowerCase(),
-    }));
+  const lista = normalizarRespostasFuncionais(respostas);
   const negativas = lista.filter(respostaFuncionalNegativa);
   const decisao   = decidirDestino({
     condicaoDeclarada: tradein?.condicao_aparelho,
