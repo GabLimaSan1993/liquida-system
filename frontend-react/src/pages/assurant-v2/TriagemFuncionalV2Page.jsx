@@ -1350,12 +1350,53 @@ export default function TriagemFuncionalV2Page() {
     carregarFila();
   }
 
-  async function handleNaoLiga() {
+  function handleNaoLiga() {
+    if (carregando || !ctx?.voucher) return;
+    setFinalizacaoPendente({
+      lista: [{
+        perguntaId: "nao-liga-inicial",
+        pergunta: "O aparelho liga?",
+        resposta: "nao",
+        divergente: true,
+        geraLaudo: true,
+        bloqueante: true,
+      }],
+      bateria: null,
+      percentual: null,
+    });
+    setResultado(null);
+    setBuscaDefeito("");
+    setEtapa("fim");
+  }
+
+  async function finalizarNaoLiga() {
     if (carregando || !ctx?.voucher) return;
     setCarregando(true);
-    try { exibirDivergencia(await registrarNaoLiga(ctx.voucher)); }
-    catch (error) { mostrarErro(error.message); }
-    finally { setCarregando(false); }
+    try {
+      const resolucaoSku = resolverSku(catalogo.produtos, {
+        marca: produto.marca,
+        modelo: produto.modelo,
+        capacidade: produto.armazenamento,
+        cor: produto.cor,
+      });
+      const resposta = await registrarNaoLiga(ctx.voucher, {
+        defeitos: defeitosTodos,
+        produto: { ...produto, sku: resolucaoSku?.sku || ctx.tradein?.sku_base || null },
+      });
+      if (resposta?.divergencia && !resposta?.nao_liga_local) {
+        exibirDivergencia(resposta);
+        return;
+      }
+      if (!resposta?.ok || resposta.status !== "Aguardando laudo") {
+        throw new Error(resposta?.erro || "Não foi possível confirmar o envio ao Laudo.");
+      }
+      setFinalizacaoPendente(null);
+      exibirDivergencia(resposta);
+    } catch (error) {
+      mostrarErro(error.message);
+    } finally {
+      setCarregando(false);
+    }
   }
 
   function abrirConferenciaImeis() {
@@ -1695,6 +1736,11 @@ export default function TriagemFuncionalV2Page() {
     if (
       !finalizacaoPendente
     ) {
+      return;
+    }
+
+    if (condicaoInicial === "nao_liga") {
+      await finalizarNaoLiga();
       return;
     }
 
@@ -2161,7 +2207,7 @@ export default function TriagemFuncionalV2Page() {
                           <option value="danos_tela">Danos da tela</option>
                         </select>
                         <p className="mt-2 text-xs text-slate-600">
-                          {condicaoInicial === "nao_liga" ? "Ao continuar, o aparelho seguirá à Triagem Cosmética com a divergência funcional Não liga registrada. Não será enviado para Análise Assurant nem considerado IMEI conferido." : aparelhoBloqueado ? "Informe um IMEI somente quando for possível consultá-lo fisicamente. Se não houver acesso pelo slot do chip, continue sem IMEI. O sistema preservará a referência cadastral sem considerá-la bipada. O laudo seguirá a condição original da compra." : danosTela ? "Continue a triagem com um IMEI opcional. Se a tela impedir a leitura, deixe o campo vazio. Danos da tela será registrado como defeito adicional, sem encaminhamento para Divergências." : "Preencha os dados físicos e siga para a identificação do aparelho."}
+                          {condicaoInicial === "nao_liga" ? "Ao continuar, selecione os defeitos adicionais identificados. Após concluir a Funcional, o aparelho seguirá para o LAUDO como DIVERGÊNCIA · NÃO LIGA, e só depois para a Triagem Cosmética. Não irá à Análise Assurant e o IMEI não será considerado conferido." : aparelhoBloqueado ? "Informe um IMEI somente quando for possível consultá-lo fisicamente. Se não houver acesso pelo slot do chip, continue sem IMEI. O sistema preservará a referência cadastral sem considerá-la bipada. O laudo seguirá a condição original da compra." : danosTela ? "Continue a triagem com um IMEI opcional. Se a tela impedir a leitura, deixe o campo vazio. Danos da tela será registrado como defeito adicional, sem encaminhamento para Divergências." : "Preencha os dados físicos e siga para a identificação do aparelho."}
                         </p>
                       </Campo>
                       {modoRetriagem && (
@@ -2423,7 +2469,7 @@ export default function TriagemFuncionalV2Page() {
                           }
                           className="inline-flex h-10 items-center gap-2 rounded-xl bg-violet-700 px-5 text-xs font-bold text-white shadow-sm transition hover:bg-violet-800 disabled:cursor-not-allowed disabled:opacity-40"
                         >
-                          {condicaoInicial === "nao_liga" ? "Registrar divergência e enviar à triagem" : "Salvar e continuar"}
+                          {condicaoInicial === "nao_liga" ? "Continuar para defeitos adicionais" : "Salvar e continuar"}
 
                           <ChevronRight className="h-4 w-4" />
                         </button>
@@ -2882,7 +2928,9 @@ export default function TriagemFuncionalV2Page() {
                           : "text-emerald-900"
                       }`}
                     >
-                      {exigeDefeitoFinal
+                      {condicaoInicial === "nao_liga"
+                        ? "DIVERGÊNCIA · APARELHO NÃO LIGA"
+                        : exigeDefeitoFinal
                         ? "Há resposta negativa na triagem"
                         : "Triagem sem divergência funcional"}
                     </div>
@@ -2894,7 +2942,9 @@ export default function TriagemFuncionalV2Page() {
                           : "text-emerald-700"
                       }`}
                     >
-                      {exigeDefeitoFinal
+                      {condicaoInicial === "nao_liga"
+                        ? "Selecione os defeitos adicionais encontrados, se houver. Não liga já será registrado automaticamente. Ao concluir, o aparelho irá para Laudo antes da Cosmética."
+                        : exigeDefeitoFinal
                         ? "Selecione ao menos um defeito para concluir."
                         : "Se houver defeito adicional, selecione abaixo. O aparelho será classificado como QUEBRADO."}
                     </div>
@@ -3038,7 +3088,7 @@ export default function TriagemFuncionalV2Page() {
                       }
                       disabled={
                         carregando ||
-                        (exigeDefeitoFinal &&
+                        (condicaoInicial !== "nao_liga" && exigeDefeitoFinal &&
                           !danosTela &&
                           !defeitosTodos.length)
                       }
@@ -3074,7 +3124,7 @@ export default function TriagemFuncionalV2Page() {
                     <Aviso tipo="aviso">
                       <div>
                         <div className="font-black">
-                          {resultado.nao_liga_local ? "Aparelho não liga — enviado para Triagem Cosmética (divergência funcional)" : (resultado.tipo_problema === "nao_liga" ? "Aparelho não liga" : resultado.tipo_problema === "sem_ordem" ? "Sem Ordem" : "IMEI divergente") + " — aguardando decisão da Assurant."}
+                          {resultado.nao_liga_local ? "DIVERGÊNCIA · NÃO LIGA — enviado para LAUDO" : (resultado.tipo_problema === "nao_liga" ? "Aparelho não liga" : resultado.tipo_problema === "sem_ordem" ? "Sem Ordem" : "IMEI divergente") + " — aguardando decisão da Assurant."}
                           <div className="mt-3 flex gap-2">
                             <button className="rounded-lg border px-3 py-2" onClick={() => etiquetaDivergencia(resultado)}>Reimprimir etiqueta</button>
                             <button className="rounded-lg border px-3 py-2" onClick={() => etiquetaDivergencia(resultado,{baixar:true})}>Baixar etiqueta PDF</button>
@@ -3082,7 +3132,7 @@ export default function TriagemFuncionalV2Page() {
                         </div>
 
                         <div className="mt-1 font-medium">
-                          {resultado.nao_liga_local ? "Encaminhe à bancada de Triagem Cosmética com a etiqueta de divergência funcional. O IMEI ainda não foi conferido fisicamente e não deve ser presumido para armazenagem." : "O aparelho está segregado e bloqueado até a decisão da Assurant. Cole a etiqueta de divergência."}
+                          {resultado.nao_liga_local ? "Encaminhe à bancada de LAUDO. Depois da emissão do Laudo de DIVERGÊNCIA · NÃO LIGA, o aparelho seguirá para Triagem Cosmética. Não será enviado à Análise Assurant. O IMEI não foi conferido fisicamente." : "O aparelho está segregado e bloqueado até a decisão da Assurant. Cole a etiqueta de divergência."}
                           {resultado.motivo && <p className="mt-2">{resultado.motivo}</p>}
                         </div>
                       </div>
