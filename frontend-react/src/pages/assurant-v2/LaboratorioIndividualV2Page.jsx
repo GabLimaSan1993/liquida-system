@@ -35,42 +35,84 @@ const dataHora = v => v ? new Date(v).toLocaleString('pt-BR',{timeZone:'America/
 const limpo = v => String(v ?? '').trim().toUpperCase();
 const regraVoucher = /^[A-Z0-9][A-Z0-9_-]{2,59}$/;
 
+function ehColunaVoucher(x) {
+  const s=String(x??'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[\uFEFF\u200B-\u200D]/g,'').replace(/[^a-zA-Z0-9]+/g,' ')
+    .trim().toLowerCase().replace(/\s+/g,' ');
+  return /^(voucher|voucher id|voucher numero|voucher codigo|voucher de reparo|voucher do aparelho|codigo voucher|codigo do voucher|numero voucher|numero do voucher|id voucher|n voucher)$/.test(s);
+}
+function normalizarVoucherLab(x) {
+  const v=String(x??'').normalize('NFKC').replace(/[\uFEFF\u200B-\u200D]/g,'')
+    .trim().replace(/^['"]+|['"]+$/g,'').toUpperCase().replace(/\s+/g,'');
+  if (!v) return '';
+  if (/^\d{15}$/.test(v)) return '__IMEI__';
+  if (/^\d+$/.test(v)) return 'YBV'+v.replace(/^0+(?=\d)/,'');
+  if (/^YBV\d+$/.test(v)) return 'YBV'+v.slice(3).replace(/^0+(?=\d)/,'');
+  return v;
+}
 async function lerPlanilha(arquivo) {
-  if (!arquivo) throw new Error('Selecione um arquivo.');
-  if (!/\.(xlsx|xls|csv|ods)$/i.test(arquivo.name)) {
-    throw new Error('Use uma planilha XLSX, XLS, ODS ou CSV.');
+  if(!arquivo)throw new Error('Selecione uma planilha.');
+  if(!/\.(xlsx|xls|csv|ods)$/i.test(arquivo.name||''))
+    throw new Error('Formato inválido. Utilize XLSX, XLS, ODS ou CSV.');
+  if(!arquivo.size||arquivo.size>15*1024*1024)
+    throw new Error('Arquivo vazio ou maior que 15 MB. Divida em arquivos menores.');
+  let livro;
+  try {
+    livro=XLSX.read(await arquivo.arrayBuffer(),{type:'array',raw:false,codepage:65001});
+  } catch(e) {
+    throw new Error('Não foi possível ler a planilha. Confira se não tem senha ou exporte como XLSX/CSV. '+String(e?.message||''));
   }
-  if (arquivo.size > 15*1024*1024) throw new Error('O arquivo deve ter até 15 MB.');
-  const bytes = await arquivo.arrayBuffer();
-  const livro = XLSX.read(bytes,{type:'array'});
-  if (!livro.SheetNames?.length) throw new Error('Não foi localizada nenhuma aba da planilha.');
-  const matriz = XLSX.utils.sheet_to_json(livro.Sheets[livro.SheetNames[0]],{
-    header:1,raw:false,defval:'',blankrows:false
-  });
-  if (!matriz.length) throw new Error('A planilha está vazia.');
-  // Ler SOMENTE a coluna Voucher; nenhuma coluna de OS, IMEI, lote ou pedido é necessária.
-  const indiceCabecalho = matriz.findIndex((linha,i) => i<12 && linha.some(
-    v => /^voucher(?:\s*(?:id|n[uú]mero|c[oó]digo))?$/i.test(String(v||'').trim())
-  ));
-  const indiceColuna = indiceCabecalho>=0
-    ? matriz[indiceCabecalho].findIndex(v=>/^voucher(?:\s*(?:id|n[uú]mero|c[oó]digo))?$/i.test(String(v||'').trim()))
-    : 0;
-  const comeco = indiceCabecalho>=0 ? indiceCabecalho+1 : 0;
-  const unicos = new Set(), invalidos = [], repetidos = [];
-  let naoVazios=0, invalidosContagem=0, repetidosContagem=0;
-  matriz.slice(comeco).forEach((linha,k)=>{
-    const voucher=limpo(linha[indiceColuna]);
-    if (!voucher) return;
-    naoVazios++;
-    if(!regraVoucher.test(voucher)) {invalidosContagem++;if(invalidos.length<12) invalidos.push('Linha '+(comeco+k+1)+': '+voucher);return;}
-    if(unicos.has(voucher)) {repetidosContagem++;if(repetidos.length<12) repetidos.push(voucher);return;}
-    unicos.add(voucher);
-  });
-  if(!unicos.size) throw new Error('Nenhum voucher válido encontrado. Confira a coluna Voucher.');
-  return {vouchers:Array.from(unicos),total:naoVazios,
-    invalidos,invalidosQuantidade:invalidosContagem,
-    repetidos,repetidosQuantidade:repetidosContagem,
-    arquivo:arquivo.name,aba:livro.SheetNames[0]};
+  if(!livro.SheetNames?.length)throw new Error('Nenhuma aba encontrada no arquivo.');
+  let atual=null,fallback=null;
+  for(const nome of livro.SheetNames) {
+    const sheet=livro.Sheets[nome],ref=sheet?.['!ref'];
+    if(!ref)continue;
+    const faixa=XLSX.utils.decode_range(ref);
+    if(faixa.e.r-faixa.s.r>25000)
+      throw new Error('A aba '+nome+' tem mais de 25 mil linhas. Remova linhas vazias formatadas.');
+    const linhas=XLSX.utils.sheet_to_json(sheet,{header:1,raw:false,defval:'',blankrows:true});
+    if(!linhas.length)continue;
+    let cabecalho=-1,coluna=-1;
+    for(let n=0;n<Math.min(25,linhas.length)&&cabecalho<0;n++){
+      const c=(linhas[n]||[]).findIndex(ehColunaVoucher);
+      if(c>=0){cabecalho=n;coluna=c;}
+    }
+    if(cabecalho>=0){atual={nome,linhas,coluna,comeco:cabecalho+1};break;}
+    if(!fallback&&faixa.e.c-faixa.s.c===0) {
+      const primeiro=linhas.find(row=>String(row?.[0]??'').trim())?.[0];
+      if (/^(imei|os|pedido|numero de os)$/i.test(String(primeiro||'').trim()))
+        throw new Error('Arquivo por '+primeiro+' não é aceito. Envie somente a coluna VOUCHER.');
+      if(primeiro!=null)fallback={nome,linhas,coluna:0,comeco:0};
+    }
+  }
+  atual=atual||fallback;
+  if(!atual)throw new Error('Coluna VOUCHER não encontrada. Use o modelo, sem IMEI/OS como chave.');
+  const {nome,linhas,coluna,comeco}=atual;
+  const vistos=new Map(),invalidos=[],repetidos=[];
+  let total=0,invalidosQuantidade=0,repetidosQuantidade=0;
+  for(let i=comeco;i<linhas.length;i++){
+    const valor=linhas[i]?.[coluna];
+    if(valor==null||!String(valor).trim())continue;
+    total++;
+    const voucher=normalizarVoucherLab(valor);
+    if(voucher==='__IMEI__'||!regraVoucher.test(voucher)){
+      invalidosQuantidade++;
+      if(invalidos.length<15)invalidos.push('Linha '+(i+1)+': '+(
+        voucher==='__IMEI__'?'15 dígitos parecem IMEI; informe o voucher':String(valor).slice(0,70)));
+      continue;
+    }
+    if(vistos.has(voucher)){
+      repetidosQuantidade++;
+      if(repetidos.length<15)repetidos.push('Linha '+(i+1)+': '+voucher+' (também na linha '+vistos.get(voucher)+')');
+      continue;
+    }
+    vistos.set(voucher,i+1);
+    if(vistos.size>5000)throw new Error('Limite de 5.000 vouchers únicos por arquivo. Divida o upload.');
+  }
+  if(!vistos.size)throw new Error('Nenhum voucher válido encontrado na aba '+nome+'. Confira a coluna Voucher.');
+  return {vouchers:[...vistos.keys()],total,
+    invalidos,invalidosQuantidade,repetidos,repetidosQuantidade,
+    arquivo:arquivo.name,aba:nome};
 }
 
 export default function LaboratorioIndividualV2Page() {
@@ -289,13 +331,13 @@ export default function LaboratorioIndividualV2Page() {
           <h2 className="text-sm font-black text-slate-900">Adicionar voucher individualmente</h2>
           <p className="mt-2 text-xs text-slate-500">Sem planilha e sem vínculo de lote.</p>
           <form className="mt-4 space-y-3" onSubmit={e=>{
-            e.preventDefault();const v=limpo(voucherManual);
-            if(!regraVoucher.test(v)){setErro('Informe um voucher válido.');return;}
+            e.preventDefault();const v=normalizarVoucherLab(voucherManual);
+            if(!regraVoucher.test(v)||v==='__IMEI__'){setErro('Informe um voucher válido.');return;}
             void importar([v],'Cadastro individual');
           }}>
             <input value={voucherManual} disabled={ocupado} onChange={e=>setVoucherManual(e.target.value)} placeholder="Bipar ou digitar voucher"
               className={CAMPO+' w-full'} aria-label="Voucher individual"/>
-            <button disabled={ocupado||!regraVoucher.test(limpo(voucherManual))}
+            <button disabled={ocupado||!regraVoucher.test(normalizarVoucherLab(voucherManual))||normalizarVoucherLab(voucherManual)==='__IMEI__'}
               className={BOTAO+' w-full border-emerald-700 bg-emerald-600 text-white'}>
               <PackageCheck size={16}/> Receber e liberar para técnico
             </button>
