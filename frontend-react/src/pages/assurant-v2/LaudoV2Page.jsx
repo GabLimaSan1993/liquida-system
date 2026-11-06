@@ -359,8 +359,9 @@ function ContextoLaudo({
       label:
         "IMEI",
       value:
-        dados.imei ||
-        "—",
+        dados.naoLigaDivergencia
+          ? "Não conferido — aparelho não liga"
+          : dados.imei || "—",
       mono: true,
     },
 
@@ -436,6 +437,15 @@ function ContextoLaudo({
           )}
         </div>
 
+        {dados.naoLigaDivergencia && (
+          <div className="border-t border-amber-200 bg-amber-50 px-5 py-3">
+            <p className="text-xs font-black text-amber-900">DIVERGÊNCIA · NÃO LIGA</p>
+            <p className="mt-1 text-[11px] leading-5 text-amber-800">
+              Encaminhado pela Funcional, sem Análise Assurant. Documente o não funcionamento e os defeitos adicionais. O IMEI não foi conferido fisicamente.
+              Após gerar o laudo, o aparelho seguirá para Triagem Cosmética.
+            </p>
+          </div>
+        )}
         {dados.motivo && (
           <div className="border-t border-slate-100 bg-amber-50/70 px-5 py-3">
             <div className="text-[9px] font-black uppercase tracking-wide text-amber-500">
@@ -591,7 +601,7 @@ function FilaLaudo({
                     </div>
 
                     <div className="mt-0.5 truncate font-mono text-[10px] text-slate-400">
-                      {item.imei ||
+                      {item.naoLigaDivergencia ? "IMEI não conferido — NÃO LIGA" : item.imei ||
                         "IMEI não informado"}
                     </div>
 
@@ -610,6 +620,7 @@ function FilaLaudo({
                     </div>
 
                     <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      {item.naoLigaDivergencia && <span className="rounded-md bg-rose-100 px-2 py-0.5 text-[9px] font-black text-rose-800">DIVERGÊNCIA · NÃO LIGA</span>}
                       <span
                         title={
                           item.motivo
@@ -784,6 +795,9 @@ export default function LaudoV2Page() {
     ETAPAS_FOTO[
       idxFoto
     ];
+  const tituloFoto = (item) => dados?.naoLigaDivergencia && item?.id === "imei"
+    ? "Foto da etiqueta / voucher (aparelho não liga)"
+    : item?.titulo;
 
   async function carregarFila() {
     setCarregandoFila(
@@ -1466,7 +1480,7 @@ export default function LaudoV2Page() {
                                       ]
                                     }
                                     alt={
-                                      item.titulo
+                                      tituloFoto(item)
                                     }
                                     className="h-full w-full object-cover"
                                   />
@@ -1490,7 +1504,7 @@ export default function LaudoV2Page() {
                               <div className="px-1 pb-1 pt-2">
                                 <div className="truncate text-[11px] font-black text-slate-700">
                                   {
-                                    item.titulo
+                                    tituloFoto(item)
                                   }
                                 </div>
 
@@ -1516,8 +1530,7 @@ export default function LaudoV2Page() {
 
                 <Panel
                   title={
-                    etapaFotoAtual
-                      ?.titulo ||
+                    tituloFoto(etapaFotoAtual) ||
                     "Captura"
                   }
                   subtitle="Utilize a câmera ou selecione uma imagem do dispositivo."
@@ -1604,8 +1617,7 @@ export default function LaudoV2Page() {
                                 ]
                               }
                               alt={
-                                etapaFotoAtual
-                                  ?.titulo
+                                tituloFoto(etapaFotoAtual)
                               }
                               className="max-h-[520px] w-full object-contain"
                             />
@@ -1703,11 +1715,7 @@ export default function LaudoV2Page() {
                               {idxFoto <
                               ETAPAS_FOTO.length -
                                 1
-                                ? ETAPAS_FOTO[
-                                    idxFoto +
-                                      1
-                                  ]
-                                    ?.titulo
+                                ? tituloFoto(ETAPAS_FOTO[idxFoto + 1])
                                 : "Após esta foto, revise o conjunto."}
                             </div>
                           </div>
