@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Download, Upload, RefreshCw, Wrench, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { operarReparo, operarReparoPorVouchers, exportarReparo } from '../services/reparoPickingService.js';
-import { lerUploadReparo, baixarModeloReparoVoucher } from '../services/reparoUpload.js';
+import { lerUploadReparoFlexivel, baixarModeloReparoVoucher } from '../services/reparoUpload.js';
 import { useAuth } from '../AuthContext.jsx';
 
 const labels = { pendente: 'Aguardando bipagem', bloqueado: 'Pendência', bipado: 'Bipado', em_reparo: 'Em reparo' };
@@ -34,7 +34,7 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
     event.target.value = '';
     if (!arquivo || busy) return;
     setBusy(true); setError(''); setMessage(''); setUpload(null); setRelatorioImportacao(null);
-    try { setUpload({ nome: arquivo.name, vouchers: await lerUploadReparo(arquivo) }); }
+    try { setUpload({ nome: arquivo.name, ...await lerUploadReparoFlexivel(arquivo) }); }
     catch (err) { setError(err.message); }
     finally { setBusy(false); }
   }
@@ -158,8 +158,16 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
       </div>
     )}
     {!oracle && upload && <div className="space-y-3 rounded-xl border border-purple-200 bg-purple-50 p-4">
-      <p className="text-sm font-semibold text-slate-800">{upload.nome} • {number(upload.vouchers.length)} vouchers para reparo</p>
+      <p className="text-sm font-semibold text-slate-800">{upload.nome} • {number(upload.vouchers.length)} vouchers válidos para reparo</p>
       <p className="text-xs text-slate-600">A importação usa o voucher para localizar o aparelho e seu IMEI no WMS/Triagem. Vouchers já presentes em pickings ativos serão ignorados e listados. A retirada física continua exigindo bipagem.</p>
+      {(upload.qtdInvalidos > 0 || upload.qtdRepetidos > 0) && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950">
+          <p className="font-black">{number(upload.qtdInvalidos)} linha(s) inválida(s) e {number(upload.qtdRepetidos)} voucher(s) repetido(s) ignorados.</p>
+          <p className="mt-1">Somente os {number(upload.vouchers.length)} vouchers válidos serão importados. IMEIs não substituem vouchers.</p>
+          {!!upload.invalidos.length && <p className="mt-2">{upload.invalidos.join(" · ")}</p>}
+          {!!upload.repetidos.length && <p className="mt-2">{upload.repetidos.join(" · ")}</p>}
+        </div>
+      )}
       <details className="text-xs text-slate-600"><summary className="cursor-pointer font-semibold">Conferir vouchers do arquivo</summary><div className="mt-2 max-h-40 overflow-auto rounded-lg border bg-white p-3 font-mono">{upload.vouchers.map(codigo => <div key={codigo}>{codigo}</div>)}</div></details>
       <div className="flex gap-2"><button disabled={busy} onClick={importarReparo} className="rounded-lg bg-purple-700 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{busy ? 'Importando…' : 'Importar e criar lote'}</button><button disabled={busy} onClick={() => setUpload(null)} className="rounded-lg border bg-white px-4 py-2 text-xs disabled:opacity-50">Cancelar</button></div>
     </div>}
