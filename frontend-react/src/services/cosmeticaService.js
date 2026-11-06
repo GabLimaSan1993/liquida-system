@@ -36,7 +36,7 @@ export function calcularGradeFinal({ tela, laterais, traseira, temDefeitoFuncion
 
   // Bateria abaixo de 70% prevalece sobre a grade estética e Outlet.
   const bateriaCritica = (bateriaPercentual !== null && bateriaPercentual !== undefined &&
-    bateriaPercentual !== "" && Number.isFinite(Number(bateriaPercentual)) && Number(bateriaPercentual) < 70)
+    bateriaPercentual !== "" && Number.isFinite(Number(bateriaPercentual)) && Number(bateriaPercentual) >= 1 && Number(bateriaPercentual) < 70)
     || /abaixo\s*(de\s*)?70\s*%/i.test(String(bateria || ""));
   if (bateriaCritica) {
     return {
