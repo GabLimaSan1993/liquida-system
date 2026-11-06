@@ -1,4 +1,5 @@
 import InventarioGeralPanel from '../../components/assurant/InventarioGeralPanel.jsx';
+import { supabase } from '../../lib/supabase.js';
 import {
   useEffect,
   useMemo,
@@ -465,6 +466,37 @@ export default function ConsultaEstoqueV2Page() {
   const alvoEnderecoRef =
     useRef(null);
 
+  const [pendenciasBateria, setPendenciasBateria] = useState(null);
+  const [mostrarPendenciasBateria, setMostrarPendenciasBateria] = useState(false);
+
+  async function carregarPendenciasBateria() {
+    try {
+      const { data, error } = await supabase.rpc("wms_bateria_critica_pendencias", { p_limite: 250 });
+      if (!error && data) setPendenciasBateria(data);
+    } catch {
+      // Consulta complementar: não impedir a navegação do estoque.
+    }
+  }
+  useEffect(() => { void carregarPendenciasBateria(); }, []);
+
+  function exportarPendenciasBateria() {
+    const lista = pendenciasBateria?.itens || [];
+    if (!lista.length) return;
+    const colunas = [
+      ["Voucher","voucher"],["IMEI","imei"],["Modelo","modelo"],
+      ["Bateria (%)","bateria_percentual"],["Status bateria","status_bateria"],
+      ["Grade física anterior","grade_fisica_atual"],["Grade corrigida","grade_estoque"],
+      ["Endereço atual","endereco"],["Status operacional","status_triagem"],
+    ];
+    const esc = v => '"' + String(v ?? "").replace(/"/g,'""') + '"';
+    const csv = [colunas.map(c => esc(c[0])).join(";"),
+      ...lista.map(linha => colunas.map(([,key]) => esc(linha[key])).join(";"))].join("\r\n");
+    const url = URL.createObjectURL(new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"}));
+    const a = document.createElement("a");
+    a.href=url; a.download="WMS_Reenderecamento_Bateria_Abaixo_70.csv";
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  }
+
 
   useEffect(() => {
     let cancelado =
@@ -709,6 +741,7 @@ export default function ConsultaEstoqueV2Page() {
 
 
   async function atualizarAtual() {
+    void carregarPendenciasBateria();
     if (
       visao ===
       "mapa"
@@ -927,6 +960,61 @@ const andarResumo =
         </div>
       )}
 
+
+
+      {Number(pendenciasBateria?.total_pendente || 0) > 0 && (
+        <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-1 items-start gap-3">
+              <ShieldAlert size={21} className="mt-0.5 shrink-0 text-amber-700" />
+              <div>
+                <p className="text-sm font-black">
+                  {Number(pendenciasBateria.total_pendente).toLocaleString("pt-BR")} aparelhos com bateria abaixo de 70% para reendereçamento
+                </p>
+                <p className="mt-1 max-w-4xl text-xs leading-5 text-amber-800">
+                  Grade comercial corrigida para QUEBRADO. Estes aparelhos permanecem nas posições físicas
+                  anteriores até a movimentação por bipagem; a saída fica protegida enquanto há divergência.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => setMostrarPendenciasBateria(v => !v)}
+                aria-expanded={mostrarPendenciasBateria}
+                className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-black text-amber-950 hover:bg-amber-100">
+                {mostrarPendenciasBateria ? "Ocultar relação" : "Ver relação de IMEIs"}
+              </button>
+              <button type="button" onClick={exportarPendenciasBateria}
+                className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-black text-amber-950 hover:bg-amber-100">
+                Exportar CSV
+              </button>
+            </div>
+          </div>
+          {mostrarPendenciasBateria && (
+            <div className="mt-4 max-h-80 overflow-auto rounded-xl border border-amber-200 bg-white">
+              <table className="w-full min-w-[720px] text-left text-xs">
+                <thead className="sticky top-0 bg-amber-100 text-amber-950">
+                  <tr>{["Voucher","IMEI","Modelo","Bateria","Grade atual da posição","Endereço físico","Destino"].map(h => (
+                    <th key={h} className="px-3 py-2 font-black">{h}</th>
+                  ))}</tr>
+                </thead>
+                <tbody className="divide-y divide-amber-100 text-slate-700">
+                  {(pendenciasBateria.itens || []).map(item => (
+                    <tr key={item.alocacao_id}>
+                      <td className="px-3 py-2 font-bold">{item.voucher}</td>
+                      <td className="px-3 py-2">{item.imei}</td>
+                      <td className="px-3 py-2">{item.modelo || "—"}</td>
+                      <td className="px-3 py-2">{item.bateria_percentual > 0 ? item.bateria_percentual + "%" : item.status_bateria || "Abaixo 70%"}</td>
+                      <td className="px-3 py-2">{item.grade_fisica_atual}</td>
+                      <td className="px-3 py-2">{item.endereco}</td>
+                      <td className="px-3 py-2 font-black text-rose-700">QUEBRADO</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <KpiCard
