@@ -29,6 +29,11 @@ export function completarIdentificacao(dados, triagem = {}, tradein = {}, catalo
 }
 
 export function camposAusentesLaudo(dados) {
+  // Não liga: não exigir IMEI ou ficha técnica que o operador não
+  // consegue conferir fisicamente. O laudo registra a limitação.
+  if (dados?.naoLigaDivergencia === true) {
+    return dados?.voucher ? [] : ["voucher"];
+  }
   return [
     ['cliente', dados.cliente], ['loja', dados.loja],
     ['marca', dados.produto?.marca], ['modelo', dados.produto?.modelo],
@@ -105,6 +110,8 @@ export async function carregarParaLaudo(voucher) {
   // O JSON da funcional guarda produto, divergências e o motivo do destino.
   let respostas = null;
   try { respostas = JSON.parse(t.respostas_funcional || "null"); } catch { respostas = null; }
+  const naoLigaDivergencia = respostas?.destino?.tipo_laudo === "DIVERGENCIA" &&
+    respostas?.destino?.tipo_divergencia === "NAO_LIGA";
 
   const divergencias = (respostas?.respostas || [])
     .filter(r => r.divergente)
@@ -113,6 +120,9 @@ export async function carregarParaLaudo(voucher) {
   return completarIdentificacao({
     ok: true,
     triagemId: t.id,
+    naoLigaDivergencia,
+    tipoLaudo: naoLigaDivergencia ? "DIVERGENCIA" : "TRIAGEM",
+    identificacaoNaoBipada: respostas?.identificacao?.identificacao_nao_bipada === true,
     voucher: t.voucher,
     imei: t.imei,
     produto: respostas?.produto || null,
@@ -144,6 +154,8 @@ export async function listarAguardandoLaudo() {
     return {
       voucher:   t.voucher,
       imei:      t.imei,
+      naoLigaDivergencia: r?.destino?.tipo_laudo === "DIVERGENCIA" &&
+        r?.destino?.tipo_divergencia === "NAO_LIGA",
       modelo:    r?.produto?.modelo || t.modelo || null,
       marca:     r?.produto?.marca || null,
       motivo:    r?.destino?.motivo || null,
@@ -167,7 +179,8 @@ export function gerarPdfLaudo(dados, fotos, observacao, opcoes = {}) {
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(15);
-  doc.text("LAUDO DE TRIAGEM", largura / 2, 20, { align: "center" });
+  doc.text(dados.naoLigaDivergencia ? "LAUDO DE DIVERGENCIA - NAO LIGA" : "LAUDO DE TRIAGEM",
+    largura / 2, 20, { align: "center" });
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
@@ -196,7 +209,8 @@ export function gerarPdfLaudo(dados, fotos, observacao, opcoes = {}) {
       ["Nome do cliente:", dados.cliente || "—", "Loja:", dados.loja || "—"],
       ["Marca:", dados.produto?.marca || "—", "Modelo:", dados.produto?.modelo || "—"],
       ["Capacidade:", dados.produto?.armazenamento || "—", "Cor:", dados.produto?.cor || "—"],
-      ["IMEI:", dados.imei || "—", "Voucher:", dados.voucher || "—"],
+      ["IMEI:", dados.naoLigaDivergencia ? "NAO CONFERIDO (APARELHO NAO LIGA)" : dados.imei || "—",
+       "Voucher:", dados.voucher || "—"],
     ],
   });
   y = doc.lastAutoTable.finalY + 8;
