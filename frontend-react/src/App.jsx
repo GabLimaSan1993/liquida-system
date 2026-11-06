@@ -77,6 +77,7 @@ import TriagensV2Page from "./pages/assurant-v2/TriagensV2Page.jsx";
 import TriagemAutomaticaLabV2Page from "./pages/assurant-v2/TriagemAutomaticaLabV2Page.jsx";
 import TriagemUnificadaTestePage from "./pages/assurant-v2/TriagemUnificadaTestePage.jsx";
 import ArmazenagemV2Page from "./pages/assurant-v2/ArmazenagemV2Page.jsx";
+import ReparoRetornoPanel from "./components/ReparoRetornoPanel.jsx";
 import ConsultaEstoqueV2Page from "./pages/assurant-v2/ConsultaEstoqueV2Page.jsx";
 import InventarioV2Page from "./pages/assurant-v2/InventarioV2Page.jsx";
 import CargaInicialV2Page from "./pages/assurant-v2/CargaInicialV2Page.jsx";
@@ -615,6 +616,17 @@ export default function App() {
           path="estoque/armazenagem"
           element={
             <ArmazenagemV2Page />
+          }
+        />
+
+        {/* Retorno de reparo separado da armazenagem dirigida.
+            Usa a mesma permissão da Armazenagem para os operadores atuais. */}
+        <Route
+          path="estoque/retorno-reparo"
+          element={
+            <ProtectedRoute tela="/v2/assurant/estoque/armazenagem">
+              <ReparoRetornoPanel modo="armazenagem" />
+            </ProtectedRoute>
           }
         />
 
