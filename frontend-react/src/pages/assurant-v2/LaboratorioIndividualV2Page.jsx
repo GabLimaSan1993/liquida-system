@@ -170,6 +170,21 @@ export default function LaboratorioIndividualV2Page() {
     setNovoDefeito('');setErro('');
   }
 
+  async function abrirVoucherJaCadastrado(voucher) {
+    if(ocupado) return;
+    setOcupado(true);setErro('');
+    try {
+      const r = await laboratorioIndividual('listar',{
+        busca:voucher,status:null,offset:0,limite:50
+      });
+      const exato=(r?.itens||[]).find(x=>String(x.voucher||'').toUpperCase()===voucher.toUpperCase());
+      if(!exato) throw new Error('Voucher já registrado, mas não localizado na página. Consulte-o na busca geral.');
+      setFiltro('');setPagina(0);setBusca(voucher);setTexto(voucher);
+      abrir(exato);
+    } catch(e) {setErro(e.message||'Falha ao consultar voucher existente.');}
+    finally {setOcupado(false);}
+  }
+
   async function realizar(i,acao,extra={}) {
     if(!i) throw new Error('Selecione o aparelho.');
     if(i.origem==='individual'){
@@ -221,7 +236,7 @@ export default function LaboratorioIndividualV2Page() {
         await importar(arquivo.vouchers, arquivo.arquivo,
           { automatico: true, origem: dadosArquivo });
       } else if (conferencia) {
-        setErro('Nenhum novo recebimento: todos os '+conferencia.total+
+        setErro('Sem novos cadastros nesta planilha: '+conferencia.total+
           ' vouchers já constam no Laboratório ou no histórico. '+
           'O contador permanece igual para não duplicar aparelhos. Veja a relação abaixo.');
       }
@@ -370,14 +385,27 @@ export default function LaboratorioIndividualV2Page() {
                   </summary>
                   <div className="mt-2 max-h-56 overflow-auto rounded-lg border border-slate-200 bg-slate-50">
                     {(previa.conferencia.itens || []).map(item => (
-                      <div key={item.voucher} className="flex flex-wrap justify-between gap-2 border-b border-slate-100 px-3 py-2 last:border-b-0">
+                      <div key={item.voucher} className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 last:border-b-0">
                         <span className="font-mono font-bold">{item.voucher}</span>
-                        <span className="text-slate-600">
-                          {item.situacao==='NOVO'?'Novo cadastro'
-                            :item.situacao==='LIBERAR_PENDENTE'?'Liberação pendente'
-                            :item.situacao==='JA_NO_HISTORICO'?'Já no histórico'
-                            :'Já cadastrado'} {item.status_atual?'· '+item.status_atual:''}
-                        </span>
+                        <div className="flex flex-wrap items-center gap-2 text-slate-600">
+                          <span>
+                            {item.situacao==='NOVO'?'Novo cadastro'
+                              :item.situacao==='LIBERAR_PENDENTE'?'Liberação pendente'
+                              :item.situacao==='JA_NO_HISTORICO'?'Já no histórico'
+                              :'Já cadastrado'} {item.status_atual?'· '+item.status_atual:''}
+                          </span>
+                          {item.cadastrado_por && <span className="text-slate-500">
+                            · Registrado por {item.cadastrado_por}
+                            {item.cadastrado_em ? ' em '+new Date(item.cadastrado_em).toLocaleString('pt-BR') : ''}
+                          </span>}
+                          {item.situacao!=='NOVO' && (
+                            <button type="button" disabled={ocupado}
+                              onClick={()=>void abrirVoucherJaCadastrado(item.voucher)}
+                              className="rounded-md border border-violet-200 bg-violet-50 px-2 py-1 text-[11px] font-bold text-violet-700">
+                              Abrir na bancada
+                            </button>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
