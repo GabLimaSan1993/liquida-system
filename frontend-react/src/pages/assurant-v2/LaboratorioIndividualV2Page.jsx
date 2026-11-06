@@ -10,14 +10,14 @@ import { listarDefeitos } from '../../services/triagemFuncionalService.js';
 const BOTAO = 'inline-flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-40';
 const CAMPO = 'rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-violet-500';
 const ESTADOS = [
-  ['','Todos'],['aguardando_recebimento','Aguardando recebimento'],
+  ['','Todos'],['aguardando_recebimento','Aguardando recebimento (legado)'],
   ['recebido','Aguardando técnico'],['em_reparo','Em reparo'],
   ['concluido','Concluído'],['em_devolucao','Em devolução'],
   ['devolvido_warehouse','Devolvido ao Warehouse']
 ];
 const rotulo = {
-  aguardando_recebimento:'Aguardando recebimento',
-  recebido:'Recebido · validar no técnico',
+  aguardando_recebimento:'Aguardando recebimento (legado)',
+  recebido:'Aguardando técnico',
   em_reparo:'Em reparo',
   concluido:'Reparo concluído',
   em_devolucao:'Em devolução',
@@ -166,20 +166,41 @@ export default function LaboratorioIndividualV2Page() {
   async function importar(vouchers,rotuloImportacao) {
     if(ocupado||!vouchers?.length)return;
     setOcupado(true);setErro('');setSucesso('');
-    let incluidos=0,existentes=0;
+    let incluidos=0,existentes=0,liberados=0;
+    let loteAtual=0;
     try{
-      for(let i=0;i<vouchers.length;i+=250){
-        const parte=vouchers.slice(i,i+250);
-        setProgresso('Importando '+(Math.min(vouchers.length,i+parte.length))+' de '+vouchers.length+' vouchers...');
+      const loteTamanho=100;
+      const lotes=Math.ceil(vouchers.length/loteTamanho);
+      for(let i=0;i<vouchers.length;i+=loteTamanho){
+        loteAtual=Math.floor(i/loteTamanho)+1;
+        const parte=vouchers.slice(i,i+loteTamanho);
+        setProgresso('Recebendo lote '+loteAtual+' de '+lotes+
+          ' · '+Math.min(vouchers.length,i+parte.length)+' / '+vouchers.length+' vouchers');
         const r=await laboratorioIndividual('importar',{vouchers:parte});
+        if(!r?.ok)throw new Error('O banco não confirmou o lote '+loteAtual+'.');
         incluidos+=Number(r.incluidos||0);
         existentes+=Number(r.ja_existentes||0);
+        liberados+=Number(r.liberados_pendentes||0);
       }
-      setSucesso(rotuloImportacao+': '+incluidos+' voucher(s) incluído(s) individualmente; '+existentes+' já existentes (sem duplicação). Nenhum foi marcado como fisicamente recebido.');
-      setPrevia(null);setVoucherManual('');setPagina(0);setBusca('');setTexto('');setFiltro('');
+      const ignorados=previa?.vouchers?.length===vouchers.length
+        ? Number(previa.invalidosQuantidade||0)+Number(previa.repetidosQuantidade||0):0;
+      setSucesso(rotuloImportacao+': '+incluidos+' voucher(s) novo(s) recebido(s), '+
+        liberados+' pendente(s) liberado(s) para o técnico e '+
+        existentes+' já cadastrado(s), sem duplicação.'+
+        (ignorados?' '+ignorados+' linha(s) inválida(s)/repetida(s) ignorada(s).':'')+
+        ' Não é necessária outra confirmação de recebimento.');
+      setPrevia(null);setVoucherManual('');setPagina(0);setBusca('');setTexto('');setFiltro('recebido');
       await carregar();
     } catch(e){
-      setErro('Importação interrompida após '+incluidos+' inclusão(ões). '+(e.message||'Erro')+'. As linhas já gravadas permanecem sem duplicação; envie o arquivo novamente para completar.');
+      const mensagem=String(e?.message||'Erro de importação');
+      const orientacao=/timeout|canceling statement|timed out|504|gateway|tempo limite/i.test(mensagem)
+        ? ' Pode ter ocorrido gravação antes do tempo limite. Reenvie a planilha: vouchers existentes não são duplicados.'
+        : /permission|permissão|access|acesso|42501|403/i.test(mensagem)
+        ? ' Peça liberação do Laboratório de Reparos na Gestão de Usuários.'
+        : '';
+      setErro('Erro no lote '+loteAtual+': '+mensagem+'. Foram incluídos '+incluidos+
+        ' e liberados '+liberados+' antes da falha.'+orientacao+
+        ' É seguro reenviar o arquivo para completar a importação.');
       await carregar();
     } finally{setOcupado(false);setProgresso('');}
   }
@@ -217,7 +238,7 @@ export default function LaboratorioIndividualV2Page() {
         <div>
           <p className="text-xs font-bold uppercase tracking-wider text-violet-700">Assurant Warehouse · Laboratório</p>
           <h1 className="mt-1 text-2xl font-black">Laboratório de Reparos</h1>
-          <p className="mt-1 text-sm text-slate-600">Recebimento, conferência e validação técnica <b>por voucher</b>. Sem cadastro de lote ou pedido para importar aparelhos.</p>
+          <p className="mt-1 text-sm text-slate-600">Importação por voucher com recebimento confirmado automaticamente e encaminhamento direto à bancada do técnico. A OS continua sujeita à validação técnica.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={carregar} disabled={ocupado||carregando} className={BOTAO+' border-slate-300 bg-white text-slate-700'}>
@@ -234,7 +255,7 @@ export default function LaboratorioIndividualV2Page() {
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_330px]">
         <section className="rounded-2xl border border-violet-200 bg-white p-5 shadow-sm">
           <div className="flex items-center gap-2"><FileSpreadsheet size={20} className="text-violet-700"/><h2 className="text-base font-black">Importar recebimento por planilha</h2></div>
-          <p className="mt-2 text-xs leading-5 text-slate-600">Envie XLSX, XLS, ODS ou CSV. Somente a coluna <b>Voucher</b> será considerada. As colunas de pedido, lote, IMEI, OS e demais informações são ignoradas. Um voucher existente não será criado novamente.</p>
+          <p className="mt-2 text-xs leading-5 text-slate-600">Envie XLSX, XLS, ODS ou CSV. A coluna <b>Voucher</b> é a única utilizada; pedido, lote, IMEI e OS são ignorados. O envio confirma o recebimento e coloca o aparelho diretamente em <b>Aguardando técnico</b>. Vouchers existentes não são duplicados.</p>
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <label className={BOTAO+' cursor-pointer border-violet-300 bg-violet-50 text-violet-800'}>
               <Upload size={16}/> Selecionar planilha
@@ -255,13 +276,13 @@ export default function LaboratorioIndividualV2Page() {
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <button type="button" disabled={ocupado} onClick={()=>importar(previa.vouchers,previa.arquivo)}
                 className={BOTAO+' border-violet-700 bg-violet-700 text-white'}>
-                <Upload size={16}/> Importar {previa.vouchers.length} voucher(s)
+                <Upload size={16}/> Receber e liberar {previa.vouchers.length} voucher(s) para técnico
               </button>
               <button type="button" disabled={ocupado} onClick={()=>setPrevia(null)} className={BOTAO+' border-slate-200 text-slate-700'}>Cancelar</button>
             </div>
           </div>}
           {progresso&&<p role="status" className="mt-3 text-xs font-bold text-violet-700">{progresso}</p>}
-          <p className="mt-3 text-[11px] leading-5 text-amber-800">Importar cria a pendência de conferência. A movimentação não confirma recebimento físico, não emite OS, não cria pedido/romaneio e não movimenta o WMS.</p>
+          <p className="mt-3 text-[11px] leading-5 text-amber-800">A importação confirma administrativamente o recebimento dos vouchers informados, registra o usuário e horário e libera a fila do técnico, sem nova conferência por voucher. A OS e os defeitos ainda são validados na bancada. Não gera pedido/romaneio nem movimenta WMS/Oracle.</p>
         </section>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -276,7 +297,7 @@ export default function LaboratorioIndividualV2Page() {
               className={CAMPO+' w-full'} aria-label="Voucher individual"/>
             <button disabled={ocupado||!regraVoucher.test(limpo(voucherManual))}
               className={BOTAO+' w-full border-emerald-700 bg-emerald-600 text-white'}>
-              <PackageCheck size={16}/> Cadastrar voucher
+              <PackageCheck size={16}/> Receber e liberar para técnico
             </button>
           </form>
         </section>
@@ -371,8 +392,8 @@ export default function LaboratorioIndividualV2Page() {
           {item.alerta_origem&&<div className="mt-3 flex gap-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-800"><AlertTriangle size={16} className="shrink-0"/>{item.alerta_origem}</div>}
 
           {item.status==='aguardando_recebimento'&&<section className="mt-4 rounded-xl border border-sky-200 bg-sky-50 p-4">
-            <h3 className="text-sm font-black">Conferência física do recebimento</h3>
-            <p className="mt-1 text-xs text-slate-600">Confirme o voucher no aparelho. A OS é validada posteriormente pelo técnico.</p>
+            <h3 className="text-sm font-black">Recebimento pendente de fluxo antigo</h3>
+            <p className="mt-1 text-xs text-slate-600">Este voucher foi importado antes da mudança de fluxo. Reenvie a planilha original para confirmar o recebimento e liberar o técnico, ou confirme individualmente aqui.</p>
             <button disabled={ocupado} type="button" onClick={()=>executar(item,'receber',{},'Voucher '+item.voucher+' recebido fisicamente e enviado à validação do técnico.')}
               className={BOTAO+' mt-3 border-emerald-700 bg-emerald-600 text-white'}>
               <PackageCheck size={16}/> Confirmar recebimento por voucher
