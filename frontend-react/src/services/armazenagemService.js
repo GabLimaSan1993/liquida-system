@@ -339,10 +339,31 @@ export async function reservarEndereco(
   voucher,
   userId
 ) {
-  const voucherInformado =
-    String(voucher || "")
-      .trim()
-      .toUpperCase();
+  const identificador = String(voucher || "").trim().toUpperCase();
+  let voucherInformado = identificador;
+  // Planilhas antigas do GAIA misturam IMEIs e vouchers.
+  // O WMS só reserva por voucher: resolver IMEI apenas quando inequívoco.
+  if (/^[0-9]{15}$/.test(identificador)) {
+    const { data: diagnostico, error: erroDiagnostico } = await supabase.rpc(
+      "assurant_armazenagem_diagnostico_planilha",
+      { p_chaves: [identificador] }
+    );
+    if (erroDiagnostico) throw new Error(erroDiagnostico.message);
+    const candidatos = diagnostico?.itens?.[0]?.candidatos || [];
+    if (!candidatos.length) {
+      throw new Error("IMEI não encontrado na triagem. Confira a planilha do GAIA.");
+    }
+    if (candidatos.length > 1) {
+      const erro = new Error(
+        "Esse IMEI está associado a " + candidatos.length +
+        " vouchers. Selecione o voucher da etiqueta física antes de reservar endereço."
+      );
+      erro.alternativas = candidatos;
+      throw erro;
+    }
+    voucherInformado = candidatos[0].voucher;
+    if (!voucherInformado) throw new Error("IMEI sem voucher vinculado.");
+  }
 
 
   /*
