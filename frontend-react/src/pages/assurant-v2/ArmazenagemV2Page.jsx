@@ -681,6 +681,7 @@ export default function ArmazenagemV2Page() {
     feedback,
     setFeedback,
   ] = useState(null);
+  const [alternativasImei, setAlternativasImei] = useState([]);
 
   const [
     concluido,
@@ -766,6 +767,7 @@ export default function ArmazenagemV2Page() {
     setFeedback(
       null
     );
+    setAlternativasImei([]);
 
     try {
       const resultado =
@@ -779,7 +781,7 @@ export default function ArmazenagemV2Page() {
       );
 
       setVoucher(
-        informado
+        resultado.reserva?.voucher || resultado.detalhes?.voucher || informado
       );
 
       setEtapaAtual(
@@ -816,6 +818,7 @@ export default function ArmazenagemV2Page() {
           ? "A estrutura do WMS ainda não foi instalada no Supabase."
           : erro.message;
 
+      setAlternativasImei(Array.isArray(erro.alternativas) ? erro.alternativas : []);
       setFeedback({
         tipo:
           "erro",
@@ -1154,11 +1157,37 @@ export default function ArmazenagemV2Page() {
         </Aviso>
       )}
 
+      {alternativasImei.length > 0 && !dados && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <p className="text-sm font-black text-amber-950">
+            IMEI com múltiplos vouchers cadastrados
+          </p>
+          <p className="mt-1 text-xs text-amber-900">
+            Confira o voucher na etiqueta física e escolha o cadastro correspondente.
+            Retornos e ciclos diferentes não devem ser alocados automaticamente pelo IMEI.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {alternativasImei.map(item => {
+              const pronto = item.status === "Aguardando armazenagem"
+                && Boolean(item.grade) && !item.wms_ativo;
+              return (
+                <button key={item.voucher} type="button"
+                  disabled={!pronto || carregando}
+                  onClick={() => { setVoucher(item.voucher); void abrirVoucher(item.voucher); }}
+                  className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-left text-xs font-bold text-amber-950 disabled:opacity-50">
+                  <span className="block">{item.voucher} · {item.grade || "Sem grade"}</span>
+                  <span className="mt-1 block text-[10px] font-medium">{item.status}{item.wms_ativo ? " · WMS ativo" : ""}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
       {!dados ? (
         <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
           <Panel
             title="Identificação do produto"
-            subtitle="Bipe o voucher para solicitar o melhor endereço disponível."
+            subtitle="Bipe o voucher ou IMEI para solicitar o endereço correto. IMEIs com vários vouchers exigem escolha do cadastro físico."
             icon={ScanLine}
           >
             <div className="p-5 lg:p-6">
@@ -1207,7 +1236,7 @@ export default function ArmazenagemV2Page() {
                           abrirVoucher();
                         }
                       }}
-                      placeholder="Bipe o voucher..."
+                      placeholder="Bipe o voucher ou IMEI..."
                       className="h-14 w-full rounded-xl border border-violet-200 bg-white pl-12 pr-4 font-mono text-base font-black tracking-wide text-slate-800 outline-none transition placeholder:font-sans placeholder:font-medium placeholder:tracking-normal placeholder:text-slate-300 focus:border-violet-400 focus:ring-4 focus:ring-violet-100 disabled:opacity-50"
                     />
                   </div>
