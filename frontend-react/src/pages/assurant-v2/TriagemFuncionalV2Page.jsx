@@ -36,6 +36,7 @@ import {
   listarAguardandoFuncional,
   classificarBateria,
   resolverSku,
+  normalizarRespostasFuncionais,
 } from "../../services/triagemFuncionalService.js";
 
 const ETAPAS = [
@@ -961,7 +962,7 @@ export default function TriagemFuncionalV2Page() {
       finalizacaoPendente
         ?.lista?.some(
           (resposta) =>
-            resposta.divergente
+            resposta?.divergente === true
         )
     );
 
@@ -1432,11 +1433,14 @@ export default function TriagemFuncionalV2Page() {
       ctx.canal ||
       "YBV";
 
-    const lista =
+    const perguntasRecebidas =
       await buscarPerguntas(
         tipoPerguntas,
         produto.marca
       );
+    const lista = (Array.isArray(perguntasRecebidas) ? perguntasRecebidas : [])
+      .filter(pergunta => pergunta && typeof pergunta === "object"
+        && pergunta.id != null && String(pergunta.texto || "").trim());
 
     if (
       !lista.length
@@ -1556,6 +1560,10 @@ export default function TriagemFuncionalV2Page() {
   ) {
     const pergunta =
       perguntas[idx];
+    if (!pergunta || !pergunta.id) {
+      mostrarErro("Pergunta inválida no catálogo. Atualize as perguntas antes de continuar.");
+      return;
+    }
 
     const respostaOk =
       (
@@ -1706,11 +1714,7 @@ export default function TriagemFuncionalV2Page() {
     setFinalizacaoPendente({
       // Retriagens podem ter perguntas novas e um marcador nulo na
       // posição de bateria; nenhuma posição nula chega à conclusão.
-      lista: (Array.isArray(lista) ? lista : []).filter(
-        r => r && typeof r === "object" &&
-        (r.perguntaId || r.pergunta_id) &&
-        ["sim", "nao"].includes(String(r.resposta || "").trim().toLowerCase())
-      ),
+      lista: normalizarRespostasFuncionais(lista),
 
       bateria:
         bateria ||
@@ -1768,19 +1772,18 @@ export default function TriagemFuncionalV2Page() {
     bateria,
     percentual = null
   ) {
-    const respostasValidas = (Array.isArray(lista) ? lista : [])
-      .filter(r => r && typeof r === "object" &&
-        (r.perguntaId || r.pergunta_id) &&
-        ["sim", "nao"].includes(String(r.resposta || "").trim().toLowerCase()));
+    const respostasValidas = normalizarRespostasFuncionais(lista);
 
     // A conclusão só é liberada quando todas as perguntas funcionais
     // ativas foram respondidas; bateria é tratada separadamente.
-    const primeiraPendente = perguntas.find(pergunta =>
-      pergunta?.tipo_resposta !== "bateria" &&
-      !respostasValidas.some(r =>
-        String(r.perguntaId || r.pergunta_id) === String(pergunta.id)
-      )
-    );
+    const primeiraPendente = (Array.isArray(perguntas) ? perguntas : [])
+      .filter(pergunta => pergunta && typeof pergunta === "object" && pergunta.id != null)
+      .find(pergunta =>
+        pergunta.tipo_resposta !== "bateria" &&
+        !respostasValidas.some(r =>
+          String(r.perguntaId) === String(pergunta.id)
+        )
+      );
     if (primeiraPendente) {
       setIdx(perguntas.indexOf(primeiraPendente));
       setEtapa("perguntas");
@@ -3255,8 +3258,9 @@ export default function TriagemFuncionalV2Page() {
                           </div>
 
                           <div className="divide-y divide-slate-100">
-                            {resultado.respostas.map(
-                              (
+                            {(Array.isArray(resultado.respostas) ? resultado.respostas : [])
+                              .filter(resposta => resposta && typeof resposta === "object")
+                              .map((
                                 resposta,
                                 index
                               ) => (
