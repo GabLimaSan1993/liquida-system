@@ -37,10 +37,13 @@ function ehColunaVoucher(x) {
   const s=String(x??'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'')
     .replace(/[\uFEFF\u200B-\u200D]/g,'').replace(/[^a-zA-Z0-9]+/g,' ')
     .trim().toLowerCase().replace(/\s+/g,' ');
-  return /^(voucher|voucher id|voucher numero|voucher codigo|voucher de reparo|voucher do aparelho|codigo voucher|codigo do voucher|numero voucher|numero do voucher|id voucher|n voucher)$/.test(s);
+  return /^(voucher|voucher id|voucher numero|voucher codigo|voucher de reparo|voucher do aparelho|voucher para reparo|voucher recebimento|voucher de recebimento|voucher do reparo|codigo voucher|codigo do voucher|numero voucher|numero do voucher|id voucher|n voucher)$/.test(s);
 }
 function normalizarVoucherLab(x) {
-  const v=String(x??'').normalize('NFKC').replace(/[\uFEFF\u200B-\u200D]/g,'')
+  // Excel pode guardar o número do voucher como célula numérica.
+  const original = typeof x === 'number' && Number.isSafeInteger(x)
+    ? x.toFixed(0) : String(x??'');
+  const v=original.normalize('NFKC').replace(/[\uFEFF\u200B-\u200D\u00A0]/g,'')
     .trim().replace(/^['"]+|['"]+$/g,'').toUpperCase().replace(/\s+/g,'');
   if (!v) return '';
   if (/^\d{15}$/.test(v)) return '__IMEI__';
@@ -56,7 +59,7 @@ async function lerPlanilha(arquivo) {
     throw new Error('Arquivo vazio ou maior que 15 MB. Divida em arquivos menores.');
   let livro;
   try {
-    livro=XLSX.read(await arquivo.arrayBuffer(),{type:'array',raw:false,codepage:65001});
+    livro=XLSX.read(await arquivo.arrayBuffer(),{type:'array',raw:true,codepage:65001});
   } catch(e) {
     throw new Error('Não foi possível ler a planilha. Confira se não tem senha ou exporte como XLSX/CSV. '+String(e?.message||''));
   }
@@ -68,10 +71,10 @@ async function lerPlanilha(arquivo) {
     const faixa=XLSX.utils.decode_range(ref);
     if(faixa.e.r-faixa.s.r>25000)
       throw new Error('A aba '+nome+' tem mais de 25 mil linhas. Remova linhas vazias formatadas.');
-    const linhas=XLSX.utils.sheet_to_json(sheet,{header:1,raw:false,defval:'',blankrows:true});
+    const linhas=XLSX.utils.sheet_to_json(sheet,{header:1,raw:true,defval:'',blankrows:true});
     if(!linhas.length)continue;
     let cabecalho=-1,coluna=-1;
-    for(let n=0;n<Math.min(25,linhas.length)&&cabecalho<0;n++){
+    for(let n=0;n<Math.min(60,linhas.length)&&cabecalho<0;n++){
       const c=(linhas[n]||[]).findIndex(ehColunaVoucher);
       if(c>=0){cabecalho=n;coluna=c;}
     }
@@ -80,7 +83,8 @@ async function lerPlanilha(arquivo) {
       const primeiro=linhas.find(row=>String(row?.[0]??'').trim())?.[0];
       if (/^(imei|os|pedido|numero de os)$/i.test(String(primeiro||'').trim()))
         throw new Error('Arquivo por '+primeiro+' não é aceito. Envie somente a coluna VOUCHER.');
-      if(primeiro!=null)fallback={nome,linhas,coluna:0,comeco:0};
+      if(primeiro!=null)fallback={nome,linhas,coluna:0,
+        comeco:ehColunaVoucher(primeiro)?linhas.findIndex(row=>String(row?.[0]??'').trim())+1:0};
     }
   }
   atual=atual||fallback;
@@ -93,7 +97,8 @@ async function lerPlanilha(arquivo) {
     if(valor==null||!String(valor).trim())continue;
     total++;
     const voucher=normalizarVoucherLab(valor);
-    if(voucher==='__IMEI__'||!regraVoucher.test(voucher)){
+    if(voucher==='__IMEI__'||!regraVoucher.test(voucher) ||
+      /^(VOUCHER|IMEI|PEDIDO|TOTAL|NUMERO|OS)$/i.test(voucher)){
       invalidosQuantidade++;
       if(invalidos.length<15)invalidos.push('Linha '+(i+1)+': '+(
         voucher==='__IMEI__'?'15 dígitos parecem IMEI; informe o voucher':String(valor).slice(0,70)));
@@ -313,6 +318,7 @@ export default function LaboratorioIndividualV2Page() {
               <span className="text-rose-700">{previa.invalidosQuantidade} inválidos no arquivo</span>
             </div>
             {!!previa.invalidos.length&&<p className="mt-2 text-[11px] text-rose-700">Inválidos ignorados: {previa.invalidos.join('; ')}</p>}
+            {!!previa.repetidos.length&&<p className="mt-2 text-[11px] text-amber-800">Repetidos ignorados: {previa.repetidos.join('; ')}</p>}
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <button type="button" disabled={ocupado} onClick={()=>importar(previa.vouchers,previa.arquivo)}
                 className={BOTAO+' border-violet-700 bg-violet-700 text-white'}>
