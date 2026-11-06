@@ -1009,6 +1009,7 @@ export default function TriagemCosmeticaV2Page() {
 
         bateria:
           dados.bateria,
+        bateriaPercentual: dados.bateriaPercentual,
       });
     }, [
       dados,
