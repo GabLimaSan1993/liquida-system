@@ -31,9 +31,21 @@ export function piorGrade(...grades) {
 // grade      = o que vale para venda e precificação
 // gradeCosmetica = a estética pura, preservada para exibir "BOM ⚡" quando
 //                  a bateria rebaixou para Outlet
-export function calcularGradeFinal({ tela, laterais, traseira, temDefeitoFuncional, bateria }) {
+export function calcularGradeFinal({ tela, laterais, traseira, temDefeitoFuncional, bateria, bateriaPercentual }) {
   const base = piorGrade(tela, laterais, traseira);
 
+  // Bateria abaixo de 70% prevalece sobre a grade estética e Outlet.
+  const bateriaCritica = (bateriaPercentual !== null && bateriaPercentual !== undefined &&
+    bateriaPercentual !== "" && Number.isFinite(Number(bateriaPercentual)) && Number(bateriaPercentual) < 70)
+    || /abaixo\s*(de\s*)?70\s*%/i.test(String(bateria || ""));
+  if (bateriaCritica) {
+    return {
+      grade: "QUEBRADO",
+      gradeCosmetica: base,
+      rebaixado: true,
+      motivo: "Saúde da bateria abaixo de 70% — obrigatório estoque Quebrado",
+    };
+  }
   if (temDefeitoFuncional) {
     return {
       grade: "QUEBRADO",
