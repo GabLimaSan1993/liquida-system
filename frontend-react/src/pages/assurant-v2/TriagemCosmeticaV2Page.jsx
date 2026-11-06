@@ -1459,7 +1459,7 @@ export default function TriagemCosmeticaV2Page() {
                     <div>
                       <div className="font-black">Divergência funcional — APARELHO NÃO LIGA</div>
                       <p className="mt-2 text-xs font-medium">
-                        Encaminhado diretamente da Triagem Funcional, sem Análise Assurant.
+                        Encaminhado após o LAUDO de Divergência · Não liga, sem Análise Assurant.
                         Avalie tela, laterais e traseira, mantendo grade QUEBRADO.
                         O IMEI não foi confirmado fisicamente; não trate a referência do cadastro como IMEI bipado.
                       </p>
