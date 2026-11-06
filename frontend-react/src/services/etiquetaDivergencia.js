@@ -12,7 +12,7 @@ export function criarEtiquetaDivergencia(caso) {
   doc.setFontSize(17);
   doc.text(caso.tipo_problema === "nao_liga" ? "APARELHO NAO LIGA" : caso.tipo_problema === "sem_ordem" ? "SEM ORDEM" : "IMEI DIVERGENTE", 52.5, 10, { align: "center" });
   doc.setFontSize(8);
-  doc.text(caso.nao_liga_local || caso.destino === "triagem_cosmetica" ? "TRIAGEM COSMETICA - DIVERGENCIA FUNCIONAL" : "SEGREGAR - AGUARDANDO DECISAO ASSURANT", 52.5, 15, { align: "center" });
+  doc.text(caso.nao_liga_local || caso.tipo_problema === "nao_liga" ? "LAUDO - DIVERGENCIA FUNCIONAL" : "SEGREGAR - AGUARDANDO DECISAO ASSURANT", 52.5, 15, { align: "center" });
   const linha = (texto, y, tamanho = 8) => {
     doc.setFontSize(tamanho);
     const largura = doc.getTextWidth(texto);
