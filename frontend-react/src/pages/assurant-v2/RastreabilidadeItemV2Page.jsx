@@ -643,9 +643,17 @@ export default function RastreabilidadeItemV2Page() {
         throw new Error("Sua sessão expirou. Faça login novamente no Liquida System para consultar a rastreabilidade.");
       }
 
-      const parametrosBusca = { p_busca: term, p_imei: imei || null };
+      // O voucher exato prevalece sobre vínculos por IMEI. Alguns IMEIs
+      // constam em mais de um YBV; buscar só por IMEI escolhia outro cadastro.
+      const consultaVoucherExato = /^YBV[0-9]+$/i.test(term);
+      const nomeRpc = consultaVoucherExato
+        ? "assurant_rastreabilidade_voucher_exato"
+        : "assurant_rastreabilidade_privada_fast";
+      const parametrosBusca = consultaVoucherExato
+        ? { p_voucher: term.toUpperCase() }
+        : { p_busca: term, p_imei: imei || null };
       let { data: result, error: rpcError } = await supabase.rpc(
-        "assurant_rastreabilidade_privada_fast",
+        nomeRpc,
         parametrosBusca
       );
 
@@ -657,7 +665,7 @@ export default function RastreabilidadeItemV2Page() {
           throw new Error("Sua sessão expirou. Faça login novamente no Liquida System para consultar a rastreabilidade.");
         }
         ({ data: result, error: rpcError } = await supabase.rpc(
-          "assurant_rastreabilidade_privada_fast",
+          nomeRpc,
           parametrosBusca
         ));
       }
@@ -668,7 +676,7 @@ export default function RastreabilidadeItemV2Page() {
       // ainda não existe na Triagem nem no recebimento físico do Liquida.
       const { data: tradeinResult, error: tradeinError } = await supabase.rpc(
         "assurant_rastreabilidade_tradein",
-        { p_busca: term, p_imei: imei || result?.selecionado_imei || null }
+        { p_busca: term, p_imei: consultaVoucherExato ? null : (imei || result?.selecionado_imei || null) }
       );
       if (tradeinError) throw tradeinError;
 
@@ -701,7 +709,9 @@ export default function RastreabilidadeItemV2Page() {
           status_tradein: tradeinResult.status_tradein,
           somente_tradein: tradeinResult.somente_tradein,
         },
-        selecionado_imei: result?.selecionado_imei || tradeinResult.imei || null,
+        // Não religa automaticamente o IMEI quando existem vouchers duplicados.
+        selecionado_imei: result?.imei_compartilhado
+          ? null : (result?.selecionado_imei || tradeinResult.imei || null),
         matches: result?.matches?.length
           ? result.matches
           : tradeinResult.imei
@@ -751,6 +761,9 @@ export default function RastreabilidadeItemV2Page() {
       setRetriageHistory(retriageResult);
       setColorInfo(colorResult);
       setActionError("");
+      setColorOpen(false);
+      setUnlinkOpen(false);
+      setFinalizeOpen(false);
       setActiveTab("historico");
 
       if (updateUrl) {
@@ -871,7 +884,7 @@ export default function RastreabilidadeItemV2Page() {
   );
 
   const canUnlink =
-    Boolean(summary?.imei) &&
+    !data?.imei_compartilhado && Boolean(summary?.imei) &&
     (unlinkableB2C.length > 0 || unlinkableB2B.length > 0);
 
   const filteredEvents = useMemo(() => {
@@ -1299,6 +1312,43 @@ export default function RastreabilidadeItemV2Page() {
             </div>
           )}
 
+          {data?.imei_compartilhado && (
+            <section className="rounded-2xl border border-amber-300 bg-amber-50 px-5 py-4 text-amber-950 shadow-sm">
+              <div className="flex items-start gap-3">
+                <AlertTriangle size={19} className="mt-0.5 shrink-0 text-amber-700" />
+                <div className="min-w-0">
+                  <h3 className="text-sm font-black">IMEI vinculado a mais de um voucher</h3>
+                  <p className="mt-1 text-xs leading-5">
+                    Consulta limitada ao voucher exato. Outros vouchers compartilham este IMEI
+                    na base, mas seus eventos de triagem, Oracle, WMS e pedidos não são
+                    atribuídos automaticamente ao voucher pesquisado.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {(data.vouchers_mesmo_imei || []).map((item) => (
+                      <button key={item.voucher} type="button"
+                        onClick={() => {
+                          setInput(item.voucher);
+                          void consultar(item.voucher, null, true);
+                        }}
+                        className={`rounded-lg border px-3 py-2 text-left text-[11px] font-bold transition ${
+                          item.voucher?.toUpperCase() === summary?.voucher?.toUpperCase()
+                            ? "border-amber-400 bg-amber-200 text-amber-950"
+                            : "border-amber-200 bg-white text-amber-900 hover:bg-amber-100"
+                        }`}>
+                        <span className="block">{item.voucher}</span>
+                        <span className="block max-w-48 truncate text-[10px] font-medium opacity-80">
+                          {item.modelo || item.status || "Sem modelo"}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-2 text-[11px] font-semibold">
+                    Regularize o vínculo entre voucher e IMEI antes de realizar movimentações ou correções cadastrais.
+                  </p>
+                </div>
+              </div>
+            </section>
+          )}
           {summary ? (
             <>
               <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -1401,7 +1451,7 @@ export default function RastreabilidadeItemV2Page() {
                       <span className="text-xs font-black text-slate-800">
                         {colorInfo?.cor_atual || colorInfo?.cor_sistema || "—"}
                       </span>
-                      {!summary.somente_tradein && <button
+                      {!summary.somente_tradein && !data?.imei_compartilhado && <button
                         type="button"
                         onClick={() => {
                           setActionError("");
@@ -1443,7 +1493,7 @@ export default function RastreabilidadeItemV2Page() {
                 </div>
               </div>
 
-              {!summary.somente_tradein && (<>
+              {!summary.somente_tradein && !data?.imei_compartilhado && (<>
               <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <div className="flex flex-col gap-4 p-5 xl:flex-row xl:items-center xl:justify-between">
                   <div>
@@ -1586,6 +1636,14 @@ export default function RastreabilidadeItemV2Page() {
               </div>
               </>)}
 
+              {data?.imei_compartilhado && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-950">
+                  <strong>Vínculo de IMEI compartilhado:</strong> as ações de reserva, alteração de cor,
+                  desvinculação e expedição ficam indisponíveis nesta consulta até a conciliação
+                  de identidade. Os dados exibidos pertencem ao voucher pesquisado, não ao
+                  cadastro mais recente que possui o mesmo IMEI.
+                </div>
+              )}
               {summary.somente_tradein && (
                 <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-900">
                   <strong>Jornada iniciada no Trade-in:</strong> ainda não há triagem física vinculada a este voucher.
