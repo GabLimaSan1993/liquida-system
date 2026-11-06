@@ -212,14 +212,26 @@ export default function LaboratorioIndividualV2Page() {
       } catch (erroConferencia) {
         avisoConferencia = erroConferencia?.message || 'Conferência indisponível';
       }
-      setPrevia({ ...arquivo, conferencia, avisoConferencia });
+      const dadosArquivo = { ...arquivo, conferencia, avisoConferencia };
+      setPrevia(dadosArquivo);
+      // Selecionar o arquivo é a confirmação do recebimento.
+      // A pré-conferência evita reimportar cadastros que já existem.
+      if (conferencia && (Number(conferencia.novos || 0) > 0 ||
+          Number(conferencia.liberar_pendentes || 0) > 0)) {
+        await importar(arquivo.vouchers, arquivo.arquivo,
+          { automatico: true, origem: dadosArquivo });
+      } else if (conferencia) {
+        setErro('Nenhum novo recebimento: todos os '+conferencia.total+
+          ' vouchers já constam no Laboratório ou no histórico. '+
+          'O contador permanece igual para não duplicar aparelhos. Veja a relação abaixo.');
+      }
     } catch (err) {
       setErro(err.message);
     } finally { setOcupado(false); e.target.value=''; }
   }
 
-  async function importar(vouchers,rotuloImportacao) {
-    if(ocupado||!vouchers?.length)return;
+  async function importar(vouchers,rotuloImportacao,opcoes={}) {
+    if(!vouchers?.length || (ocupado && !opcoes.automatico))return;
     setOcupado(true);setErro('');setSucesso('');
     let incluidos=0,existentes=0,liberados=0;
     let loteAtual=0;
@@ -237,8 +249,9 @@ export default function LaboratorioIndividualV2Page() {
         existentes+=Number(r.ja_existentes||0);
         liberados+=Number(r.liberados_pendentes||0);
       }
-      const ignorados=previa?.vouchers?.length===vouchers.length
-        ? Number(previa.invalidosQuantidade||0)+Number(previa.repetidosQuantidade||0):0;
+      const contexto=opcoes.origem || previa;
+      const ignorados=contexto?.vouchers?.length===vouchers.length
+        ? Number(contexto.invalidosQuantidade||0)+Number(contexto.repetidosQuantidade||0):0;
       if (incluidos===0 && liberados===0) {
         setErro('O total não aumentou: nenhum voucher novo foi cadastrado. '+
           existentes+' voucher(s) já constam no Laboratório (cadastro individual ou histórico). '+
@@ -320,7 +333,7 @@ export default function LaboratorioIndividualV2Page() {
           <p className="mt-2 text-xs leading-5 text-slate-600">Envie XLSX, XLS, ODS ou CSV. A coluna <b>Voucher</b> é a única utilizada; pedido, lote, IMEI e OS são ignorados. O envio confirma o recebimento e coloca o aparelho diretamente em <b>Aguardando técnico</b>. Vouchers existentes não são duplicados.</p>
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <label className={BOTAO+' cursor-pointer border-violet-300 bg-violet-50 text-violet-800'}>
-              <Upload size={16}/> Selecionar planilha
+              <Upload size={16}/> Enviar planilha · recebimento automático
               <input type="file" className="sr-only" accept=".xlsx,.xls,.ods,.csv" disabled={ocupado} onChange={prepararArquivo}/>
             </label>
             <a download="Modelo_Recebimento_Laboratorio.csv"
@@ -391,7 +404,7 @@ export default function LaboratorioIndividualV2Page() {
             </div>
           </div>}
           {progresso&&<p role="status" className="mt-3 text-xs font-bold text-violet-700">{progresso}</p>}
-          <p className="mt-3 text-[11px] leading-5 text-amber-800">A importação confirma administrativamente o recebimento dos vouchers informados, registra o usuário e horário e libera a fila do técnico, sem nova conferência por voucher. A OS e os defeitos ainda são validados na bancada. Não gera pedido/romaneio nem movimenta WMS/Oracle.</p>
+          <p className="mt-3 text-[11px] leading-5 text-amber-800">Ao selecionar o arquivo, os vouchers novos são importados automaticamente, sem novo clique. A importação confirma administrativamente o recebimento dos vouchers informados, registra o usuário e horário e libera a fila do técnico, sem nova conferência por voucher. A OS e os defeitos ainda são validados na bancada. Não gera pedido/romaneio nem movimenta WMS/Oracle.</p>
         </section>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
