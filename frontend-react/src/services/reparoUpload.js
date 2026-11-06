@@ -95,7 +95,7 @@ export function validarLinhasReparoFlexivel(linhas, { aba = "Reparo" } = {}) {
     const texto = original.replace(/[\uFEFF\u200B-\u200D]/g, "").trim().toUpperCase();
     const voucher = normalizarVoucherReparo(texto);
     if (/^[0-9]{15}$/.test(texto) ||
-        !/^[A-Z0-9_-]{3,60}$/.test(voucher) ||
+        !/^[A-Z0-9-]{3,60}$/.test(voucher) ||
         /^(VOUCHER|IMEI|PEDIDO|OS|NUMERO|TOTAL)$/.test(voucher)) {
       qtdInvalidos++;
       if (invalidos.length < 20) invalidos.push(
