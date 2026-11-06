@@ -43,7 +43,7 @@ async function lerChaves(file) {
   let totalLinhas = 0;
   for (const nome of livro.SheetNames || []) {
     const linhas = XLSX.utils.sheet_to_json(livro.Sheets[nome], {
-      header: 1, raw: false, defval: "", blankrows: false,
+      header: 1, raw: true, defval: "", blankrows: false,
     });
     if (!linhas.length) continue;
     let cabecalho = -1, colunas = [];
