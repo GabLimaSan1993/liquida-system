@@ -1,4 +1,5 @@
 import ReparoRetornoPanel from "../../components/ReparoRetornoPanel.jsx";
+import GaiaArmazenagemConferenciaPanel from "../../components/assurant/GaiaArmazenagemConferenciaPanel.jsx";
 import {
   useEffect,
   useRef,
@@ -1113,6 +1114,9 @@ export default function ArmazenagemV2Page() {
   return (
     <div className="space-y-5">
       <ReparoRetornoPanel modo="armazenagem" />
+      <GaiaArmazenagemConferenciaPanel
+        onSelecionarVoucher={(valor) => { setVoucher(valor); void abrirVoucher(valor); }}
+      />
       <Processo
         etapa={
           etapaProcesso
