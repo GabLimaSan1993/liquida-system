@@ -113,9 +113,27 @@ export async function carregarParaLaudo(voucher) {
   const naoLigaDivergencia = respostas?.destino?.tipo_laudo === "DIVERGENCIA" &&
     respostas?.destino?.tipo_divergencia === "NAO_LIGA";
 
-  const divergencias = (respostas?.respostas || [])
-    .filter(r => r.divergente)
-    .map(r => ({ pergunta: r.pergunta, resposta: r.resposta === "nao" ? "NÃO" : "SIM" }));
+
+  // Registros antigos do GAIA/funcional trazem "Pergunta: Resposta: Não"
+  // em texto, não em JSON. Sem esta leitura a tela mostrava "Nenhuma
+  // ocorrência" mesmo com defeitos e respostas negativas cadastrados.
+  const negativasLegado = !respostas && t.respostas_funcional
+    ? String(t.respostas_funcional).split(/;\\s*(?=[^;]+?:\\s*Resposta\\s*:)/i)
+      .map(item => {
+        const m = item.match(/^\\s*(.*?)\\s*:\\s*Resposta\\s*:\\s*(Não|Nao|Sim|Yes|No)\\s*$/i);
+        if (!m) return null;
+        const negativa = /^(n[aã]o|no)$/i.test(m[2]);
+        return negativa ? { pergunta: m[1].trim(), resposta: "NÃO" } : null;
+      }).filter(Boolean)
+    : [];
+  const divergencias = respostas
+    ? (Array.isArray(respostas.respostas) ? respostas.respostas : [])
+      .filter(r => r?.divergente === true || r?.divergente === "true")
+      .map(r => ({
+        pergunta: r.pergunta || r.pergunta_id || "Ocorrência funcional",
+        resposta: String(r.resposta || "").toLowerCase() === "nao" ? "NÃO" : "SIM"
+      }))
+    : negativasLegado;
 
   return completarIdentificacao({
     ok: true,
