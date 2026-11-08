@@ -741,6 +741,11 @@ function TabAnalise({ pedidosIniciais, onAtualizarSilencioso, itensAnalise }) {
                         </div>
                         <p className="text-xs text-slate-600 truncate">{item.modelo}{item.grade ? ` · ${item.grade}` : ""}</p>
                         <p className="text-xs text-slate-400 font-mono">Local original: {item.local_estoque || "—"}</p>
+                         {item.motivo_bloqueio_wms && (
+                           <p className="rounded-lg bg-red-50 px-2.5 py-2 text-xs font-semibold text-red-700 ring-1 ring-red-200">
+                             WMS · retirada bloqueada: {item.motivo_bloqueio_wms}
+                           </p>
+                         )}
                         {item.nao_localizado_em && <p className="text-xs text-slate-400">Não localizado em: {new Date(item.nao_localizado_em).toLocaleString("pt-BR")}</p>}
                         {item.status === "bipado" && item.localizado_em && <p className="text-xs text-emerald-600 font-semibold">✓ Localizado em {new Date(item.localizado_em).toLocaleString("pt-BR")} → {item.localizado_local}</p>}
                         {item.status === "nao_faturar" && (
