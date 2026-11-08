@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "../../lib/supabase";
 import { AlertTriangle, Download, FileSpreadsheet, Loader2, RefreshCw, Upload } from "lucide-react";
@@ -77,9 +77,9 @@ async function lerChaves(file) {
   return { unicos, repetidos: chaves.length - unicos.length, invalidos, totalLinhas };
 }
 function baixarCSV(dados) {
-  const cab = ["Identificador", "Tipo", "Situação", "Vouchers vinculados", "Status por voucher", "Grade final", "Grade cosmética já cadastrada", "Grade GAIA", "GAIA status", "WMS ativo"];
+  const cab = ["Identificador", "Tipo", "Situação física", "Pendência operacional", "Vouchers vinculados", "Status por voucher", "Grade final", "Grade cosmética já cadastrada", "Grade GAIA", "GAIA status", "WMS ativo"];
   const linhas = (dados?.itens || []).map(i => [
-    i.identificador, i.tipo, rotulos[i.classificacao] || i.classificacao,
+    i.identificador, i.tipo, i.status_fisico || "Fora do lote físico", rotulos[i.classificacao] || i.classificacao,
     (i.candidatos || []).map(c => c.voucher).join(" | "),
     (i.candidatos || []).map(c => c.voucher + ": " + (c.status || "sem status")).join(" | "),
     (i.candidatos || []).map(c => c.voucher + ": " + (c.grade || "pendente")).join(" | "),
@@ -113,6 +113,15 @@ export default function GaiaArmazenagemConferenciaPanel({ onSelecionarVoucher })
   const [sucesso,setSucesso] = useState("");
   const [filtro,setFiltro] = useState("TODOS");
   const ref = useRef(null);
+  // Consulta inicial compacta; a relação permanece recolhida para preservar
+  // a função principal de bipagem acima da dobra.
+  useEffect(() => {
+    let ativo = true;
+    supabase.rpc("assurant_armazenagem_diagnostico_planilha", {p_chaves:null})
+      .then(({data,error}) => {if(ativo && !error && data) setDados(data);})
+      .catch(() => {});
+    return () => {ativo=false;};
+  }, []);
 
   function selecionarRegularizacao(c) {
     // A grade cosmética pode existir mesmo sem a coluna grade final.
@@ -198,14 +207,20 @@ export default function GaiaArmazenagemConferenciaPanel({ onSelecionarVoucher })
         <div>
           <div className="flex items-center gap-2 text-sm font-black text-slate-900">
             <FileSpreadsheet className="h-5 w-5 text-violet-700" />
-            Conciliação de Armazenagem · GAIA legado
+            Fila física de Armazenagem · GAIA legado
           </div>
           <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-500">
-            Identifica IMEIs e vouchers de planilhas antigas, localiza o cadastro correto
-            e separa os prontos dos bloqueados. Não confirma armazenagem sem bipagem.
+            Os identificadores do lote foram declarados fisicamente como Aguardando armazenagem.
+            Vínculos de voucher, grade, WMS e B2C continuam rastreáveis. A alocação final
+            exige bipagem e não é simulada pelo lote físico.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {dados?.fisico_aguardando != null && (
+            <span className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-black text-violet-900">
+              {Number(dados.fisico_aguardando).toLocaleString("pt-BR")} aguardando armazenagem · físico
+            </span>
+          )}
           <button type="button" disabled={carregando} onClick={() => void consultar(null)}
             className="inline-flex items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-black text-violet-800 disabled:opacity-50">
             {carregando ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
@@ -235,14 +250,14 @@ export default function GaiaArmazenagemConferenciaPanel({ onSelecionarVoucher })
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2 text-center sm:grid-cols-4 xl:grid-cols-8">
             {[
-              ["Identificadores",dados.total],
-              ["Aptos",dados.prontos],
-              ["Vários vouchers",dados.ambiguos],
-              ["Grade já existe; etapa pendente",dados.grade_cosmetica_pendente],
-              ["Sem grade no cadastro",dados.sem_grade],
-              ["No WMS",dados.ja_no_wms],
-              ["Reserva B2C",dados.reservados_b2c],
-              ["Outras pendências",(dados.etapa_pendente||0)+(dados.conferir_legado||0)+(dados.nao_encontrados||0)]
+              ["Aguardando fisicamente",dados.fisico_aguardando],
+              ["Aptos à bipagem",dados.prontos],
+              ["Múltiplos vouchers",dados.ambiguos],
+              ["Sem grade final",dados.sem_grade],
+              ["Já no WMS (únicos)",dados.ja_no_wms],
+              ["Reserva B2C (únicos)",dados.reservados_b2c],
+              ["Divergências WMS (todo lote)",dados.fisico_divergencias_wms],
+              ["Divergências B2C (todo lote)",dados.fisico_divergencias_b2c]
             ].map(([label,n]) => (
               <div key={label} className="rounded-lg bg-slate-50 p-3">
                 <div className="text-xl font-black text-slate-950">{Number(n||0).toLocaleString("pt-BR")}</div>
@@ -252,10 +267,10 @@ export default function GaiaArmazenagemConferenciaPanel({ onSelecionarVoucher })
           </div>
           <div className="mt-3 flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0"/>
-            A grade cosmética já cadastrada é exibida separadamente da grade comercial final.
-            Registros com etapa pendente não estão automaticamente liberados: o operador deve
-            conferir o aparelho e seu voucher. IMEIs com vários vouchers não recebem a grade
-            de outro ciclo. A regularização física preserva as etapas antigas e exige bipagem WMS.
+            Aguardando armazenagem é a situação física confirmada para todo o lote.
+            Apenas os itens aptos à bipagem recebem novo endereço diretamente.
+            Os IMEIs com múltiplos vouchers exigem conferência da etiqueta;
+            vínculos WMS/B2C existentes não foram apagados e não autorizam alocação duplicada.
           </div>
 
           {regularizando && (
@@ -358,7 +373,7 @@ export default function GaiaArmazenagemConferenciaPanel({ onSelecionarVoucher })
           <div className="mt-3 max-h-[450px] overflow-auto rounded-xl border border-slate-200">
             <table className="min-w-[920px] w-full text-left text-xs">
               <thead className="sticky top-0 bg-slate-100 text-slate-700">
-                <tr>{["Identificador","Classificação","Vouchers / situação / grade","Ação segura"].map(h=>(
+                <tr>{["Identificador","Posição física","Condição para bipagem","Vouchers / situação / grade","Ação segura"].map(h=>(
                   <th key={h} className="px-3 py-3 font-black">{h}</th>
                 ))}</tr>
               </thead>
@@ -367,6 +382,11 @@ export default function GaiaArmazenagemConferenciaPanel({ onSelecionarVoucher })
                   <tr key={item.identificador} className="align-top">
                     <td className="px-3 py-3 font-mono font-bold text-slate-800">{item.identificador}
                       <div className="text-[10px] font-medium text-slate-400">{item.tipo}</div>
+                    </td>
+                    <td className="px-3 py-3">
+                      <span className="inline-block rounded-lg border border-violet-200 bg-violet-50 px-2 py-1 text-[10px] font-black text-violet-800">
+                        {item.status_fisico || "Não declarado"}
+                      </span>
                     </td>
                     <td className="px-3 py-3">
                       <span className={`inline-block rounded-md px-2 py-1 text-[10px] font-bold ${colors[item.classificacao]||"bg-slate-100 text-slate-700"}`}>
