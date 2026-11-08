@@ -99,7 +99,57 @@ export default function GaiaArmazenagemConferenciaPanel({ onSelecionarVoucher })
   const [dados,setDados] = useState(null);
   const [erro,setErro] = useState("");
   const [info,setInfo] = useState("");
+  const [regularizando,setRegularizando] = useState(null);
+  const [voucherDigitado,setVoucherDigitado] = useState("");
+  const [gradeFisica,setGradeFisica] = useState("");
+  const [bateriaInformada,setBateriaInformada] = useState("");
+  const [observacao,setObservacao] = useState("");
+  const [confirmadoFisicamente,setConfirmadoFisicamente] = useState(false);
+  const [salvando,setSalvando] = useState(false);
+  const [sucesso,setSucesso] = useState("");
+  const [filtro,setFiltro] = useState("TODOS");
   const ref = useRef(null);
+
+  function selecionarRegularizacao(c) {
+    setRegularizando(c);setVoucherDigitado("");setGradeFisica("");
+    setBateriaInformada("");setObservacao("");setConfirmadoFisicamente(false);
+    setErro("");setSucesso("");
+  }
+
+  async function confirmarRegularizacao() {
+    if (!regularizando || salvando) return;
+    if (voucherDigitado.trim().toUpperCase() !== regularizando.voucher) {
+      setErro("Digite exatamente o voucher da etiqueta física para evitar vínculo incorreto.");
+      return;
+    }
+    if (!/^[0-9]{15}$/.test(String(regularizando.imei||"")) || !gradeFisica || !confirmadoFisicamente) {
+      setErro("Confirme o IMEI, escolha a grade conferida e marque a declaração de conferência física.");
+      return;
+    }
+    setSalvando(true);setErro("");setSucesso("");
+    try {
+      const {data,error} = await supabase.rpc("assurant_gaia_legado_liberar_armazenagem",{
+        p_voucher:regularizando.voucher,
+        p_imei:regularizando.imei,
+        p_grade_fisica:gradeFisica,
+        p_voucher_confirmado:voucherDigitado.trim().toUpperCase(),
+        p_confirmacao:confirmadoFisicamente,
+        p_bateria_percentual:bateriaInformada==="" ? null : Number(bateriaInformada),
+        p_observacao:observacao.trim() || "Conferência física de legado GAIA na área de armazenagem"
+      });
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.erro || "Não foi possível regularizar o cadastro.");
+      const liberado=regularizando.voucher;
+      setRegularizando(null);
+      setSucesso(liberado+" liberado para reserva e bipagem. Classificação final: "+
+        data.grade_final+". Histórico das triagens anteriores mantido.");
+      const {data:atualizado,error:erroAtualizacao}=await supabase.rpc(
+        "assurant_armazenagem_diagnostico_planilha",{p_chaves:null});
+      if (!erroAtualizacao && atualizado) setDados(atualizado);
+      onSelecionarVoucher?.(liberado);
+    } catch(e) {setErro(e?.message || "Falha na regularização. Nada foi liberado.");}
+    finally {setSalvando(false);}
+  }
 
   async function consultar(chaves, infoLocal) {
     setCarregando(true); setErro("");
@@ -159,7 +209,8 @@ export default function GaiaArmazenagemConferenciaPanel({ onSelecionarVoucher })
           </button>
         </div>
       </div>
-      {erro && <div className="mx-4 mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-700">{erro}</div>}
+      {erro && <div role="alert" className="mx-4 mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-700">{erro}</div>}
+      {sucesso && <div role="status" className="mx-4 mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">{sucesso}</div>}
       {aberto && dados && (
         <div className="border-t border-slate-100 p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -191,8 +242,98 @@ export default function GaiaArmazenagemConferenciaPanel({ onSelecionarVoucher })
           </div>
           <div className="mt-3 flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0"/>
-            Quando o mesmo IMEI possui vários vouchers, confira a etiqueta física antes de selecionar.
-            Aparelhos sem grade final no GAIA precisam concluir a classificação ou ter o relatório final conciliado.
+            IMEIs com vários vouchers exigem conferência da etiqueta física. O legado GAIA sem grade
+            pode ser regularizado individualmente com a grade realmente conferida pelo operador,
+            sem marcar testes antigos como concluídos e sem simular movimentação WMS.
+          </div>
+
+          {regularizando && (
+            <section className="mt-3 rounded-xl border border-violet-300 bg-violet-50 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-black text-violet-950">Regularizar legado GAIA antes da armazenagem</h3>
+                  <p className="mt-1 text-xs text-violet-800">
+                    Voucher <strong>{regularizando.voucher}</strong> · IMEI <strong>{regularizando.imei}</strong>
+                    · {regularizando.modelo || "Modelo não informado"}
+                  </p>
+                  <p className="mt-1 text-xs text-violet-800">
+                    Status no GAIA: {regularizando.gaia_status || "não informado"}.
+                    A regularização ficará auditada com seu usuário e horário.
+                  </p>
+                </div>
+                <button type="button" disabled={salvando} onClick={()=>setRegularizando(null)}
+                  className="rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs font-bold text-violet-900">
+                  Fechar
+                </button>
+              </div>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <label className="text-xs font-bold text-slate-800">
+                  Confirme o voucher que está na etiqueta física
+                  <input type="text" value={voucherDigitado} onChange={e=>setVoucherDigitado(e.target.value.toUpperCase())}
+                    placeholder={regularizando.voucher}
+                    className="mt-1 w-full rounded-lg border border-violet-200 bg-white px-3 py-2 font-mono font-semibold outline-none focus:border-violet-500"/>
+                </label>
+                <label className="text-xs font-bold text-slate-800">
+                  Grade física conferida no aparelho *
+                  <select value={gradeFisica} onChange={e=>setGradeFisica(e.target.value)}
+                    className="mt-1 w-full rounded-lg border border-violet-200 bg-white px-3 py-2 outline-none focus:border-violet-500">
+                    <option value="">Selecione após conferir</option>
+                    {["QUEBRADO","REGULAR","BOM","MUITO BOM","EXCELENTE","LIKE NEW"].map(g=>(
+                      <option key={g} value={g}>{g}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-xs font-bold text-slate-800">
+                  Saúde da bateria (%) — se medida
+                  <input type="number" min="1" max="100" step="1" value={bateriaInformada}
+                    onChange={e=>setBateriaInformada(e.target.value)}
+                    placeholder="Ex.: 78 · deixe vazio se sem medição"
+                    className="mt-1 w-full rounded-lg border border-violet-200 bg-white px-3 py-2 outline-none focus:border-violet-500"/>
+                  <span className="mt-1 block font-normal text-slate-600">
+                    Abaixo de 70% vai para QUEBRADO; 70–79% aplica OUTLET.
+                  </span>
+                </label>
+                <label className="text-xs font-bold text-slate-800">
+                  Observação da conferência (opcional)
+                  <input type="text" value={observacao} onChange={e=>setObservacao(e.target.value)}
+                    placeholder="Etiqueta, laudo ou condição física observada"
+                    className="mt-1 w-full rounded-lg border border-violet-200 bg-white px-3 py-2 outline-none focus:border-violet-500"/>
+                </label>
+              </div>
+              <label className="mt-4 flex cursor-pointer items-start gap-2 text-xs font-semibold leading-5 text-slate-800">
+                <input type="checkbox" className="mt-1" checked={confirmadoFisicamente}
+                  onChange={e=>setConfirmadoFisicamente(e.target.checked)}/>
+                Confirmo que tenho o aparelho em mãos, conferi voucher, IMEI e grade física
+                na etiqueta/produto e autorizo a regularização excepcional do cadastro legado.
+                Isso não substitui testes técnicos, não registra triagem como concluída e
+                não movimenta o WMS sem a bipagem posterior.
+              </label>
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <button type="button" disabled={salvando||!confirmadoFisicamente||!gradeFisica||
+                  voucherDigitado.trim().toUpperCase()!==regularizando.voucher}
+                  onClick={()=>void confirmarRegularizacao()}
+                  className="rounded-lg bg-violet-700 px-4 py-2 text-xs font-black text-white disabled:opacity-50">
+                  {salvando ? "Registrando conferência..." : "Liberar para reservar endereço"}
+                </button>
+                <span className="text-[11px] text-slate-600">
+                  Cadastro de triagem e movimentações anteriores permanecem rastreáveis.
+                </span>
+              </div>
+            </section>
+          )}
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <label className="text-xs font-bold text-slate-600" htmlFor="gaia-filtro-situacao">Mostrar</label>
+            <select id="gaia-filtro-situacao" value={filtro} onChange={e=>setFiltro(e.target.value)}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold">
+              <option value="TODOS">Todos os identificadores</option>
+              {Object.entries(rotulos).map(([codigo,titulo])=>(
+                <option key={codigo} value={codigo}>{titulo}</option>
+              ))}
+            </select>
+            <span className="text-[11px] text-slate-500">
+              {(dados.itens||[]).filter(item=>filtro==="TODOS"||item.classificacao===filtro).length} exibidos
+            </span>
           </div>
           <div className="mt-3 max-h-[450px] overflow-auto rounded-xl border border-slate-200">
             <table className="min-w-[920px] w-full text-left text-xs">
@@ -202,7 +343,7 @@ export default function GaiaArmazenagemConferenciaPanel({ onSelecionarVoucher })
                 ))}</tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {(dados.itens||[]).map(item=>(
+                {(dados.itens||[]).filter(item=>filtro==="TODOS"||item.classificacao===filtro).map(item=>(
                   <tr key={item.identificador} className="align-top">
                     <td className="px-3 py-3 font-mono font-bold text-slate-800">{item.identificador}
                       <div className="text-[10px] font-medium text-slate-400">{item.tipo}</div>
@@ -229,8 +370,18 @@ export default function GaiaArmazenagemConferenciaPanel({ onSelecionarVoucher })
                             Abrir {c.voucher}
                           </button>
                         ))}
-                        {!(item.candidatos||[]).some(c=>c.status==="Aguardando armazenagem"&&c.grade&&!c.wms_ativo)&&
-                          <span className="text-[10px] text-slate-400">Necessita conciliação</span>}
+                        {(item.candidatos||[]).filter(c=>c.origem==="gaia"&&!c.wms_ativo&&!c.grade&&
+                          ["Aguardando triagem funcional","Aguardando triagem cosmética"].includes(c.status)).map(c=>(
+                          <button key={"regularizar-"+c.voucher} type="button" disabled={salvando}
+                            onClick={()=>selecionarRegularizacao(c)}
+                            className="rounded-md border border-violet-200 bg-violet-50 px-2 py-1 text-[10px] font-black text-violet-800">
+                            Conferir e regularizar {c.voucher}
+                          </button>
+                        ))}
+                        {!(item.candidatos||[]).some(c=>(c.status==="Aguardando armazenagem"&&c.grade&&!c.wms_ativo)||
+                           (c.origem==="gaia"&&!c.wms_ativo&&!c.grade&&
+                            ["Aguardando triagem funcional","Aguardando triagem cosmética"].includes(c.status)))&&
+                          <span className="text-[10px] text-slate-400">Necessita conciliação / atendimento da etapa</span>}
                       </div>
                     </td>
                   </tr>
