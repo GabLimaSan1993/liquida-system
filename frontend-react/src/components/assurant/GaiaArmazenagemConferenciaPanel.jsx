@@ -6,7 +6,8 @@ import { AlertTriangle, Download, FileSpreadsheet, Loader2, RefreshCw, Upload } 
 const rotulos = {
   PRONTO: "Apto para armazenagem",
   MULTIPLOS_VOUCHERS: "IMEI com mais de um voucher",
-  SEM_GRADE_FINAL: "GAIA / triagem sem grade final",
+  SEM_GRADE_FINAL: "Sem grade registrada no voucher",
+  GRADE_COSMETICA_ETAPA_PENDENTE: "Grade existente · etapa pendente",
   JA_NO_WMS: "Já possui alocação WMS",
   ETAPA_PENDENTE: "Etapa operacional pendente",
   CONFERIR_LEGADO: "Conferir fluxo legado do GAIA",
@@ -17,6 +18,7 @@ const colors = {
   PRONTO: "bg-emerald-50 text-emerald-800",
   MULTIPLOS_VOUCHERS: "bg-amber-50 text-amber-800",
   SEM_GRADE_FINAL: "bg-rose-50 text-rose-700",
+  GRADE_COSMETICA_ETAPA_PENDENTE: "bg-amber-50 text-amber-900",
   JA_NO_WMS: "bg-sky-50 text-sky-700",
   RESERVADO_B2C: "bg-orange-50 text-orange-800",
 };
@@ -75,13 +77,15 @@ async function lerChaves(file) {
   return { unicos, repetidos: chaves.length - unicos.length, invalidos, totalLinhas };
 }
 function baixarCSV(dados) {
-  const cab = ["Identificador", "Tipo", "Situação", "Vouchers vinculados", "Status por voucher", "Grades", "GAIA", "WMS ativo"];
+  const cab = ["Identificador", "Tipo", "Situação", "Vouchers vinculados", "Status por voucher", "Grade final", "Grade cosmética já cadastrada", "Grade GAIA", "GAIA status", "WMS ativo"];
   const linhas = (dados?.itens || []).map(i => [
     i.identificador, i.tipo, rotulos[i.classificacao] || i.classificacao,
     (i.candidatos || []).map(c => c.voucher).join(" | "),
     (i.candidatos || []).map(c => c.voucher + ": " + (c.status || "sem status")).join(" | "),
-    (i.candidatos || []).map(c => c.voucher + ": " + (c.grade || "sem grade")).join(" | "),
-    (i.candidatos || []).map(c => c.voucher + ": " + (c.gaia_status || "—") + "/" + (c.gaia_grade || "—")).join(" | "),
+    (i.candidatos || []).map(c => c.voucher + ": " + (c.grade || "pendente")).join(" | "),
+    (i.candidatos || []).map(c => c.voucher + ": " + (c.grade_cosmetica || "não registrada")).join(" | "),
+    (i.candidatos || []).map(c => c.voucher + ": " + (c.gaia_grade || "não registrada")).join(" | "),
+    (i.candidatos || []).map(c => c.voucher + ": " + (c.gaia_status || "—")).join(" | "),
     (i.candidatos || []).map(c => c.wms_ativo ? c.voucher : "").filter(Boolean).join(" | "),
   ]);
   const esc = x => '"' + String(x ?? "").replace(/"/g, '""') + '"';
@@ -111,7 +115,12 @@ export default function GaiaArmazenagemConferenciaPanel({ onSelecionarVoucher })
   const ref = useRef(null);
 
   function selecionarRegularizacao(c) {
-    setRegularizando(c);setVoucherDigitado("");setGradeFisica("");
+    // A grade cosmética pode existir mesmo sem a coluna grade final.
+    // Exibir a existente para mera conferência física, não exigir nova classificação.
+    const gradeExistente=String(c.grade_cosmetica || c.grade || c.gaia_grade || "").toUpperCase().trim();
+    setRegularizando(c);setVoucherDigitado("");
+    setGradeFisica(["QUEBRADO","REGULAR","BOM","MUITO BOM","EXCELENTE","LIKE NEW"].includes(gradeExistente)
+      ? gradeExistente : "");
     setBateriaInformada("");setObservacao("");setConfirmadoFisicamente(false);
     setErro("");setSucesso("");
   }
@@ -224,12 +233,13 @@ export default function GaiaArmazenagemConferenciaPanel({ onSelecionarVoucher })
                 className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold">Ocultar</button>
             </div>
           </div>
-          <div className="mt-3 grid grid-cols-2 gap-2 text-center sm:grid-cols-4 xl:grid-cols-7">
+          <div className="mt-3 grid grid-cols-2 gap-2 text-center sm:grid-cols-4 xl:grid-cols-8">
             {[
               ["Identificadores",dados.total],
               ["Aptos",dados.prontos],
               ["Vários vouchers",dados.ambiguos],
-              ["Sem grade final",dados.sem_grade],
+              ["Grade já existe; etapa pendente",dados.grade_cosmetica_pendente],
+              ["Sem grade no cadastro",dados.sem_grade],
               ["No WMS",dados.ja_no_wms],
               ["Reserva B2C",dados.reservados_b2c],
               ["Outras pendências",(dados.etapa_pendente||0)+(dados.conferir_legado||0)+(dados.nao_encontrados||0)]
@@ -242,9 +252,10 @@ export default function GaiaArmazenagemConferenciaPanel({ onSelecionarVoucher })
           </div>
           <div className="mt-3 flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0"/>
-            IMEIs com vários vouchers exigem conferência da etiqueta física. O legado GAIA sem grade
-            pode ser regularizado individualmente com a grade realmente conferida pelo operador,
-            sem marcar testes antigos como concluídos e sem simular movimentação WMS.
+            A grade cosmética já cadastrada é exibida separadamente da grade comercial final.
+            Registros com etapa pendente não estão automaticamente liberados: o operador deve
+            conferir o aparelho e seu voucher. IMEIs com vários vouchers não recebem a grade
+            de outro ciclo. A regularização física preserva as etapas antigas e exige bipagem WMS.
           </div>
 
           {regularizando && (
@@ -258,6 +269,9 @@ export default function GaiaArmazenagemConferenciaPanel({ onSelecionarVoucher })
                   </p>
                   <p className="mt-1 text-xs text-violet-800">
                     Status no GAIA: {regularizando.gaia_status || "não informado"}.
+                    {regularizando.grade_cosmetica
+                      ? " Grade cosmética já registrada: " + regularizando.grade_cosmetica + "."
+                      : " Sem grade cosmética no cadastro atual."}
                     A regularização ficará auditada com seu usuário e horário.
                   </p>
                 </div>
@@ -274,7 +288,7 @@ export default function GaiaArmazenagemConferenciaPanel({ onSelecionarVoucher })
                     className="mt-1 w-full rounded-lg border border-violet-200 bg-white px-3 py-2 font-mono font-semibold outline-none focus:border-violet-500"/>
                 </label>
                 <label className="text-xs font-bold text-slate-800">
-                  Grade física conferida no aparelho *
+                  Grade física do aparelho — confirme a grade cadastrada *
                   <select value={gradeFisica} onChange={e=>setGradeFisica(e.target.value)}
                     className="mt-1 w-full rounded-lg border border-violet-200 bg-white px-3 py-2 outline-none focus:border-violet-500">
                     <option value="">Selecione após conferir</option>
@@ -282,6 +296,12 @@ export default function GaiaArmazenagemConferenciaPanel({ onSelecionarVoucher })
                       <option key={g} value={g}>{g}</option>
                     ))}
                   </select>
+                  {regularizando.grade_cosmetica && (
+                    <span className="mt-1 block text-[11px] font-normal text-slate-600">
+                      Pré-preenchida pela grade cosmética já existente.
+                      Confira no aparelho antes de confirmar; não é uma nova triagem.
+                    </span>
+                  )}
                 </label>
                 <label className="text-xs font-bold text-slate-800">
                   Saúde da bateria (%) — se medida
@@ -356,7 +376,11 @@ export default function GaiaArmazenagemConferenciaPanel({ onSelecionarVoucher })
                     <td className="px-3 py-3 text-slate-700">
                       {(item.candidatos||[]).map(c=>(
                         <div key={c.voucher} className="mb-1">
-                          <strong>{c.voucher}</strong> · {c.status || "—"} · {c.grade || c.gaia_grade || "sem grade"}
+                          <strong>{c.voucher}</strong> · {c.status || "—"} ·
+                          {c.grade ? " Grade final: " + c.grade : c.grade_cosmetica
+                            ? " Grade cosmética existente: " + c.grade_cosmetica + " (etapa pendente)"
+                            : c.gaia_grade ? " Grade no GAIA: " + c.gaia_grade
+                            : " Sem grade neste voucher"}
                           {c.wms_ativo ? " · WMS ativo" : ""}
                         </div>
                       ))}
