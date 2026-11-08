@@ -5,7 +5,8 @@ import { supabase } from "../lib/supabase";
 // Ex: "20260701_GABRISCELL_QUEBRA.xlsx" -> "2026-07-01". Retorna null se não achar.
 function extrairDataDoNome(nomeArquivo) {
   if (!nomeArquivo) return null;
-  const m = String(nomeArquivo).match(/^(\d{4})(\d{2})(\d{2})/);
+  const base = String(nomeArquivo).replace(/^PICKING[\s_-]+/i, "");
+  const m = base.match(/^(\d{4})(\d{2})(\d{2})/);
   if (!m) return null;
   const [, ano, mes, dia] = m;
   const a = parseInt(ano), mi = parseInt(mes), d = parseInt(dia);
@@ -191,61 +192,58 @@ export async function importarPedidoB2B(file, userId, extras = {}) {
           throw new Error("Informe a condição de pagamento no upload. Nenhum pedido foi criado.");
         }
 
-        const { data: existing } = await supabase.from("b2b_pedidos").select("id").eq("lote", lote).single();
-        if (existing) throw new Error(`Pedido "${lote}" já foi importado.`);
-
-        const { data: pedido, error: errPedido } = await supabase
-          .from("b2b_pedidos")
-          .insert({
-            lote,
-            cliente,
-            data_pedido:        extrairDataDoNome(file.name),
-            total_itens:        rows.length,
-            criado_por:         userId,
-            condicao_pagamento: condicaoPagamentoUpload,
-            cnpj_agregado:      cnpjUpload,
-            status_picking:     "em_andamento",
-            status_faturamento: "pendente",
-          })
-          .select().single();
-        if (errPedido) throw new Error(errPedido.message);
-
-        // IMEIs da planilha, já normalizados (trim) para o match com a triagem
-        const imeisLista = rows
-          .map(r => acharImeiLinha(r))
-          .filter(i => i.length > 5);
-
+        // A gravação deve ser atômica. A implementação anterior cadastrava
+        // primeiro o cabeçalho e só depois os itens: se um trigger de WMS
+        // rejeitasse algum IMEI, restava um pedido fantasma (368/0 itens).
+        // A RPC reutiliza o cabeçalho vazio e reverte tudo em caso de erro.
+        const imeisLista = rows.map(acharImeiLinha).filter(Boolean);
         const wmsMap = await localizarImeisWms(imeisLista);
-
-        const itens = rows.map((r, rowIdx) => {
+        const itens = rows.map(r => {
           const imei = acharImeiLinha(r);
           const wms = wmsMap.get(imei) || null;
-          let valor = null;
-          if (valorIdx >= 0) valor = valorMoedaB2B(r.__celulas[valorIdx]);
           return {
-            pedido_id: pedido.id, imei,
-            voucher:       wms?.voucher || null,
-            modelo:        r["MODELO"]  || r["CNN"]  || null,
-            grade:         r["GRADE"]   || null,
-            grade2:        r["GRADE2"]  || null,
-            desc_item:     r["DESC_ITEM"] || null,
-            cod_item:      r["COD_ITEM"]  || null,
+            imei,
+            voucher: wms?.voucher || null,
+            modelo: r["MODELO"] || r["CNN"] || null,
+            grade: r["GRADE"] || null,
+            grade2: r["GRADE2"] || null,
+            desc_item: r["DESC_ITEM"] || null,
+            cod_item: r["COD_ITEM"] || null,
             local_estoque: wms?.disponivel ? wms.local : null,
-            aging:         wms?.aging_dias ?? null,
-            valor,
-            // Fora do WMS ou já comprometido com outro pedido: análise direta.
-            status:        wms?.disponivel ? "pendente" : "em_analise",
+            aging: wms?.aging_dias ?? null,
+            valor: valorIdx >= 0 ? valorMoedaB2B(r.__celulas[valorIdx]) : null,
+            // Reservas físicas não podem ser abertas para aparelhos já
+            // comprometidos ou que não estejam confirmados no WMS.
+            status: wms?.disponivel ? "pendente" : "em_analise",
           };
-        }).filter(i => i.imei && i.imei.length > 5);
+        }).filter(item => item.imei);
 
-        await supabase.from("b2b_pedidos").update({ total_itens: itens.length }).eq("id", pedido.id);
-
-        const CHUNK = 500;
-        for (let i = 0; i < itens.length; i += CHUNK) {
-          const { error } = await supabase.from("b2b_itens").insert(itens.slice(i, i + CHUNK));
-          if (error) throw new Error(error.message);
+        const { data: importado, error: erroImportacao } = await supabase.rpc(
+          "b2b_importar_pedido_atomico", {
+            p_lote: lote,
+            p_cliente: cliente,
+            p_data_pedido: extrairDataDoNome(file.name),
+            p_cnpj: cnpjUpload,
+            p_condicao_pagamento: condicaoPagamentoUpload,
+            p_itens: itens,
+          }
+        );
+        if (erroImportacao) throw new Error(
+          "Falha ao gravar o lote (nenhum item novo fica parcialmente salvo): "+
+          erroImportacao.message
+        );
+        if (!importado?.ok || Number(importado.total) !== itens.length) {
+          throw new Error("A importação não confirmou a contagem dos aparelhos. Confira antes de reprocessar.");
         }
-        resolve({ pedido, total: itens.length, lote, cliente });
+        resolve({
+          pedido: {id:importado.pedido_id},
+          total: Number(importado.total),
+          lote,
+          cliente,
+          pendentes: Number(importado.pendentes || 0),
+          emAnalise: Number(importado.em_analise || 0),
+          recuperado: importado.pedido_recuperado === true,
+        });
       } catch (err) { reject(err); }
     };
     reader.onerror = () => reject(new Error("Erro ao ler o arquivo."));
