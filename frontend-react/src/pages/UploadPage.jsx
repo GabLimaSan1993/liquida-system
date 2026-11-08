@@ -477,11 +477,18 @@ export default function UploadPage({ warehouseV2 = false }) {
         lote:     result.lote,
         cliente:  result.cliente,
         total:    result.total,
-        mensagem: "Pedido importado com sucesso!",
+        mensagem: result.recuperado
+          ? "Pedido incompleto recuperado com sucesso."
+          : "Pedido importado com sucesso.",
       });
       updateHistoryCard("Pedido B2B", { name: b2bFile.name, status: "Concluído", rows: result.total.toLocaleString("pt-BR"), progress: 100 });
       setProgress(100);
-      setStatus(`Pedido B2B importado! ${result.total.toLocaleString("pt-BR")} itens — Lote: ${result.lote}`);
+      setStatus(
+        (result.recuperado ? "Pedido B2B incompleto recuperado!" : "Pedido B2B importado!")+
+        " "+result.total.toLocaleString("pt-BR")+" itens — Lote: "+result.lote+
+        ". "+result.pendentes.toLocaleString("pt-BR")+" disponíveis para picking e "+
+        result.emAnalise.toLocaleString("pt-BR")+" em análise (não retirar até regularizar o WMS)."
+      );
       setB2bCondicaoPagamento("");
       setB2bCnpjAgregado("");
       const { data } = await supabase.from("b2b_pedidos").select("id, lote").order("criado_em", { ascending: false });
