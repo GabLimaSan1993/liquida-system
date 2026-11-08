@@ -415,7 +415,8 @@ export default function GaiaArmazenagemConferenciaPanel({ onSelecionarVoucher })
                           </button>
                         ))}
                         {(item.candidatos||[]).filter(c=>c.origem==="gaia"&&!c.wms_ativo&&!c.grade&&
-                          ["Aguardando triagem funcional","Aguardando triagem cosmética"].includes(c.status)).map(c=>(
+                          (["Aguardando triagem funcional","Aguardando triagem cosmética"].includes(c.status) ||
+                            (c.status==="Aguardando armazenagem" && !c.grade_cosmetica))).map(c=>(
                           <button key={"regularizar-"+c.voucher} type="button" disabled={salvando}
                             onClick={()=>selecionarRegularizacao(c)}
                             className="rounded-md border border-violet-200 bg-violet-50 px-2 py-1 text-[10px] font-black text-violet-800">
@@ -424,7 +425,8 @@ export default function GaiaArmazenagemConferenciaPanel({ onSelecionarVoucher })
                         ))}
                         {!(item.candidatos||[]).some(c=>(c.status==="Aguardando armazenagem"&&c.grade&&!c.wms_ativo)||
                            (c.origem==="gaia"&&!c.wms_ativo&&!c.grade&&
-                            ["Aguardando triagem funcional","Aguardando triagem cosmética"].includes(c.status)))&&
+                            (["Aguardando triagem funcional","Aguardando triagem cosmética"].includes(c.status) ||
+                            (c.status==="Aguardando armazenagem" && !c.grade_cosmetica))))&&
                           <span className="text-[10px] text-slate-400">Necessita conciliação / atendimento da etapa</span>}
                       </div>
                     </td>
