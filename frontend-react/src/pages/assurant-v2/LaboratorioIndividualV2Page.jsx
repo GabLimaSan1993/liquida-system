@@ -599,11 +599,11 @@ export default function LaboratorioIndividualV2Page() {
               </>}
             </section>
             <section className="mt-4 rounded-xl border border-slate-200 p-4">
-              <h3 className="text-sm font-black">Conclusão do reparo</h3>
+              <h3 className="text-sm font-black">Conclusão do reparo</h3><p className="mt-1 text-xs text-slate-500">Classificação técnica para o retorno: Scrap → sub 1000; sem reparo → sub 7; reparado → nova triagem cosmética. Importações individuais não autorizam movimentação WMS/Oracle automática sem vínculo físico validado.</p>
               <div className="mt-3 grid gap-2 md:grid-cols-2">
                 <label className="text-xs font-semibold text-slate-600">Resultado
                   <select value={resultado} disabled={ocupado||item.status==='concluido'} onChange={e=>setResultado(e.target.value)} className={CAMPO+' mt-1 block w-full'}>
-                    <option value="reparado">Reparado</option><option value="sem_reparo">Sem reparo</option><option value="irrecuperavel">Irrecuperável</option>
+                    <option value="reparado">Reparado — nova cosmética / grade Oracle</option><option value="sem_reparo">Sem reparo — Quebrado, sub 6 → 7</option><option value="irrecuperavel">Scrap / irrecuperável — sub 6 → 1000</option>
                   </select>
                 </label>
                 <label className="text-xs font-semibold text-slate-600">Observações técnicas
