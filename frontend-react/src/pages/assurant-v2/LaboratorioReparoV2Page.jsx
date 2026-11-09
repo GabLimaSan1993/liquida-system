@@ -158,7 +158,7 @@ export default function LaboratorioReparoV2Page() {
     const i=itens.find(x=>x.voucher?.trim().toUpperCase()===buscaDevolucao.trim().toUpperCase()||x.imei===buscaDevolucao.trim());
     if(!i){setErro('Voucher não localizado neste lote.');return;}
     if(i.status!=='em_devolucao'){setErro('Este voucher não possui romaneio de devolução pendente.');return;}
-    const r=await executar('receber_warehouse',{p_item_id:i.id},'Recebimento físico confirmado. Enviado para aguardando armazenagem.');
+    const r=await executar('receber_warehouse',{p_item_id:i.id},'Recebimento físico confirmado; destino definido pelo resultado técnico (Scrap, Quebrado ou nova cosmética).');
     if(r)setBuscaDevolucao('');
   }
   const contagem=(status)=>itens.filter(i=>i.status===status).length;
@@ -269,7 +269,7 @@ export default function LaboratorioReparoV2Page() {
                     <button disabled={!novoDefeito.trim()} className={botao+' border border-slate-200 bg-white text-violet-700 hover:bg-violet-50'}><Plus size={15}/>Adicionar</button></form>
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
-                  <label className="text-xs font-bold text-slate-700">Resultado do reparo<select className={'mt-1 '+campo} value={resultado} onChange={e=>setResultado(e.target.value)}><option value="reparado">Reparado</option><option value="sem_reparo">Sem reparo</option><option value="irrecuperavel">Irrecuperável</option></select></label>
+                  <label className="text-xs font-bold text-slate-700">Resultado do reparo<select className={'mt-1 '+campo} value={resultado} onChange={e=>setResultado(e.target.value)}><option value="reparado">Reparado — nova cosmética / grade Oracle</option><option value="sem_reparo">Sem reparo — Quebrado, sub 6 → 7</option><option value="irrecuperavel">Scrap / irrecuperável — sub 6 → 1000</option></select></label>
                   <label className="text-xs font-bold text-slate-700">Observações técnicas<textarea className={'mt-1 '+campo} rows={2} value={observacoes} onChange={e=>setObservacoes(e.target.value)} placeholder="Serviço realizado, peças, testes e pendências"/></label>
                 </div>
                 <div className="flex flex-wrap gap-2"><button className={botao+' border border-slate-200 bg-white text-violet-700 hover:bg-violet-50'} onClick={salvarDefeitos} disabled={busy}>Salvar revisão dos defeitos</button>
@@ -278,7 +278,7 @@ export default function LaboratorioReparoV2Page() {
             </div>}
             {aba==='devolucao'&&<div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <h3 className="text-sm font-bold text-slate-800">Romaneio de devolução ao warehouse</h3>
-              <p className="text-sm text-slate-500">Os reparos concluídos podem ser agrupados em um romaneio de retorno. A conferência física deve ser bipada no warehouse; somente depois o produto irá para <b>Aguardando armazenagem</b>.</p>
+              <p className="text-sm text-slate-500">Os reparos concluídos podem ser agrupados em um romaneio de retorno. Após a bipagem no warehouse: <b>Scrap → Oracle 6/1000</b>; <b>sem reparo → Quebrado, Oracle 6/7</b>; <b>reparado → nova cosmética e alocação pela grade</b>.</p>
               <div className="flex flex-wrap items-center gap-3"><span className="rounded-lg bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700">{concluidos} prontos para envio</span>
                 <button className={botao+' bg-violet-700 text-white hover:bg-violet-800'} disabled={busy||!concluidos} onClick={async()=>{const r=await executar('gerar_retorno',{},'Romaneio de devolução gerado.');if(r) setAba('romaneios');}}><ClipboardList size={16}/>Gerar romaneio de retorno</button></div>
               <form onSubmit={devolver} className="flex flex-wrap gap-2"><input className={campo+' min-w-52 flex-1'} value={buscaDevolucao} onChange={e=>setBuscaDevolucao(e.target.value)} placeholder="Bipar voucher recebido pelo warehouse"/>
