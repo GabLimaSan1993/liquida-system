@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Download, Upload, RefreshCw, Wrench, ArrowLeft, CheckCircle2 } from 'lucide-react';
-import { operarReparo, operarReparoPorVouchers, exportarReparo } from '../services/reparoPickingService.js';
+import { operarReparo, operarReparoPorVouchers, exportarReparo, exportarFilaOracleReparo } from '../services/reparoPickingService.js';
 import { lerUploadReparoFlexivel, baixarModeloReparoVoucher } from '../services/reparoUpload.js';
 import { useAuth } from '../AuthContext.jsx';
 import { imprimirMinutaReparo, imprimirEtiquetasCaixasReparo } from '../services/reparoDocumentosService.js';
@@ -121,6 +121,15 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
     finally { setBusy(false); }
   }
 
+  async function baixarFilaOracle() {
+    setBusy(true); setError(''); setMessage('');
+    try {
+      const resposta = await exportarFilaOracleReparo();
+      setMessage(`Fila Oracle de envio: ${number(resposta.total)} IMEIs bipados, dos quais ${number(resposta.liberados)} estão liberados após a conclusão do picking. O arquivo não registra movimentações no Oracle.`);
+    } catch (err) { setError(err.message); }
+    finally { setBusy(false); }
+  }
+
   function imprimirDocumento(tipo) {
     if (!detail) return;
     setError('');
@@ -148,6 +157,7 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
           <input ref={arquivoRef} type="file" accept=".xlsx,.xls,.csv" aria-label="Planilha de vouchers para reparo" className="hidden" onChange={selecionarArquivo} disabled={busy} />
           <button disabled={busy || loading} onClick={() => arquivoRef.current?.click()} className="flex items-center gap-2 rounded-xl bg-purple-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"><Upload size={14} />Importar para reparo</button>
         </>}
+        {oracle && <button disabled={busy} onClick={baixarFilaOracle} className="flex items-center gap-2 rounded-xl border border-violet-300 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-800"><Download size={14} />Fila Oracle dos IMEIs bipados</button>}
         {detail && <button disabled={busy} onClick={() => { setDetail(null); carregar(); }} className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs"><ArrowLeft size={14} />Pedidos</button>}
         {detail && <button disabled={busy} onClick={exportar} className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs"><Download size={14} />{oracle ? 'Exportar movimentação' : 'Exportar picking'}</button>}
         {detail && !oracle && <>
