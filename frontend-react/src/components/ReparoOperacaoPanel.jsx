@@ -3,6 +3,7 @@ import { Download, Upload, RefreshCw, Wrench, ArrowLeft, CheckCircle2 } from 'lu
 import { operarReparo, operarReparoPorVouchers, exportarReparo } from '../services/reparoPickingService.js';
 import { lerUploadReparoFlexivel, baixarModeloReparoVoucher } from '../services/reparoUpload.js';
 import { useAuth } from '../AuthContext.jsx';
+import { imprimirMinutaReparo, imprimirEtiquetasCaixasReparo } from '../services/reparoDocumentosService.js';
 
 const labels = { pendente: 'Aguardando bipagem', bloqueado: 'Pendência', bipado: 'Bipado', em_reparo: 'Em reparo' };
 const number = n => Number(n || 0).toLocaleString('pt-BR');
@@ -23,6 +24,8 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
   const [historico, setHistorico] = useState(false);
   const [destino, setDestino] = useState('');
   const [referencia, setReferencia] = useState('');
+  const [tipoProcesso, setTipoProcesso] = useState('Reparo');
+  const [quantidadeCaixas, setQuantidadeCaixas] = useState(1);
   const inputRef = useRef(null);
   const arquivoRef = useRef(null);
   const [upload, setUpload] = useState(null);
@@ -52,6 +55,7 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
         setMessage('Nenhum novo aparelho incluído. Confira os vouchers já vinculados a outros pickings ou que precisam de regularização.');
       } else if (data.pedido.status === 'picking') {
         setDetail(data); setImei(''); setBusca(''); setFiltro('');
+        setTipoProcesso(/NAO.?INICI|NÃO.?INICI/i.test(data?.pedido?.lote || '') ? 'Revisão não inicializa' : 'Reparo');
         setMessage(`Lote ${data.pedido.lote} criado a partir dos vouchers: ${number(data.importacao?.incluidos || data.pedido.total)} incluídos e ${number(data.importacao?.qtd_ignorados)} ignorados. ${number(data.pedido.bloqueados)} com pendência. Confira a lista antes da bipagem.`);
       } else {
         setDetail(null);
@@ -85,6 +89,7 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
     try {
       const data = await operarReparo(oracle ? 'detalhar_oracle' : 'detalhar_picking', id);
       setDetail(data); setDestino(data.pedido.status_destino_oracle || '');
+      setTipoProcesso(/NAO.?INICI|NÃO.?INICI/i.test(data?.pedido?.lote || '') ? 'Revisão não inicializa' : 'Reparo');
       setReferencia(data.pedido.referencia_oracle || ''); setBusca(''); setFiltro('');
     } catch (err) { setError(err.message); }
     finally { setBusy(false); }
@@ -116,6 +121,16 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
     finally { setBusy(false); }
   }
 
+  function imprimirDocumento(tipo) {
+    if (!detail) return;
+    setError('');
+    try {
+      const processo = tipoProcesso.trim() || 'Reparo';
+      if (tipo === 'minuta') imprimirMinutaReparo(detail.pedido, detail.itens, processo);
+      else imprimirEtiquetasCaixasReparo(detail.pedido, processo, quantidadeCaixas);
+    } catch (err) { setError(err.message); }
+  }
+
   const pedidosVisiveis = pedidos.filter(p => !oracle || historico || p.status === 'aguardando_oracle');
   const pedido = detail?.pedido;
   const itens = (detail?.itens || []).filter(i => (!filtro || i.status === filtro) &&
@@ -135,6 +150,19 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
         </>}
         {detail && <button disabled={busy} onClick={() => { setDetail(null); carregar(); }} className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs"><ArrowLeft size={14} />Pedidos</button>}
         {detail && <button disabled={busy} onClick={exportar} className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs"><Download size={14} />{oracle ? 'Exportar movimentação' : 'Exportar picking'}</button>}
+        {detail && !oracle && <>
+          <label className="text-xs font-semibold text-slate-600">Classificação do processo
+            <input list="tipos-reparo" value={tipoProcesso} onChange={e => setTipoProcesso(e.target.value)}
+              placeholder="Reparo / Revisão não inicializa" className="mt-1 block min-w-48 rounded-lg border bg-white px-3 py-2 text-xs" maxLength={70}/>
+            <datalist id="tipos-reparo"><option value="Reparo"/><option value="Revisão não inicializa"/><option value="Revisão técnica"/><option value="Reclassificação"/></datalist>
+          </label>
+          <button type="button" disabled={busy} onClick={() => imprimirDocumento('minuta')} className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs"><Download size={14}/>Gerar minuta (IMEI e descrição)</button>
+          <label className="text-xs font-semibold text-slate-600">Caixas
+            <input type="number" value={quantidadeCaixas} onChange={e => setQuantidadeCaixas(e.target.value)}
+              min="1" max="100" className="mt-1 block w-16 rounded-lg border bg-white px-2 py-2 text-xs"/>
+          </label>
+          <button type="button" disabled={busy} onClick={() => imprimirDocumento('etiquetas')} className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs"><Download size={14}/>Etiquetas das caixas</button>
+        </>}
         <button disabled={busy || loading} onClick={() => detail && !oracle ? executar('atualizar') : detail ? abrir(detail.pedido.id) : carregar()} className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs disabled:opacity-50"><RefreshCw size={14} />{detail && !oracle ? 'Atualizar posições' : 'Atualizar'}</button>
       </div>
     </div>
