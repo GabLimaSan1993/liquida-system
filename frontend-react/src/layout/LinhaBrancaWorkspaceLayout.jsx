@@ -24,6 +24,7 @@ const NAVEGACAO = [
     subgrupos:[
       {id:"lavadoras",titulo:"Lavadoras",icone:WashingMachine,itens:[
         {nome:"Visão da linha",rota:"/v2/linha-branca/lavadoras",exata:true},
+        {nome:"Estoque de Lavadoras",rota:"/v2/linha-branca/gestao/estoque",icone:Warehouse},
         {nome:"Triagem",rota:"/v2/linha-branca/lavadoras/triagem"},
         {nome:"Reparos",rota:"/v2/linha-branca/lavadoras/reparos"},
         {nome:"Bancada de testes",rota:"/v2/linha-branca/lavadoras/testes"},
