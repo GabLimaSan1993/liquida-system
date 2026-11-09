@@ -138,8 +138,30 @@ export default function ReparoRetornoPanel({ modo = 'armazenagem' }) {
       planilha['!cols'] = Object.keys(linhas[0]).map(k => ({ wch: /Modelo|Status|Resultado|Processo/.test(k) ? 32 : 22 }));
       const livro = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(livro, planilha, 'Envios e Retornos');
+      const avulsos = (data.laboratorio_avulsos || []).map(i => ({
+        'Origem': 'Laboratório individual — sem confirmação WMS',
+        'Voucher': i.voucher || '',
+        'IMEI': String(i.imei || ''),
+        'Modelo': i.modelo || '',
+        'SKU': i.sku || '',
+        'Grade origem': i.grade || '',
+        'OS laboratório': i.os_numero || i.os_referencia || '',
+        'Status laboratório': i.status,
+        'Resultado': resultadoLabel[i.resultado] || '',
+        'Recebido em': i.recebido_em || '',
+        'Concluído em': i.concluido_em || '',
+        'Observações': i.observacoes || '',
+        'Movimentação física WMS': 'Não comprovada pela importação',
+        'Oracle envio/retorno': 'Não confirmado pelo sistema'
+      }));
+      if (avulsos.length) {
+        const abaAvulsos = XLSX.utils.json_to_sheet(avulsos);
+        abaAvulsos['!autofilter'] = { ref: abaAvulsos['!ref'] };
+        abaAvulsos['!cols'] = Object.keys(avulsos[0]).map(k => ({ wch: /Origem|Modelo|Observações/.test(k) ? 42 : 24 }));
+        XLSX.utils.book_append_sheet(livro, abaAvulsos, 'Laboratório sem WMS');
+      }
       XLSX.writeFile(livro, 'Historico_Envios_Retornos_Reparos.xlsx');
-      setMensagem(`Relatório exportado com ${linhas.length.toLocaleString('pt-BR')} registros. Importações avulsas não comprovam saída física do WMS.`);
+      setMensagem(`Relatório exportado: ${linhas.length.toLocaleString('pt-BR')} registros vinculados ao picking e ${avulsos.length.toLocaleString('pt-BR')} importações de laboratório em aba separada, sem movimentação WMS comprovada.`);
     } catch (e) { setErro(e.message || 'Erro ao exportar histórico.'); }
     finally { setBusy(''); }
   }
