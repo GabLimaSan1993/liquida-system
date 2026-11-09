@@ -43,3 +43,36 @@ export async function exportarReparo(pedido, itens, modo, statusDestino = '') {
   XLSX.utils.book_append_sheet(book, sheet, modo === 'oracle' ? 'Movimentação Oracle' : 'Picking Reparo');
   XLSX.writeFile(book, `${modo === 'oracle' ? 'Movimentacao_Oracle' : 'Picking'}_${pedido.lote}.xlsx`);
 }
+
+/**
+ * A bipagem alimenta esta fila automaticamente, sem movimentar o Oracle.
+ * Os lotes em picking são pré-lista; apenas os concluídos são liberados.
+ */
+export async function exportarFilaOracleReparo() {
+  const { data, error } = await supabase.rpc('assurant_reparo_fila_oracle_envio');
+  if (error) throw new Error(error.message);
+  if (!Array.isArray(data) || !data.length) throw new Error('Não existem IMEIs bipados aguardando envio ao Oracle.');
+  const XLSX = await import('xlsx');
+  const linhas = data.map(i => ({
+    'Lote': i.lote,
+    'Situação': i.situacao_fila === 'LIBERADO_PARA_MOVIMENTACAO' ? 'Liberado — picking concluído' : 'Pré-lista — picking em andamento',
+    'IMEI': String(i.imei || ''),
+    'Voucher': i.voucher || '',
+    'Modelo': i.modelo || '',
+    'SKU': i.sku || '',
+    'Grade': i.grade || '',
+    'Local WMS': i.local_wms || '',
+    'Subinventário atual (conferir)': i.subinv_estoque_origem || '',
+    'Subinventário destino': '6',
+    'Bipado em': i.bipado_em || '',
+    'Picking concluído em': i.picking_concluido_em || '',
+    'Finalidade': i.finalidade
+  }));
+  const planilha = XLSX.utils.json_to_sheet(linhas);
+  planilha['!autofilter'] = { ref: planilha['!ref'] };
+  planilha['!cols'] = Object.keys(linhas[0]).map(k => ({ wch: /Modelo|Situação|Finalidade/.test(k) ? 40 : 23 }));
+  const livro = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(livro, planilha, 'Fila Envios Oracle');
+  XLSX.writeFile(livro, 'Fila_Oracle_Envio_Reparos.xlsx');
+  return { total: linhas.length, liberados: linhas.filter(i => i['Situação'] === 'Liberado — picking concluído').length };
+}
