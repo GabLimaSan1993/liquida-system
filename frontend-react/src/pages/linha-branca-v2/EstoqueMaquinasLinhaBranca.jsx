@@ -91,13 +91,41 @@ export default function EstoqueMaquinasLinhaBranca() {
         status_lavadora:status,escopo:"TODOS"};
       const {data,error}=await supabase.rpc("linha_branca_inventario_fisico",{p_dados:filtros});
       if(error)throw new Error(error.message);
-      setDados(data||null);
+      const resposta = typeof data === "string" ? JSON.parse(data) : data;
+      if (!resposta || typeof resposta !== "object" ||
+          !Array.isArray(resposta.itens) || !resposta.resumo) {
+        throw new Error("A consulta não retornou os dados esperados de OSs e indicadores. Atualize ou comunique a inconsistência.");
+      }
+      setDados(resposta);
     }catch(e){setErro("Não foi possível carregar o estoque de máquinas: "+e.message);}
     finally{setCarregando(false);}
   },[pagina,busca,marca,status]);
   useEffect(()=>{void carregar();},[carregar]);
-  const resumo=dados?.resumo_lavadoras||{};
   const resumoDetalhes=dados?.resumo||{};
+  const resumo=useMemo(()=>{
+    const detalhado=dados?.resumo_lavadoras||{};
+    // A consulta também devolve o resumo geral. Se o detalhamento vier
+    // ausente/zerado por versão antiga do RPC, NÃO exibir estoque zerado.
+    const temValores=Object.values(detalhado).some(v=>Number(v)>0);
+    if(temValores)return detalhado;
+    const geral=dados?.resumo||{};
+    return {
+      AGUARDANDO_TRIAGEM:Number(geral.TRIAGEM||0),
+      EM_TRIAGEM:0,
+      AGUARDANDO_REPARO:0,
+      AGUARDANDO_CMP:Number(geral.AGUARDANDO_CMP||0),
+      EM_REPARO:Number(geral.REPARO||0),
+      BANCADA_TESTES:Number(geral.TESTES||0),
+      LIMPEZA:Number(geral.LIMPEZA||0),
+      QUALIDADE:Number(geral.QUALIDADE||0),
+      APROVADO:Number(geral.APROVADO||0),
+      CONCLUIDO:Number(geral.CONCLUIDA_LOJA||0)+Number(geral.LOJA_POR_CONCILIACAO||0)+Number(geral.SAIDA_CONFIRMADA||0),
+      SCRAP:Number(geral.SCRAP_CONDENADO||0),
+      AGUARDANDO_DESMEMBRAMENTO:Number(geral.AGUARDANDO_DESMEMBRAMENTO||0),
+      FORA_CONFERENCIA:Number(geral.FORA_CONFERENCIA||0)
+    };
+  },[dados]);
+  const resumoDetalhadoDisponivel=Object.values(dados?.resumo_lavadoras||{}).some(v=>Number(v)>0);
   const somar=(...states)=>states.reduce((v,k)=>v+Number(resumo[k]||0),0);
 
   const filtroAtivo=!!(busca||marca||status);
@@ -190,6 +218,13 @@ export default function EstoqueMaquinasLinhaBranca() {
             Somente lavadoras e lava e seca. Consulte todas as OSs identificadas, incluindo
             triagem, reparo, CMP, concluídas e scrap. Cada máquina permanece com sua rastreabilidade.
           </p>
+          {!carregando&&dados&&<p className="mt-2 text-sm font-black text-violet-800" role="status">
+            {FORMAT(dados.total_lavadoras)} lavadoras na base · {FORMAT(dados.total_filtrado)} no filtro · {FORMAT((dados.itens||[]).length)} nesta página
+          </p>}
+          {!carregando&&dados&&!resumoDetalhadoDisponivel&&Number(dados.total_lavadoras||0)>0&&
+            <p className="mt-1 text-[11px] font-semibold text-amber-800">
+              Distribuição provisória pelos status gerais da consulta; o detalhamento por etapa não veio na resposta.
+            </p>}
         </div>
         <button type="button" onClick={carregar} disabled={carregando}
           className={BOTAO+" border-slate-200 bg-white text-slate-700"}>
