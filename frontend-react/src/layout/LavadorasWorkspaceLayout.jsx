@@ -33,6 +33,11 @@ const MENU = [
     exact: true,
   },
   {
+    label: "Estoque de Lavadoras",
+    icon: PackageOpen,
+    to: "/v2/linha-branca/gestao/estoque",
+  },
+  {
     label: "Triagem",
     icon: ClipboardCheck,
     to: "/v2/linha-branca/lavadoras/triagem",
