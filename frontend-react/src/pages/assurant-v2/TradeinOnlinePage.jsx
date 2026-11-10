@@ -6,7 +6,7 @@ import { nomeArquivoLaudo } from '../../services/laudoGrvExportService.js';
 import { AlertTriangle, Boxes, CheckCircle2, ClipboardCheck, FileText, Link2, Package, RefreshCw, Search, Trash2, Truck } from 'lucide-react';
 import {
   ROTAS_TRADEIN_ONLINE, listarEtapaOnline, listarObjetosOnline, listarVinculosOnline,
-  vincularAparelhoOnline, desvincularAparelhoOnline
+  vincularAparelhoOnline, desvincularAparelhoOnline, registrarDecisaoClienteOnline
 } from '../../services/tradeinOnlineService.js';
 
 const ICONES = {
@@ -176,6 +176,8 @@ function FilaEtapa({ config }) {
   const [erro,setErro] = useState('');
   const [carregando,setCarregando] = useState(false);
   const [baixando,setBaixando] = useState('');
+  const [salvandoDecisao,setSalvandoDecisao] = useState('');
+  const [sucesso,setSucesso] = useState('');
   const [agora,setAgora] = useState(() => Date.now());
   useEffect(() => {
     if (config.id !== 'decisao-cliente') return undefined;
@@ -197,6 +199,21 @@ function FilaEtapa({ config }) {
   const carregar=useCallback(async()=>{setCarregando(true);setErro('');try{
     const d=await listarEtapaOnline(config.etapa);setAparelhos(d.aparelhos||[]);
   }catch(e){setErro(e.message);}finally{setCarregando(false);}},[config.etapa]);
+  async function decidirDivergencia(item,aprovou) {
+    if (salvandoDecisao || carregando) return;
+    const destino = aprovou ? 'Triagem Cosmética de Lojas' : 'Aguardando Devolução (Trade-In Online)';
+    const texto = aprovou
+      ? 'O cliente APROVOU a divergência do voucher '+item.voucher+'?\\n\\nO produto será encaminhado à '+destino+'. O laudo e o resultado original da ALS serão preservados.'
+      : 'O cliente NÃO APROVOU a divergência do voucher '+item.voucher+'?\\n\\nO produto será encaminhado à fila '+destino+'.';
+    if (!window.confirm(texto.replace(/\\n/g,'\n'))) return;
+    setSalvandoDecisao(item.id);setErro('');setSucesso('');
+    try {
+      const r = await registrarDecisaoClienteOnline(item.id,aprovou);
+      setSucesso('Decisão registrada para '+r.voucher+'. Destino: '+r.destino+'.');
+      await carregar();
+    } catch (e) { setErro(e.message); }
+    finally { setSalvandoDecisao(''); }
+  }
   useEffect(()=>{carregar();},[carregar]);
   const filtrados=useMemo(()=>aparelhos.filter(a=>[a.codigo_rastreio,a.voucher,a.observacoes,a.destinatario_correios].some(v=>normalize(v).includes(normalize(busca)))),[aparelhos,busca]);
   return <div className="space-y-5">
@@ -207,10 +224,18 @@ function FilaEtapa({ config }) {
       </div>
       <button type="button" onClick={carregar} disabled={carregando} className={btn}><RefreshCw size={15}/>Atualizar fila</button>
     </div>
-    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-950">
-      <strong>Etapa em implantação.</strong> A fila já é separada do processo de Lojas. As ações técnicas e os critérios específicos de cada modalidade ainda dependem da parametrização dos questionários, laudos e regras de decisão. Nenhuma movimentação será feita automaticamente nesta tela.
-    </div>
+    {config.id==='decisao-cliente'
+      ? <div className="rounded-xl border border-violet-200 bg-violet-50 p-4 text-xs leading-relaxed text-violet-950">
+          <strong>Decisão sobre divergência do laudo.</strong> Cada voucher exige confirmação:
+          se o cliente <strong>aprovou</strong>, o produto segue para a <strong>Triagem Cosmética (Lojas)</strong>;
+          se <strong>não aprovou</strong>, segue para <strong>Aguardando Devolução (Online)</strong>.
+          As decisões ficam auditadas e não podem ser registradas duas vezes.
+        </div>
+      : <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-950">
+          <strong>Etapa em implantação.</strong> A fila já é separada do processo de Lojas. As ações técnicas e os critérios específicos de cada modalidade ainda dependem da parametrização.
+        </div>}
     <Mensagem erro texto={erro}/>
+    <Mensagem texto={sucesso}/>
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h2 className="font-black text-slate-800">{config.titulo}</h2>
@@ -221,7 +246,7 @@ function FilaEtapa({ config }) {
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[760px] text-left text-xs">
-          <thead><tr className="border-b bg-slate-50 text-slate-600">{['Voucher','Objeto Correios','Resultado ALS','IMEI / Serial','Defeitos adicionais',config.id==='decisao-cliente'?'Conclusão ALS':'Data do vínculo',...(config.id==='decisao-cliente'?['Aging desde ALS','Documento do laudo']:[])].map(t=><th key={t} className="p-3">{t}</th>)}</tr></thead>
+          <thead><tr className="border-b bg-slate-50 text-slate-600">{['Voucher','Objeto Correios','Resultado ALS','IMEI / Serial','Defeitos adicionais',config.id==='decisao-cliente'?'Conclusão ALS':'Data do vínculo',...(config.id==='decisao-cliente'?['Aging desde ALS','Documento do laudo','Decisão do cliente']:[]),...(config.id==='devolucao'?['Decisão do cliente']:[])].map(t=><th key={t} className="p-3">{t}</th>)}</tr></thead>
           <tbody>{filtrados.map(item=><tr key={item.id} className="border-b">
             <td className="p-3 font-mono font-black text-violet-700">{item.voucher||'—'}</td>
             <td className="p-3 font-mono">{item.codigo_rastreio}</td>
@@ -239,6 +264,30 @@ function FilaEtapa({ config }) {
                     <button type="button" className={btn} disabled={Boolean(baixando)} onClick={()=>abrirDocumento(item,'pdf')}>PDF</button>
                     <button type="button" className={btn} disabled={Boolean(baixando)} onClick={()=>abrirDocumento(item,'xlsx')}>Excel</button>
                   </div>}
+            </td>}
+            {config.id==='decisao-cliente'&&<td className="p-3">
+              <div className="flex min-w-[190px] flex-col gap-2">
+                <button type="button"
+                  disabled={Boolean(salvandoDecisao)||carregando}
+                  onClick={()=>decidirDivergencia(item,true)}
+                  className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-[11px] font-black text-emerald-800 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50">
+                  <CheckCircle2 size={14}/>
+                  {salvandoDecisao===item.id?'Registrando...':'Cliente aprovou'}
+                </button>
+                <button type="button"
+                  disabled={Boolean(salvandoDecisao)||carregando}
+                  onClick={()=>decidirDivergencia(item,false)}
+                  className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-[11px] font-black text-rose-800 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50">
+                  <AlertTriangle size={14}/>
+                  {salvandoDecisao===item.id?'Registrando...':'Cliente não aprovou'}
+                </button>
+              </div>
+            </td>}
+            {config.id==='devolucao'&&<td className="p-3">
+              {item.decisao_cliente==='nao_aprovou'
+                ? <span className="font-bold text-rose-800">Divergência reprovada</span>
+                : '—'}
+              {item.decisao_cliente_em&&<p className="mt-1 text-[11px] text-slate-500">{fmtData(item.decisao_cliente_em)}</p>}
             </td>}
           </tr>)}</tbody>
         </table>
