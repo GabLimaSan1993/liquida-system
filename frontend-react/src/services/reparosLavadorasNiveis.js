@@ -226,7 +226,11 @@ export function nivelEfetivoLavadora(os) {
 }
 export function tecnicoHabilitadoLavadora(profile, nivel) {
   const id=String(profile?.id||"");
-  return nivel==="N3" ? id===TECNICOS_REPARO_LAVADORAS.carlos : Object.values(TECNICOS_REPARO_LAVADORAS).includes(id);
+  // N3: Carlos e Alexandre. Kauã permanece autorizado somente para N1/N2.
+  // A exclusividade de retrabalho reprovado segue validada em tecnicoPodeAtuarOsLavadora.
+  return nivel==="N3"
+    ? [TECNICOS_REPARO_LAVADORAS.carlos, TECNICOS_REPARO_LAVADORAS.alexandre].includes(id)
+    : Object.values(TECNICOS_REPARO_LAVADORAS).includes(id);
 }
 /** Retorno de bancada após falha em reparo de Kaua/Alexandre é exclusivo de Carlos.
  * Nível original da OS permanece N1/N2 para métricas e cor dos cartões.
