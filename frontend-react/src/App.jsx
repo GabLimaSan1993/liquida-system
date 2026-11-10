@@ -1,4 +1,5 @@
 import LaboratorioReparoV2Page from "./pages/assurant-v2/LaboratorioReparoV2Page.jsx";
+import TradeinOnlinePage from "./pages/assurant-v2/TradeinOnlinePage.jsx";
 import LaboratorioIndividualV2Page from "./pages/assurant-v2/LaboratorioIndividualV2Page.jsx";
 import BaixasManuaisB2CV2Page from './pages/assurant-v2/BaixasManuaisB2CV2Page.jsx';
 import UploadAgingLinhaBrancaPage from "./pages/linha-branca-v2/UploadAgingLinhaBrancaPage.jsx";
@@ -558,6 +559,44 @@ export default function App() {
           element={
             <GestaoRecebimentoV2Page />
           }
+        />
+
+        {/* Operação Trade-In Online — módulo separado da esteira de Lojas. */}
+        <Route
+          path="online/vinculacao"
+          element={<ProtectedRoute tela="/v2/assurant/online/vinculacao">
+            <TradeinOnlinePage tipo="vinculacao" />
+          </ProtectedRoute>}
+        />
+        <Route
+          path="online/triagem-als"
+          element={<ProtectedRoute tela="/v2/assurant/online/triagem-als">
+            <TradeinOnlinePage tipo="triagem-als" />
+          </ProtectedRoute>}
+        />
+        <Route
+          path="online/laudo"
+          element={<ProtectedRoute tela="/v2/assurant/online/laudo">
+            <TradeinOnlinePage tipo="laudo" />
+          </ProtectedRoute>}
+        />
+        <Route
+          path="online/decisao-cliente"
+          element={<ProtectedRoute tela="/v2/assurant/online/decisao-cliente">
+            <TradeinOnlinePage tipo="decisao-cliente" />
+          </ProtectedRoute>}
+        />
+        <Route
+          path="online/devolucao"
+          element={<ProtectedRoute tela="/v2/assurant/online/devolucao">
+            <TradeinOnlinePage tipo="devolucao" />
+          </ProtectedRoute>}
+        />
+        <Route
+          path="online/expedicao"
+          element={<ProtectedRoute tela="/v2/assurant/online/expedicao">
+            <TradeinOnlinePage tipo="expedicao" />
+          </ProtectedRoute>}
         />
 
 
