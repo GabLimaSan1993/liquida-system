@@ -112,7 +112,7 @@ export async function listarAguardandoCosmetica() {
     .from("assurant_triagem")
     .select("voucher, imei, modelo, status_bateria, data_funcional, respostas_funcional, resultado_triagem_funcional, defeitos_adicionais")
     .eq("status_atual", STATUS_ENTRADA)
-    .in("origem_triagem", ["liquida", "devolucao_b2c"])
+    .in("origem_triagem", ["liquida", "devolucao_b2c", "tradein_online"])
     .order("data_funcional", { ascending: true });
   if (error) throw new Error(error.message);
 
