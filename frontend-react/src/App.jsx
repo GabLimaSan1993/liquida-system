@@ -80,6 +80,7 @@ import TriagemUnificadaTestePage from "./pages/assurant-v2/TriagemUnificadaTeste
 import ArmazenagemV2Page from "./pages/assurant-v2/ArmazenagemV2Page.jsx";
 import ReparoRetornoPanel from "./components/ReparoRetornoPanel.jsx";
 import ConsultaEstoqueV2Page from "./pages/assurant-v2/ConsultaEstoqueV2Page.jsx";
+import KardexEstoqueV2Page from "./pages/assurant-v2/KardexEstoqueV2Page.jsx";
 import InventarioV2Page from "./pages/assurant-v2/InventarioV2Page.jsx";
 import CargaInicialV2Page from "./pages/assurant-v2/CargaInicialV2Page.jsx";
 import B2BV2Page from "./pages/assurant-v2/B2BV2Page.jsx";
@@ -674,6 +675,9 @@ export default function App() {
           element={
             <ConsultaEstoqueV2Page />
           }
+        />
+        <Route path="estoque/kardex"
+          element={<ProtectedRoute tela="/v2/assurant/estoque/kardex"><KardexEstoqueV2Page /></ProtectedRoute>}
         />
 
         <Route
