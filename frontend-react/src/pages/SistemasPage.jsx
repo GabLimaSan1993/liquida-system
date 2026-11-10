@@ -141,17 +141,14 @@ export default function SistemasPage() {
 
   const acessoAssurant = useMemo(() => {
     if (profile?.is_master) return true;
-
-    return (
-      areaTecnica === "assurant" ||
-      telas.some(
-        (rota) =>
-          rota.startsWith("/v2/assurant") ||
-          rota.startsWith("/assurant") ||
-          rota.startsWith("/b2b") ||
-          rota.startsWith("/b2c")
-      )
+    const temLojas = telas.some(rota =>
+      (rota.startsWith("/v2/assurant/") && !rota.startsWith("/v2/assurant/online/")) ||
+      rota.startsWith("/assurant") ||
+      rota.startsWith("/b2b") ||
+      rota.startsWith("/b2c")
     );
+    const temSomenteOnline = telas.some(rota => rota.startsWith("/v2/assurant/online/"));
+    return temLojas || (areaTecnica === "assurant" && !temSomenteOnline);
   }, [profile, areaTecnica, telas]);
 
   const acessoOnline = profile?.is_master || ROTAS_TRADEIN_ONLINE.some(item => hasAccess(item.rota));
