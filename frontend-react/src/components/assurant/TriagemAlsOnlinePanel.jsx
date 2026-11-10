@@ -44,7 +44,8 @@ export default function TriagemAlsOnlinePanel(){
     Promise.all([carregarCatalogo(),listarDefeitos()]).then(([modelos,def])=>{
       if(!ativo)return;
       setCatalogo(modelos.produtos||[]);
-      setCatalogoDefeitos(unicos((def||[]).map(d=>d.nome).filter(n=>n!=='Sem Defeito')));
+      // Mesma lista completa usada na Triagem Funcional: id, nome e categoria, sem cortes ou exclusões adicionais.
+      setCatalogoDefeitos(def||[]);
     }).catch(e=>{if(ativo)setErro('Erro no catálogo de modelos ou defeitos: '+e.message);});
     return()=>{ativo=false;};
   },[]);
@@ -58,7 +59,12 @@ export default function TriagemAlsOnlinePanel(){
   const segundoObrigatorio=tipo==='CELULAR'&&exigeDoisImeis(produto.modelo,tipo,false,false);
   const imeisOpcionais=resultado==='RECUSADO';
   const visiveis=useMemo(()=>fila.filter(a=>[a.voucher,a.codigo_rastreio,a.destinatario_correios,a.observacoes].some(v=>limpar(v).includes(limpar(busca)))),[fila,busca]);
-  const defeitosVisiveis=catalogoDefeitos.filter(d=>limpar(d).includes(limpar(buscaDefeito))).slice(0,buscaDefeito.trim()?25:16);
+  const defeitosVisiveis=useMemo(()=>{
+    const termo=limpar(buscaDefeito.trim());
+    return !termo ? catalogoDefeitos : catalogoDefeitos.filter(d =>
+      limpar(d.nome).includes(termo)||limpar(d.categoria).includes(termo)
+    );
+  },[catalogoDefeitos,buscaDefeito]);
   const opcao=OPCOES.find(o=>o.valor===resultado);
 
   function abrir(a){setItem(a);setResultado('');setProduto(vazio());setImei1('');setImei2('');setDefeitos([]);setBuscaDefeito('');setErroModal('');setSucesso('');}
@@ -188,13 +194,23 @@ export default function TriagemAlsOnlinePanel(){
             </div>
           </section>
           <section>
-            <div className="flex items-center justify-between"><h3 className="text-sm font-black">Defeito adicional {resultado==='GRADE_MATCH'?'(opcional)':'*'}</h3><span className="text-xs text-slate-500">{defeitos.length} selecionado(s)</span></div>
+            <div className="flex items-center justify-between gap-2"><h3 className="text-sm font-black">Defeitos adicionais {resultado==='GRADE_MATCH'?'(opcional)':'*'}</h3>
+              <span className="text-xs text-slate-500">{defeitos.length} selecionado(s) · {catalogoDefeitos.length} opções</span></div>
             <div className="mt-2 flex flex-wrap gap-2">{defeitos.map(d=><button key={d} type="button" onClick={()=>alterarDefeito(d)} className="rounded-full border border-violet-300 bg-violet-50 px-3 py-1.5 text-[11px] text-violet-950">{d} <X size={12} className="inline"/></button>)}</div>
             <input className={campo} placeholder="Pesquisar defeitos" value={buscaDefeito} onChange={e=>setBuscaDefeito(e.target.value)}/>
-            <div className="mt-2 grid max-h-44 gap-2 overflow-auto rounded-xl border border-slate-200 p-3 sm:grid-cols-2">
-              {defeitosVisiveis.map(d=><label key={d} className="flex cursor-pointer items-center gap-2 text-xs">
-                <input type="checkbox" checked={defeitos.includes(d)} onChange={()=>alterarDefeito(d)} className="h-4 w-4 accent-violet-700"/>{d}</label>)}
-              {!defeitosVisiveis.length&&<p className="text-xs text-slate-500">Nenhum defeito encontrado.</p>}
+            <div className="mt-2 max-h-[300px] overflow-y-auto rounded-xl border border-slate-100 bg-slate-50/60 p-3">
+              {defeitosVisiveis.length ? <div className="flex flex-wrap gap-2">
+                {defeitosVisiveis.map(d=>{
+                  const marcado=defeitos.includes(d.nome);
+                  return <button key={d.id} type="button" onClick={()=>alterarDefeito(d.nome)}
+                    aria-pressed={marcado}
+                    className={`rounded-xl border px-3 py-2 text-[11px] font-bold transition ${marcado
+                      ? 'border-violet-700 bg-violet-700 text-white'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-violet-200 hover:bg-violet-50'}`}>
+                    {d.nome}
+                  </button>;
+                })}
+              </div> : <p className="py-6 text-center text-xs font-semibold text-slate-400">Nenhum defeito encontrado para esta pesquisa.</p>}
             </div>
           </section>
           <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
