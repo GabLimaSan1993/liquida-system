@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Boxes, CheckCircle2, ClipboardCheck, FileText, Link2, Package, RefreshCw, Search, Trash2, Truck } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../AuthContext.jsx';
 import {
   ROTAS_TRADEIN_ONLINE, listarEtapaOnline, listarObjetosOnline, listarVinculosOnline,
   vincularAparelhoOnline, desvincularAparelhoOnline
@@ -209,8 +207,6 @@ function FilaEtapa({ config }) {
 }
 
 export default function TradeinOnlinePage({ tipo='vinculacao' }) {
-  const navigate=useNavigate();
-  const { hasAccess }=useAuth();
   const config=ROTAS_TRADEIN_ONLINE.find(item=>item.id===tipo)||ROTAS_TRADEIN_ONLINE[0];
   const Icon=ICONES[config.id]||Link2;
   return <div className="mx-auto max-w-[1500px] space-y-6">
@@ -220,13 +216,6 @@ export default function TradeinOnlinePage({ tipo='vinculacao' }) {
         <div><h1 className="text-2xl font-black text-slate-900">{config.titulo}</h1>
           <p className="mt-1 text-xs text-slate-500">GRV · Online · TRAON · MELI · Rastreabilidade por código do objeto Correios</p>
         </div></div>
-      <div className="mt-5 flex flex-wrap gap-2">
-        {ROTAS_TRADEIN_ONLINE.filter(i=>hasAccess(i.rota)).map(item=>
-          <button key={item.id} onClick={()=>navigate(item.rota)} type="button"
-            className={`rounded-xl border px-3 py-2 text-xs font-bold transition ${item.id===tipo?'border-violet-700 bg-violet-700 text-white':'border-slate-200 bg-white text-slate-700 hover:border-violet-300'}`}>
-            {item.titulo}
-          </button>)}
-      </div>
     </header>
     {tipo==='vinculacao'?<VinculacaoObjetos/>:<FilaEtapa config={config}/>}
   </div>;
