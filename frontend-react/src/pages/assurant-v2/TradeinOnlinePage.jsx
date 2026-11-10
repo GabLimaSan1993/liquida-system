@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import TriagemAlsOnlinePanel from '../../components/assurant/TriagemAlsOnlinePanel.jsx';
 import LaudosTradeinOnlinePanel from '../../components/assurant/LaudosTradeinOnlinePanel.jsx';
 import DevolucaoOnlinePopup from '../../components/assurant/DevolucaoOnlinePopup.jsx';
+import ImportarGrvAtendimentoOnline from '../../components/assurant/ImportarGrvAtendimentoOnline.jsx';
 import { consultarLaudoOnline, baixarArquivoLaudo } from '../../services/tradeinOnlineLaudoService.js';
 import { nomeArquivoLaudo } from '../../services/laudoGrvExportService.js';
 import { AlertTriangle, Boxes, CheckCircle2, ClipboardCheck, FileText, Link2, Package, RefreshCw, Search, Trash2, Truck } from 'lucide-react';
@@ -233,14 +234,19 @@ function FilaEtapa({ config }) {
           se <strong>não aprovou</strong>, segue para <strong>Aguardando Devolução (Online)</strong>.
           As decisões ficam auditadas e não podem ser registradas duas vezes.
         </div>
-      : <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-950">
-          <strong>Etapa em implantação.</strong> A fila já é separada do processo de Lojas. As ações técnicas e os critérios específicos de cada modalidade ainda dependem da parametrização.
-        </div>}
+      : config.id==='devolucao'
+        ? <div className="rounded-xl border border-violet-200 bg-violet-50 p-4 text-xs text-violet-950">
+            <strong>Devoluções Trade-ins Online.</strong> Clique em um voucher reprovado pelo cliente, registre o e-ticket e gere a Declaração de Conteúdo. O destino é a Expedição B2C já existente.
+          </div>
+        : <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-950">
+            <strong>Etapa em implantação.</strong> A fila já é separada do processo de Lojas. As ações técnicas e os critérios específicos de cada modalidade ainda dependem da parametrização.
+          </div>}
     <Mensagem erro texto={erro}/>
     <Mensagem texto={sucesso}/>
-    {['devolucao','expedicao'].includes(config.id)&&<p className="text-xs text-slate-600">
-      Clique no <strong>voucher</strong> para {config.id==='devolucao'?'registrar o e-ticket e gerar a Declaração de Conteúdo':'consultar o e-ticket e baixar a Declaração de Conteúdo'} em <strong>PDF e Excel</strong>.
-      {config.id==='devolucao'&&'Ao concluir, o produto segue para Expedição.'}
+    {config.id==='devolucao'&&<ImportarGrvAtendimentoOnline/>}
+    {config.id==='devolucao'&&<p className="text-xs text-slate-600">
+      Clique no <strong>voucher</strong> para registrar o e-ticket e gerar a Declaração de Conteúdo em <strong>PDF e Excel</strong>.
+      Ao concluir, o produto aparece na <strong>Expedição B2C já existente</strong>, na seção de devoluções Trade-ins Online.
     </p>}
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -255,7 +261,7 @@ function FilaEtapa({ config }) {
           <thead><tr className="border-b bg-slate-50 text-slate-600">{['Voucher','Objeto Correios','Resultado ALS','IMEI / Serial','Defeitos adicionais',config.id==='decisao-cliente'?'Conclusão ALS':'Data do vínculo',...(config.id==='decisao-cliente'?['Aging desde ALS','Documento do laudo','Decisão do cliente']:[]),...(config.id==='devolucao'?['Decisão do cliente']:[])].map(t=><th key={t} className="p-3">{t}</th>)}</tr></thead>
           <tbody>{filtrados.map(item=><tr key={item.id} className="border-b">
             <td className="p-3 font-mono font-black text-violet-700">
-              {['devolucao','expedicao'].includes(config.id)?
+              {config.id==='devolucao'?
                 <button type="button" onClick={()=>setVoucherDevolucao(item)}
                   className="rounded py-1 text-left font-mono font-black text-violet-700 underline underline-offset-2 hover:text-violet-900"
                   title="Abrir coleta de e-ticket e Declaração de Conteúdo">
@@ -308,12 +314,12 @@ function FilaEtapa({ config }) {
         {!carregando&&!filtrados.length&&<p className="py-9 text-center text-xs text-slate-500">Nenhum produto nesta etapa.</p>}
       </div>
     </section>
-    {['devolucao','expedicao'].includes(config.id)&&voucherDevolucao&&<DevolucaoOnlinePopup
+    {config.id==='devolucao'&&voucherDevolucao&&<DevolucaoOnlinePopup
       item={voucherDevolucao}
       onClose={()=>setVoucherDevolucao(null)}
       onConcluido={r=>{
         setSucesso('Declaração de Conteúdo gerada para '+r.voucher+
-          ' · E-ticket '+r.eticket+'. Encaminhado para Expedição.');
+          ' · E-ticket '+r.eticket+'. Encaminhado para Expedição B2C (seção de devoluções Trade-ins Online).');
         carregar();
       }}
     />}
