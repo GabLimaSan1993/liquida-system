@@ -430,8 +430,7 @@ const MENU_TRADEIN_ONLINE = [
       {label: "Triagem ALS", icon: ClipboardCheck, to: "/v2/assurant/online/triagem-als", enabled: true, exact: true},
       {label: "Laudo", icon: FileText, to: "/v2/assurant/online/laudo", enabled: true, exact: true},
       {label: "Aguardando Definição do Cliente", icon: Clock3, to: "/v2/assurant/online/decisao-cliente", enabled: true, exact: true},
-      {label: "Aguardando Devolução", icon: Package, to: "/v2/assurant/online/devolucao", enabled: true, exact: true},
-      {label: "Expedição", icon: Truck, to: "/v2/assurant/online/expedicao", enabled: true, exact: true},
+      {label: "Devoluções Trade-ins Online", icon: Package, to: "/v2/assurant/online/devolucao", enabled: true, exact: true},
     ],
   },
 ];
