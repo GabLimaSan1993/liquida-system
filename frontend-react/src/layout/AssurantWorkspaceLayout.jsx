@@ -312,6 +312,13 @@ const MENU_GROUPS = [
   exact: true,
   enabled: true,
 },
+      {
+  label: "Kardex de Estoque",
+  icon: History,
+  to: "/v2/assurant/estoque/kardex",
+  exact: true,
+  enabled: true,
+},
 
       {
   label: "Rastreabilidade",
