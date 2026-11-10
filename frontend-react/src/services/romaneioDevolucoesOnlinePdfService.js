@@ -7,8 +7,11 @@ const trunc=(value,n=60)=>String(value??'—').trim().slice(0,n)||'—';
 const brl=value=>Number(value||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 
 export function gerarCodigoRomaneioOnline(){
-  const partes=new Intl.DateTimeFormat('en-CA',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit'})
-    .format(new Date()).replace(/-/g,'');
+  const dataPartes=Object.fromEntries(
+    new Intl.DateTimeFormat('en-US',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit'})
+      .formatToParts(new Date()).filter(p=>p.type!=='literal').map(p=>[p.type,p.value])
+  );
+  const partes=dataPartes.year+dataPartes.month+dataPartes.day;
   return 'RTON-'+partes+'-'+crypto.randomUUID().replace(/-/g,'').slice(0,12).toUpperCase();
 }
 
