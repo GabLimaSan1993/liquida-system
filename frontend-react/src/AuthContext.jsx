@@ -50,6 +50,8 @@ export function AuthProvider({ children }) {
 
   function hasAccess(tela) {
     if (!profile) return false;
+    // Administradores master não dependem de permissões avulsas de tela.
+    if (profile.is_master) return true;
     if (tela === "/chamados/gestao") return profile.id === "b517d70a-56be-4b4f-8b9e-a03c769dd3c3" && profile.telas_permitidas?.includes(tela) === true && profile.telas_permitidas?.includes("/chamados") === true;
     if (tela === "/chamados") return profile.telas_permitidas?.includes(tela) === true;
     if (tela === "/v2/linha-branca" || tela.startsWith("/v2/linha-branca/")) return hasLinhaBrancaAccess(profile, tela);
