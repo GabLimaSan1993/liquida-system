@@ -17,7 +17,6 @@ import {
 
 import { useAuth } from "../AuthContext.jsx";
 import { signOut } from "../services/authService.js";
-import { ROTAS_TRADEIN_ONLINE } from "../services/tradeinOnlineService.js";
 
 const MODULOS_FUTUROS = [
   {
@@ -141,18 +140,20 @@ export default function SistemasPage() {
 
   const acessoAssurant = useMemo(() => {
     if (profile?.is_master) return true;
-    const temLojas = telas.some(rota =>
-      (rota.startsWith("/v2/assurant/") && !rota.startsWith("/v2/assurant/online/")) ||
-      rota.startsWith("/assurant") ||
-      rota.startsWith("/b2b") ||
-      rota.startsWith("/b2c")
+    return (
+      areaTecnica === "assurant" ||
+      telas.some(rota =>
+        rota.startsWith("/v2/assurant") ||
+        rota.startsWith("/assurant") ||
+        rota.startsWith("/b2b") ||
+        rota.startsWith("/b2c")
+      )
     );
-    const temSomenteOnline = telas.some(rota => rota.startsWith("/v2/assurant/online/"));
-    return temLojas || (areaTecnica === "assurant" && !temSomenteOnline);
   }, [profile, areaTecnica, telas]);
-
-  const acessoOnline = profile?.is_master || ROTAS_TRADEIN_ONLINE.some(item => hasAccess(item.rota));
-  const primeiraTelaOnline = ROTAS_TRADEIN_ONLINE.find(item => hasAccess(item.rota))?.rota;
+  // Sistema único. A divisão Lojas / Trade-In Online ocorre somente no menu lateral.
+  const entradaAssurant = profile?.is_master || telas.includes("/v2/assurant")
+    ? "/v2/assurant"
+    : telas.find(rota => rota.startsWith("/v2/assurant/online/")) || "/v2/assurant";
 
   const acessoLinhaBranca = hasAccess("/v2/linha-branca");
 
@@ -224,27 +225,16 @@ export default function SistemasPage() {
           {hasAccess("/chamados") && <ModuloDisponivel nome="Chamados e solicitações" descricao="Solicite ajustes, melhorias e correções no sistema" icon={Ticket} onClick={() => navigate("/chamados")} />}
           {acessoAssurant ? (
             <ModuloDisponivel
-              nome="Operação – Lojas"
-              descricao="Fluxo atual de lojas: recebimento, triagens, estoque e expedição"
+              nome="Assurant Warehouse"
+              descricao="Operação Assurant: Lojas e Trade-In Online"
               icon={Warehouse}
-              onClick={() =>
-                navigate("/v2/assurant")
-              }
+              onClick={() => navigate(entradaAssurant)}
             />
           ) : (
             <ModuloIndisponivel
-              nome="Operação – Lojas"
-              descricao="Fluxo atual de lojas"
+              nome="Assurant Warehouse"
+              descricao="Operação Assurant"
               icon={Warehouse}
-            />
-          )}
-          {acessoOnline && primeiraTelaOnline && (
-            <ModuloDisponivel
-              nome="Operação – Trade-In Online"
-              descricao="GRV, Online, TRAON e MELI: vinculação por objeto e esteira separada"
-              icon={Smartphone}
-              onClick={() => navigate(primeiraTelaOnline)}
-              destaque="Nova operação"
             />
           )}
 
