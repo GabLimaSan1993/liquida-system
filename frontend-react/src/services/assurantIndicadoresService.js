@@ -1690,116 +1690,65 @@ export async function fetchInteligenciaEstoqueItem(
 ========================================================= */
 
 export async function fetchIndicadoresExecutivos() {
-  const [
-    comparativoAtual,
-    operacaoComparativoAtual,
-    b2bComparativoAtual,
-    b2cCanaisComparativoAtual,
-    etapasComparativoAtual,
+  // O cockpit não deve disparar duas dezenas de agregações pesadas
+  // simultaneamente: elas competem por CPU e provocam statement_timeout.
+  // Uma falha isolada não deve ocultar os outros indicadores válidos.
+  const consultas = [
+    ["comparativoAtual", fetchComparativoPeriodoAtual],
+    ["operacaoComparativoAtual", fetchOperacaoComparativoPeriodoAtual],
+    ["b2bComparativoAtual", fetchB2BComparativoPeriodoAtual],
+    ["b2cCanaisComparativoAtual", fetchB2CCanaisComparativoPeriodoAtual],
+    ["etapasComparativoAtual", fetchEtapasComparativoPeriodoAtual],
+    ["kpisSemanais", fetchKpisSemanais],
+    ["kpisMensais", fetchKpisMensais],
+    ["etapasSemanais", fetchEtapasSemanais],
+    ["etapasMensais", fetchEtapasMensais],
+    ["operacaoDiaria", fetchOperacaoDiaria],
+    ["operacaoMensal", fetchOperacaoMensal],
+    ["leadtimeTriagemMensal", fetchLeadtimeTriagemMensal],
+    ["gradesMensais", fetchGradesMensais],
+    ["b2bOperacaoDiaria", fetchB2BOperacaoDiaria],
+    ["b2bOperacaoMensal", fetchB2BOperacaoMensal],
+    ["b2cCanaisMensal", fetchB2CCanaisMensal],
+    ["b2cCanaisFaixasMensal", fetchB2CCanaisFaixasMensal],
+    ["b2cColetasMensal", fetchB2CColetasMensal],
+    ["expedicaoDiaria", fetchExpedicaoDiaria],
+    ["ocorrenciasMensais", fetchOcorrenciasMensais],
+    ["errosProcessoMensais", fetchErrosProcessoMensais],
+    ["estoquePosicaoAtual", fetchEstoquePosicaoAtual],
+    ["estoqueAgingAtual", fetchEstoqueAgingAtual],
+    ["estoqueQualidadeAtual", fetchEstoqueQualidadeAtual],
+  ];
+  const dados = {};
+  const falhasConsultas = [];
+  let respostasValidas = 0;
+  const limiteSimultaneo = 5;
 
-    kpisSemanais,
-    kpisMensais,
-    etapasSemanais,
-    etapasMensais,
+  for (let inicio = 0; inicio < consultas.length; inicio += limiteSimultaneo) {
+    const lote = consultas.slice(inicio, inicio + limiteSimultaneo);
+    const resultados = await Promise.allSettled(lote.map(([, carregar]) => carregar()));
+    resultados.forEach((resultado, indice) => {
+      const [nome] = lote[indice];
+      if (resultado.status === "fulfilled") {
+        dados[nome] = resultado.value;
+        respostasValidas += 1;
+      } else {
+        dados[nome] = nome === "estoqueQualidadeAtual" ? {} : [];
+        falhasConsultas.push(`${nome}: ${resultado.reason?.message || "consulta indisponível"}`);
+        console.error("Indicadores: consulta indisponível", nome, resultado.reason);
+      }
+    });
+  }
 
-    operacaoDiaria,
-    operacaoMensal,
-    leadtimeTriagemMensal,
-    gradesMensais,
-
-    b2bOperacaoDiaria,
-    b2bOperacaoMensal,
-
-    b2cCanaisMensal,
-    b2cCanaisFaixasMensal,
-    b2cColetasMensal,
-    expedicaoDiaria,
-
-    ocorrenciasMensais,
-    errosProcessoMensais,
-
-    estoquePosicaoAtual,
-    estoqueAgingAtual,
-    estoqueQualidadeAtual,
-  ] =
-    await Promise.all([
-      fetchComparativoPeriodoAtual(),
-      fetchOperacaoComparativoPeriodoAtual(),
-      fetchB2BComparativoPeriodoAtual(),
-      fetchB2CCanaisComparativoPeriodoAtual(),
-      fetchEtapasComparativoPeriodoAtual(),
-
-      fetchKpisSemanais(),
-      fetchKpisMensais(),
-      fetchEtapasSemanais(),
-      fetchEtapasMensais(),
-
-      fetchOperacaoDiaria(),
-      fetchOperacaoMensal(),
-      fetchLeadtimeTriagemMensal(),
-      fetchGradesMensais(),
-
-      fetchB2BOperacaoDiaria(),
-      fetchB2BOperacaoMensal(),
-
-      fetchB2CCanaisMensal(),
-      fetchB2CCanaisFaixasMensal(),
-      fetchB2CColetasMensal(),
-      fetchExpedicaoDiaria(),
-
-      fetchOcorrenciasMensais(),
-      fetchErrosProcessoMensais(),
-
-      fetchEstoquePosicaoAtual(),
-      fetchEstoqueAgingAtual(),
-      fetchEstoqueQualidadeAtual(),
-    ]);
-
+  if (respostasValidas === 0) {
+    throw new Error("Todas as consultas de indicadores falharam. Verifique o Supabase antes de utilizar os números.");
+  }
   return {
-    /* Comparativos justos do período corrente */
-    comparativoAtual,
-    operacaoComparativoAtual,
-    b2bComparativoAtual,
-    b2cCanaisComparativoAtual,
-    etapasComparativoAtual,
-
-    /* Histórico temporal */
-    kpisSemanais,
-    kpisMensais,
-    etapasSemanais,
-    etapasMensais,
-
-    /* Warehouse */
-    operacaoDiaria,
-    operacaoMensal,
-    leadtimeTriagemMensal,
-    gradesMensais,
-
-    /* B2B */
-    b2bOperacaoDiaria,
-    b2bOperacaoMensal,
-
-    /* B2C */
-    b2cCanaisMensal,
-    b2cCanaisFaixasMensal,
-    b2cColetasMensal,
-    expedicaoDiaria,
-
-    /* Ocorrências / Retrabalho */
-    ocorrenciasMensais,
-    errosProcessoMensais,
-
-    /* Estoque */
-    estoquePosicaoAtual,
-    estoqueAgingAtual,
-    estoqueQualidadeAtual,
-
+    ...dados,
+    falhasConsultas,
     periodoAnalise: {
-      inicio:
-        DATA_INICIAL_ANALISE,
-
-      fim:
-        DATA_FINAL_ANALISE,
+      inicio: DATA_INICIAL_ANALISE,
+      fim: DATA_FINAL_ANALISE,
     },
   };
 }
