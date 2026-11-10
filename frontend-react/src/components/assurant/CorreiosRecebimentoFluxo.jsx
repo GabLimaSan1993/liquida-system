@@ -8,6 +8,8 @@ import {
   estornarObjetoCorreios, listarObjetosCorreios
 } from '../../services/correiosRecebimentoService.js';
 import { buscarRecebimento } from '../../services/recebimentoService.js';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../AuthContext.jsx';
 
 const formatarData = valor => valor ? new Date(valor).toLocaleString('pt-BR') : '—';
 const estiloBotao = 'inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50';
@@ -142,6 +144,8 @@ export function CorreiosBipagem({ recebimento, onVoltar, onConcluir }) {
 }
 
 export function CorreiosRomaneio({ recebimentoId, onNovo }) {
+  const navigate = useNavigate();
+  const { hasAccess } = useAuth();
   const [dados,setDados] = useState(null);
   const [erro,setErro] = useState('');
   const [carregando,setCarregando] = useState(true);
@@ -214,6 +218,11 @@ export function CorreiosRomaneio({ recebimentoId, onNovo }) {
         <button type="button" onClick={excel} className={estiloBotao}><Download size={15}/>Excel</button>
         <button type="button" onClick={pdf} className={estiloBotao}><Download size={15}/>PDF</button>
         <button type="button" onClick={onNovo} className={estiloBotao}><Truck size={15}/>Novo recebimento</button>
+        {hasAccess('/v2/assurant/online/vinculacao') &&
+          <button type="button" onClick={() => navigate('/v2/assurant/online/vinculacao')}
+            className="inline-flex items-center gap-2 rounded-xl bg-violet-700 px-4 py-2.5 text-xs font-bold text-white">
+            Vinculação de Objetos
+          </button>}
       </div>
       <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[460px] text-left text-xs">
         <thead><tr className="border-b bg-slate-50">{['Código do objeto','Data da bipagem','Responsável','Vínculo'].map(k=><th key={k} className="p-3">{k}</th>)}</tr></thead>
