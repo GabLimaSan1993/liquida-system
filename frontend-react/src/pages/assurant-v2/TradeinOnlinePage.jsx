@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import TriagemAlsOnlinePanel from '../../components/assurant/TriagemAlsOnlinePanel.jsx';
 import { AlertTriangle, Boxes, CheckCircle2, ClipboardCheck, FileText, Link2, Package, RefreshCw, Search, Trash2, Truck } from 'lucide-react';
 import {
   ROTAS_TRADEIN_ONLINE, listarEtapaOnline, listarObjetosOnline, listarVinculosOnline,
@@ -184,10 +185,14 @@ function FilaEtapa({ config }) {
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[760px] text-left text-xs">
-          <thead><tr className="border-b bg-slate-50 text-slate-600">{['Objeto Correios','Destinatário','Voucher','Observações','Data do vínculo'].map(t=><th key={t} className="p-3">{t}</th>)}</tr></thead>
+          <thead><tr className="border-b bg-slate-50 text-slate-600">{['Voucher','Objeto Correios','Resultado ALS','IMEI / Serial','Defeitos adicionais','Data do vínculo'].map(t=><th key={t} className="p-3">{t}</th>)}</tr></thead>
           <tbody>{filtrados.map(item=><tr key={item.id} className="border-b">
-            <td className="p-3 font-mono font-bold">{item.codigo_rastreio}</td><td className="p-3">{item.destinatario_correios}</td>
-            <td className="p-3 font-mono">{item.voucher||'—'}</td><td className="p-3">{item.observacoes||'—'}</td><td className="p-3">{fmtData(item.criado_em)}</td>
+            <td className="p-3 font-mono font-black text-violet-700">{item.voucher||'—'}</td>
+            <td className="p-3 font-mono">{item.codigo_rastreio}</td>
+            <td className="p-3 font-bold">{item.resultado_als==='TRINCADO'?'Trincado':item.resultado_als==='RECUSADO'?'Recusado':item.resultado_als||'—'}</td>
+            <td className="p-3 font-mono">{item.imei||'Não bipado'}{item.imei2?' / '+item.imei2:''}</td>
+            <td className="p-3">{(item.defeitos_als||[]).join('; ')||'—'}</td>
+            <td className="p-3">{fmtData(item.triado_em||item.criado_em)}</td>
           </tr>)}</tbody>
         </table>
         {!carregando&&!filtrados.length&&<p className="py-9 text-center text-xs text-slate-500">Nenhum produto nesta etapa.</p>}
@@ -207,6 +212,6 @@ export default function TradeinOnlinePage({ tipo='vinculacao' }) {
           <p className="mt-1 text-xs text-slate-500">GRV · Online · TRAON · MELI · Rastreabilidade por código do objeto Correios</p>
         </div></div>
     </header>
-    {tipo==='vinculacao'?<VinculacaoObjetos/>:<FilaEtapa config={config}/>}
+    {tipo==='vinculacao'?<VinculacaoObjetos/>:tipo==='triagem-als'?<TriagemAlsOnlinePanel/>:<FilaEtapa config={config}/>}
   </div>;
 }
