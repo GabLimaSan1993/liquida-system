@@ -17,6 +17,7 @@ import {
 
 import { useAuth } from "../AuthContext.jsx";
 import { signOut } from "../services/authService.js";
+import { ROTAS_TRADEIN_ONLINE } from "../services/tradeinOnlineService.js";
 
 const MODULOS_FUTUROS = [
   {
@@ -153,6 +154,9 @@ export default function SistemasPage() {
     );
   }, [profile, areaTecnica, telas]);
 
+  const acessoOnline = profile?.is_master || ROTAS_TRADEIN_ONLINE.some(item => hasAccess(item.rota));
+  const primeiraTelaOnline = ROTAS_TRADEIN_ONLINE.find(item => hasAccess(item.rota))?.rota;
+
   const acessoLinhaBranca = hasAccess("/v2/linha-branca");
 
   function abrirLinhaBranca() {
@@ -223,8 +227,8 @@ export default function SistemasPage() {
           {hasAccess("/chamados") && <ModuloDisponivel nome="Chamados e solicitações" descricao="Solicite ajustes, melhorias e correções no sistema" icon={Ticket} onClick={() => navigate("/chamados")} />}
           {acessoAssurant ? (
             <ModuloDisponivel
-              nome="Assurant Warehouse"
-              descricao="Operação Warehouse"
+              nome="Operação – Lojas"
+              descricao="Fluxo atual de lojas: recebimento, triagens, estoque e expedição"
               icon={Warehouse}
               onClick={() =>
                 navigate("/v2/assurant")
@@ -232,9 +236,18 @@ export default function SistemasPage() {
             />
           ) : (
             <ModuloIndisponivel
-              nome="Assurant Warehouse"
-              descricao="Operação Warehouse"
+              nome="Operação – Lojas"
+              descricao="Fluxo atual de lojas"
               icon={Warehouse}
+            />
+          )}
+          {acessoOnline && primeiraTelaOnline && (
+            <ModuloDisponivel
+              nome="Operação – Trade-In Online"
+              descricao="GRV, Online, TRAON e MELI: vinculação por objeto e esteira separada"
+              icon={Smartphone}
+              onClick={() => navigate(primeiraTelaOnline)}
+              destaque="Nova operação"
             />
           )}
 
