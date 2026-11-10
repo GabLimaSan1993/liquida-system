@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import TriagemAlsOnlinePanel from '../../components/assurant/TriagemAlsOnlinePanel.jsx';
 import LaudosTradeinOnlinePanel from '../../components/assurant/LaudosTradeinOnlinePanel.jsx';
+import DevolucaoOnlinePopup from '../../components/assurant/DevolucaoOnlinePopup.jsx';
 import { consultarLaudoOnline, baixarArquivoLaudo } from '../../services/tradeinOnlineLaudoService.js';
 import { nomeArquivoLaudo } from '../../services/laudoGrvExportService.js';
 import { AlertTriangle, Boxes, CheckCircle2, ClipboardCheck, FileText, Link2, Package, RefreshCw, Search, Trash2, Truck } from 'lucide-react';
@@ -178,6 +179,7 @@ function FilaEtapa({ config }) {
   const [baixando,setBaixando] = useState('');
   const [salvandoDecisao,setSalvandoDecisao] = useState('');
   const [sucesso,setSucesso] = useState('');
+  const [voucherDevolucao,setVoucherDevolucao] = useState(null);
   const [agora,setAgora] = useState(() => Date.now());
   useEffect(() => {
     if (config.id !== 'decisao-cliente') return undefined;
@@ -236,6 +238,10 @@ function FilaEtapa({ config }) {
         </div>}
     <Mensagem erro texto={erro}/>
     <Mensagem texto={sucesso}/>
+    {config.id==='devolucao'&&<p className="text-xs text-slate-600">
+      Clique no <strong>voucher</strong> para abrir a coleta de e-ticket e gerar a Declaração de Conteúdo em <strong>PDF e Excel</strong>.
+      Ao concluir, o produto segue para Expedição.
+    </p>}
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h2 className="font-black text-slate-800">{config.titulo}</h2>
@@ -248,7 +254,15 @@ function FilaEtapa({ config }) {
         <table className="w-full min-w-[760px] text-left text-xs">
           <thead><tr className="border-b bg-slate-50 text-slate-600">{['Voucher','Objeto Correios','Resultado ALS','IMEI / Serial','Defeitos adicionais',config.id==='decisao-cliente'?'Conclusão ALS':'Data do vínculo',...(config.id==='decisao-cliente'?['Aging desde ALS','Documento do laudo','Decisão do cliente']:[]),...(config.id==='devolucao'?['Decisão do cliente']:[])].map(t=><th key={t} className="p-3">{t}</th>)}</tr></thead>
           <tbody>{filtrados.map(item=><tr key={item.id} className="border-b">
-            <td className="p-3 font-mono font-black text-violet-700">{item.voucher||'—'}</td>
+            <td className="p-3 font-mono font-black text-violet-700">
+              {config.id==='devolucao'?
+                <button type="button" onClick={()=>setVoucherDevolucao(item)}
+                  className="rounded py-1 text-left font-mono font-black text-violet-700 underline underline-offset-2 hover:text-violet-900"
+                  title="Abrir coleta de e-ticket e Declaração de Conteúdo">
+                  {item.voucher||'—'}
+                </button>
+                :(item.voucher||'—')}
+            </td>
             <td className="p-3 font-mono">{item.codigo_rastreio}</td>
             <td className="p-3 font-bold">{item.resultado_als==='TRINCADO'?'Trincado':item.resultado_als==='RECUSADO'?'Recusado':item.resultado_als||'—'}</td>
             <td className="p-3 font-mono">{item.imei||'Não bipado'}{item.imei2?' / '+item.imei2:''}</td>
@@ -294,6 +308,15 @@ function FilaEtapa({ config }) {
         {!carregando&&!filtrados.length&&<p className="py-9 text-center text-xs text-slate-500">Nenhum produto nesta etapa.</p>}
       </div>
     </section>
+    {config.id==='devolucao'&&voucherDevolucao&&<DevolucaoOnlinePopup
+      item={voucherDevolucao}
+      onClose={()=>setVoucherDevolucao(null)}
+      onConcluido={r=>{
+        setSucesso('Declaração de Conteúdo gerada para '+r.voucher+
+          ' · E-ticket '+r.eticket+'. Encaminhado para Expedição.');
+        carregar();
+      }}
+    />}
   </div>;
 }
 
