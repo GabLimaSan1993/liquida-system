@@ -619,12 +619,12 @@ export default function App() {
           }
         />
 
-        {/* Retorno de reparo separado da armazenagem dirigida.
-            Usa a mesma permissão da Armazenagem para os operadores atuais. */}
+        {/* Retorno de reparo: permissão própria, administrável em Gestão de Usuários.
+            Não habilita Armazenagem, Oracle nem acesso ao laboratório. */}
         <Route
           path="estoque/retorno-reparo"
           element={
-            <ProtectedRoute tela="/v2/assurant/estoque/armazenagem">
+            <ProtectedRoute tela="/v2/assurant/estoque/retorno-reparo">
               <ReparoRetornoPanel modo="armazenagem" />
             </ProtectedRoute>
           }
