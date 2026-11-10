@@ -36,6 +36,7 @@ import {
   listarEmAndamento,
   buscarRecebimento,
   TRANSPORTADORAS,
+  DESTINATARIOS_CORREIOS,
 } from "../../services/recebimentoService.js";
 
 import { useAuth } from "../../AuthContext.jsx";
@@ -323,7 +324,7 @@ function TelaLista({
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <span className="inline-flex rounded-lg bg-violet-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-violet-700">
-                      {carga.transportadora}{carga.codigo_rastreio&&` · ${carga.codigo_rastreio}`}
+                      {carga.transportadora}{carga.destinatario_correios && ` · ${carga.destinatario_correios}`}{carga.codigo_rastreio&&` · ${carga.codigo_rastreio}`}
                     </span>
 
                     <div className="mt-3 text-sm font-black text-slate-800">
@@ -430,6 +431,7 @@ function TelaCarga({
   ] = useState("");
 
   const [rastreio,setRastreio] = useState('');
+  const [destinatarioCorreios, setDestinatarioCorreios] = useState('');
   const [motorista, setMotorista] =
     useState("");
 
@@ -507,6 +509,7 @@ function TelaCarga({
           {
             transportadora,
             codigo_rastreio: rastreio,
+            destinatario_correios: transportadora === "Correios" ? destinatarioCorreios : null,
             motorista_nome:
               motorista,
             motorista_cpf: cpf,
@@ -552,7 +555,27 @@ function TelaCarga({
         icon={Truck}
       >
         <div className="space-y-6 p-5">
-          {transportadora==='Correios'&&<label className="block text-xs font-bold">Código do objeto dos Correios<input aria-label="Código do objeto dos Correios" required maxLength={13} value={rastreio} onChange={e=>setRastreio(e.target.value.toUpperCase().replace(/\s/g,''))} className="mt-2 block w-full rounded-xl border border-slate-200 px-3 py-2" placeholder="AA123456789BR"/><span className="mt-2 block font-normal text-slate-500">Um objeto por recebimento. Depois, bipe os vouchers contidos nele.</span></label>}
+          {transportadora === 'Correios' && (
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="block text-xs font-bold">
+                Destinatário do recebimento
+                <select required aria-label="Destinatário dos Correios"
+                  value={destinatarioCorreios} onChange={e => setDestinatarioCorreios(e.target.value)}
+                  className="mt-2 block w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm">
+                  <option value="">Selecione o destinatário</option>
+                  {DESTINATARIOS_CORREIOS.map(nome => <option key={nome} value={nome}>{nome}</option>)}
+                </select>
+                <span className="mt-2 block font-normal text-slate-500">Indica para quem o pacote é destinado; não substitui a modalidade GRV, TRAON, MELI ou Online.</span>
+              </label>
+              <label className="block text-xs font-bold">
+                Código do objeto dos Correios
+                <input aria-label="Código do objeto dos Correios" required maxLength={13}
+                  value={rastreio} onChange={e => setRastreio(e.target.value.toUpperCase().replace(/\s/g,''))}
+                  className="mt-2 block w-full rounded-xl border border-slate-200 px-3 py-3" placeholder="AA123456789BR"/>
+                <span className="mt-2 block font-normal text-slate-500">Um objeto por recebimento. A bipagem dos produtos ocorre na sequência.</span>
+              </label>
+            </div>
+          )}
           <div>
             <label className="text-xs font-black uppercase tracking-wide text-slate-500">
               Transportadora
