@@ -6,11 +6,16 @@ import { validarVoucherRecebimento } from "./voucherRecebimento.js";
 // ══════════════════════════════════════════════════════════
 
 const TRANSPORTADORAS = ["DHL", "Safe", "ViCargo", "Correios"];
+export const DESTINATARIOS_CORREIOS = ["EcoPhone", "Traon", "MyWIT", "Estoque Seguradora"];
 
 // ── Criar a carga (tela 1) ──
-export async function criarRecebimento({ transportadora, motorista_nome, motorista_cpf, placa, lacres, codigo_rastreio }, userId, userNome) {
+export async function criarRecebimento({ transportadora, motorista_nome, motorista_cpf, placa, lacres, codigo_rastreio, destinatario_correios }, userId, userNome) {
   if (!TRANSPORTADORAS.includes(transportadora)) {
     return { ok: false, erro: "Selecione uma transportadora válida." };
+  }
+  const destinatario = String(destinatario_correios || "").trim();
+  if (transportadora === "Correios" && !DESTINATARIOS_CORREIOS.includes(destinatario)) {
+    return { ok: false, erro: "Selecione um destinatário dos Correios: EcoPhone, Traon, MyWIT ou Estoque Seguradora." };
   }
   const rastreio=String(codigo_rastreio||'').trim().toUpperCase();
   if(transportadora==='Correios'&&!/^[A-Z]{2}[0-9]{9}[A-Z]{2}$/.test(rastreio)) return {ok:false,erro:'Informe um código de objeto dos Correios válido (13 caracteres).'};
@@ -19,6 +24,7 @@ export async function criarRecebimento({ transportadora, motorista_nome, motoris
     .insert({
       transportadora,
       codigo_rastreio: transportadora==='Correios'?rastreio:null,
+      destinatario_correios: transportadora === 'Correios' ? destinatario : null,
       motorista_nome:    motorista_nome?.trim() || null,
       motorista_cpf:     motorista_cpf?.trim() || null,
       placa:             placa?.trim().toUpperCase() || null,
