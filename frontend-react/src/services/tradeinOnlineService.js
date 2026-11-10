@@ -5,8 +5,7 @@ export const ROTAS_TRADEIN_ONLINE = [
   { id: 'triagem-als', titulo: 'Triagem ALS', rota: '/v2/assurant/online/triagem-als', etapa: 'aguardando_triagem_als' },
   { id: 'laudo', titulo: 'Laudo', rota: '/v2/assurant/online/laudo', etapa: 'aguardando_laudo' },
   { id: 'decisao-cliente', titulo: 'Aguardando Definição do Cliente', rota: '/v2/assurant/online/decisao-cliente', etapa: 'aguardando_decisao_cliente' },
-  { id: 'devolucao', titulo: 'Aguardando Devolução', rota: '/v2/assurant/online/devolucao', etapa: 'aguardando_devolucao' },
-  { id: 'expedicao', titulo: 'Expedição', rota: '/v2/assurant/online/expedicao', etapa: 'aguardando_expedicao' },
+  { id: 'devolucao', titulo: 'Devoluções Trade-ins Online', rota: '/v2/assurant/online/devolucao', etapa: 'aguardando_devolucao' },
 ];
 
 async function operar(acao, dados={}) {
