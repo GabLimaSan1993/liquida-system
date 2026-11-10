@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import TriagemAlsOnlinePanel from '../../components/assurant/TriagemAlsOnlinePanel.jsx';
 import LaudosTradeinOnlinePanel from '../../components/assurant/LaudosTradeinOnlinePanel.jsx';
+import { consultarLaudoOnline, baixarArquivoLaudo } from '../../services/tradeinOnlineLaudoService.js';
+import { nomeArquivoLaudo } from '../../services/laudoGrvExportService.js';
 import { AlertTriangle, Boxes, CheckCircle2, ClipboardCheck, FileText, Link2, Package, RefreshCw, Search, Trash2, Truck } from 'lucide-react';
 import {
   ROTAS_TRADEIN_ONLINE, listarEtapaOnline, listarObjetosOnline, listarVinculosOnline,
@@ -159,6 +161,19 @@ function FilaEtapa({ config }) {
   const [busca,setBusca] = useState('');
   const [erro,setErro] = useState('');
   const [carregando,setCarregando] = useState(false);
+  const [baixando,setBaixando] = useState('');
+  async function abrirDocumento(item,tipo){
+    const chave=item.id+tipo;
+    setBaixando(chave);setErro('');
+    try{
+      const r=await consultarLaudoOnline(item.id);
+      const path=tipo==='pdf'?r.laudo?.pdf_path:r.laudo?.excel_path;
+      if(!path)throw new Error('Este voucher não possui '+(tipo==='pdf'?'PDF':'Excel')+' registrado.');
+      const nome='laudo_grv_'+nomeArquivoLaudo(item.voucher)+(tipo==='pdf'?'.pdf':'.xlsx');
+      await baixarArquivoLaudo(path,nome);
+    }catch(e){setErro(e.message);}
+    finally{setBaixando('');}
+  }
   const carregar=useCallback(async()=>{setCarregando(true);setErro('');try{
     const d=await listarEtapaOnline(config.etapa);setAparelhos(d.aparelhos||[]);
   }catch(e){setErro(e.message);}finally{setCarregando(false);}},[config.etapa]);
@@ -186,7 +201,7 @@ function FilaEtapa({ config }) {
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[760px] text-left text-xs">
-          <thead><tr className="border-b bg-slate-50 text-slate-600">{['Voucher','Objeto Correios','Resultado ALS','IMEI / Serial','Defeitos adicionais','Data do vínculo'].map(t=><th key={t} className="p-3">{t}</th>)}</tr></thead>
+          <thead><tr className="border-b bg-slate-50 text-slate-600">{['Voucher','Objeto Correios','Resultado ALS','IMEI / Serial','Defeitos adicionais','Data do vínculo',...(config.id==='decisao-cliente'?['Documento do laudo']:[])].map(t=><th key={t} className="p-3">{t}</th>)}</tr></thead>
           <tbody>{filtrados.map(item=><tr key={item.id} className="border-b">
             <td className="p-3 font-mono font-black text-violet-700">{item.voucher||'—'}</td>
             <td className="p-3 font-mono">{item.codigo_rastreio}</td>
@@ -194,6 +209,14 @@ function FilaEtapa({ config }) {
             <td className="p-3 font-mono">{item.imei||'Não bipado'}{item.imei2?' / '+item.imei2:''}</td>
             <td className="p-3">{(item.defeitos_als||[]).join('; ')||'—'}</td>
             <td className="p-3">{fmtData(item.triado_em||item.criado_em)}</td>
+            {config.id==='decisao-cliente'&&<td className="p-3">
+              {/^SAMV/i.test(item.voucher||'')
+                ? <span className="text-xs font-bold text-emerald-800">Laudo realizado</span>
+                : <div className="flex gap-2">
+                    <button type="button" className={btn} disabled={Boolean(baixando)} onClick={()=>abrirDocumento(item,'pdf')}>PDF</button>
+                    <button type="button" className={btn} disabled={Boolean(baixando)} onClick={()=>abrirDocumento(item,'xlsx')}>Excel</button>
+                  </div>}
+            </td>}
           </tr>)}</tbody>
         </table>
         {!carregando&&!filtrados.length&&<p className="py-9 text-center text-xs text-slate-500">Nenhum produto nesta etapa.</p>}
