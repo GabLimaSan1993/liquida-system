@@ -1,4 +1,4 @@
-import CorreiosPanel from '../../components/assurant/CorreiosPanel.jsx';
+import { CorreiosBipagem, CorreiosRomaneio } from '../../components/assurant/CorreiosRecebimentoFluxo.jsx';
 import { useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
@@ -95,11 +95,11 @@ function PageHeader({ etapa }) {
         </div>
 
         <h1 className="mt-3 text-2xl font-black tracking-tight text-slate-900 lg:text-[30px]">
-          Recebimento YBV
+          Recebimento de cargas
         </h1>
 
         <p className="mt-1 text-sm text-slate-500">
-          Registro de chegada, lacres, bipagem de vouchers e romaneio.
+          YBV: bipagem por voucher. Correios: bipagem por código de objeto, com vínculo de aparelhos posterior.
         </p>
       </div>
 
@@ -365,18 +365,17 @@ function TelaLista({
 
                   <div>
                     <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400">
-                      Vouchers
+                      {carga.transportadora === 'Correios' ? 'Objetos' : 'Vouchers'}
                     </div>
 
                     <div className="mt-1 text-xs font-bold text-slate-600">
-                      {carga.total_vouchers ||
-                        0}
+                      {carga.transportadora === 'Correios' ? (carga.total_objetos || 0) : (carga.total_vouchers || 0)}
                     </div>
                   </div>
 
                   <div>
                     <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400">
-                      Lacres
+                      Lacres (opcional)
                     </div>
 
                     <div className="mt-1 text-xs font-bold text-slate-600">
@@ -430,8 +429,7 @@ function TelaCarga({
     setTransportadora,
   ] = useState("");
 
-  const [rastreio,setRastreio] = useState('');
-  const [destinatarioCorreios, setDestinatarioCorreios] = useState('');
+   const [destinatarioCorreios, setDestinatarioCorreios] = useState('');
   const [motorista, setMotorista] =
     useState("");
 
@@ -508,13 +506,13 @@ function TelaCarga({
         await criarRecebimento(
           {
             transportadora,
-            codigo_rastreio: rastreio,
+            codigo_rastreio: null,
             destinatario_correios: transportadora === "Correios" ? destinatarioCorreios : null,
             motorista_nome:
               motorista,
             motorista_cpf: cpf,
             placa,
-            lacres,
+            lacres: lacreInput.trim() ? [...new Set([...lacres, lacreInput.trim().toUpperCase()])] : lacres,
           },
           user.id,
           profile?.nome
@@ -556,24 +554,19 @@ function TelaCarga({
       >
         <div className="space-y-6 p-5">
           {transportadora === 'Correios' && (
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="rounded-xl border border-violet-100 bg-violet-50/40 p-4">
               <label className="block text-xs font-bold">
-                Destinatário do recebimento
+                Destinatário do recebimento *
                 <select required aria-label="Destinatário dos Correios"
                   value={destinatarioCorreios} onChange={e => setDestinatarioCorreios(e.target.value)}
                   className="mt-2 block w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm">
                   <option value="">Selecione o destinatário</option>
                   {DESTINATARIOS_CORREIOS.map(nome => <option key={nome} value={nome}>{nome}</option>)}
                 </select>
-                <span className="mt-2 block font-normal text-slate-500">Indica para quem o pacote é destinado; não substitui a modalidade GRV, TRAON, MELI ou Online.</span>
               </label>
-              <label className="block text-xs font-bold">
-                Código do objeto dos Correios
-                <input aria-label="Código do objeto dos Correios" required maxLength={13}
-                  value={rastreio} onChange={e => setRastreio(e.target.value.toUpperCase().replace(/\s/g,''))}
-                  className="mt-2 block w-full rounded-xl border border-slate-200 px-3 py-3" placeholder="AA123456789BR"/>
-                <span className="mt-2 block font-normal text-slate-500">Um objeto por recebimento. A bipagem dos produtos ocorre na sequência.</span>
-              </label>
+              <p className="mt-2 text-xs text-violet-900">
+                Preencha motorista, CPF e placa e inicie a carga. Os códigos de rastreio serão bipados <b>somente na etapa seguinte</b>, um por pacote. IMEI/voucher serão vinculados depois.
+              </p>
             </div>
           )}
           <div>
@@ -609,10 +602,11 @@ function TelaCarga({
           <div className="grid gap-4 lg:grid-cols-3">
             <label>
               <span className="text-xs font-bold text-slate-500">
-                Nome do motorista
+                Nome do motorista {transportadora === 'Correios' ? '*' : ''}
               </span>
 
               <input
+                required={transportadora === 'Correios'}
                 value={motorista}
                 onChange={(event) =>
                   setMotorista(
@@ -625,10 +619,11 @@ function TelaCarga({
 
             <label>
               <span className="text-xs font-bold text-slate-500">
-                CPF
+                CPF {transportadora === 'Correios' ? '*' : ''}
               </span>
 
               <input
+                required={transportadora === 'Correios'}
                 value={cpf}
                 onChange={(event) =>
                   setCpf(
@@ -641,10 +636,11 @@ function TelaCarga({
 
             <label>
               <span className="text-xs font-bold text-slate-500">
-                Placa
+                Placa {transportadora === 'Correios' ? '*' : ''}
               </span>
 
               <input
+                required={transportadora === 'Correios'}
                 value={placa}
                 onChange={(event) =>
                   setPlaca(
@@ -1551,8 +1547,7 @@ export default function RecebimentoV2Page() {
     <div className="mx-auto max-w-[1680px] space-y-6">
       <PageHeader etapa={etapa} />
       {etapa === "lista" && <RetornoVoucherIncorretoPanel />}
-      <CorreiosPanel />
-
+ 
       {carregandoCarga ? (
         <div className="flex h-48 items-center justify-center">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-violet-100 border-t-violet-600" />
@@ -1595,50 +1590,23 @@ export default function RecebimentoV2Page() {
             />
           )}
 
-          {etapa ===
-            "bipagem" &&
-            recebimento && (
-              <TelaBipagem
-                recebimento={
-                  recebimento
-                }
-                onVoltar={() =>
-                  setEtapa(
-                    "lista"
-                  )
-                }
-                onConcluir={(
-                  rec
-                ) => {
-                  setRecebimento(
-                    rec
-                  );
+          {etapa === "bipagem" && recebimento &&
+            (recebimento.transportadora === 'Correios'
+              ? <CorreiosBipagem recebimento={recebimento}
+                  onVoltar={() => setEtapa('lista')}
+                  onConcluir={rec => { setRecebimento(rec); setEtapa('romaneio'); }}/>
+              : <TelaBipagem recebimento={recebimento}
+                  onVoltar={() => setEtapa('lista')}
+                  onConcluir={rec => { setRecebimento(rec); setEtapa('romaneio'); }}/>)
+          }
 
-                  setEtapa(
-                    "romaneio"
-                  );
-                }}
-              />
-            )}
-
-          {etapa ===
-            "romaneio" &&
-            recebimento && (
-              <TelaRomaneio
-                recebimentoId={
-                  recebimento.id
-                }
-                onNovo={() => {
-                  setRecebimento(
-                    null
-                  );
-
-                  setEtapa(
-                    "lista"
-                  );
-                }}
-              />
-            )}
+          {etapa === "romaneio" && recebimento &&
+            (recebimento.transportadora === 'Correios'
+              ? <CorreiosRomaneio recebimentoId={recebimento.id}
+                  onNovo={() => { setRecebimento(null); setEtapa('lista'); }}/>
+              : <TelaRomaneio recebimentoId={recebimento.id}
+                  onNovo={() => { setRecebimento(null); setEtapa('lista'); }}/>)
+          }
         </>
       )}
     </div>
