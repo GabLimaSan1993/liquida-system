@@ -25,6 +25,20 @@ export const listarEtapaOnline = etapa => operar('listar_etapa', { etapa });
 export const vincularAparelhoOnline = dados => operar('vincular', dados);
 export const desvincularAparelhoOnline = aparelho_id => operar('desvincular', { aparelho_id });
 
+/** Registra a decisão sobre a divergência da ALS.
+ * Aprovação transfere para a triagem cosmética convencional; negativa vai à devolução Online.
+ */
+export async function registrarDecisaoClienteOnline(aparelho_id, aprovou) {
+  const { data, error } = await supabase.rpc('assurant_tradein_online_decisao_cliente', {
+    p_aparelho_id: aparelho_id,
+    p_aprovou: aprovou,
+  });
+  if (error) throw new Error(error.message || 'Não foi possível registrar a decisão do cliente.');
+  if (!data?.ok) throw new Error(data?.erro || 'Decisão do cliente não foi registrada.');
+  return data;
+}
+
+
 export async function finalizarTriagemAlsOnline(dados) {
   const { data, error } = await supabase.rpc('assurant_tradein_online_triagem_als_finalizar', {
     p_dados: dados,
