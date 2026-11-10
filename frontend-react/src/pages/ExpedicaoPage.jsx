@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../AuthContext.jsx";
 import jsPDF from "jspdf";
+import DevolucoesOnlineExpedicaoPanel from "../components/assurant/DevolucoesOnlineExpedicaoPanel.jsx";
 import "jspdf-autotable";
 import {
   canaisExpedicao, abrirRomaneio, listarItens,
@@ -175,6 +176,7 @@ export default function ExpedicaoPage() {
 
   return (
     <div className="max-w-4xl mx-auto">
+      <DevolucoesOnlineExpedicaoPanel />
       <p className="text-sm text-gray-500 mb-2">Canal</p>
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-6">
         {canais.map((c) => (
