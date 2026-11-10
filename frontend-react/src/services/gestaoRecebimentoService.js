@@ -45,23 +45,29 @@ export function fmtDataHora(d) {
 export async function buscarGestaoRecebimento(periodo = "30d") {
   const desde = desdeISO(periodo);
 
-  const { data: recebimentos, error } = await supabase
-    .from("recebimentos")
-    .select("id, transportadora, motorista_nome, placa, status, total_vouchers, iniciado_em, concluido_em, iniciado_por_nome")
-    .gte("iniciado_em", desde)
-    .order("iniciado_em", { ascending: false });
-  if (error) return { ok: false, erro: error.message };
+  const [consultaRecebimentos, consultaCorreios] = await Promise.all([
+    supabase.from("recebimentos")
+      .select("id, transportadora, destinatario_correios, motorista_nome, placa, status, total_vouchers, total_objetos, iniciado_em, concluido_em, iniciado_por_nome")
+      .gte("iniciado_em", desde)
+      .order("iniciado_em", { ascending: false }),
+    supabase.rpc("assurant_correios_relatorio_gestao")
+  ]);
+  if (consultaRecebimentos.error) return { ok: false, erro: consultaRecebimentos.error.message };
+  if (consultaCorreios.error) return { ok: false, erro: consultaCorreios.error.message };
+  const recebimentos = consultaRecebimentos.data;
 
   const lista = recebimentos || [];
   const concluidos = lista.filter(r => r.status === "concluido");
   const andamento  = lista.filter(r => r.status === "em_andamento");
 
   // KPIs
-  const totalVouchers = concluidos.reduce((s, r) => s + (r.total_vouchers || 0), 0);
+  const totalVouchers = concluidos.reduce((s, r) => s + (r.transportadora === "Correios" ? 0 : (Number(r.total_vouchers) || 0)), 0);
+  const totalObjetos = concluidos.reduce((s, r) => s + (r.transportadora === "Correios" ? (Number(r.total_objetos) || 0) : 0), 0);
   const temposTotais  = concluidos.map(r => minutos(r.iniciado_em, r.concluido_em)).filter(v => v != null);
   const kpis = {
     recebimentos:   concluidos.length,
     vouchers:       totalVouchers,
+    objetos:        totalObjetos,
     voucherPorCarga: concluidos.length ? Math.round(totalVouchers / concluidos.length) : 0,
     tempoMedioMin:  media(temposTotais),
     emAndamento:    andamento.length,
@@ -108,6 +114,7 @@ export async function buscarGestaoRecebimento(periodo = "30d") {
     transportadoras,
     colaboradores,
     emAndamento,
+    correiosProdutividade: consultaCorreios.data?.registros || [],
     historico: concluidos,  // já ordenados por data desc
   };
 }
@@ -117,10 +124,18 @@ export async function buscarRomaneioGestao(recebimentoId) {
   const { data: rec, error } = await supabase
     .from("recebimentos").select("*").eq("id", recebimentoId).single();
   if (error) return { ok: false, erro: error.message };
-  const { data: vouchers } = await supabase
+  if (rec.transportadora === "Correios") {
+    const { data, error: erroObjetos } = await supabase.rpc("assurant_correios_relatorio_gestao", {
+      p_recebimento_id: recebimentoId,
+    });
+    if (erroObjetos) return { ok: false, erro: erroObjetos.message };
+    return { ok: true, recebimento: rec, objetos: data?.objetos || [], vouchers: [] };
+  }
+  const { data: vouchers, error: erroVouchers } = await supabase
     .from("recebimento_vouchers")
     .select("voucher, bipado_em, bipado_por_nome")
     .eq("recebimento_id", recebimentoId)
     .order("bipado_em", { ascending: true });
-  return { ok: true, recebimento: rec, vouchers: vouchers || [] };
+  if (erroVouchers) return { ok: false, erro: erroVouchers.message };
+  return { ok: true, recebimento: rec, vouchers: vouchers || [], objetos: [] };
 }
