@@ -663,17 +663,18 @@ export default function IndicadoresExecutivosV2Page() {
           .limit(1),
       ]);
 
+      const falhasConsultas = [...(resultado.falhasConsultas || [])];
       if (fifoResposta.error) {
-        throw new Error(
-          `vw_assurant_fifo_comparativo_periodo_atual: ${fifoResposta.error.message}`
+        falhasConsultas.push(
+          `Comparativo FIFO: ${fifoResposta.error.message}`
         );
       }
 
       setDados({
         ...resultado,
-
+        falhasConsultas,
         fifoComparativoAtual:
-          fifoResposta.data?.[0] || {},
+          fifoResposta.error ? {} : fifoResposta.data?.[0] || {},
       });
     } catch (err) {
       console.error(err);
@@ -2410,6 +2411,20 @@ export default function IndicadoresExecutivosV2Page() {
 
   return (
     <div className="space-y-6 pb-10">
+      {(dados.falhasConsultas || []).length > 0 && (
+        <div role="alert" className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-950">
+          <div className="flex items-center gap-2 font-bold">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            Alguns indicadores não puderam ser atualizados. Desconsidere os blocos afetados até a próxima consulta.
+          </div>
+          <div className="mt-1 break-words">
+            {(dados.falhasConsultas || []).join(" | ")}
+          </div>
+          <button type="button" onClick={carregar} className="mt-2 rounded-lg border border-amber-400 bg-white px-3 py-1.5 font-bold">
+            Tentar novamente
+          </button>
+        </div>
+      )}
       <header className="rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col justify-between gap-5 px-5 py-5 xl:flex-row xl:items-center">
           <div>
@@ -2555,7 +2570,7 @@ export default function IndicadoresExecutivosV2Page() {
                   ? "danger"
                   : "warning",
             },
-
+
           ]}
         />
       </header>
