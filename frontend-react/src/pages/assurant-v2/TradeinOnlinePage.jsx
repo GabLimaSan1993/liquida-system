@@ -3,9 +3,14 @@ import TriagemAlsOnlinePanel from '../../components/assurant/TriagemAlsOnlinePan
 import LaudosTradeinOnlinePanel from '../../components/assurant/LaudosTradeinOnlinePanel.jsx';
 import DevolucaoOnlinePopup from '../../components/assurant/DevolucaoOnlinePopup.jsx';
 import ImportarGrvAtendimentoOnline from '../../components/assurant/ImportarGrvAtendimentoOnline.jsx';
+import {
+  prepararJanelaEtiquetaVoucherOnline,
+  fecharJanelaEtiquetaVoucherOnline,
+  imprimirEtiquetaVoucherOnline
+} from '../../services/etiquetaVoucherOnline.js';
 import { consultarLaudoOnline, baixarArquivoLaudo } from '../../services/tradeinOnlineLaudoService.js';
 import { nomeArquivoLaudo } from '../../services/laudoGrvExportService.js';
-import { AlertTriangle, Boxes, CheckCircle2, ClipboardCheck, FileText, Link2, Package, RefreshCw, Search, Trash2, Truck } from 'lucide-react';
+import { AlertTriangle, Boxes, CheckCircle2, ClipboardCheck, FileText, Link2, Package, Printer, RefreshCw, Search, Trash2, Truck } from 'lucide-react';
 import {
   ROTAS_TRADEIN_ONLINE, listarEtapaOnline, listarObjetosOnline, listarVinculosOnline,
   vincularAparelhoOnline, desvincularAparelhoOnline, registrarDecisaoClienteOnline
@@ -77,14 +82,37 @@ function VinculacaoObjetos() {
   const doObjeto = aparelhos.filter(a=>a.objeto_id===objetoId);
   async function salvar(e) {
     e.preventDefault();if(salvando||!objetoId)return;
+    const voucherDigitado=form.voucher.trim().toUpperCase();
+    // Abrir durante o clique evita o bloqueio de popups após aguardar o RPC.
+    const janelaEtiqueta=prepararJanelaEtiquetaVoucherOnline();
     setSalvando(true);setErro('');setSucesso('');
     try {
-      const dados = await vincularAparelhoOnline({objeto_id:objetoId,...form});
-      setSucesso(`Voucher ${form.voucher.trim().toUpperCase()} vinculado ao objeto ${dados.codigo_rastreio} e encaminhado à fila de Triagem ALS.`);
+      const dados=await vincularAparelhoOnline({objeto_id:objetoId,...form});
+      const voucherConfirmado=String(dados?.voucher||voucherDigitado).trim().toUpperCase();
+      let statusEtiqueta='Etiqueta de código de barras aberta para impressão.';
+      try {
+        if(!imprimirEtiquetaVoucherOnline(voucherConfirmado,janelaEtiqueta)) {
+          statusEtiqueta='Impressão automática bloqueada; utilize Reimprimir etiqueta abaixo.';
+        }
+      }catch(erroImpressao) {
+        statusEtiqueta='Vínculo salvo, mas a impressão falhou: '+erroImpressao.message+'. Utilize Reimprimir etiqueta.';
+      }
       setForm({ voucher:'',observacoes:'' });
       await carregar();
-    } catch(err){setErro(err.message);}
-    finally{setSalvando(false);}
+      setSucesso('Voucher '+voucherConfirmado+' vinculado ao objeto '+dados.codigo_rastreio+
+        ' e encaminhado à Triagem ALS. '+statusEtiqueta);
+    }catch(err){
+      fecharJanelaEtiquetaVoucherOnline(janelaEtiqueta);
+      setErro(err.message);
+    }finally{setSalvando(false);}
+  }
+  function reimprimirEtiqueta(item) {
+    setErro('');
+    try {
+      if(!imprimirEtiquetaVoucherOnline(item.voucher)) {
+        setErro('O navegador bloqueou a janela de impressão. Libere popups para este site e tente novamente.');
+      }
+    }catch(err){setErro('Não foi possível gerar a etiqueta: '+err.message);}
   }
   async function remover(item){
     if(salvando||!window.confirm(`Desfazer vínculo do voucher ${item.voucher||'—'}? O evento ficará auditado.`))return;
@@ -151,7 +179,7 @@ function VinculacaoObjetos() {
                   className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-violet-700 px-4 py-3 text-sm font-bold text-white disabled:opacity-40">
                   <CheckCircle2 size={17}/>{salvando?'Gravando…':'Confirmar vinculação'}
                 </button>
-                <p className="mt-2 text-xs text-slate-500">Voucher obrigatório. Não é necessário informar IMEI, origem, modelo ou pedido. Ao confirmar, o aparelho entra na fila de Triagem ALS.</p>
+                <p className="mt-2 text-xs text-slate-500">Voucher obrigatório. Não é necessário informar IMEI, origem, modelo ou pedido. Ao confirmar, o aparelho entra na fila de Triagem ALS e será aberta uma etiqueta 50 × 30 mm com somente o código de barras do voucher.</p>
               </div>
             </form>
           </>}
@@ -164,6 +192,11 @@ function VinculacaoObjetos() {
               <div className="flex-1"><p className="font-mono font-bold text-slate-800">Voucher: {a.voucher||'—'}</p>
               {a.observacoes && <p className="mt-1 text-slate-600">Observações: {a.observacoes}</p>}
               <p className="mt-1 text-violet-700">{ETAPAS[a.etapa]||a.etapa}</p></div>
+              <button type="button" onClick={()=>reimprimirEtiqueta(a)} disabled={salvando} className={btn}
+                title={'Reimprimir código de barras do voucher '+a.voucher}
+                aria-label={'Reimprimir etiqueta do voucher '+a.voucher}>
+                <Printer size={14}/>Reimprimir etiqueta
+              </button>
               <button type="button" onClick={()=>remover(a)} disabled={salvando} className={btn} aria-label="Desfazer vínculo"><Trash2 size={14}/></button>
             </div>)}</div>}
         </section>
