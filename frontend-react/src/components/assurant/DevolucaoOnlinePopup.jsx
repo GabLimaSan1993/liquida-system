@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { AlertTriangle, CheckCircle2, Download, FileSpreadsheet, FileText, Package, ScanLine, X } from 'lucide-react';
 import { consultarDevolucaoOnline, concluirDevolucaoOnline, enviarDocumentosDevolucao, baixarDeclaracaoDevolucao } from '../../services/tradeinOnlineDevolucaoService.js';
 import { gerarDeclaracaoConteudoPDF, REMETENTE_DECLARACAO } from '../../services/declaracaoConteudoOnlinePdfService.js';
@@ -151,6 +152,9 @@ export default function DevolucaoOnlinePopup({ item, onClose, onConcluido }) {
           <div className="flex items-center gap-2 text-sm font-black text-emerald-900"><CheckCircle2 size={20}/>Declaração gerada e devolução concluída</div>
           <p className="text-xs text-emerald-900">E-ticket <strong>{resultado.eticket}</strong> registrado. O voucher foi encaminhado à tela de <strong>Expedição B2C existente</strong>, na seção de devoluções Trade-ins Online. Os documentos podem ser baixados novamente.</p>
           <div className="flex flex-wrap gap-2">
+            <Link to="/v2/assurant/b2c/expedicao" className="inline-flex items-center gap-2 rounded-xl bg-violet-700 px-4 py-2.5 text-xs font-black text-white">
+              Abrir Expedição B2C
+            </Link>
             <button type="button" disabled={Boolean(baixando)} onClick={()=>baixar('pdf')} className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-xs font-bold text-emerald-900 shadow-sm"><FileText size={16}/> Baixar PDF <Download size={13}/></button>
             <button type="button" disabled={Boolean(baixando)} onClick={()=>baixar('xlsx')} className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-xs font-bold text-emerald-900 shadow-sm"><FileSpreadsheet size={16}/> Baixar Excel <Download size={13}/></button>
           </div>
