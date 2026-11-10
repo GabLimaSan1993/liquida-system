@@ -40,8 +40,7 @@ export const TELAS = [
   { id: "/v2/assurant/online/triagem-als", label: "Triagem ALS", grupo: "Assurant — Operação Trade-In Online" },
   { id: "/v2/assurant/online/laudo", label: "Laudo", grupo: "Assurant — Operação Trade-In Online" },
   { id: "/v2/assurant/online/decisao-cliente", label: "Aguardando Definição do Cliente", grupo: "Assurant — Operação Trade-In Online" },
-  { id: "/v2/assurant/online/devolucao", label: "Aguardando Devolução", grupo: "Assurant — Operação Trade-In Online" },
-  { id: "/v2/assurant/online/expedicao", label: "Expedição", grupo: "Assurant — Operação Trade-In Online" },
+  { id: "/v2/assurant/online/devolucao", label: "Devoluções Trade-ins Online", grupo: "Assurant — Operação Trade-In Online" },
 
   { id: "/v2/assurant/triagens/funcional", label: "Triagem Funcional", grupo: "Assurant — Triagens" },
   { id: "/v2/assurant/triagens/divergencias-imei", label: "Divergências — Assurant", grupo: "Assurant — Triagens" },
