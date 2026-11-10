@@ -13,6 +13,20 @@ const ICONES = {
   vinculacao: Link2, 'triagem-als': ClipboardCheck, laudo: FileText,
   'decisao-cliente': AlertTriangle, devolucao: Package, expedicao: Truck
 };
+// Aging da fila de decisão: parte exclusivamente da finalização da Triagem ALS.
+function formatarAgingAls(triadoEm, agora) {
+  if (!triadoEm) return '—';
+  const inicio = new Date(triadoEm).getTime();
+  if (!Number.isFinite(inicio)) return '—';
+  const minutos = Math.max(0, Math.floor((agora - inicio) / 60000));
+  const dias = Math.floor(minutos / 1440);
+  const horas = Math.floor((minutos % 1440) / 60);
+  const minutosRestantes = minutos % 60;
+  if (dias > 0) return `${dias}d ${horas}h`;
+  if (horas > 0) return `${horas}h ${minutosRestantes}min`;
+  return `${minutosRestantes}min`;
+}
+
 const ETAPAS = {
   identificacao_pendente: 'Identificação pendente',
   aguardando_triagem_als: 'Aguardando Triagem ALS',
@@ -162,6 +176,12 @@ function FilaEtapa({ config }) {
   const [erro,setErro] = useState('');
   const [carregando,setCarregando] = useState(false);
   const [baixando,setBaixando] = useState('');
+  const [agora,setAgora] = useState(() => Date.now());
+  useEffect(() => {
+    if (config.id !== 'decisao-cliente') return undefined;
+    const timer = setInterval(() => setAgora(Date.now()), 60000);
+    return () => clearInterval(timer);
+  }, [config.id]);
   async function abrirDocumento(item,tipo){
     const chave=item.id+tipo;
     setBaixando(chave);setErro('');
@@ -201,7 +221,7 @@ function FilaEtapa({ config }) {
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[760px] text-left text-xs">
-          <thead><tr className="border-b bg-slate-50 text-slate-600">{['Voucher','Objeto Correios','Resultado ALS','IMEI / Serial','Defeitos adicionais','Data do vínculo',...(config.id==='decisao-cliente'?['Documento do laudo']:[])].map(t=><th key={t} className="p-3">{t}</th>)}</tr></thead>
+          <thead><tr className="border-b bg-slate-50 text-slate-600">{['Voucher','Objeto Correios','Resultado ALS','IMEI / Serial','Defeitos adicionais',config.id==='decisao-cliente'?'Conclusão ALS':'Data do vínculo',...(config.id==='decisao-cliente'?['Aging desde ALS','Documento do laudo']:[])].map(t=><th key={t} className="p-3">{t}</th>)}</tr></thead>
           <tbody>{filtrados.map(item=><tr key={item.id} className="border-b">
             <td className="p-3 font-mono font-black text-violet-700">{item.voucher||'—'}</td>
             <td className="p-3 font-mono">{item.codigo_rastreio}</td>
@@ -209,6 +229,9 @@ function FilaEtapa({ config }) {
             <td className="p-3 font-mono">{item.imei||'Não bipado'}{item.imei2?' / '+item.imei2:''}</td>
             <td className="p-3">{(item.defeitos_als||[]).join('; ')||'—'}</td>
             <td className="p-3">{fmtData(item.triado_em||item.criado_em)}</td>
+            {config.id==='decisao-cliente'&&<td className="p-3 whitespace-nowrap font-semibold tabular-nums text-slate-800" title={item.triado_em ? 'Contagem iniciada em '+fmtData(item.triado_em) : 'Sem registro de conclusão da Triagem ALS'}>
+              {formatarAgingAls(item.triado_em,agora)}
+            </td>}
             {config.id==='decisao-cliente'&&<td className="p-3">
               {/^SAMV/i.test(item.voucher||'')
                 ? <span className="text-xs font-bold text-emerald-800">Laudo realizado</span>
