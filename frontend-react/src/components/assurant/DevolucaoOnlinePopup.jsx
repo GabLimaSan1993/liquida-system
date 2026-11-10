@@ -3,6 +3,7 @@ import { AlertTriangle, CheckCircle2, Download, FileSpreadsheet, FileText, Packa
 import { consultarDevolucaoOnline, concluirDevolucaoOnline, enviarDocumentosDevolucao, baixarDeclaracaoDevolucao } from '../../services/tradeinOnlineDevolucaoService.js';
 import { gerarDeclaracaoConteudoPDF, REMETENTE_DECLARACAO } from '../../services/declaracaoConteudoOnlinePdfService.js';
 import { gerarDeclaracaoConteudoExcel } from '../../services/declaracaoConteudoOnlineExcelService.js';
+import { buscarDadosDevolucaoOnline } from '../../services/tradeinOnlineGrvImportService.js';
 
 const campo='mt-1 block w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-violet-500';
 const titulo='text-[11px] font-bold text-slate-600';
@@ -13,7 +14,8 @@ export default function DevolucaoOnlinePopup({ item, onClose, onConcluido }) {
   const [eticket,setEticket]=useState('');
   const [destinatario,setDestinatario]=useState(inicial);
   const [conteudo,setConteudo]=useState('CELULAR');
-  const [valor,setValor]=useState('50.00');
+  const [valor,setValor]=useState('');
+  const [origemDados,setOrigemDados]=useState('');
   const [peso,setPeso]=useState('');
   const [carregando,setCarregando]=useState(true);
   const [salvando,setSalvando]=useState(false);
@@ -25,17 +27,36 @@ export default function DevolucaoOnlinePopup({ item, onClose, onConcluido }) {
   useEffect(()=>{
     let ativo=true;
     consultarDevolucaoOnline(item.id)
-      .then(r=>{
+      .then(async r=>{
         if(!ativo)return;
         if(r.documento){
           setEticket(r.documento.eticket||'');
           setDestinatario({...inicial,...(r.documento.destinatario||{})});
           setConteudo(r.documento.conteudo||'CELULAR');
-          setValor(String(r.documento.valor_declarado||'50.00'));
+          setValor(String(r.documento.valor_declarado??''));
           setPeso(r.documento.peso_total_kg ? String(r.documento.peso_total_kg) : '');
           setResultado(r.documento);
+          return;
+        }
+        setConteudo(item.tipo_aparelho==='TABLET'?'TABLET':item.tipo_aparelho==='RELOGIO'?'RELÓGIO':'CELULAR');
+        const dados=await buscarDadosDevolucaoOnline(item.id);
+        if(!ativo)return;
+        if(dados?.encontrado&&dados?.dados){
+          const p=dados.dados;
+          setOrigemDados(p.fonte||'Base importada');
+          setDestinatario({
+            nome:clean(p.nome),cpf_cnpj:clean(p.cpf_cnpj),
+            endereco:clean(p.endereco),bairro:clean(p.bairro),
+            cidade:clean(p.cidade),uf:clean(p.uf).toUpperCase(),cep:clean(p.cep)
+          });
+          if(clean(p.conteudo))setConteudo(clean(p.conteudo));
+          if(p.valor_declarado!=null&&Number(p.valor_declarado)>0)
+            setValor(Number(p.valor_declarado).toFixed(2));
+          // Peso não é pré-preenchido em nenhuma hipótese.
+          setPeso('');
         }else{
-          setConteudo(item.tipo_aparelho==='TABLET'?'TABLET':item.tipo_aparelho==='RELOGIO'?'RELÓGIO':'CELULAR');
+          setOrigemDados('Voucher ainda não localizado nas importações diárias');
+          setValor('');setPeso('');
         }
       })
       .catch(e=>{if(ativo)setErro(e.message);})
@@ -119,11 +140,16 @@ export default function DevolucaoOnlinePopup({ item, onClose, onConcluido }) {
           <div><span className="font-bold text-slate-500">Remetente do modelo</span><p className="mt-1 font-semibold">{REMETENTE_DECLARACAO.nome} · {REMETENTE_DECLARACAO.cidade}/{REMETENTE_DECLARACAO.uf}</p></div>
           <div><span className="font-bold text-slate-500">Situação</span><p className="mt-1 font-semibold text-rose-800">{resultado?'Declaração gerada':'Cliente não aprovou a divergência'}</p></div>
         </div>
+        {!resultado&&origemDados&&<p className="rounded-xl border border-violet-200 bg-violet-50 p-3 text-xs font-semibold text-violet-950">
+          {origemDados==='Voucher ainda não localizado nas importações diárias'
+            ? 'Sem cadastro nas bases importadas para este voucher. Complete os campos manualmente ou importe o relatório do GRV Atendimento.'
+            : 'Dados do destinatário carregados automaticamente da fonte: '+origemDados+'. Confira antes de gerar. O peso permanece para preenchimento manual.'}
+        </p>}
         {erro&&<div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-900">{erro}</div>}
 
         {resultado ? <div className="space-y-4 rounded-xl border border-emerald-200 bg-emerald-50 p-5">
           <div className="flex items-center gap-2 text-sm font-black text-emerald-900"><CheckCircle2 size={20}/>Declaração gerada e devolução concluída</div>
-          <p className="text-xs text-emerald-900">E-ticket <strong>{resultado.eticket}</strong> registrado. O voucher foi encaminhado à fila de <strong>Expedição</strong>. Os documentos podem ser baixados novamente.</p>
+          <p className="text-xs text-emerald-900">E-ticket <strong>{resultado.eticket}</strong> registrado. O voucher foi encaminhado à tela de <strong>Expedição B2C existente</strong>, na seção de devoluções Trade-ins Online. Os documentos podem ser baixados novamente.</p>
           <div className="flex flex-wrap gap-2">
             <button type="button" disabled={Boolean(baixando)} onClick={()=>baixar('pdf')} className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-xs font-bold text-emerald-900 shadow-sm"><FileText size={16}/> Baixar PDF <Download size={13}/></button>
             <button type="button" disabled={Boolean(baixando)} onClick={()=>baixar('xlsx')} className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-xs font-bold text-emerald-900 shadow-sm"><FileSpreadsheet size={16}/> Baixar Excel <Download size={13}/></button>
@@ -157,12 +183,12 @@ export default function DevolucaoOnlinePopup({ item, onClose, onConcluido }) {
             <label className={titulo}>Valor declarado (R$) *
               <input className={campo} inputMode="decimal" value={valor} onChange={e=>setValor(e.target.value)} disabled={salvando||carregando} required/>
             </label>
-            <label className={titulo}>Peso total (kg)
+            <label className={titulo}>Peso total (kg) — informar manualmente
               <input className={campo} inputMode="decimal" value={peso} onChange={e=>setPeso(e.target.value)} placeholder="Ex.: 0,350" disabled={salvando||carregando}/>
             </label>
           </div>
           <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-            <AlertTriangle size={17} className="mt-0.5 shrink-0"/> Confira destinatário e valor antes de concluir. A declaração será gerada com campos legais e espaço para assinatura física; a ação moverá o voucher para Expedição.
+            <AlertTriangle size={17} className="mt-0.5 shrink-0"/> Confira destinatário e valor antes de concluir. A declaração será gerada com campos legais e espaço para assinatura física; a ação moverá o voucher para a Expedição já existente, na seção de devoluções Online.
           </div>
           <button type="submit" disabled={salvando||carregando} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-violet-700 px-5 py-3 text-sm font-black text-white transition hover:bg-violet-800 disabled:opacity-50">
             <Package size={18}/>{salvando?'Gerando e salvando declaração...':'Gerar Declaração de Conteúdo'}
