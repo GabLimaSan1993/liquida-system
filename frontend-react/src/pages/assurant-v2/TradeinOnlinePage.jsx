@@ -238,9 +238,9 @@ function FilaEtapa({ config }) {
         </div>}
     <Mensagem erro texto={erro}/>
     <Mensagem texto={sucesso}/>
-    {config.id==='devolucao'&&<p className="text-xs text-slate-600">
-      Clique no <strong>voucher</strong> para abrir a coleta de e-ticket e gerar a Declaração de Conteúdo em <strong>PDF e Excel</strong>.
-      Ao concluir, o produto segue para Expedição.
+    {['devolucao','expedicao'].includes(config.id)&&<p className="text-xs text-slate-600">
+      Clique no <strong>voucher</strong> para {config.id==='devolucao'?'registrar o e-ticket e gerar a Declaração de Conteúdo':'consultar o e-ticket e baixar a Declaração de Conteúdo'} em <strong>PDF e Excel</strong>.
+      {config.id==='devolucao'&&'Ao concluir, o produto segue para Expedição.'}
     </p>}
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -255,7 +255,7 @@ function FilaEtapa({ config }) {
           <thead><tr className="border-b bg-slate-50 text-slate-600">{['Voucher','Objeto Correios','Resultado ALS','IMEI / Serial','Defeitos adicionais',config.id==='decisao-cliente'?'Conclusão ALS':'Data do vínculo',...(config.id==='decisao-cliente'?['Aging desde ALS','Documento do laudo','Decisão do cliente']:[]),...(config.id==='devolucao'?['Decisão do cliente']:[])].map(t=><th key={t} className="p-3">{t}</th>)}</tr></thead>
           <tbody>{filtrados.map(item=><tr key={item.id} className="border-b">
             <td className="p-3 font-mono font-black text-violet-700">
-              {config.id==='devolucao'?
+              {['devolucao','expedicao'].includes(config.id)?
                 <button type="button" onClick={()=>setVoucherDevolucao(item)}
                   className="rounded py-1 text-left font-mono font-black text-violet-700 underline underline-offset-2 hover:text-violet-900"
                   title="Abrir coleta de e-ticket e Declaração de Conteúdo">
@@ -308,7 +308,7 @@ function FilaEtapa({ config }) {
         {!carregando&&!filtrados.length&&<p className="py-9 text-center text-xs text-slate-500">Nenhum produto nesta etapa.</p>}
       </div>
     </section>
-    {config.id==='devolucao'&&voucherDevolucao&&<DevolucaoOnlinePopup
+    {['devolucao','expedicao'].includes(config.id)&&voucherDevolucao&&<DevolucaoOnlinePopup
       item={voucherDevolucao}
       onClose={()=>setVoucherDevolucao(null)}
       onConcluido={r=>{
