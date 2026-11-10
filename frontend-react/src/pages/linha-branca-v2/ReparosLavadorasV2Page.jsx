@@ -352,7 +352,7 @@ export default function ReparosLavadorasV2Page() {
       return setMensagem("Informe o diagnóstico e selecione ao menos um serviço executado.");
     }
     if (necessidadesAbertas.length) return setMensagem("Há requisições de peças ou compras em aberto. Receba o material e conclua o serviço somente após executá-lo.");
-    if (!podeExecutar) return setMensagem(selectedOs?.retorno_pos_reparo_exclusivo_carlos ? "Retorno reprovado na bancada: somente Carlos Dias pode refazer este reparo." : "Nível N3 exclusivo de Carlos Dias; N1/N2 disponíveis para Carlos, Kaua e Alexandre.");
+    if (!podeExecutar) return setMensagem(selectedOs?.retorno_pos_reparo_exclusivo_carlos ? "Retorno reprovado na bancada: somente Carlos Dias pode refazer este reparo." : "Nível N3 disponível para Carlos Dias e Alexandre Gabriel; N1/N2 também para Kauã. Retorno reprovado na bancada segue exclusivo de Carlos Dias.");
     if(areaAtual==="Reparo Estético"){
       try{
         const fotos=await conferirEvidenciasEsteticas(selectedOs.id);
