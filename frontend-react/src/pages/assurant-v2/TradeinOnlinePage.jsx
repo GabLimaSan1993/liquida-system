@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import TriagemAlsOnlinePanel from '../../components/assurant/TriagemAlsOnlinePanel.jsx';
+import LaudosTradeinOnlinePanel from '../../components/assurant/LaudosTradeinOnlinePanel.jsx';
 import { AlertTriangle, Boxes, CheckCircle2, ClipboardCheck, FileText, Link2, Package, RefreshCw, Search, Trash2, Truck } from 'lucide-react';
 import {
   ROTAS_TRADEIN_ONLINE, listarEtapaOnline, listarObjetosOnline, listarVinculosOnline,
@@ -14,7 +15,7 @@ const ETAPAS = {
   identificacao_pendente: 'Identificação pendente',
   aguardando_triagem_als: 'Aguardando Triagem ALS',
   aguardando_laudo: 'Aguardando Laudo',
-  aguardando_decisao_cliente: 'Aguardando Decisão do Cliente',
+  aguardando_decisao_cliente: 'Aguardando Definição do Cliente',
   aguardando_devolucao: 'Aguardando Devolução',
   aguardando_expedicao: 'Aguardando Expedição',
   expedido: 'Expedido', encerrado: 'Encerrado'
@@ -212,6 +213,6 @@ export default function TradeinOnlinePage({ tipo='vinculacao' }) {
           <p className="mt-1 text-xs text-slate-500">GRV · Online · TRAON · MELI · Rastreabilidade por código do objeto Correios</p>
         </div></div>
     </header>
-    {tipo==='vinculacao'?<VinculacaoObjetos/>:tipo==='triagem-als'?<TriagemAlsOnlinePanel/>:<FilaEtapa config={config}/>}
+    {tipo==='vinculacao'?<VinculacaoObjetos/>:tipo==='triagem-als'?<TriagemAlsOnlinePanel/>:tipo==='laudo'?<LaudosTradeinOnlinePanel/>:<FilaEtapa config={config}/>}
   </div>;
 }
