@@ -163,14 +163,13 @@ export function CorreiosRomaneio({ recebimentoId, onNovo }) {
       '#':i+1,'Código do objeto':item.codigo_rastreio,
       'Bipado em':formatarData(item.bipado_em),
       'Operador':item.bipado_por_nome || '',
-      'Situação':'Aguardando vinculação de IMEI e voucher',
-      'Voucher':item.voucher || '','IMEI':item.imei || ''
+      'Situação':item.status_vinculo === 'aguardando_vinculacao' ? 'Aguardando vinculação' : (item.status_vinculo || '—')
     }));
   }
   function excel() {
     const wb=XLSX.utils.book_new();
     const ws=XLSX.utils.json_to_sheet(linhas());
-    ws['!cols']=[{wch:7},{wch:25},{wch:25},{wch:32},{wch:40},{wch:22},{wch:22}];
+    ws['!cols']=[{wch:7},{wch:25},{wch:25},{wch:32},{wch:27}];
     XLSX.utils.book_append_sheet(wb,ws,'Objetos Correios');
     XLSX.writeFile(wb,`romaneio_correios_${dados.recebimento.id.slice(0,8)}.xlsx`);
   }
@@ -185,7 +184,7 @@ export function CorreiosRomaneio({ recebimentoId, onNovo }) {
       `Placa: ${rec.placa || '—'} · Lacres: ${(rec.lacres||[]).join(', ')||'—'}`,
       `Início: ${formatarData(rec.iniciado_em)} · Conclusão: ${formatarData(rec.concluido_em)}`,
       `Total de objetos: ${objetos.length}`,
-      'Os IMEIs e vouchers serão vinculados em etapa posterior.'
+      'Identificação dos aparelhos em etapa posterior.'
     ];
     info.forEach((linha,i)=>doc.text(linha,14,28+i*6));
     doc.autoTable({startY:70,head:[['#','Código do objeto','Bipado em','Responsável']],
@@ -199,7 +198,7 @@ export function CorreiosRomaneio({ recebimentoId, onNovo }) {
   return <div className="space-y-4">
     <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
       <div className="flex items-center gap-2 text-emerald-900"><CheckCircle2 size={20}/><h2 className="font-black">Recebimento Correios concluído</h2></div>
-      <p className="mt-2 text-xs text-emerald-900">{objetos.length} objeto(s) registrados para <b>{rec.destinatario_correios}</b>. Aguardando vinculação de IMEI e voucher.</p>
+      <p className="mt-2 text-xs text-emerald-900">{objetos.length} objeto(s) registrados para <b>{rec.destinatario_correios}</b>. Aguardando identificação dos aparelhos.</p>
     </div>
     <section className="rounded-2xl border bg-white p-5 shadow-sm">
       <h3 className="font-black">Romaneio da carga</h3>
@@ -222,7 +221,7 @@ export function CorreiosRomaneio({ recebimentoId, onNovo }) {
           <td className="p-3 font-mono font-bold">{item.codigo_rastreio}</td>
           <td className="p-3">{formatarData(item.bipado_em)}</td>
           <td className="p-3">{item.bipado_por_nome || '—'}</td>
-          <td className="p-3 text-amber-800">Aguardando IMEI/voucher</td>
+          <td className="p-3 text-amber-800">Aguardando vinculação</td>
         </tr>)}</tbody>
       </table></div>
     </section>
