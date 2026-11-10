@@ -64,6 +64,7 @@ export const TELAS = [
   { id: "/v2/assurant/estoque/armazenagem", label: "Estoque — Armazenagem", grupo: "Assurant — Estoque" },
   { id: "/v2/assurant/estoque/retorno-reparo", label: "Retorno de Reparo — Bipagem, Recebimento e Relatórios", grupo: "Assurant — Estoque" },
   { id: "/v2/assurant/estoque/consulta", label: "Estoque — Consulta", grupo: "Assurant — Estoque" },
+  { id: "/v2/assurant/estoque/kardex", label: "Kardex de Estoque — movimentações e saldos", grupo: "Assurant — Estoque" },
   { id: "/v2/assurant/estoque/inventario", label: "Estoque — Inventário", grupo: "Assurant — Estoque" },
   { id: "/v2/assurant/estoque/carga-inicial", label: "Estoque — Carga Inicial", grupo: "Assurant — Estoque" },
 
