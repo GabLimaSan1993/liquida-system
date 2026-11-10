@@ -18,16 +18,25 @@ export async function criarRecebimento({ transportadora, motorista_nome, motoris
     return { ok: false, erro: "Selecione um destinatário dos Correios: EcoPhone, Traon, MyWIT ou Estoque Seguradora." };
   }
   const rastreio=String(codigo_rastreio||'').trim().toUpperCase();
-  if(transportadora==='Correios'&&!/^[A-Z]{2}[0-9]{9}[A-Z]{2}$/.test(rastreio)) return {ok:false,erro:'Informe um código de objeto dos Correios válido (13 caracteres).'};
+  const cpfDigitos = String(motorista_cpf || '').replace(/\D/g, '');
+  const placaNormalizada = String(placa || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (transportadora === 'Correios') {
+    if (!String(motorista_nome || '').trim()) return { ok: false, erro: 'Informe o nome do motorista.' };
+    if (cpfDigitos.length !== 11) return { ok: false, erro: 'Informe o CPF do motorista com 11 dígitos.' };
+    if (!/^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/.test(placaNormalizada)) {
+      return { ok: false, erro: 'Informe uma placa válida, no padrão ABC1234 ou ABC1D23.' };
+    }
+  }
   const { data, error } = await supabase
     .from("recebimentos")
     .insert({
       transportadora,
-      codigo_rastreio: transportadora==='Correios'?rastreio:null,
+      // Na modalidade Correios o objeto é bipado APÓS abrir a carga; nunca no cabeçalho.
+      codigo_rastreio: null,
       destinatario_correios: transportadora === 'Correios' ? destinatario : null,
       motorista_nome:    motorista_nome?.trim() || null,
       motorista_cpf:     motorista_cpf?.trim() || null,
-      placa:             placa?.trim().toUpperCase() || null,
+      placa:             transportadora === 'Correios' ? placaNormalizada : (placa?.trim().toUpperCase() || null),
       lacres:            Array.isArray(lacres) ? lacres : [],
       iniciado_por:      userId,
       iniciado_por_nome: userNome || null,
@@ -204,7 +213,7 @@ export async function buscarRomaneio(recebimentoId) {
 export async function listarRecebimentos(limite = 30) {
   const { data, error } = await supabase
     .from("recebimentos")
-    .select("id, transportadora, codigo_rastreio, motorista_nome, placa, status, iniciado_em, concluido_em, total_vouchers, iniciado_por_nome")
+    .select("id, transportadora, codigo_rastreio, destinatario_correios, motorista_nome, placa, status, iniciado_em, concluido_em, total_vouchers, total_objetos, iniciado_por_nome")
     .order("iniciado_em", { ascending: false })
     .limit(limite);
   if (error) return [];
@@ -216,7 +225,7 @@ export async function listarRecebimentos(limite = 30) {
 export async function listarEmAndamento() {
   const { data, error } = await supabase
     .from("recebimentos")
-    .select("id, transportadora, codigo_rastreio, motorista_nome, placa, lacres, status, iniciado_em, total_vouchers, iniciado_por, iniciado_por_nome")
+    .select("id, transportadora, codigo_rastreio, destinatario_correios, motorista_nome, placa, lacres, status, iniciado_em, total_vouchers, total_objetos, iniciado_por, iniciado_por_nome")
     .eq("status", "em_andamento")
     .order("iniciado_em", { ascending: false });
   if (error) return [];
