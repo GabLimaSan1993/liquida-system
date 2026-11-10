@@ -15,6 +15,7 @@ import {
   FileText,
   FlaskConical,
   HelpCircle,
+  Link2,
   Ticket,
   History,
   LayoutDashboard,
@@ -107,7 +108,7 @@ const MENU_GROUPS = [
   },
 
   {
-    label: "OPERAÇÃO",
+    label: "OPERAÇÃO – LOJAS",
     items: [
       {
         label: "Recebimento",
@@ -410,6 +411,20 @@ const MENU_GROUPS = [
         icon: FileText,
         enabled: false,
       },
+    ],
+  },
+];
+
+const MENU_TRADEIN_ONLINE = [
+  {
+    label: "OPERAÇÃO – TRADE-IN ONLINE",
+    items: [
+      {label: "Vinculação de Objetos", icon: Link2, to: "/v2/assurant/online/vinculacao", enabled: true, exact: true},
+      {label: "Triagem ALS", icon: ClipboardCheck, to: "/v2/assurant/online/triagem-als", enabled: true, exact: true},
+      {label: "Laudo", icon: FileText, to: "/v2/assurant/online/laudo", enabled: true, exact: true},
+      {label: "Aguardando Decisão do Cliente", icon: Clock3, to: "/v2/assurant/online/decisao-cliente", enabled: true, exact: true},
+      {label: "Aguardando Devolução", icon: Package, to: "/v2/assurant/online/devolucao", enabled: true, exact: true},
+      {label: "Expedição", icon: Truck, to: "/v2/assurant/online/expedicao", enabled: true, exact: true},
     ],
   },
 ];
@@ -979,6 +994,12 @@ function SidebarContent({
   pathname,
   mobile = false,
 }) {
+  const navigate = useNavigate();
+  const onlineAtivo = pathname.startsWith("/v2/assurant/online/");
+  const rotasOnline = MENU_TRADEIN_ONLINE[0].items.filter(
+    item => profile?.is_master || profile?.telas_permitidas?.includes(item.to)
+  );
+  const possuiOnline = rotasOnline.length > 0;
   const podeVerRota = (to, allowedUserIds, liquidaOnly = false) => {
     if (to === "/chamados/gestao") return profile?.id === "b517d70a-56be-4b4f-8b9e-a03c769dd3c3" && profile?.telas_permitidas?.includes(to) === true && profile?.telas_permitidas?.includes("/chamados") === true;
     if (to === "/chamados") return profile?.telas_permitidas?.includes(to) === true;
@@ -1012,7 +1033,7 @@ function SidebarContent({
     );
   };
 
-  const menuGroupsVisiveis = MENU_GROUPS
+  const menuGroupsVisiveis = (onlineAtivo ? MENU_TRADEIN_ONLINE : MENU_GROUPS)
     .map((group) => ({
       ...group,
       items: group.items
@@ -1113,11 +1134,10 @@ function SidebarContent({
             </div>
 
             <div className="mt-1 text-sm font-bold text-white">
-              Assurant Warehouse
+              {onlineAtivo ? "Operação – Trade-In Online" : "Operação – Lojas"}
             </div>
-
             <div className="mt-0.5 text-[11px] leading-4 text-white/40">
-              Operação dedicada
+              Assurant Warehouse · Fluxos separados
             </div>
           </div>
         ) : (
@@ -1130,6 +1150,18 @@ function SidebarContent({
         )}
       </div>
 
+      <div className={`shrink-0 mt-3 space-y-2 ${collapsed ? "px-2" : "px-4"}`}>
+        <button type="button" onClick={() => navigate("/v2/assurant")}
+          title="Operação – Lojas"
+          className={`flex w-full items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-xs font-bold transition ${!onlineAtivo ? "border-violet-200 bg-white text-violet-900" : "border-white/15 bg-white/5 text-white/75 hover:bg-white/15"}`}>
+          <Warehouse className="h-4 w-4 shrink-0" />{!collapsed && "Operação – Lojas"}
+        </button>
+        {possuiOnline && <button type="button" title="Operação – Trade-In Online"
+          onClick={() => navigate(onlineAtivo ? pathname : rotasOnline[0].to)}
+          className={`flex w-full items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-xs font-bold transition ${onlineAtivo ? "border-violet-200 bg-white text-violet-900" : "border-white/15 bg-white/5 text-white/75 hover:bg-white/15"}`}>
+          <Link2 className="h-4 w-4 shrink-0" />{!collapsed && "Operação – Trade-In Online"}
+        </button>}
+      </div>
       <nav
         className={`
           assurant-sidebar-scroll mt-4 flex-1 overflow-y-auto overflow-x-hidden pb-4
