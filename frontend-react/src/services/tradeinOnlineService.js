@@ -24,3 +24,12 @@ export const listarVinculosOnline = () => operar('listar_vinculacao');
 export const listarEtapaOnline = etapa => operar('listar_etapa', { etapa });
 export const vincularAparelhoOnline = dados => operar('vincular', dados);
 export const desvincularAparelhoOnline = aparelho_id => operar('desvincular', { aparelho_id });
+
+export async function finalizarTriagemAlsOnline(dados) {
+  const { data, error } = await supabase.rpc('assurant_tradein_online_triagem_als_finalizar', {
+    p_dados: dados,
+  });
+  if (error) throw new Error(error.message || 'Não foi possível concluir a Triagem ALS.');
+  if (!data?.ok) throw new Error(data?.erro || 'Triagem ALS não foi concluída.');
+  return data;
+}
