@@ -176,10 +176,66 @@ function KpiCard({
   );
 }
 
+function exportarExcelCorreios(rec, objetos) {
+  const cab = [
+    ["ROMANEIO DE RECEBIMENTO — CORREIOS"], [],
+    ["Destinatário", rec.destinatario_correios || "—"],
+    ["Transportadora", "Correios"],
+    ["Motorista", rec.motorista_nome || "—"],
+    ["CPF", rec.motorista_cpf || "—"],
+    ["Placa", rec.placa || "—"],
+    ["Lacres", (rec.lacres || []).join(", ") || "—"],
+    ["Responsável pela carga", rec.iniciado_por_nome || "—"],
+    ["Início", fmtDataHora(rec.iniciado_em)],
+    ["Conclusão", fmtDataHora(rec.concluido_em)],
+    ["Total de objetos", objetos.length],
+    [],
+    ["#", "Código do objeto", "Data/hora da bipagem", "Responsável pela bipagem", "Situação"],
+  ];
+  const linhas = objetos.map((objeto, i) => [
+    i + 1, objeto.codigo_rastreio, fmtDataHora(objeto.bipado_em),
+    objeto.bipado_por_nome || "—",
+    objeto.status_vinculo === "aguardando_vinculacao" ? "Aguardando vinculação" : (objeto.status_vinculo || "—")
+  ]);
+  const ws = XLSX.utils.aoa_to_sheet([...cab, ...linhas]);
+  ws["!cols"] = [{wch:7},{wch:29},{wch:28},{wch:32},{wch:27}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Objetos Correios");
+  XLSX.writeFile(wb, `romaneio_correios_${rec.id.slice(0,8)}.xlsx`);
+}
+
+function exportarPDFCorreios(rec, objetos) {
+  const doc = new jsPDF();
+  doc.setFontSize(14);
+  doc.text("Romaneio de Recebimento - Correios", 14, 16);
+  doc.setFontSize(9);
+  const detalhes = [
+    `Destinatario: ${rec.destinatario_correios || "—"}`,
+    `Motorista: ${rec.motorista_nome || "—"}   CPF: ${rec.motorista_cpf || "—"}   Placa: ${rec.placa || "—"}`,
+    `Lacres: ${(rec.lacres || []).join(", ") || "—"}`,
+    `Iniciado por: ${rec.iniciado_por_nome || "—"}`,
+    `Inicio: ${fmtDataHora(rec.iniciado_em)}   Conclusao: ${fmtDataHora(rec.concluido_em)}`,
+    `Total de objetos: ${objetos.length}`
+  ];
+  detalhes.forEach((linha,i) => doc.text(linha, 14, 26 + i*6));
+  doc.autoTable({
+    startY: 26 + detalhes.length * 6 + 6,
+    head: [["#", "Codigo do objeto", "Bipado em", "Responsavel", "Situacao"]],
+    body: objetos.map((o,i)=>[
+      i+1,o.codigo_rastreio,fmtDataHora(o.bipado_em),o.bipado_por_nome || "—",
+      o.status_vinculo === "aguardando_vinculacao" ? "Aguardando vinculacao" : (o.status_vinculo || "—")
+    ]),
+    styles: {fontSize:8},
+    headStyles:{fillColor:[91,33,182]}
+  });
+  doc.save(`romaneio_correios_${rec.id.slice(0,8)}.pdf`);
+}
+
 function exportarExcel(
   rec,
   vouchers
 ) {
+  if (rec.transportadora === 'Correios') return exportarExcelCorreios(rec, vouchers);
   const cab = [
     [
       "ROMANEIO DE RECEBIMENTO — LOJAS",
@@ -278,6 +334,7 @@ function exportarPDF(
   rec,
   vouchers
 ) {
+  if (rec.transportadora === 'Correios') return exportarPDFCorreios(rec, vouchers);
   const doc =
     new jsPDF();
 
@@ -465,12 +522,12 @@ export default function GestaoRecebimentoV2Page() {
         ) {
           exportarExcel(
             res.recebimento,
-            res.vouchers
+            res.recebimento.transportadora === "Correios" ? (res.objetos || []) : res.vouchers
           );
         } else {
           exportarPDF(
             res.recebimento,
-            res.vouchers
+            res.recebimento.transportadora === "Correios" ? (res.objetos || []) : res.vouchers
           );
         }
       }
@@ -594,19 +651,13 @@ export default function GestaoRecebimentoV2Page() {
 
   const kpis =
     useMemo(() => {
-      const totalVouchers =
-        historicoPeriodo.reduce(
-          (
-            soma,
-            recebimento
-          ) =>
-            soma +
-            (
-              recebimento.total_vouchers ||
-              0
-            ),
-          0
-        );
+      const totalVouchers = historicoPeriodo.reduce(
+        (soma, rec) => soma + (rec.transportadora === "Correios" ? 0 : (Number(rec.total_vouchers) || 0)), 0
+      );
+      const totalObjetos = historicoPeriodo.reduce(
+        (soma, rec) => soma + (rec.transportadora === "Correios" ? (Number(rec.total_objetos) || 0) : 0), 0
+      );
+      const cargasCorreios = historicoPeriodo.filter(r => r.transportadora === "Correios").length;
 
       const tempos =
         historicoPeriodo
@@ -628,6 +679,8 @@ export default function GestaoRecebimentoV2Page() {
 
         vouchers:
           totalVouchers,
+        objetos: totalObjetos,
+        objetoPorCarga: cargasCorreios ? Math.round(totalObjetos / cargasCorreios) : 0,
 
         voucherPorCarga:
           historicoPeriodo.length
@@ -667,15 +720,15 @@ export default function GestaoRecebimentoV2Page() {
 
               qtd: 0,
               vouchers: 0,
+              objetos: 0,
               tempos: [],
             };
           }
 
           agrupado[nome].qtd += 1;
 
-          agrupado[nome].vouchers +=
-            recebimento.total_vouchers ||
-            0;
+          if (nome === "Correios") agrupado[nome].objetos += Number(recebimento.total_objetos) || 0;
+          else agrupado[nome].vouchers += Number(recebimento.total_vouchers) || 0;
 
           const tempo =
             minutos(
@@ -708,6 +761,7 @@ export default function GestaoRecebimentoV2Page() {
 
             vouchers:
               item.vouchers,
+            objetos: item.objetos,
 
             tempoMedioMin:
               media(
@@ -727,83 +781,38 @@ export default function GestaoRecebimentoV2Page() {
       historicoPeriodo,
     ]);
 
-  const colaboradores =
-    useMemo(() => {
-      const agrupado = {};
-
-      historicoPeriodo.forEach(
-        (recebimento) => {
-          const nome =
-            recebimento.iniciado_por_nome ||
-            "—";
-
-          if (
-            !agrupado[nome]
-          ) {
-            agrupado[nome] = {
-              nome,
-              cargas: 0,
-              vouchers: 0,
-              tempos: [],
-            };
-          }
-
-          agrupado[nome].cargas +=
-            1;
-
-          agrupado[nome].vouchers +=
-            recebimento.total_vouchers ||
-            0;
-
-          const tempo =
-            minutos(
-              recebimento.iniciado_em,
-              recebimento.concluido_em
-            );
-
-          if (
-            tempo != null
-          ) {
-            agrupado[
-              nome
-            ].tempos.push(
-              tempo
-            );
-          }
-        }
-      );
-
-      return Object.values(
-        agrupado
-      )
-        .map(
-          (item) => ({
-            nome:
-              item.nome,
-
-            cargas:
-              item.cargas,
-
-            vouchers:
-              item.vouchers,
-
-            tempoMedioMin:
-              media(
-                item.tempos
-              ),
-          })
-        )
-        .sort(
-          (
-            a,
-            b
-          ) =>
-            b.vouchers -
-            a.vouchers
-        );
-    }, [
-      historicoPeriodo,
-    ]);
+  const colaboradores = useMemo(() => {
+    const agrupado = {};
+    const registrar = (nome, rec, vouchers = 0, objetos = 0) => {
+      const chave = nome || "—";
+      if (!agrupado[chave]) agrupado[chave] = {nome:chave,cargas:new Set(),vouchers:0,objetos:0,tempos:[]};
+      agrupado[chave].cargas.add(rec.id);
+      agrupado[chave].vouchers += vouchers;
+      agrupado[chave].objetos += objetos;
+      const tempo = minutos(rec.iniciado_em, rec.concluido_em);
+      if (tempo != null && !agrupado[chave].temposPorCarga?.has?.(rec.id)) {
+        if (!agrupado[chave].temposPorCarga) agrupado[chave].temposPorCarga = new Set();
+        agrupado[chave].temposPorCarga.add(rec.id);
+        agrupado[chave].tempos.push(tempo);
+      }
+    };
+    historicoPeriodo.forEach(rec => {
+      if (rec.transportadora !== "Correios") {
+        registrar(rec.iniciado_por_nome || "—",rec,Number(rec.total_vouchers)||0,0);
+      }
+    });
+    const correiosPorId = new Map(historicoPeriodo
+      .filter(rec => rec.transportadora === "Correios").map(rec => [rec.id,rec]));
+    (dados?.correiosProdutividade || []).forEach(linha => {
+      const rec = correiosPorId.get(linha.recebimento_id);
+      if (rec) registrar(linha.operador || "—",rec,0,Number(linha.objetos)||0);
+    });
+    return Object.values(agrupado).map(item => ({
+      nome:item.nome, cargas:item.cargas.size,
+      vouchers:item.vouchers,objetos:item.objetos,
+      tempoMedioMin:media(item.tempos)
+    })).sort((a,b)=>(b.vouchers+b.objetos)-(a.vouchers+a.objetos));
+  }, [historicoPeriodo,dados?.correiosProdutividade]);
 
   const maxTransportadora =
     Math.max(
@@ -831,6 +840,7 @@ export default function GestaoRecebimentoV2Page() {
             item.motorista_nome,
             item.placa,
             item.transportadora,
+            item.destinatario_correios,
             item.iniciado_por_nome,
           ];
 
@@ -969,7 +979,7 @@ export default function GestaoRecebimentoV2Page() {
         </div>
       ) : (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
             <KpiCard
               label="Recebimentos"
               value={fmtNumber(
@@ -990,6 +1000,13 @@ export default function GestaoRecebimentoV2Page() {
               variant="blue"
             />
 
+            <KpiCard
+              label="Objetos Correios"
+              value={fmtNumber(kpis.objetos)}
+              helper={`${kpis.objetoPorCarga} por carga Correios`}
+              icon={Package}
+              variant="emerald"
+            />
             <KpiCard
               label="Tempo médio"
               value={fmtDuracao(
@@ -1064,12 +1081,12 @@ export default function GestaoRecebimentoV2Page() {
                       <div className="mt-4 flex gap-5 text-xs">
                         <div>
                           <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400">
-                            Vouchers
+                            {recebimento.transportadora === "Correios" ? "Objetos" : "Vouchers"}
                           </div>
 
                           <div className="mt-1 font-black text-slate-700">
                             {fmtNumber(
-                              recebimento.total_vouchers
+                              recebimento.transportadora === "Correios" ? recebimento.total_objetos : recebimento.total_vouchers
                             )}
                           </div>
                         </div>
@@ -1132,7 +1149,7 @@ export default function GestaoRecebimentoV2Page() {
                               {
                                 item.qtd
                               }{" "}
-                              cargas ·{" "}
+                              cargas · {fmtNumber(item.transportadora === "Correios" ? item.objetos : item.vouchers)} {item.transportadora === "Correios" ? "objetos" : "vouchers"} ·{" "}
                               {fmtDuracao(
                                 item.tempoMedioMin
                               )}
@@ -1191,10 +1208,10 @@ export default function GestaoRecebimentoV2Page() {
                           </div>
 
                           <div className="mt-0.5 text-[10px] text-slate-400">
-                            {fmtNumber(
-                              colaborador.vouchers
-                            )}{" "}
-                            vouchers
+                            {colaborador.vouchers > 0 && <span>{fmtNumber(colaborador.vouchers)} vouchers</span>}
+                            {colaborador.vouchers > 0 && colaborador.objetos > 0 && " · "}
+                            {colaborador.objetos > 0 && <span>{fmtNumber(colaborador.objetos)} objetos Correios</span>}
+                            {colaborador.vouchers === 0 && colaborador.objetos === 0 && "Sem bipagens"}
                           </div>
                         </div>
 
@@ -1262,7 +1279,7 @@ export default function GestaoRecebimentoV2Page() {
                         "Transportadora",
                         "Motorista",
                         "Placa",
-                        "Vouchers",
+                        "Unidades",
                         "Tempo",
                         "Colaborador",
                         "Início",
@@ -1305,9 +1322,9 @@ export default function GestaoRecebimentoV2Page() {
                             className="border-b border-slate-100 last:border-0 hover:bg-violet-50/30"
                           >
                             <td className="px-4 py-3 text-xs font-bold text-slate-700">
-                              {
-                                recebimento.transportadora
-                              }
+                              {recebimento.transportadora}
+                              {recebimento.transportadora === "Correios" && recebimento.destinatario_correios &&
+                                <span className="mt-1 block text-[10px] font-medium text-violet-700">{recebimento.destinatario_correios}</span>}
                             </td>
 
                             <td className="px-4 py-3 text-xs text-slate-600">
@@ -1321,9 +1338,8 @@ export default function GestaoRecebimentoV2Page() {
                             </td>
 
                             <td className="px-4 py-3 text-xs font-bold text-slate-700">
-                              {fmtNumber(
-                                recebimento.total_vouchers
-                              )}
+                              {fmtNumber(recebimento.transportadora === "Correios" ? recebimento.total_objetos : recebimento.total_vouchers)}
+                              <span className="ml-1 text-[10px] font-normal text-slate-400">{recebimento.transportadora === "Correios" ? "objetos" : "vouchers"}</span>
                             </td>
 
                             <td className="px-4 py-3 text-xs text-slate-600">
