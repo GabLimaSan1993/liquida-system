@@ -34,7 +34,7 @@ function VinculacaoObjetos() {
   const [aparelhos,setAparelhos] = useState([]);
   const [objetoId,setObjetoId] = useState('');
   const [busca,setBusca] = useState('');
-  const [form,setForm] = useState({ modalidade:'GRV',imei:'',voucher:'',modelo:'',pedido_origem:'',observacoes:'' });
+  const [form,setForm] = useState({ voucher:'',observacoes:'' });
   const [erro,setErro] = useState('');
   const [sucesso,setSucesso] = useState('');
   const [carregando,setCarregando] = useState(false);
@@ -60,14 +60,14 @@ function VinculacaoObjetos() {
     setSalvando(true);setErro('');setSucesso('');
     try {
       const dados = await vincularAparelhoOnline({objeto_id:objetoId,...form});
-      setSucesso(`Vínculo registrado para ${dados.codigo_rastreio}. ${form.imei && form.voucher ? 'Pronto para a fila de Triagem ALS.' : 'Identificação incompleta: permanece pendente.'}`);
-      setForm(v=>({...v,imei:'',voucher:'',modelo:'',pedido_origem:'',observacoes:''}));
+      setSucesso(`Voucher ${form.voucher.trim().toUpperCase()} vinculado ao objeto ${dados.codigo_rastreio} e encaminhado à fila de Triagem ALS.`);
+      setForm({ voucher:'',observacoes:'' });
       await carregar();
     } catch(err){setErro(err.message);}
     finally{setSalvando(false);}
   }
   async function remover(item){
-    if(salvando||!window.confirm(`Desfazer vínculo do IMEI ${item.imei||'—'} / voucher ${item.voucher||'—'}? O evento ficará auditado.`))return;
+    if(salvando||!window.confirm(`Desfazer vínculo do voucher ${item.voucher||'—'}? O evento ficará auditado.`))return;
     setSalvando(true);setErro('');setSucesso('');
     try{await desvincularAparelhoOnline(item.id);setSucesso('Vínculo desfeito com auditoria.');await carregar();}
     catch(e){setErro(e.message);}finally{setSalvando(false);}
@@ -115,33 +115,23 @@ function VinculacaoObjetos() {
           <div className="flex items-center gap-2"><Link2 className="h-5 w-5 text-violet-700"/><h2 className="font-black text-slate-800">Vincular aparelho ao objeto</h2></div>
           {!selecionado?<p className="mt-5 text-sm text-slate-500">Selecione um código de objeto na lista para iniciar os vínculos.</p>:<>
             <p className="mt-2 rounded-xl bg-violet-50 p-3 text-xs text-violet-900"><b>Objeto: {selecionado.codigo_rastreio}</b> · {selecionado.destinatario_correios}</p>
-            <form onSubmit={salvar} className="mt-4 grid gap-3 sm:grid-cols-2">
-              <label className="text-xs font-bold text-slate-700">Origem da operação
-                <select required className={estiloInput+' mt-1'} value={form.modalidade} onChange={e=>setForm({...form,modalidade:e.target.value})}>
-                  <option value="GRV">GRV</option><option value="ONLINE">Online</option><option value="TRAON">TRAON</option><option value="MELI">MELI</option>
-                </select>
+            <form onSubmit={salvar} className="mt-4 grid gap-4">
+              <label className="text-xs font-bold text-slate-700">Voucher *
+                <input required className={estiloInput+' mt-1 font-mono'} value={form.voucher}
+                  onChange={e=>setForm({...form,voucher:e.target.value.toUpperCase()})}
+                  placeholder="Bipe ou digite o voucher" autoComplete="off" />
               </label>
-              <label className="text-xs font-bold text-slate-700">IMEI (14 a 16 dígitos)
-                <input className={estiloInput+' mt-1 font-mono'} inputMode="numeric" value={form.imei} onChange={e=>setForm({...form,imei:e.target.value.replace(/[^0-9]/g,'')})} maxLength={16} placeholder="IMEI do aparelho"/>
+              <label className="text-xs font-bold text-slate-700">Observações (opcional)
+                <textarea className={estiloInput+' mt-1 min-h-[90px] resize-y'} value={form.observacoes}
+                  onChange={e=>setForm({...form,observacoes:e.target.value})}
+                  placeholder="Informações adicionais sobre o objeto ou aparelho" rows={3}/>
               </label>
-              <label className="text-xs font-bold text-slate-700">Voucher / identificação
-                <input className={estiloInput+' mt-1 font-mono'} value={form.voucher} onChange={e=>setForm({...form,voucher:e.target.value.toUpperCase()})} placeholder="Voucher ou referência"/>
-              </label>
-              <label className="text-xs font-bold text-slate-700">Modelo informado
-                <input className={estiloInput+' mt-1'} value={form.modelo} onChange={e=>setForm({...form,modelo:e.target.value})} placeholder="Marca e modelo"/>
-              </label>
-              <label className="text-xs font-bold text-slate-700">Pedido de origem
-                <input className={estiloInput+' mt-1'} value={form.pedido_origem} onChange={e=>setForm({...form,pedido_origem:e.target.value})} placeholder="Nº pedido / Trade ID"/>
-              </label>
-              <label className="text-xs font-bold text-slate-700">Observações
-                <input className={estiloInput+' mt-1'} value={form.observacoes} onChange={e=>setForm({...form,observacoes:e.target.value})} placeholder="Informações adicionais"/>
-              </label>
-              <div className="sm:col-span-2">
-                <button type="submit" disabled={salvando||(!form.imei.trim()&&!form.voucher.trim())}
+              <div>
+                <button type="submit" disabled={salvando||!form.voucher.trim()}
                   className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-violet-700 px-4 py-3 text-sm font-bold text-white disabled:opacity-40">
                   <CheckCircle2 size={17}/>{salvando?'Gravando…':'Confirmar vinculação'}
                 </button>
-                <p className="mt-2 text-xs text-slate-500">Com IMEI e voucher, entra em Aguardando Triagem ALS. Sem um deles, fica em Identificação pendente. Nenhum laudo ou decisão é produzido automaticamente.</p>
+                <p className="mt-2 text-xs text-slate-500">Voucher obrigatório. Não é necessário informar IMEI, origem, modelo ou pedido. Ao confirmar, o aparelho entra na fila de Triagem ALS.</p>
               </div>
             </form>
           </>}
@@ -151,8 +141,8 @@ function VinculacaoObjetos() {
           {!selecionado?<p className="mt-3 text-xs text-slate-500">Selecione um objeto para ver seus aparelhos.</p>:doObjeto.length===0?
             <p className="mt-3 text-xs text-slate-500">Ainda não há aparelho vinculado.</p>:
             <div className="mt-3 space-y-2">{doObjeto.map(a=><div key={a.id} className="flex flex-wrap items-start gap-3 rounded-xl border border-slate-200 p-3 text-xs">
-              <div className="flex-1"><p className="font-bold text-slate-800">{a.modalidade} · {a.modelo||'Modelo não informado'}</p>
-              <p className="mt-1 font-mono">IMEI: {a.imei||'—'} · Voucher: {a.voucher||'—'}</p>
+              <div className="flex-1"><p className="font-mono font-bold text-slate-800">Voucher: {a.voucher||'—'}</p>
+              {a.observacoes && <p className="mt-1 text-slate-600">Observações: {a.observacoes}</p>}
               <p className="mt-1 text-violet-700">{ETAPAS[a.etapa]||a.etapa}</p></div>
               <button type="button" onClick={()=>remover(a)} disabled={salvando} className={btn} aria-label="Desfazer vínculo"><Trash2 size={14}/></button>
             </div>)}</div>}
@@ -171,7 +161,7 @@ function FilaEtapa({ config }) {
     const d=await listarEtapaOnline(config.etapa);setAparelhos(d.aparelhos||[]);
   }catch(e){setErro(e.message);}finally{setCarregando(false);}},[config.etapa]);
   useEffect(()=>{carregar();},[carregar]);
-  const filtrados=useMemo(()=>aparelhos.filter(a=>[a.codigo_rastreio,a.imei,a.voucher,a.modelo,a.pedido_origem,a.modalidade].some(v=>normalize(v).includes(normalize(busca)))),[aparelhos,busca]);
+  const filtrados=useMemo(()=>aparelhos.filter(a=>[a.codigo_rastreio,a.voucher,a.observacoes,a.destinatario_correios].some(v=>normalize(v).includes(normalize(busca)))),[aparelhos,busca]);
   return <div className="space-y-5">
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex items-center gap-3">
@@ -189,15 +179,15 @@ function FilaEtapa({ config }) {
         <h2 className="font-black text-slate-800">{config.titulo}</h2>
         <div className="relative">
           <Search size={16} className="absolute left-3 top-3.5 text-slate-400"/>
-          <input className={estiloInput+' pl-9'} value={busca} onChange={e=>setBusca(e.target.value)} placeholder="Buscar objeto, IMEI ou voucher"/>
+          <input className={estiloInput+' pl-9'} value={busca} onChange={e=>setBusca(e.target.value)} placeholder="Buscar objeto ou voucher"/>
         </div>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[760px] text-left text-xs">
-          <thead><tr className="border-b bg-slate-50 text-slate-600">{['Objeto Correios','Destinatário','Modalidade','IMEI','Voucher','Modelo','Data do vínculo'].map(t=><th key={t} className="p-3">{t}</th>)}</tr></thead>
+          <thead><tr className="border-b bg-slate-50 text-slate-600">{['Objeto Correios','Destinatário','Voucher','Observações','Data do vínculo'].map(t=><th key={t} className="p-3">{t}</th>)}</tr></thead>
           <tbody>{filtrados.map(item=><tr key={item.id} className="border-b">
-            <td className="p-3 font-mono font-bold">{item.codigo_rastreio}</td><td className="p-3">{item.destinatario_correios}</td><td className="p-3">{item.modalidade}</td>
-            <td className="p-3 font-mono">{item.imei||'—'}</td><td className="p-3">{item.voucher||'—'}</td><td className="p-3">{item.modelo||'—'}</td><td className="p-3">{fmtData(item.criado_em)}</td>
+            <td className="p-3 font-mono font-bold">{item.codigo_rastreio}</td><td className="p-3">{item.destinatario_correios}</td>
+            <td className="p-3 font-mono">{item.voucher||'—'}</td><td className="p-3">{item.observacoes||'—'}</td><td className="p-3">{fmtData(item.criado_em)}</td>
           </tr>)}</tbody>
         </table>
         {!carregando&&!filtrados.length&&<p className="py-9 text-center text-xs text-slate-500">Nenhum produto nesta etapa.</p>}
