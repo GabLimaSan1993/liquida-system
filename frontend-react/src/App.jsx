@@ -593,12 +593,7 @@ export default function App() {
             <TradeinOnlinePage tipo="devolucao" />
           </ProtectedRoute>}
         />
-        <Route
-          path="online/expedicao"
-          element={<ProtectedRoute tela="/v2/assurant/online/expedicao">
-            <TradeinOnlinePage tipo="expedicao" />
-          </ProtectedRoute>}
-        />
+        <Route path="online/expedicao" element={<Navigate replace to="/v2/assurant/b2c/expedicao" />} />
 
 
         {/* Triagens */}
