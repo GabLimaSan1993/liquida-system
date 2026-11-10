@@ -33,7 +33,7 @@ export async function importarGrvAtendimentoOnline(file,onProgress=()=>{}) {
      bairro:'', // O GRV Atendimento não traz bairro em coluna própria.
      cidade:trim(v.municipio),
      uf:trim(v.estado).toUpperCase(),
-     cep:trim(v.cep).replace(/\D/g,'').padStart(8,'0'),
+     cep:trim(v.cep).replace(/\D/g,'') ? trim(v.cep).replace(/\D/g,'').padStart(8,'0') : '',
      modelo_item:trim(v.modelo_item),
      valor_declarado:valor
    };
