@@ -71,7 +71,7 @@ export async function listarAguardandoFuncional() {
   }));
 }
 
-export async function listarDefeitos() {
+export async function listarDefeitos(incluirDefeitosLaboratorio = false) {
   const { data, error } = await supabase
     .from("triagem_defeitos")
     .select("id, nome, categoria")
@@ -79,7 +79,16 @@ export async function listarDefeitos() {
     .order("categoria")
     .order("nome");
   if (error) throw new Error(error.message);
-  return (data || []).filter(defeito => !ehFaixaBateriaSemDefeito(defeito.nome));
+  // Scrap é apontamento de laboratório; não oferecer como defeito da triagem inicial.
+  const defeitos = (data || []).filter(defeito =>
+    !ehFaixaBateriaSemDefeito(defeito.nome)
+    && (incluirDefeitosLaboratorio || defeito.categoria !== "laboratorio")
+  );
+  // Laboratório: apresentar os novos motivos de Scrap no topo, sem exigir pesquisa.
+  return incluirDefeitosLaboratorio
+    ? defeitos.sort((a, b) =>
+      Number(b.categoria === "laboratorio") - Number(a.categoria === "laboratorio"))
+    : defeitos;
 }
 
 export async function consultarVoucher(voucher) {
