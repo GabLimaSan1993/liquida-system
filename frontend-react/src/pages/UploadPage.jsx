@@ -14,7 +14,7 @@ import {
   previewMovimentacao,
   uploadMovimentacao,
 } from "../services/assurantMovimentacaoService.js";
-import { importarPedidoB2B } from "../services/b2bService.js";
+import { importarPedidoB2B, analisarPlanilhaPedidoB2B } from "../services/b2bService.js";
 import { importarNFs }        from "../services/b2bNfService.js";
 import { uploadAnymarketZip } from "../services/anymarketService.js";
 import { alocarPedidosAutomaticamente } from "../services/alocacaoAutomaticaService.js";
@@ -188,6 +188,9 @@ export default function UploadPage({ warehouseV2 = false }) {
   const [loadingB2bUpload, setLoadingB2bUpload]                     = useState(false);
   const [b2bCondicaoPagamento, setB2bCondicaoPagamento]             = useState("");
   const [b2bCnpjAgregado, setB2bCnpjAgregado]                       = useState("");
+  const [b2bAnalise, setB2bAnalise]                                 = useState(null);
+  const [b2bErro, setB2bErro]                                       = useState("");
+  const [b2bDadosHistoricos, setB2bDadosHistoricos]                 = useState("");
 
   // ── NF B2B ────────────────────────────────────────────
   const [nfFile, setNfFile]                                         = useState(null);
@@ -473,9 +476,44 @@ export default function UploadPage({ warehouseV2 = false }) {
   }
 
   // ── Handler B2B ───────────────────────────────────────
+  async function selecionarArquivoB2B(file) {
+    setB2bFile(file);
+    setB2bPreview(null);
+    setB2bAnalise(null);
+    setB2bErro("");
+    setB2bDadosHistoricos("");
+    if(!file)return;
+    try {
+      const info=await analisarPlanilhaPedidoB2B(file);
+      setB2bAnalise(info);
+      // Dados sugeridos a partir do mesmo Ganhador indicado no arquivo,
+      // sem alterar as informações caso já tenham sido preenchidas.
+      const {data: antigos,error}=await supabase.from("b2b_pedidos")
+        .select("cnpj_agregado,condicao_pagamento,cliente,criado_em")
+        .eq("cliente",info.cliente)
+        .order("criado_em",{ascending:false})
+        .limit(1);
+      if(!error && antigos?.length){
+        const ultimo=antigos[0];
+        const cnpj=String(ultimo.cnpj_agregado||"").replace(/\D/g,"");
+        const condicao=String(ultimo.condicao_pagamento||"").trim();
+        if(cnpj.length===14)setB2bCnpjAgregado(prev=>prev.trim()||cnpj);
+        if(condicao)setB2bCondicaoPagamento(prev=>prev.trim()||condicao);
+        setB2bDadosHistoricos("Sugestão do último pedido de "+info.cliente+
+          ": confira o CNPJ e a condição de pagamento antes de confirmar o envio.");
+      }
+    }catch(e){setB2bErro(e.message||"Erro ao ler o arquivo de Picking.");}
+  }
+
   async function handleUploadB2B() {
     try {
       if (!b2bFile) { setStatus("Selecione uma planilha de Pedido B2B."); return; }
+      if(b2bErro) throw new Error("A planilha precisa ser corrigida: "+b2bErro);
+      if(!b2bCondicaoPagamento.trim() ||
+         !/^\d{14}$/.test(b2bCnpjAgregado.replace(/\D/g,""))){
+        throw new Error("Confirme o CNPJ do agregado (14 dígitos) e a condição de pagamento antes do envio.");
+      }
+      setB2bErro("");
       setLoadingB2bUpload(true);
       setProgress(0);
       setStatus("Importando pedido B2B...");
@@ -502,9 +540,13 @@ export default function UploadPage({ warehouseV2 = false }) {
       );
       setB2bCondicaoPagamento("");
       setB2bCnpjAgregado("");
+      setB2bAnalise(null);
+      setB2bDadosHistoricos("");
+      setB2bErro("");
       const { data } = await supabase.from("b2b_pedidos").select("id, lote").order("criado_em", { ascending: false });
       setPedidosB2B(data || []);
     } catch (error) {
+      setB2bErro(error.message);
       setStatus(`Erro ao importar Pedido B2B: ${error.message}`);
       updateHistoryCard("Pedido B2B", { status: "Erro" });
     } finally {
@@ -983,7 +1025,7 @@ export default function UploadPage({ warehouseV2 = false }) {
               <input
                 type="file"
                 accept=".xlsx,.xls"
-                onChange={e => { setB2bFile(e.target.files?.[0] || null); setB2bPreview(null); }}
+                onChange={e => { void selecionarArquivoB2B(e.target.files?.[0] || null); }}
                 className="block w-full text-sm text-slate-600"
               />
               <div className="mt-3 text-sm font-medium">
@@ -993,6 +1035,17 @@ export default function UploadPage({ warehouseV2 = false }) {
                 {b2bFile ? "Arquivo pronto para envio" : "Selecione um arquivo .xlsx"}
               </div>
             </div>
+
+            {b2bAnalise && (
+              <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50 p-3 text-xs text-violet-900">
+                <p className="font-black">Planilha validada: {b2bAnalise.total.toLocaleString("pt-BR")} IMEIs · {b2bAnalise.cliente}</p>
+                <p className="mt-1">Aba: {b2bAnalise.aba} · Cabeçalho na linha {b2bAnalise.linhaCabecalho}</p>
+                <p className="mt-1 font-semibold">Grades individuais: {Object.entries(b2bAnalise.grades).map(([grade,q])=>grade+" ("+q+")").join(" · ")}</p>
+                <p className="mt-1">O nome do lote não modifica a grade individual.</p>
+                {b2bDadosHistoricos && <p className="mt-2 font-bold text-amber-900">{b2bDadosHistoricos}</p>}
+              </div>
+            )}
+            {b2bErro && <div role="alert" className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-bold text-rose-800">{b2bErro}</div>}
 
             <div className="mt-4">
               <Button onClick={handleUploadB2B} disabled={!b2bFile || loadingB2bUpload}>
