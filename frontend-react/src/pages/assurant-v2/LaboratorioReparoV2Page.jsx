@@ -9,6 +9,11 @@ const nRom = r => 'LAB-' + (r.tipo === 'envio' ? 'ENV-' : r.tipo === 'importacao
 const statusNome = {aguardando_recebimento:'Aguardando recebimento',recebido:'Recebido · aguarda validação técnica',em_reparo:'Em reparo',concluido:'Reparo concluído',em_devolucao:'Aguardando warehouse',devolvido_warehouse:'Devolvido ao warehouse'};
 const escapar = v => String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const normalizarDefeito = v => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').trim();
+const nomeResultadoLaboratorio = {
+  reparado:'Reparado',
+  sem_reparo:'Não Reparado Desbloqueado',
+  irrecuperavel:'Scrap - Não Liga / Bloqueado'
+};
 
 function imprimirRomaneio(rom, itens, lote) {
   const linhas = itens.filter(i => rom.tipo !== 'retorno' ? i.romaneio_saida_id === rom.id : i.romaneio_retorno_id === rom.id);
@@ -21,7 +26,7 @@ function imprimirRomaneio(rom, itens, lote) {
   <div class="meta"><div><p><b>Número:</b> ${escapar(nRom(rom))}</p><p><b>Lote:</b> ${escapar(lote)}</p><p><b>Origem:</b> ${rom.tipo==='importacao'?'Planilha — sem comprovação de expedição':rom.tipo==='envio'?'Warehouse':'Laboratório'}</p></div>
   <div><p><b>Emissão:</b> ${escapar(formatarData(rom.criado_em))}</p><p><b>Total:</b> ${linhas.length} aparelhos</p><p><b>Destino:</b> ${rom.tipo==='importacao'?'Conferência no Laboratório':rom.tipo==='envio'?'Laboratório':'Warehouse'}</p></div></div>
   <table><thead><tr><th>#</th><th>Voucher</th><th>IMEI / Série</th><th>Modelo</th><th>OS vinculada</th><th>Resultado</th></tr></thead><tbody>
-  ${linhas.map((i,k)=>`<tr><td>${k+1}</td><td>${escapar(i.voucher)}</td><td>${escapar(i.imei)}</td><td>${escapar(i.modelo)}</td><td>${escapar(i.os_numero || '—')}</td><td>${escapar(i.resultado || '—')}</td></tr>`).join('')}
+  ${linhas.map((i,k)=>`<tr><td>${k+1}</td><td>${escapar(i.voucher)}</td><td>${escapar(i.imei)}</td><td>${escapar(i.modelo)}</td><td>${escapar(i.os_numero || '—')}</td><td>${escapar(nomeResultadoLaboratorio[i.resultado] || i.resultado || '—')}</td></tr>`).join('')}
   </tbody></table><div class="assinaturas"><div>Conferido / saída</div><div>Transportador</div><div>Conferido / recebimento</div></div>
   <p class="rodape">Transferência interna; não é documento fiscal. Conferir os vouchers fisicamente na entrega e no recebimento. O recebimento pelo warehouse não equivale à alocação no estoque ou à entrada no Oracle.</p>
   <script>window.addEventListener('load',()=>{window.focus();window.print()})<\/script></body></html>`;
@@ -77,7 +82,7 @@ export default function LaboratorioReparoV2Page() {
   // Usa o mesmo catalogo da triagem funcional, sem manter uma lista paralela.
   useEffect(()=>{
     let ativo=true;
-    listarDefeitos()
+    listarDefeitos(true)
       .then(lista=>{if(ativo){setDefeitosCatalogo(lista);setErroCatalogo('');}})
       .catch(()=>{if(ativo)setErroCatalogo('Não foi possível carregar o catálogo da triagem. Você ainda pode adicionar defeitos manualmente.');})
       .finally(()=>{if(ativo)setCarregandoCatalogo(false);});
@@ -269,7 +274,7 @@ export default function LaboratorioReparoV2Page() {
                     <button disabled={!novoDefeito.trim()} className={botao+' border border-slate-200 bg-white text-violet-700 hover:bg-violet-50'}><Plus size={15}/>Adicionar</button></form>
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
-                  <label className="text-xs font-bold text-slate-700">Resultado do reparo<select className={'mt-1 '+campo} value={resultado} onChange={e=>setResultado(e.target.value)}><option value="reparado">Reparado — nova cosmética / grade Oracle</option><option value="sem_reparo">Sem reparo — Quebrado, sub 6 → 7</option><option value="irrecuperavel">Scrap / irrecuperável — sub 6 → 1000</option></select></label>
+                  <label className="text-xs font-bold text-slate-700">Resultado do reparo<select className={'mt-1 '+campo} value={resultado} onChange={e=>setResultado(e.target.value)}><option value="reparado">Reparado</option><option value="sem_reparo">Não Reparado Desbloqueado</option><option value="irrecuperavel">Scrap - Não Liga / Bloqueado</option></select></label>
                   <label className="text-xs font-bold text-slate-700">Observações técnicas<textarea className={'mt-1 '+campo} rows={2} value={observacoes} onChange={e=>setObservacoes(e.target.value)} placeholder="Serviço realizado, peças, testes e pendências"/></label>
                 </div>
                 <div className="flex flex-wrap gap-2"><button className={botao+' border border-slate-200 bg-white text-violet-700 hover:bg-violet-50'} onClick={salvarDefeitos} disabled={busy}>Salvar revisão dos defeitos</button>
@@ -278,7 +283,7 @@ export default function LaboratorioReparoV2Page() {
             </div>}
             {aba==='devolucao'&&<div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <h3 className="text-sm font-bold text-slate-800">Romaneio de devolução ao warehouse</h3>
-              <p className="text-sm text-slate-500">Os reparos concluídos podem ser agrupados em um romaneio de retorno. Após a bipagem no warehouse: <b>Scrap → Oracle 6/1000</b>; <b>sem reparo → Quebrado, Oracle 6/7</b>; <b>reparado → nova cosmética e alocação pela grade</b>.</p>
+              <p className="text-sm text-slate-500">Os reparos concluídos podem ser agrupados em um romaneio de retorno. Após a bipagem no warehouse: <b>Scrap - Não Liga / Bloqueado → Oracle 6/1000</b>; <b>Não Reparado Desbloqueado → Quebrado, Oracle 6/7</b>; <b>Reparado → nova cosmética e alocação pela grade</b>.</p>
               <div className="flex flex-wrap items-center gap-3"><span className="rounded-lg bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700">{concluidos} prontos para envio</span>
                 <button className={botao+' bg-violet-700 text-white hover:bg-violet-800'} disabled={busy||!concluidos} onClick={async()=>{const r=await executar('gerar_retorno',{},'Romaneio de devolução gerado.');if(r) setAba('romaneios');}}><ClipboardList size={16}/>Gerar romaneio de retorno</button></div>
               <form onSubmit={devolver} className="flex flex-wrap gap-2"><input className={campo+' min-w-52 flex-1'} value={buscaDevolucao} onChange={e=>setBuscaDevolucao(e.target.value)} placeholder="Bipar voucher recebido pelo warehouse"/>
