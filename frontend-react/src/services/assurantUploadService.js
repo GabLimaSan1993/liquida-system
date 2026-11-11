@@ -71,14 +71,14 @@ function parseDate(valor) {
 
   // Datas numéricas são comuns em XLSX; não podem ser tratadas como "dd/mm/aaaa".
   const texto = String(valor).trim();
-  if (/^\\d{5}(?:\\.\\d+)?$/.test(texto)) {
+  if (/^\d{5}(?:\.\d+)?$/.test(texto)) {
     const excel = XLSX.SSF.parse_date_code(Number(texto));
     if (excel?.y && excel?.m && excel?.d) {
       return new Date(Date.UTC(excel.y,excel.m-1,excel.d,excel.H||0,excel.M||0,excel.S||0)).toISOString();
     }
   }
 
-  const partes = texto.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{2,4})(?:\\s+(\\d{1,2}:\\d{2}(?::\\d{2})?))?/);
+  const partes = texto.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:\s+(\d{1,2}:\d{2}(?::\d{2})?))?/);
   if (partes) {
     const dia=partes[1].padStart(2,'0');
     const mes=partes[2].padStart(2,'0');
@@ -89,7 +89,7 @@ function parseDate(valor) {
   }
 
   // Algumas abas já trazem datas ISO.
-  if (/^\\d{4}-\\d{2}-\\d{2}/.test(texto)) {
+  if (/^\d{4}-\d{2}-\d{2}/.test(texto)) {
     const data=new Date(texto.replace(' ','T'));
     return Number.isNaN(data.getTime()) ? null : data.toISOString();
   }
