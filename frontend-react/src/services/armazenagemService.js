@@ -342,6 +342,45 @@ export async function reservarEndereco(
   const identificador = String(voucher || "").trim().toUpperCase();
   let voucherInformado = identificador;
 
+  // Vouchers DEVn são novos retornos B2C, não sinônimos do voucher original.
+  // Nunca remapear DEV1YBV... para YBV... e reservar: isso criaria estoque duplicado.
+  const retornoB2c = identificador.match(/^DEV([0-9]+)([A-Z]{2,6}[0-9]+)$/);
+  if (retornoB2c) {
+    const {data:registroDev,error:erroDev} = await supabase
+      .from("assurant_triagem")
+      .select("voucher,status_atual")
+      .eq("voucher",identificador)
+      .maybeSingle();
+    if (erroDev) throw new Error("Falha ao consultar cadastro do retorno: "+erroDev.message);
+    if (!registroDev) {
+      const voucherOriginal=retornoB2c[2];
+      const {data:registroOriginal,error:erroOriginal}=await supabase
+        .from("assurant_triagem")
+        .select("voucher,imei,status_atual,modelo")
+        .eq("voucher",voucherOriginal)
+        .maybeSingle();
+      if (erroOriginal) throw new Error("Falha ao consultar voucher original: "+erroOriginal.message);
+      const {data:wmsOriginal,error:erroWmsOriginal}=await supabase.rpc(
+        "assurant_armazenagem_situacao_wms",{p_identificador:voucherOriginal}
+      );
+      if(erroWmsOriginal) throw new Error("Falha ao verificar estoque original: "+erroWmsOriginal.message);
+      const detalheOriginal=registroOriginal
+        ? "O original "+voucherOriginal+" está como "+(registroOriginal.status_atual||"sem status")+". "
+        : "O voucher original "+voucherOriginal+" não está cadastrado. ";
+      const detalheWms=wmsOriginal?.existe
+        ? "No WMS: "+(wmsOriginal.status==="confirmado"?"já armazenado":"reservado")+
+          " em "+(wmsOriginal.endereco||"endereço não encontrado")+
+          ", IMEI "+(wmsOriginal.imei||"não informado")+". "
+        : "Não há posição WMS ativa para o original. ";
+      throw new Error(
+        "RETORNO NÃO CADASTRADO: "+identificador+". "+
+        detalheOriginal+detalheWms+
+        "Registre e confirme o recebimento físico do retorno na esteira de Devoluções B2C antes de armazenar. "+
+        "Não use o voucher original para criar outra alocação."
+      );
+    }
+  }
+
   // A etapa "Aguardando oracle" ocorre APÓS a bipagem e confirmação no WMS.
   // Antes de preparar nova armazenagem, conferir se já há posição física ativa.
   const { data: situacaoWms, error: erroSituacaoWms } = await supabase.rpc(
