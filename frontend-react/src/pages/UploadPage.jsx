@@ -124,6 +124,17 @@ function UploadBox({
               ? `Linhas válidas encontradas: ${preview.totalRows.toLocaleString("pt-BR")}`
               : preview.mensagem || "Importação concluída"}
           </div>
+          {preview.formato && (
+            <p className="mt-2 text-xs font-semibold text-slate-600">
+              Formato: {preview.formato}{preview.aba ? ' · Aba: '+preview.aba : ''}
+              {preview.linhaCabecalho ? ' · Cabeçalho na linha '+preview.linhaCabecalho : ''}
+            </p>
+          )}
+          {preview.avisos?.length > 0 && (
+            <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+              {preview.avisos.map((aviso,index)=><p key={index}>{aviso}</p>)}
+            </div>
+          )}
           {preview.previewRows?.length > 0 && (
             <pre className="mt-3 max-h-72 overflow-auto rounded-2xl bg-slate-950 p-4 text-xs text-slate-100">
               {JSON.stringify(preview.previewRows, null, 2)}
