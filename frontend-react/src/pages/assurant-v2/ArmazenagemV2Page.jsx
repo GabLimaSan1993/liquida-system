@@ -820,13 +820,7 @@ export default function ArmazenagemV2Page() {
           : erro.message;
 
       setAlternativasImei(Array.isArray(erro.alternativas) ? erro.alternativas : []);
-      setFeedback({
-        tipo:
-          "erro",
-
-        msg:
-          mensagem,
-      });
+      setFeedback({ tipo: mensagem.includes("JÁ ARMAZENADO NO WMS") ? "aviso" : "erro", msg: mensagem });
     } finally {
       setCarregando(
         false
