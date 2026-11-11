@@ -190,7 +190,6 @@ export default function UploadPage({ warehouseV2 = false }) {
   const [b2bCnpjAgregado, setB2bCnpjAgregado]                       = useState("");
   const [b2bAnalise, setB2bAnalise]                                 = useState(null);
   const [b2bErro, setB2bErro]                                       = useState("");
-  const [b2bDadosHistoricos, setB2bDadosHistoricos]                 = useState("");
 
   // ── NF B2B ────────────────────────────────────────────
   const [nfFile, setNfFile]                                         = useState(null);
@@ -477,34 +476,20 @@ export default function UploadPage({ warehouseV2 = false }) {
 
   // ── Handler B2B ───────────────────────────────────────
   async function selecionarArquivoB2B(file) {
+    // CNPJ e condição de pagamento pertencem exclusivamente ao novo pedido:
+    // jamais buscar/sugerir ou herdar os campos de pedidos anteriores.
     setB2bFile(file);
     setB2bPreview(null);
     setB2bAnalise(null);
     setB2bErro("");
-    setB2bDadosHistoricos("");
+    setB2bCnpjAgregado("");
+    setB2bCondicaoPagamento("");
     if(!file)return;
     try {
       const info=await analisarPlanilhaPedidoB2B(file);
       setB2bAnalise(info);
-      // Dados sugeridos a partir do mesmo Ganhador indicado no arquivo,
-      // sem alterar as informações caso já tenham sido preenchidas.
-      const {data: antigos,error}=await supabase.from("b2b_pedidos")
-        .select("cnpj_agregado,condicao_pagamento,cliente,criado_em")
-        .eq("cliente",info.cliente)
-        .order("criado_em",{ascending:false})
-        .limit(1);
-      if(!error && antigos?.length){
-        const ultimo=antigos[0];
-        const cnpj=String(ultimo.cnpj_agregado||"").replace(/\D/g,"");
-        const condicao=String(ultimo.condicao_pagamento||"").trim();
-        if(cnpj.length===14)setB2bCnpjAgregado(prev=>prev.trim()||cnpj);
-        if(condicao)setB2bCondicaoPagamento(prev=>prev.trim()||condicao);
-        setB2bDadosHistoricos("Sugestão do último pedido de "+info.cliente+
-          ": confira o CNPJ e a condição de pagamento antes de confirmar o envio.");
-      }
     }catch(e){setB2bErro(e.message||"Erro ao ler o arquivo de Picking.");}
   }
-
   async function handleUploadB2B() {
     try {
       if (!b2bFile) { setStatus("Selecione uma planilha de Pedido B2B."); return; }
@@ -541,7 +526,6 @@ export default function UploadPage({ warehouseV2 = false }) {
       setB2bCondicaoPagamento("");
       setB2bCnpjAgregado("");
       setB2bAnalise(null);
-      setB2bDadosHistoricos("");
       setB2bErro("");
       const { data } = await supabase.from("b2b_pedidos").select("id, lote").order("criado_em", { ascending: false });
       setPedidosB2B(data || []);
@@ -996,6 +980,9 @@ export default function UploadPage({ warehouseV2 = false }) {
               📋 Formato: planilha PICKING_*.xlsx recebida por e-mail · Após importar, acesse Picking B2B para separação
             </div>
 
+            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
+              CNPJ do agregado (matriz ou filial) e condição de pagamento são informados manualmente em cada novo pedido; não usamos os dados de pedidos anteriores.
+            </div>
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label className="block text-xs font-bold text-slate-600 mb-1">Condição de Pagamento</label>
@@ -1042,7 +1029,6 @@ export default function UploadPage({ warehouseV2 = false }) {
                 <p className="mt-1">Aba: {b2bAnalise.aba} · Cabeçalho na linha {b2bAnalise.linhaCabecalho}</p>
                 <p className="mt-1 font-semibold">Grades individuais: {Object.entries(b2bAnalise.grades).map(([grade,q])=>grade+" ("+q+")").join(" · ")}</p>
                 <p className="mt-1">O nome do lote não modifica a grade individual.</p>
-                {b2bDadosHistoricos && <p className="mt-2 font-bold text-amber-900">{b2bDadosHistoricos}</p>}
               </div>
             )}
             {b2bErro && <div role="alert" className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-bold text-rose-800">{b2bErro}</div>}
