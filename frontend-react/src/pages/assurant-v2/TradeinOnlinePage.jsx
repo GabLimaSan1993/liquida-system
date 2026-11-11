@@ -83,12 +83,31 @@ function VinculacaoObjetos() {
   async function salvar(e) {
     e.preventDefault();if(salvando||!objetoId)return;
     const voucherDigitado=form.voucher.trim().toUpperCase();
+    // Evitar mensagem de erro e janela de impressão se o voucher já estiver
+    // associado ao mesmo objeto. A rotina no banco cobre telas desatualizadas.
+    const vinculoExistente=aparelhos.find(a=>String(a.voucher||'').trim().toUpperCase()===voucherDigitado);
+    if(vinculoExistente){
+      setErro('');
+      setSucesso(vinculoExistente.objeto_id===objetoId
+        ? 'O voucher '+voucherDigitado+' já está vinculado a este objeto e está na etapa '+(ETAPAS[vinculoExistente.etapa]||vinculoExistente.etapa)+'. Não é necessário vincular outra vez. Acesse a etapa correspondente no menu.'
+        : 'O voucher '+voucherDigitado+' já está vinculado ao objeto '+(vinculoExistente.codigo_rastreio||'anterior')+'. Não foi criado outro vínculo.');
+      return;
+    }
     // Abrir durante o clique evita o bloqueio de popups após aguardar o RPC.
     const janelaEtiqueta=prepararJanelaEtiquetaVoucherOnline();
     setSalvando(true);setErro('');setSucesso('');
     try {
       const dados=await vincularAparelhoOnline({objeto_id:objetoId,...form});
-      const voucherConfirmado=String(dados?.voucher||voucherDigitado).trim().toUpperCase();
+      const voucherConfirmado=String(dados?.aparelho?.voucher||voucherDigitado).trim().toUpperCase();
+      if(dados?.ja_vinculado){
+        fecharJanelaEtiquetaVoucherOnline(janelaEtiqueta);
+        setForm({voucher:'',observacoes:''});
+        await carregar();
+        setSucesso('O voucher '+voucherConfirmado+' já está vinculado ao objeto '+dados.codigo_rastreio+
+          ' e está na etapa '+(ETAPAS[dados.etapa]||dados.etapa)+
+          '. Nenhum registro duplicado foi criado. Utilize a aba da etapa correspondente no menu.');
+        return;
+      }
       let statusEtiqueta='Etiqueta de código de barras aberta para impressão.';
       try {
         if(!imprimirEtiquetaVoucherOnline(voucherConfirmado,janelaEtiqueta)) {
@@ -137,6 +156,12 @@ function VinculacaoObjetos() {
       </div>
     </div>
     <Mensagem erro texto={erro}/><Mensagem texto={sucesso}/>
+    {sucesso.includes('já está vinculado') && (
+      <a href={ROTAS_TRADEIN_ONLINE.find(r=>r.id==='triagem-als')?.rota}
+        className="inline-flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-4 py-2 text-xs font-bold text-violet-800 hover:bg-violet-100">
+        <ClipboardCheck size={15}/>Abrir Triagem ALS
+      </a>
+    )}
     <div className="grid gap-5 xl:grid-cols-[minmax(290px,0.75fr)_minmax(0,1.25fr)]">
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex items-center justify-between">
