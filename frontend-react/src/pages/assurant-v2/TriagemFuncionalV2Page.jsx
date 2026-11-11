@@ -1383,6 +1383,8 @@ export default function TriagemFuncionalV2Page() {
       const resposta = await registrarNaoLiga(ctx.voucher, {
         defeitos: defeitosTodos,
         produto: { ...produto, sku: resolucaoSku?.sku || ctx.tradein?.sku_base || null },
+        retriagem: modoRetriagem,
+        motivoRetriagem,
       });
       if (resposta?.divergencia && !resposta?.nao_liga_local) {
         exibirDivergencia(resposta);
