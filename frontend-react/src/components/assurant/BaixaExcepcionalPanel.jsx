@@ -116,8 +116,12 @@ export default function BaixaExcepcionalPanel() {
       const resposta = await executar(revisao.acao, {id: revisao.item.id, parecer: parecer.trim()});
       setMensagem(revisao.acao === "aprovar"
         ? resposta?.pedido_concluido
-          ? `Baixa de estoque efetivada. Pedido #${resposta.pedido || revisao.item.pedido_referencia} removido de Aguardando Definição e movido para Concluídos, com histórico preservado. Nenhum faturamento foi criado.`
-          : "Baixa confirmada com rastreabilidade. Nenhum faturamento foi criado."
+          ? `Baixa administrativa concluída. O item do pedido #${resposta.pedido || revisao.item.pedido_referencia} saiu das filas operacionais de Definição, Análise e Faturamento. Histórico preservado; nenhuma NF foi criada.`
+          : resposta?.motivo_pedido === "item_do_pedido_possui_outro_imei"
+            ? `Baixa do IMEI ${resposta.identificador_baixado} efetivada. O item do pedido #${resposta.pedido} permanece em operação porque está vinculado a outro IMEI (${resposta.imei_pedido}). Os outros itens do mesmo pedido não foram alterados.`
+            : resposta?.motivo_pedido === "pedido_ja_faturado_ou_encerrado_preservado"
+              ? "Baixa do produto efetivada. O pedido já estava faturado ou encerrado e seu histórico fiscal foi preservado."
+              : "Baixa física efetivada, mas o pedido não foi encerrado automaticamente. Confira o status e os vínculos do item; nenhuma NF foi criada."
         : "Solicitação rejeitada sem movimentar o estoque.");
       setRevisao(null); setParecer("");
       await atualizar();
