@@ -53,12 +53,12 @@ export async function checarOrdem(voucher) {
   if (error) throw new Error(error.message);
   return data;
 }
-export async function registrarNaoLiga(voucher, { defeitos = [], produto = {} } = {}) {
+export async function registrarNaoLiga(voucher, { defeitos = [], produto = {}, retriagem = false, motivoRetriagem = "" } = {}) {
   // Não liga: exceção funcional documentada; nunca pular o laudo.
   const { data, error } = await supabase.rpc("assurant_triagem_nao_liga_finalizar", {
     p_voucher: voucher,
     p_defeitos: defeitos,
-    p_produto: produto,
+    p_produto: retriagem ? { ...produto, motivo_retriagem: String(motivoRetriagem || "").trim() } : produto,
   });
   if (error) throw new Error(error.message);
   if (!data?.ok && !data?.divergencia) throw new Error(data?.erro || "Não foi possível finalizar a divergência funcional.");
