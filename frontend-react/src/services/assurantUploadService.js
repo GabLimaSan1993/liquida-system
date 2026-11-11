@@ -1,4 +1,5 @@
-import Papa from "papaparse";
+import * as XLSX from "xlsx";
+import { lerArquivoGaiaTriagem } from "./gaiaTriagemArquivoReader.js";
 import { supabase } from "../lib/supabase";
 
 /*
@@ -65,36 +66,35 @@ function statusGaiaParaLiquida(valor) {
 }
 
 function parseDate(valor) {
-  if (
-    !valor ||
-    valor === "N/A" ||
-    valor === ""
-  ) {
-    return null;
-  }
+  if (valor == null || valor === "" || valor === "N/A") return null;
+  if (valor instanceof Date) return Number.isNaN(valor.getTime()) ? null : valor.toISOString();
 
+  // Datas numéricas são comuns em XLSX; não podem ser tratadas como "dd/mm/aaaa".
   const texto = String(valor).trim();
-  const [parteData, parteHora] =
-    texto.split(" ");
-  const partes = parteData.split("/");
-
-  if (partes.length !== 3) {
-    return null;
+  if (/^\\d{5}(?:\\.\\d+)?$/.test(texto)) {
+    const excel = XLSX.SSF.parse_date_code(Number(texto));
+    if (excel?.y && excel?.m && excel?.d) {
+      return new Date(Date.UTC(excel.y,excel.m-1,excel.d,excel.H||0,excel.M||0,excel.S||0)).toISOString();
+    }
   }
 
-  const [dia, mes, ano] = partes;
-  const data = new Date(
-    `${ano}-${mes}-${dia}` +
-    `T${parteHora || "00:00:00"}`
-  );
-
-  if (Number.isNaN(data.getTime())) {
-    return null;
+  const partes = texto.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{2,4})(?:\\s+(\\d{1,2}:\\d{2}(?::\\d{2})?))?/);
+  if (partes) {
+    const dia=partes[1].padStart(2,'0');
+    const mes=partes[2].padStart(2,'0');
+    const ano=partes[3].length===2 ? '20'+partes[3] : partes[3];
+    const hora=partes[4] ? (partes[4].length===5?partes[4]+':00':partes[4]) : '00:00:00';
+    const data=new Date(ano+'-'+mes+'-'+dia+'T'+hora);
+    return Number.isNaN(data.getTime()) ? null : data.toISOString();
   }
 
-  return data.toISOString();
+  // Algumas abas já trazem datas ISO.
+  if (/^\\d{4}-\\d{2}-\\d{2}/.test(texto)) {
+    const data=new Date(texto.replace(' ','T'));
+    return Number.isNaN(data.getTime()) ? null : data.toISOString();
+  }
+  return null;
 }
-
 function parseRow(
   row,
   userId,
@@ -408,106 +408,34 @@ async function enviarLoteAdaptativo({
 
 // ── Preview ───────────────────────────────────────────────
 
-export async function previewTriagemAssurant(
-  file
-) {
-  return new Promise(
-    (resolve, reject) => {
-      const previewRows = [];
-      let totalRows = 0;
-      let headers = null;
-
-      Papa.parse(file, {
-        header: true,
-        skipEmptyLines: true,
-        encoding: "ISO-8859-1",
-        delimiter: ";",
-
-        step: (result, parser) => {
-          if (!headers) {
-            headers = Object.keys(
-              result.data
-            );
-          }
-
-          if (totalRows === 0) {
-            const obrigatorias = [
-              "Voucher",
-              "IMEI",
-              "Tipo_de_Rede",
-              "Data_Recebimento",
-            ];
-
-            const faltando =
-              obrigatorias.filter(
-                (coluna) =>
-                  !headers.includes(coluna)
-              );
-
-            if (faltando.length > 0) {
-              parser.abort();
-
-              reject(
-                new Error(
-                  "Colunas obrigatórias não encontradas: " +
-                  faltando.join(", ")
-                )
-              );
-
-              return;
-            }
-          }
-
-          totalRows += 1;
-
-          if (previewRows.length < 5) {
-            const row = result.data;
-
-            previewRows.push({
-              Voucher:
-                row["Voucher"],
-
-              IMEI:
-                row["IMEI"],
-
-              Modelo:
-                row["Modelo"],
-
-              Tipo_de_Rede:
-                row["Tipo_de_Rede"],
-
-              Grade:
-                row["Grade"],
-
-              Status_Gaia:
-                row["Status_atual"],
-
-              Status_Liquida:
-                statusGaiaParaLiquida(
-                  row["Status_atual"]
-                ),
-
-              Data_Recebimento:
-                row["Data_Recebimento"],
-            });
-          }
-        },
-
-        complete: () => {
-          resolve({
-            totalRows,
-            previewRows,
-          });
-        },
-
-        error: (erro) => {
-          reject(
-            new Error(erro.message)
-          );
-        },
-      });
-    }
-  );
+export async function previewTriagemAssurant(file) {
+  const documento = await lerArquivoGaiaTriagem(file);
+  const previewRows = documento.rows.slice(0, 5).map(row => ({
+    Voucher: row["Voucher"],
+    IMEI: row["IMEI"],
+    Modelo: row["Modelo"],
+    Tipo_de_Rede: row["Tipo_de_Rede"],
+    Grade: row["Grade"],
+    Status_Gaia: row["Status_atual"],
+    Status_Liquida: statusGaiaParaLiquida(row["Status_atual"]),
+    Data_Recebimento: row["Data_Recebimento"],
+  }));
+  return {
+    totalRows: documento.rows.length,
+    previewRows,
+    formato: documento.source,
+    aba: documento.sheet,
+    linhaCabecalho: documento.headerRow,
+    descartadas: documento.ignored,
+    avisos: [
+      ...(documento.ignored>0
+        ? [documento.ignored+' linhas sem voucher serão ignoradas (o banco exige voucher).']
+        : []),
+      ...(documento.missingRecommended.length
+        ? ['Colunas opcionais não localizadas: '+documento.missingRecommended.join(', ')+'.']
+        : []),
+    ],
+  };
 }
 
 // ── Upload com repetição e divisão adaptativa dos lotes ──
@@ -518,40 +446,10 @@ export async function uploadTriagemAssurant(
   mesReferencia,
   onProgress
 ) {
-  const allRows = await new Promise(
-    (resolve, reject) => {
-      Papa.parse(file, {
-        header: true,
-        skipEmptyLines: true,
-        encoding: "ISO-8859-1",
-        delimiter: ";",
-
-        complete: (results) => {
-          resolve(
-            results.data || []
-          );
-        },
-
-        error: (erro) => {
-          reject(
-            new Error(erro.message)
-          );
-        },
-      });
-    }
-  );
-
-  const registros = allRows
-    .map((row) =>
-      parseRow(
-        row,
-        userId,
-        mesReferencia
-      )
-    )
-    .filter((row) =>
-      row.voucher || row.imei
-    );
+  const documento = await lerArquivoGaiaTriagem(file);
+  const registros = documento.rows
+    .map(row => parseRow(row,userId,mesReferencia))
+    .filter(row => row.voucher); // upsert_triagem requer voucher como chave
 
   const total = registros.length;
   let inserted = 0;
