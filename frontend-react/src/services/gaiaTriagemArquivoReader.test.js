@@ -5,7 +5,7 @@ import { lerArquivoGaiaTriagem } from './gaiaTriagemArquivoReader.js';
 const fakeFile=(name,data)=>({
   name,
   async arrayBuffer(){
-    const bytes=data instanceof Uint8Array ? data : new TextEncoder().encode(data);
+    const bytes=data instanceof Uint8Array ? data : data instanceof ArrayBuffer ? new Uint8Array(data) : new TextEncoder().encode(data);
     return bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength);
   }
 });
