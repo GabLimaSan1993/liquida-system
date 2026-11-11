@@ -150,6 +150,42 @@ function normalizarCnpjUpload(valor) {
   return cnpj;
 }
 
+/**
+ * Pré-validação do PICKING recebido. Não cria pedido nem reserva estoque.
+ * Reutiliza o mesmo extrator utilizado no envio real, inclusive cabeçalhos deslocados.
+ */
+export async function analisarPlanilhaPedidoB2B(file) {
+  if (!file) throw new Error("Selecione um arquivo de picking B2B.");
+  const wb = XLSX.read(await file.arrayBuffer(), { type: "array" });
+  const { registros: rows, aba, linhaCabecalho } = extrairPlanilhaPedidoB2B(wb);
+  if (!rows.length) throw new Error("A planilha está vazia.");
+  const invalidos = rows.filter(r => !acharImeiLinha(r));
+  if (invalidos.length) throw new Error(
+    invalidos.length + " IMEI(s) inválidos, ex.: linha(s) " +
+    invalidos.slice(0, 8).map(r => r.__linhaExcel).join(", ") + "."
+  );
+  const imeis = rows.map(acharImeiLinha);
+  const vistos = new Set();
+  const duplicados = new Set();
+  for(const imei of imeis) {
+    if(vistos.has(imei))duplicados.add(imei);
+    vistos.add(imei);
+  }
+  if(duplicados.size) throw new Error(
+    duplicados.size + " IMEI(s) duplicados: " + [...duplicados].slice(0, 5).join(", ")
+  );
+  const ganhadores = [...new Set(rows.map(r => String(r.Ganhador ?? "").trim()).filter(Boolean))];
+  if(ganhadores.length !== 1 || rows.some(r => !String(r.Ganhador ?? "").trim())){
+    throw new Error('Preencha um único "Ganhador" em todas as linhas.');
+  }
+  const grades={};
+  for(const r of rows) {
+    const grade=String(r.GRADE ?? "").trim() || "Não informado";
+    grades[grade]=(grades[grade] || 0)+1;
+  }
+  return { total:rows.length, cliente:ganhadores[0], aba, linhaCabecalho, grades, imes:imeis.length };
+}
+
 export async function importarPedidoB2B(file, userId, extras = {}) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
