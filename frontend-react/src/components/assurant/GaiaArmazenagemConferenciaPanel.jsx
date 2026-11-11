@@ -8,6 +8,7 @@ const rotulos = {
   MULTIPLOS_VOUCHERS: "IMEI com mais de um voucher",
   SEM_GRADE_FINAL: "Sem grade registrada no voucher",
   GRADE_COSMETICA_ETAPA_PENDENTE: "Grade existente · etapa pendente",
+  GRADE_FISICA_PENDENTE: "OUTLET sem grade física: conferir",
   JA_NO_WMS: "Já possui alocação WMS",
   ETAPA_PENDENTE: "Etapa operacional pendente",
   CONFERIR_LEGADO: "Conferir fluxo legado do GAIA",
@@ -19,6 +20,7 @@ const colors = {
   MULTIPLOS_VOUCHERS: "bg-amber-50 text-amber-800",
   SEM_GRADE_FINAL: "bg-rose-50 text-rose-700",
   GRADE_COSMETICA_ETAPA_PENDENTE: "bg-amber-50 text-amber-900",
+  GRADE_FISICA_PENDENTE: "bg-amber-50 text-amber-900",
   JA_NO_WMS: "bg-sky-50 text-sky-700",
   RESERVADO_B2C: "bg-orange-50 text-orange-800",
 };
@@ -253,12 +255,13 @@ export default function GaiaArmazenagemConferenciaPanel({ onSelecionarVoucher })
                 className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold">Ocultar</button>
             </div>
           </div>
-          <div className="mt-3 grid grid-cols-2 gap-2 text-center sm:grid-cols-4 xl:grid-cols-8">
+          <div className="mt-3 grid grid-cols-2 gap-2 text-center sm:grid-cols-4 xl:grid-cols-9">
             {[
               ["Pendentes reais no WMS",dados.fisico_aguardando],
               ["Aptos à bipagem",dados.prontos],
               ["Múltiplos vouchers",dados.ambiguos],
               ["Sem grade final",dados.sem_grade],
+              ["OUTLET sem grade física",dados.grade_fisica_pendente],
               ["Já armazenados no WMS (lote)",dados.fisico_ja_armazenados ?? dados.ja_no_wms],
               ["Reserva B2C (únicos)",dados.reservados_b2c],
               ["Divergências WMS (todo lote)",dados.fisico_divergencias_wms],
