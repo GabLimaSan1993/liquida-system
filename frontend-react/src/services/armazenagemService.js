@@ -341,6 +341,29 @@ export async function reservarEndereco(
 ) {
   const identificador = String(voucher || "").trim().toUpperCase();
   let voucherInformado = identificador;
+
+  // A etapa "Aguardando oracle" ocorre APÓS a bipagem e confirmação no WMS.
+  // Antes de preparar nova armazenagem, conferir se já há posição física ativa.
+  const { data: situacaoWms, error: erroSituacaoWms } = await supabase.rpc(
+    "assurant_armazenagem_situacao_wms", { p_identificador: identificador }
+  );
+  if (erroSituacaoWms) throw new Error(erroSituacaoWms.message);
+  if (situacaoWms?.existe && situacaoWms.status === "confirmado") {
+    const dataConfirmada = situacaoWms.confirmado_em
+      ? new Date(situacaoWms.confirmado_em).toLocaleString("pt-BR", {timeZone:"America/Sao_Paulo"})
+      : "data não informada";
+    throw new Error(
+      "JÁ ARMAZENADO NO WMS. Voucher " + (situacaoWms.voucher || identificador) +
+      " · Endereço: " + (situacaoWms.endereco || "consultar estoque") +
+      " · Confirmado em " + dataConfirmada +
+      ". O status 'Aguardando oracle' é posterior à armazenagem. NÃO reserve novamente."
+    );
+  }
+  if (situacaoWms?.existe && situacaoWms.status === "reservado" &&
+      /^[0-9]{15}$/.test(identificador) && situacaoWms.voucher) {
+    // Permite somente reabrir a reserva já existente pelo mesmo voucher.
+    voucherInformado = situacaoWms.voucher;
+  }
   // Planilhas antigas do GAIA misturam IMEIs e vouchers.
   // O WMS só reserva por voucher: resolver IMEI apenas quando inequívoco.
   if (/^[0-9]{15}$/.test(identificador)) {
