@@ -210,7 +210,7 @@ export default function GaiaArmazenagemConferenciaPanel({ onSelecionarVoucher })
             Fila física de Armazenagem · GAIA legado
           </div>
           <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-500">
-            Os identificadores do lote foram declarados fisicamente como Aguardando armazenagem.
+            A planilha do GAIA é uma fotografia do lote original. A pendência atual desconta os produtos já confirmados no WMS.
             Vínculos de voucher, grade, WMS e B2C continuam rastreáveis. A alocação final
             exige bipagem e não é simulada pelo lote físico.
           </p>
@@ -218,7 +218,12 @@ export default function GaiaArmazenagemConferenciaPanel({ onSelecionarVoucher })
         <div className="flex flex-wrap gap-2">
           {dados?.fisico_aguardando != null && (
             <span className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-black text-violet-900">
-              {Number(dados.fisico_aguardando).toLocaleString("pt-BR")} aguardando armazenagem · físico
+              {Number(dados.fisico_aguardando).toLocaleString("pt-BR")} pendentes de armazenagem · WMS
+            </span>
+          )}
+          {dados?.fisico_ja_armazenados != null && (
+            <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-900">
+              {Number(dados.fisico_ja_armazenados).toLocaleString("pt-BR")} já armazenados no WMS
             </span>
           )}
           <button type="button" disabled={carregando} onClick={() => void consultar(null)}
@@ -250,11 +255,11 @@ export default function GaiaArmazenagemConferenciaPanel({ onSelecionarVoucher })
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2 text-center sm:grid-cols-4 xl:grid-cols-8">
             {[
-              ["Aguardando fisicamente",dados.fisico_aguardando],
+              ["Pendentes reais no WMS",dados.fisico_aguardando],
               ["Aptos à bipagem",dados.prontos],
               ["Múltiplos vouchers",dados.ambiguos],
               ["Sem grade final",dados.sem_grade],
-              ["Já no WMS (únicos)",dados.ja_no_wms],
+              ["Já armazenados no WMS (lote)",dados.fisico_ja_armazenados ?? dados.ja_no_wms],
               ["Reserva B2C (únicos)",dados.reservados_b2c],
               ["Divergências WMS (todo lote)",dados.fisico_divergencias_wms],
               ["Divergências B2C (todo lote)",dados.fisico_divergencias_b2c]
