@@ -412,9 +412,10 @@ export default function LaboratorioIndividualV2Page() {
         <div>
           <p className="text-xs font-bold uppercase tracking-wider text-violet-700">Assurant Warehouse · Laboratório</p>
           <h1 className="mt-1 text-2xl font-black">Laboratório de Reparos</h1>
-          <p className="mt-1 text-sm text-slate-600">Importação por voucher com recebimento confirmado automaticamente e encaminhamento direto à bancada do técnico. A OS continua sujeita à validação técnica.</p>
+          <p className="mt-1 text-sm text-slate-600">O voucher é validado no GAIA; o recebimento físico deve ser confirmado antes de liberar à bancada técnica.</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={exportarBase} disabled={ocupado} className={BOTAO+' border-emerald-700 bg-white text-emerald-800'}><Download size={15}/> Exportar base (XLSX)</button>
           <button type="button" onClick={carregar} disabled={ocupado||carregando} className={BOTAO+' border-slate-300 bg-white text-slate-700'}>
             <RefreshCw size={15} className={carregando?'animate-spin':''}/> Atualizar
           </button>
@@ -428,11 +429,11 @@ export default function LaboratorioIndividualV2Page() {
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_330px]">
         <section className="rounded-2xl border border-violet-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center gap-2"><FileSpreadsheet size={20} className="text-violet-700"/><h2 className="text-base font-black">Importar recebimento por planilha</h2></div>
-          <p className="mt-2 text-xs leading-5 text-slate-600">Envie XLSX, XLS, ODS ou CSV. A coluna <b>Voucher</b> é a única utilizada; pedido, lote, IMEI e OS são ignorados. O envio confirma o recebimento e coloca o aparelho diretamente em <b>Aguardando técnico</b>. Vouchers existentes não são duplicados.</p>
+          <div className="flex items-center gap-2"><FileSpreadsheet size={20} className="text-violet-700"/><h2 className="text-base font-black">Importar vouchers para Aguardando recebimento</h2></div>
+          <p className="mt-2 text-xs leading-5 text-slate-600">Envie XLSX, XLS, ODS ou CSV. A coluna <b>Voucher</b> é a única utilizada; pedido, lote, IMEI e OS são ignorados. Os vouchers devem existir no GAIA. Os novos ficam em <b>Aguardando recebimento</b>, sem confirmação automática. Vouchers já cadastrados não são duplicados.</p>
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <label className={BOTAO+' cursor-pointer border-violet-300 bg-violet-50 text-violet-800'}>
-              <Upload size={16}/> Enviar planilha · recebimento automático
+              <Upload size={16}/> Conferir planilha · GAIA
               <input type="file" className="sr-only" accept=".xlsx,.xls,.ods,.csv" disabled={ocupado} onChange={prepararArquivo}/>
             </label>
             <a download="Modelo_Recebimento_Laboratorio.csv"
@@ -452,10 +453,11 @@ export default function LaboratorioIndividualV2Page() {
               <div className="mt-3 rounded-xl border border-violet-200 bg-white p-3 text-xs">
                 <p className="font-black text-slate-800">Conferência do banco antes de importar</p>
                 <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
-                  <span className="font-bold text-emerald-700">{previa.conferencia.novos} novos (incrementam o total)</span>
+                  <span className="font-bold text-emerald-700">{previa.conferencia.novos} novos válidos para importação</span>
+                  <span className="font-bold text-rose-700">{previa.conferencia.nao_encontrados||0} vouchers inexistentes no GAIA</span>
                   <span className="font-bold text-slate-700">{previa.conferencia.ja_cadastrados} já cadastrados</span>
                   <span className="font-bold text-amber-800">{previa.conferencia.ja_no_historico} no histórico</span>
-                  <span className="font-bold text-violet-700">{previa.conferencia.liberar_pendentes} para liberar</span>
+                  <span className="font-bold text-violet-700">{previa.conferencia.liberar_pendentes} aguardando confirmação física</span>
                 </div>
                 {previa.conferencia.novos===0 && previa.conferencia.liberar_pendentes===0 && (
                   <p className="mt-2 rounded-lg bg-amber-50 p-2 font-semibold text-amber-900">
@@ -473,9 +475,10 @@ export default function LaboratorioIndividualV2Page() {
                         <span className="font-mono font-bold">{item.voucher}</span>
                         <div className="flex flex-wrap items-center gap-2 text-slate-600">
                           <span>
-                            {item.situacao==='NOVO'?'Novo cadastro'
+                            {item.situacao==='NOVO'?'Novo válido (GAIA)'
                               :item.situacao==='LIBERAR_PENDENTE'?'Liberação pendente'
                               :item.situacao==='JA_NO_HISTORICO'?'Já no histórico'
+                              :item.situacao==='NAO_ENCONTRADO'?'Inexistente no GAIA'
                               :'Já cadastrado'} {item.status_atual?'· '+item.status_atual:''}
                           </span>
                           {item.cadastrado_por && <span className="text-slate-500">
@@ -503,25 +506,30 @@ export default function LaboratorioIndividualV2Page() {
             )}
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <button type="button"
-                disabled={ocupado || (previa.conferencia &&
-                  previa.conferencia.novos===0 && previa.conferencia.liberar_pendentes===0)}
+                disabled={ocupado || !previa.conferencia || Number(previa.conferencia.nao_encontrados||0)>0 ||
+                  Number(previa.conferencia.novos||0)===0}
                 onClick={()=>importar(previa.vouchers,previa.arquivo)}
                 className={BOTAO+' border-violet-700 bg-violet-700 text-white'}>
                 <Upload size={16}/>
-                {previa.conferencia
-                  ? 'Importar '+previa.conferencia.novos+' novo(s) e liberar '+previa.conferencia.liberar_pendentes
-                  : 'Receber e liberar '+previa.vouchers.length+' voucher(s)'}
+                {'Importar '+Number(previa.conferencia?.novos||0)+' novo(s) para Ag. recebimento'}
               </button>
+              {Boolean(previa.conferencia?.liberar_pendentes) &&
+                <button type="button" disabled={ocupado || Number(previa.conferencia.nao_encontrados||0)>0}
+                  onClick={()=>void confirmarFisicamente((previa.conferencia.itens||[])
+                    .filter(x=>x.situacao==='LIBERAR_PENDENTE').map(x=>x.voucher))}
+                  className={BOTAO+' border-emerald-700 bg-emerald-600 text-white'}>
+                  <PackageCheck size={16}/> Confirmar fisicamente {previa.conferencia.liberar_pendentes} pendente(s)
+                </button>}
               <button type="button" disabled={ocupado} onClick={()=>setPrevia(null)} className={BOTAO+' border-slate-200 text-slate-700'}>Cancelar</button>
             </div>
           </div>}
           {progresso&&<p role="status" className="mt-3 text-xs font-bold text-violet-700">{progresso}</p>}
-          <p className="mt-3 text-[11px] leading-5 text-amber-800">Ao selecionar o arquivo, os vouchers novos são importados automaticamente, sem novo clique. A importação confirma administrativamente o recebimento dos vouchers informados, registra o usuário e horário e libera a fila do técnico, sem nova conferência por voucher. A OS e os defeitos ainda são validados na bancada. Não gera pedido/romaneio nem movimenta WMS/Oracle.</p>
+          <p className="mt-3 text-[11px] leading-5 text-amber-800">Selecionar o arquivo apenas verifica os vouchers. A importação não confirma a chegada física: é preciso confirmar recebimento antes de enviar ao técnico. Sem movimentação automática no WMS/Oracle.</p>
         </section>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="text-sm font-black text-slate-900">Adicionar voucher individualmente</h2>
-          <p className="mt-2 text-xs text-slate-500">Sem planilha e sem vínculo de lote.</p>
+          <p className="mt-2 text-xs text-slate-500">Somente voucher existente no GAIA. O cadastro não confirma recebimento nem libera à bancada.</p>
           <form className="mt-4 space-y-3" onSubmit={e=>{
             e.preventDefault();const v=normalizarVoucherLab(voucherManual);
             if(!regraVoucher.test(v)||v==='__IMEI__'){setErro('Informe um voucher válido.');return;}
@@ -531,7 +539,7 @@ export default function LaboratorioIndividualV2Page() {
               className={CAMPO+' w-full'} aria-label="Voucher individual"/>
             <button disabled={ocupado||!regraVoucher.test(normalizarVoucherLab(voucherManual))||normalizarVoucherLab(voucherManual)==='__IMEI__'}
               className={BOTAO+' w-full border-emerald-700 bg-emerald-600 text-white'}>
-              <PackageCheck size={16}/> Receber e liberar para técnico
+              <PackageCheck size={16}/> Adicionar em Aguardando recebimento
             </button>
           </form>
         </section>
@@ -565,8 +573,8 @@ export default function LaboratorioIndividualV2Page() {
           </div>
           <button type="button" disabled={ocupado||!Number(estados.concluido||0)}
             onClick={()=>void emitirMinuta(true)}
-            className={BOTAO+' border-violet-700 bg-violet-700 text-white'}>
-            <Truck size={15}/> Gerar minuta de todos os concluídos
+            className={BOTAO+' w-full sm:w-auto border-violet-700 bg-violet-700 text-white'}>
+            <Truck size={15}/> Gerar minuta / Devolução
           </button>
         </div>
         {filtro==='concluido'&&<div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
