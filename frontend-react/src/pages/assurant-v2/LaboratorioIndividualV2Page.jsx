@@ -2,10 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../AuthContext.jsx';
-import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, FileSpreadsheet, PackageCheck, RefreshCw, Search, Upload, Wrench, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, FileSpreadsheet, PackageCheck, RefreshCw, Search, Upload, Wrench, X, Truck, Printer } from 'lucide-react';
 import { laboratorioIndividual, conferirVouchersLaboratorio } from '../../services/laboratorioIndividualService.js';
 import { laboratorioReparo } from '../../services/laboratorioReparoService.js';
 import { listarDefeitos } from '../../services/triagemFuncionalService.js';
+import { gerarMinutaLaboratorio, listarMinutasLaboratorio, detalharMinutaLaboratorio, imprimirMinutaLaboratorio } from '../../services/laboratorioDevolucaoService.js';
 
 const BOTAO = 'inline-flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-40';
 const CAMPO = 'rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-violet-500';
@@ -140,6 +141,8 @@ export default function LaboratorioIndividualV2Page() {
   const [buscaDefeito,setBuscaDefeito]=useState('');
   const [resultado,setResultado]=useState('reparado');
   const [observacoes,setObservacoes]=useState('');
+  const [selecionados,setSelecionados]=useState([]);
+  const [minutas,setMinutas]=useState([]);
   const limite=100;
 
   const carregar=useCallback(async()=>{
@@ -151,7 +154,17 @@ export default function LaboratorioIndividualV2Page() {
     finally{setCarregando(false);}
   },[busca,filtro,pagina]);
 
+  const carregarMinutas=useCallback(async()=>{
+    try{
+      const retorno=await listarMinutasLaboratorio();
+      setMinutas(retorno.romaneios||[]);
+    }catch(e){
+      setErro(e.message||'Não foi possível listar as minutas.');
+    }
+  },[]);
+
   useEffect(()=>{void carregar();},[carregar]);
+  useEffect(()=>{void carregarMinutas();},[carregarMinutas]);
   useEffect(()=>{
     let ativo=true;
     listarDefeitos(true).then(r=>{if(ativo) setCatalogo(r||[]);}).catch(()=>{});
@@ -319,6 +332,48 @@ export default function LaboratorioIndividualV2Page() {
     finally{setOcupado(false);}
   }
 
+  const chaveItem=i=>i.origem+':'+i.id;
+  function alternarSelecao(i) {
+    if(i.status!=='concluido')return;
+    setSelecionados(atuais=>atuais.some(x=>chaveItem(x)===chaveItem(i))
+      ?atuais.filter(x=>chaveItem(x)!==chaveItem(i))
+      :[...atuais,{id:i.id,origem:i.origem}]);
+  }
+  function alternarPaginaConcluidos() {
+    const concluidos=(dados.itens||[]).filter(i=>i.status==='concluido');
+    if(!concluidos.length)return;
+    const todas=concluidos.every(i=>selecionados.some(x=>chaveItem(x)===chaveItem(i)));
+    if(todas){
+      const chaves=new Set(concluidos.map(chaveItem));
+      setSelecionados(a=>a.filter(i=>!chaves.has(chaveItem(i))));
+    } else {
+      setSelecionados(a=>[...a,...concluidos.filter(i=>!a.some(x=>chaveItem(x)===chaveItem(i))).map(i=>({id:i.id,origem:i.origem}))]);
+    }
+  }
+  async function emitirMinuta(todos=false) {
+    if(ocupado)return;
+    const quantidade=todos?Number(dados.resumo?.concluido||0):selecionados.length;
+    if(!quantidade){setErro('Não há aparelhos concluídos selecionados para devolução.');return;}
+    if(!window.confirm('Gerar minuta de devolução para '+quantidade+' aparelho(s) concluído(s)? Os produtos passarão para Em devolução, sem movimentação automática de estoque.'))return;
+    setOcupado(true);setErro('');setSucesso('');
+    try{
+      const retorno=await gerarMinutaLaboratorio(todos?null:selecionados,todos);
+      setSelecionados([]);
+      setSucesso('Minuta LAB-DEV-'+String(retorno.numero).padStart(6,'0')+' emitida para '+retorno.total+' aparelhos. Clique em Imprimir minuta abaixo para gerar o documento.');
+      await carregar();
+      await carregarMinutas();
+    }catch(e){setErro(e.message||'Falha ao emitir minuta de devolução.');}
+    finally{setOcupado(false);}
+  }
+  async function imprimirMinuta(id) {
+    const janela=window.open('','_blank','width=1100,height=800');
+    if(!janela){setErro('Libere janelas pop-up para imprimir a minuta.');return;}
+    try{
+      const dados=await detalharMinutaLaboratorio(id);
+      imprimirMinutaLaboratorio(dados,janela);
+    }catch(e){janela.close();setErro(e.message||'Não foi possível imprimir a minuta.');}
+  }
+
   const totalPaginas=Math.max(1,Math.ceil(Number(dados.total||0)/limite));
   const estados=dados.resumo||{};
 
@@ -473,6 +528,41 @@ export default function LaboratorioIndividualV2Page() {
         </form>
       </section>
 
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="flex items-center gap-2 text-sm font-black text-slate-900"><Truck size={17} className="text-violet-700"/> Devolução ao Warehouse</h2>
+            <p className="mt-1 text-xs text-slate-500"><b>{Number(estados.concluido||0).toLocaleString('pt-BR')}</b> aparelhos concluídos disponíveis para expedição. A minuta registra o envio; o recebimento deve ser conferido no Warehouse.</p>
+          </div>
+          <button type="button" disabled={ocupado||!Number(estados.concluido||0)}
+            onClick={()=>void emitirMinuta(true)}
+            className={BOTAO+' border-violet-700 bg-violet-700 text-white'}>
+            <Truck size={15}/> Gerar minuta de todos os concluídos
+          </button>
+        </div>
+        {filtro==='concluido'&&<div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
+          <button type="button" disabled={ocupado||!(dados.itens||[]).length}
+            onClick={alternarPaginaConcluidos} className={BOTAO+' border-slate-200 bg-white text-slate-700'}>
+            Selecionar/desmarcar página
+          </button>
+          <span className="text-xs font-semibold text-slate-600">{selecionados.length} selecionados</span>
+          <button type="button" disabled={ocupado||!selecionados.length}
+            onClick={()=>void emitirMinuta(false)} className={BOTAO+' border-emerald-700 bg-emerald-600 text-white'}>
+            <Truck size={15}/> Gerar minuta dos selecionados
+          </button>
+        </div>}
+        {!!minutas.length&&<div className="mt-3 border-t border-slate-100 pt-3">
+          <p className="mb-2 text-[11px] font-bold text-slate-600">Minutas emitidas · imprimir ou salvar como PDF</p>
+          <div className="flex flex-wrap gap-2">
+            {minutas.slice(0,8).map(m=><button type="button" key={m.id} disabled={ocupado}
+              onClick={()=>void imprimirMinuta(m.id)}
+              className={BOTAO+' border-slate-200 bg-slate-50 text-slate-700 hover:bg-violet-50'}>
+              <Printer size={14}/> LAB-DEV-{String(m.numero).padStart(6,'0')} · {m.total} aparelhos
+            </button>)}
+          </div>
+        </div>}
+      </section>
+
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-4">
           <div>
@@ -503,10 +593,17 @@ export default function LaboratorioIndividualV2Page() {
                 <td className="p-3">{i.os_numero||i.os_referencia||'Pendente'}{!i.os_numero&&i.os_referencia&&<p className="text-[10px] text-slate-400">Não validada</p>}</td>
                 <td className="p-3 text-[11px] text-slate-500">{dataHora(i.recebido_em||i.criado_em)}</td>
                 <td className="p-3">
-                  <button type="button" onClick={()=>abrir(i)}
-                    className={BOTAO+' border-violet-200 bg-violet-50 text-violet-700'}>
-                    {i.status==='concluido'?'Ver registro':'Abrir técnico'}
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {i.status==='concluido'&&<label className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-700">
+                      <input type="checkbox" aria-label={'Selecionar para devolução '+i.voucher}
+                        checked={selecionados.some(x=>chaveItem(x)===chaveItem(i))}
+                        disabled={ocupado} onChange={()=>alternarSelecao(i)}/> Selecionar
+                    </label>}
+                    <button type="button" onClick={()=>abrir(i)}
+                      className={BOTAO+' border-violet-200 bg-violet-50 text-violet-700'}>
+                      {i.status==='concluido'?'Ver registro':'Abrir técnico'}
+                    </button>
+                  </div>
                 </td>
               </tr>)}
               {carregando&&<tr><td colSpan={7} className="p-8 text-center text-slate-500">Carregando vouchers...</td></tr>}
