@@ -8,7 +8,7 @@ const references = [
   ['recebimento', 'Recebimento'], ['funcional', 'Triagem funcional'], ['cosmetica', 'Triagem cosmética'],
   ['laudo', 'Laudo'], ['alocacao', 'Alocação'], ['oracle', 'Oracle'], ['criacao', 'Criação'], ['atualizacao', 'Atualização'],
 ];
-const compact = [0, 1, 3, 4, 10, 13, 21, 22, 23, 24, 25, 26];
+const compact = [0, 1, 3, 4, 10, 13, 21, 22, 23, 24, 25, 26, 31, 32, 34];
 const num = value => Number(value || 0).toLocaleString('pt-BR');
 const date = value => value ? new Date(value).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '—';
 const cell = (item, index) => {
@@ -112,8 +112,8 @@ export default function RelatorioEstoqueV2Page() {
       </div>
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
         <div className="flex flex-wrap items-center justify-between gap-3 p-5"><div><h2 className="text-lg font-bold">Aparelhos e etapas</h2>
-          <p className="mt-1 text-xs text-slate-500">Referência aplicada: {references.find(([key]) => key === applied.dataReferencia)?.[1]} • {applied.dataInicial || 'Sem início'} até {applied.dataFinal || 'Sem fim'}. Excel com as 31 colunas e todos os registros filtrados.</p></div>
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={allColumns} onChange={e => setAllColumns(e.target.checked)}/>Mostrar as 31 colunas</label></div>
+          <p className="mt-1 text-xs text-slate-500">Referência aplicada: {references.find(([key]) => key === applied.dataReferencia)?.[1]} • {applied.dataInicial || 'Sem início'} até {applied.dataFinal || 'Sem fim'}. Excel com {COLUNAS_ESTOQUE.length} colunas e todos os registros filtrados.</p></div>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={allColumns} onChange={e => setAllColumns(e.target.checked)}/>Mostrar as {COLUNAS_ESTOQUE.length} colunas</label></div>
         <div className="max-h-[650px] overflow-auto"><table className="w-full whitespace-nowrap text-left text-xs">
           <thead className="sticky top-0 z-10 bg-slate-50 text-slate-500"><tr>{columns.map(index => <th key={index} className="px-4 py-3 font-semibold">{COLUNAS_ESTOQUE[index].replaceAll('_', ' ')}</th>)}</tr></thead>
           <tbody className="divide-y divide-slate-100">{result.itens.map(item => <tr key={item.id} className="hover:bg-purple-50/40">{columns.map(index => <td key={index} className="max-w-80 px-4 py-3">{index === 0 ? <button className="font-bold text-purple-700 hover:underline" onClick={() => setSelected(item)}>{item.voucher || 'Ver aparelho'}</button> : <span className="block max-w-80 truncate" title={cell(item, index)}>{cell(item, index)}</span>}</td>)}</tr>)}
@@ -130,7 +130,7 @@ export default function RelatorioEstoqueV2Page() {
     {selected && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" onClick={() => setSelected(null)}>
       <div role="dialog" aria-modal="true" aria-label="Detalhes do aparelho" className="max-h-[90vh] w-full max-w-4xl overflow-auto rounded-2xl bg-white p-6" onClick={e => e.stopPropagation()}>
         <div className="mb-5 flex items-start justify-between gap-3"><div><h2 className="text-xl font-bold">{selected.voucher}</h2><p className="mt-1 text-sm text-slate-500">{selected.imei} • {selected.status_atual}</p></div><button autoFocus aria-label="Fechar detalhes" onClick={() => setSelected(null)}><X/></button></div>
-        <dl className="grid gap-3 sm:grid-cols-2">{COLUNAS_ESTOQUE.map((label, index) => <div key={label} className={index === 27 ? 'rounded-lg bg-slate-50 p-3 sm:col-span-2' : 'rounded-lg bg-slate-50 p-3'}><dt className="text-xs text-slate-500">{label.replaceAll('_', ' ')}</dt><dd className="mt-1 whitespace-pre-wrap break-words text-sm">{cell(selected, index)}</dd></div>)}</dl>
+        <dl className="grid gap-3 sm:grid-cols-2">{COLUNAS_ESTOQUE.map((label, index) => <div key={label} className={[27,31,34,35,36].includes(index) ? 'rounded-lg bg-slate-50 p-3 sm:col-span-2' : 'rounded-lg bg-slate-50 p-3'}><dt className="text-xs text-slate-500">{label.replaceAll('_', ' ')}</dt><dd className="mt-1 whitespace-pre-wrap break-words text-sm">{cell(selected, index)}</dd></div>)}</dl>
       </div>
     </div>}
   </div>;
