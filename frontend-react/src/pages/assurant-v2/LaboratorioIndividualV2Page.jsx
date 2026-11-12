@@ -259,7 +259,10 @@ export default function LaboratorioIndividualV2Page() {
   }
 
   async function importar(vouchers,rotuloImportacao) {
-    if(!vouchers?.length || ocupado || (previa?.conferencia && Number(previa.conferencia.nao_encontrados||0)>0))return;
+    if(!vouchers?.length || ocupado || (previa?.conferencia &&
+      vouchers.length===previa.vouchers.length &&
+      vouchers.every((v,i)=>v===previa.vouchers[i]) &&
+      Number(previa.conferencia.nao_encontrados||0)>0))return;
     setOcupado(true);setErro('');setSucesso('');
     let incluidos=0,existentes=0,liberados=0;
     let loteAtual=0;
@@ -459,7 +462,7 @@ export default function LaboratorioIndividualV2Page() {
                   <span className="font-bold text-amber-800">{previa.conferencia.ja_no_historico} no histórico</span>
                   <span className="font-bold text-violet-700">{previa.conferencia.liberar_pendentes} aguardando confirmação física</span>
                 </div>
-                {previa.conferencia.novos===0 && previa.conferencia.liberar_pendentes===0 && (
+                {previa.conferencia.novos===0 && previa.conferencia.liberar_pendentes===0 && !Number(previa.conferencia.nao_encontrados||0) && (
                   <p className="mt-2 rounded-lg bg-amber-50 p-2 font-semibold text-amber-900">
                     Essa planilha não possui cadastros novos. Reenviá-la não aumenta o total:
                     os vouchers já estão na fila ou no histórico do Laboratório.
@@ -485,7 +488,7 @@ export default function LaboratorioIndividualV2Page() {
                             · Registrado por {item.cadastrado_por}
                             {item.cadastrado_em ? ' em '+new Date(item.cadastrado_em).toLocaleString('pt-BR') : ''}
                           </span>}
-                          {item.situacao!=='NOVO' && (
+                          {item.situacao!=='NOVO' && item.situacao!=='NAO_ENCONTRADO' && (
                             <button type="button" disabled={ocupado}
                               onClick={()=>void abrirVoucherJaCadastrado(item.voucher)}
                               className="rounded-md border border-violet-200 bg-violet-50 px-2 py-1 text-[11px] font-bold text-violet-700">
@@ -501,7 +504,7 @@ export default function LaboratorioIndividualV2Page() {
             ) : !!previa.avisoConferencia && (
               <p className="mt-3 rounded-lg bg-amber-50 p-2 text-xs font-semibold text-amber-900">
                 Não foi possível conferir os vouchers antes da importação: {previa.avisoConferencia}.
-                A importação ainda está disponível.
+                Não será possível importar até validar os vouchers com o GAIA.
               </p>
             )}
             <div className="mt-3 flex flex-wrap items-center gap-2">
