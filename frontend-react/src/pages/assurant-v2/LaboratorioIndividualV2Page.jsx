@@ -726,7 +726,7 @@ export default function LaboratorioIndividualV2Page() {
                   <button type="button" disabled={!novoDefeito.trim()||ocupado}
                     className={BOTAO+' border-slate-300 bg-white text-violet-700'}
                     onClick={()=>{let d=novoDefeito.trim();setDefeitos(xs=>xs.includes(d)?xs:[...xs,d]);setNovoDefeito('');}}>Adicionar</button>
-                </div>
+                </div>}
                 <input value={buscaDefeito} onChange={e=>setBuscaDefeito(e.target.value)}
                   className={CAMPO+' mt-3 w-full'} placeholder="Pesquisar defeitos do catálogo da triagem"/>
                 <div className="mt-2 max-h-32 overflow-y-auto rounded-lg border border-slate-100 p-2">
