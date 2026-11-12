@@ -273,7 +273,7 @@ export default function LaboratorioReparoV2Page() {
                   {!admin&&<p className="mt-2 text-xs font-semibold text-amber-700">Adicionar novos defeitos é permitido somente para administradores.</p>}
                   {admin&&<form onSubmit={e=>{e.preventDefault();const v=novoDefeito.trim();if(v&&!defeitos.some(d=>normalizarDefeito(d)===normalizarDefeito(v)))setDefeitos(a=>[...a,v]);setNovoDefeito('');}} className="mt-3 flex flex-wrap gap-2">
                     <input className={campo+' min-w-48 flex-1'} value={novoDefeito} onChange={e=>setNovoDefeito(e.target.value)} placeholder="Adicionar outro defeito" maxLength={150}/>
-                    <button disabled={!novoDefeito.trim()} className={botao+' border border-slate-200 bg-white text-violet-700 hover:bg-violet-50'}><Plus size={15}/>Adicionar</button></form>}}}
+                    <button disabled={!novoDefeito.trim()} className={botao+' border border-slate-200 bg-white text-violet-700 hover:bg-violet-50'}><Plus size={15}/>Adicionar</button></form>}
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
                   <label className="text-xs font-bold text-slate-700">Resultado do reparo<select className={'mt-1 '+campo} value={resultado} onChange={e=>setResultado(e.target.value)}><option value="reparado">Reparado</option><option value="sem_reparo">Não Reparado Desbloqueado</option><option value="irrecuperavel">Scrap - Não Liga / Bloqueado</option></select></label>
