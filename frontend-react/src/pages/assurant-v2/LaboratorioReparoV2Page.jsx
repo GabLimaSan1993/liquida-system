@@ -38,7 +38,8 @@ const campo = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text
 const botao = 'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40';
 
 export default function LaboratorioReparoV2Page() {
-  const { user } = useAuth();
+  const { user,profile } = useAuth();
+  const admin=Boolean(profile?.is_master);
   const [painel,setPainel]=useState({envios:[],retornos:[]});
   const [detalhe,setDetalhe]=useState(null);
   const [aba,setAba]=useState('recebimento');
@@ -95,7 +96,7 @@ export default function LaboratorioReparoV2Page() {
   const alternarDefeitoCatalogo=nome=>{
     setDefeitos(atuais=>atuais.some(x=>normalizarDefeito(x)===normalizarDefeito(nome))
       ? atuais.filter(x=>normalizarDefeito(x)!==normalizarDefeito(nome))
-      : [...atuais,nome]);
+      : (admin ? [...atuais,nome] : atuais));
   };
   const itens=detalhe?.itens || [];
   const manifests=detalhe?.romaneios || [];
@@ -260,7 +261,7 @@ export default function LaboratorioReparoV2Page() {
                         defeitosFiltrados.length?<div className="flex flex-wrap gap-2">
                           {defeitosFiltrados.map(d=>{
                             const selecionado=defeitos.some(x=>normalizarDefeito(x)===normalizarDefeito(d.nome));
-                            return <button key={d.id} type="button" aria-pressed={selecionado} disabled={busy} title={d.categoria||d.nome}
+                            return <button key={d.id} type="button" aria-pressed={selecionado} disabled={busy||(!admin&&!selecionado)} title={d.categoria||d.nome}
                               onClick={()=>alternarDefeitoCatalogo(d.nome)}
                               className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors disabled:opacity-50 ${selecionado?'border-violet-700 bg-violet-700 text-white':'border-slate-200 bg-white text-slate-700 hover:border-violet-300 hover:bg-violet-50'}`}>
                               {selecionado&&<Check size={13}/>} {d.nome}
@@ -269,9 +270,10 @@ export default function LaboratorioReparoV2Page() {
                         </div>:<p className="py-4 text-center text-xs text-slate-500">Nenhum defeito encontrado para esta pesquisa.</p>}
                     </div>
                   </div>
-                  <form onSubmit={e=>{e.preventDefault();const v=novoDefeito.trim();if(v&&!defeitos.some(d=>normalizarDefeito(d)===normalizarDefeito(v)))setDefeitos(a=>[...a,v]);setNovoDefeito('');}} className="mt-3 flex flex-wrap gap-2">
+                  {!admin&&<p className="mt-2 text-xs font-semibold text-amber-700">Adicionar novos defeitos é permitido somente para administradores.</p>}
+                  {admin&&<form onSubmit={e=>{e.preventDefault();const v=novoDefeito.trim();if(v&&!defeitos.some(d=>normalizarDefeito(d)===normalizarDefeito(v)))setDefeitos(a=>[...a,v]);setNovoDefeito('');}} className="mt-3 flex flex-wrap gap-2">
                     <input className={campo+' min-w-48 flex-1'} value={novoDefeito} onChange={e=>setNovoDefeito(e.target.value)} placeholder="Adicionar outro defeito" maxLength={150}/>
-                    <button disabled={!novoDefeito.trim()} className={botao+' border border-slate-200 bg-white text-violet-700 hover:bg-violet-50'}><Plus size={15}/>Adicionar</button></form>
+                    <button disabled={!novoDefeito.trim()} className={botao+' border border-slate-200 bg-white text-violet-700 hover:bg-violet-50'}><Plus size={15}/>Adicionar</button></form>}}}
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
                   <label className="text-xs font-bold text-slate-700">Resultado do reparo<select className={'mt-1 '+campo} value={resultado} onChange={e=>setResultado(e.target.value)}><option value="reparado">Reparado</option><option value="sem_reparo">Não Reparado Desbloqueado</option><option value="irrecuperavel">Scrap - Não Liga / Bloqueado</option></select></label>
