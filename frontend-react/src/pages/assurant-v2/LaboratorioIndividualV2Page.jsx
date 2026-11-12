@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../AuthContext.jsx';
-import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, FileSpreadsheet, PackageCheck, RefreshCw, Search, Upload, Wrench, X, Truck, Printer } from 'lucide-react';
-import { laboratorioIndividual, conferirVouchersLaboratorio } from '../../services/laboratorioIndividualService.js';
+import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, FileSpreadsheet, PackageCheck, RefreshCw, Search, Upload, Wrench, X, Truck, Printer, Download } from 'lucide-react';
+import { laboratorioIndividual, conferirVouchersLaboratorio, confirmarRecebimentoLaboratorio } from '../../services/laboratorioIndividualService.js';
 import { laboratorioReparo } from '../../services/laboratorioReparoService.js';
 import { listarDefeitos } from '../../services/triagemFuncionalService.js';
 import { gerarMinutaLaboratorio, listarMinutasLaboratorio, detalharMinutaLaboratorio, imprimirMinutaLaboratorio } from '../../services/laboratorioDevolucaoService.js';
@@ -11,12 +11,13 @@ import { gerarMinutaLaboratorio, listarMinutasLaboratorio, detalharMinutaLaborat
 const BOTAO = 'inline-flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-40';
 const CAMPO = 'rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-violet-500';
 const ESTADOS = [
-  ['','Todos'],
+  ['','Todos'],['aguardando_recebimento','Aguardando recebimento'],
   ['recebido','Aguardando técnico'],['em_reparo','Em reparo'],
   ['concluido','Concluído'],['em_devolucao','Em devolução'],
   ['devolvido_warehouse','Devolvido ao Warehouse']
 ];
 const rotulo = {
+  aguardando_recebimento:'Aguardando recebimento',
   recebido:'Aguardando técnico',
   em_reparo:'Em reparo',
   concluido:'Reparo concluído',
@@ -24,6 +25,7 @@ const rotulo = {
   devolvido_warehouse:'Devolvido ao Warehouse'
 };
 const cor = {
+  aguardando_recebimento:'bg-amber-100 text-amber-800',
   recebido:'bg-sky-100 text-sky-800',
   em_reparo:'bg-violet-100 text-violet-800',
   concluido:'bg-emerald-100 text-emerald-800',
@@ -120,7 +122,8 @@ async function lerPlanilha(arquivo) {
 }
 
 export default function LaboratorioIndividualV2Page() {
-  const {user}=useAuth();
+  const {user,profile}=useAuth();
+  const admin=Boolean(profile?.is_master);
   const [dados,setDados]=useState({itens:[],total:0,resumo:{}});
   const [texto,setTexto]=useState('');
   const [busca,setBusca]=useState('');
@@ -242,24 +245,21 @@ export default function LaboratorioIndividualV2Page() {
       }
       const dadosArquivo = { ...arquivo, conferencia, avisoConferencia };
       setPrevia(dadosArquivo);
-      // Selecionar o arquivo é a confirmação do recebimento.
-      // A pré-conferência evita reimportar cadastros que já existem.
-      if (conferencia && (Number(conferencia.novos || 0) > 0 ||
-          Number(conferencia.liberar_pendentes || 0) > 0)) {
-        await importar(arquivo.vouchers, arquivo.arquivo,
-          { automatico: true, origem: dadosArquivo });
-      } else if (conferencia) {
-        setSucesso('Planilha conferida: sem novos cadastros. '+conferencia.total+
-          ' vouchers já constam no Laboratório ou no histórico. '+
-          'O contador permanece igual para não duplicar aparelhos. Veja a relação abaixo.');
+      // A escolha do arquivo não confirma recebimento nem cria registros.
+      if (conferencia) {
+        const invalidos=Number(conferencia.nao_encontrados||0);
+        if(invalidos) setErro(invalidos+' voucher(s) não localizado(s) no GAIA/triagem. Corrija a planilha antes de importar.');
+        else setSucesso('Planilha conferida. Importe para Aguardando recebimento e confirme a chegada física em uma etapa separada.');
+      } else {
+        setErro('Não foi possível validar a planilha. Nenhum voucher foi cadastrado. '+avisoConferencia);
       }
     } catch (err) {
       setErro(err.message);
     } finally { setOcupado(false); e.target.value=''; }
   }
 
-  async function importar(vouchers,rotuloImportacao,opcoes={}) {
-    if(!vouchers?.length || (ocupado && !opcoes.automatico))return;
+  async function importar(vouchers,rotuloImportacao) {
+    if(!vouchers?.length || ocupado || (previa?.conferencia && Number(previa.conferencia.nao_encontrados||0)>0))return;
     setOcupado(true);setErro('');setSucesso('');
     let incluidos=0,existentes=0,liberados=0;
     let loteAtual=0;
@@ -269,7 +269,7 @@ export default function LaboratorioIndividualV2Page() {
       for(let i=0;i<vouchers.length;i+=loteTamanho){
         loteAtual=Math.floor(i/loteTamanho)+1;
         const parte=vouchers.slice(i,i+loteTamanho);
-        setProgresso('Recebendo lote '+loteAtual+' de '+lotes+
+        setProgresso('Importando lote '+loteAtual+' de '+lotes+
           ' · '+Math.min(vouchers.length,i+parte.length)+' / '+vouchers.length+' vouchers');
         const r=await laboratorioIndividual('importar',{vouchers:parte});
         if(!r?.ok)throw new Error('O banco não confirmou o lote '+loteAtual+'.');
@@ -277,7 +277,7 @@ export default function LaboratorioIndividualV2Page() {
         existentes+=Number(r.ja_existentes||0);
         liberados+=Number(r.liberados_pendentes||0);
       }
-      const contexto=opcoes.origem || previa;
+      const contexto=previa;
       const ignorados=contexto?.vouchers?.length===vouchers.length
         ? Number(contexto.invalidosQuantidade||0)+Number(contexto.repetidosQuantidade||0):0;
       if (incluidos===0 && liberados===0) {
@@ -286,12 +286,11 @@ export default function LaboratorioIndividualV2Page() {
           'Confira a relação da planilha para saber o status de cada um. '+
           'Não duplicamos o recebimento de aparelhos já existentes.');
       } else {
-        setSucesso(rotuloImportacao+': '+incluidos+' NOVO(S) cadastrado(s), '+
-          liberados+' pendente(s) liberado(s) para o técnico e '+
+        setSucesso(rotuloImportacao+': '+incluidos+' novo(s) em Aguardando recebimento e '+
           existentes+' já cadastrado(s), sem duplicação.'+
           (ignorados?' '+ignorados+' linha(s) inválida(s)/repetida(s) ignorada(s).':'')+
           ' O total aumenta somente pelos novos cadastros.');
-        setPrevia(null);setVoucherManual('');setPagina(0);setBusca('');setTexto('');setFiltro('recebido');
+        setPrevia(null);setVoucherManual('');setPagina(0);setBusca('');setTexto('');setFiltro('aguardando_recebimento');
       }
       await carregar();
     } catch(e){
@@ -306,6 +305,36 @@ export default function LaboratorioIndividualV2Page() {
         ' É seguro reenviar o arquivo para completar a importação.');
       await carregar();
     } finally{setOcupado(false);setProgresso('');}
+  }
+
+  async function confirmarFisicamente(vouchers) {
+    if(ocupado||!vouchers?.length)return;
+    if(!window.confirm('Confirma o recebimento físico de '+vouchers.length+' aparelho(s)? Os vouchers serão liberados ao técnico.'))return;
+    setOcupado(true);setErro('');setSucesso('');
+    try{
+      const count=await confirmarRecebimentoLaboratorio(vouchers);
+      setSucesso(count+' voucher(s) recebidos fisicamente e liberados ao técnico.');
+      setPrevia(null);setFiltro('recebido');setPagina(0);await carregar();
+    }catch(e){setErro(e.message||'Erro na confirmação de recebimento.');}
+    finally{setOcupado(false);}
+  }
+
+  async function exportarBase() {
+    if(ocupado)return;
+    setOcupado(true);setErro('');
+    try{
+      const result=await laboratorioIndividual('exportar');
+      const linhas=(result?.itens||[]).map(i=>({
+        Voucher:i.voucher||'',IMEI:i.imei||'',Status:rotulo[i.status]||i.status||''
+      }));
+      const folha=XLSX.utils.json_to_sheet(linhas,{header:['Voucher','IMEI','Status']});
+      folha['!cols']=[{wch:24},{wch:24},{wch:30}];
+      const livro=XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(livro,folha,'Laboratorio');
+      XLSX.writeFile(livro,'Base_Laboratorio_'+new Date().toISOString().slice(0,10)+'.xlsx');
+      setSucesso('Exportação realizada: '+linhas.length+' registros.');
+    }catch(e){setErro(e.message||'Não foi possível exportar a base.');}
+    finally{setOcupado(false);}
   }
 
   async function confirmarOs() {
