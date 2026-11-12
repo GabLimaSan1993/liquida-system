@@ -251,7 +251,7 @@ export default function LaboratorioIndividualV2Page() {
       // A escolha do arquivo não confirma recebimento nem cria registros.
       if (conferencia) {
         const invalidos=Number(conferencia.nao_encontrados||0);
-        if(invalidos) setErro(invalidos+' voucher(s) não localizado(s) no GAIA/triagem. Corrija a planilha antes de importar.');
+        if(invalidos) setErro(invalidos+' voucher(s) sem histórico de recebimento e passagem pela triagem. Importação bloqueada.');
         else setSucesso('Planilha conferida. Importe para Aguardando recebimento e confirme a chegada física em uma etapa separada.');
       } else {
         setErro('Não foi possível validar a planilha. Nenhum voucher foi cadastrado. '+avisoConferencia);
@@ -418,7 +418,7 @@ export default function LaboratorioIndividualV2Page() {
         <div>
           <p className="text-xs font-bold uppercase tracking-wider text-violet-700">Assurant Warehouse · Laboratório</p>
           <h1 className="mt-1 text-2xl font-black">Laboratório de Reparos</h1>
-          <p className="mt-1 text-sm text-slate-600">O voucher é validado no GAIA; o recebimento físico deve ser confirmado antes de liberar à bancada técnica.</p>
+          <p className="mt-1 text-sm text-slate-600">A entrada no Laboratório exige histórico de recebimento e passagem pela triagem. A liberação ao técnico depende de confirmação física.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={exportarBase} disabled={ocupado} className={BOTAO+' border-emerald-700 bg-white text-emerald-800'}><Download size={15}/> Exportar base (XLSX)</button>
@@ -436,10 +436,10 @@ export default function LaboratorioIndividualV2Page() {
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_330px]">
         <section className="rounded-2xl border border-violet-200 bg-white p-5 shadow-sm">
           <div className="flex items-center gap-2"><FileSpreadsheet size={20} className="text-violet-700"/><h2 className="text-base font-black">Importar vouchers para Aguardando recebimento</h2></div>
-          <p className="mt-2 text-xs leading-5 text-slate-600">Envie XLSX, XLS, ODS ou CSV. A coluna <b>Voucher</b> é a única utilizada; pedido, lote, IMEI e OS são ignorados. Os vouchers devem existir no GAIA. Os novos ficam em <b>Aguardando recebimento</b>, sem confirmação automática. Vouchers já cadastrados não são duplicados.</p>
+          <p className="mt-2 text-xs leading-5 text-slate-600">Envie XLSX, XLS, ODS ou CSV. A coluna <b>Voucher</b> é a única utilizada; pedido, lote, IMEI e OS são ignorados. Os vouchers precisam ter histórico de entrada e passagem pela triagem no sistema. Os novos ficam em <b>Aguardando recebimento</b>, sem confirmação automática. Vouchers já cadastrados não são duplicados.</p>
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <label className={BOTAO+' cursor-pointer border-violet-300 bg-violet-50 text-violet-800'}>
-              <Upload size={16}/> Conferir planilha · GAIA
+              <Upload size={16}/> Conferir entrada e triagem
               <input type="file" className="sr-only" accept=".xlsx,.xls,.ods,.csv" disabled={ocupado} onChange={prepararArquivo}/>
             </label>
             <a download="Modelo_Recebimento_Laboratorio.csv"
@@ -460,7 +460,7 @@ export default function LaboratorioIndividualV2Page() {
                 <p className="font-black text-slate-800">Conferência do banco antes de importar</p>
                 <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
                   <span className="font-bold text-emerald-700">{previa.conferencia.novos} novos válidos para importação</span>
-                  <span className="font-bold text-rose-700">{previa.conferencia.nao_encontrados||0} vouchers inexistentes no GAIA</span>
+                  <span className="font-bold text-rose-700">{previa.conferencia.nao_encontrados||0} vouchers sem histórico de entrada e triagem</span>
                   <span className="font-bold text-slate-700">{previa.conferencia.ja_cadastrados} já cadastrados</span>
                   <span className="font-bold text-amber-800">{previa.conferencia.ja_no_historico} no histórico</span>
                   <span className="font-bold text-violet-700">{previa.conferencia.liberar_pendentes} aguardando confirmação física</span>
@@ -481,10 +481,10 @@ export default function LaboratorioIndividualV2Page() {
                         <span className="font-mono font-bold">{item.voucher}</span>
                         <div className="flex flex-wrap items-center gap-2 text-slate-600">
                           <span>
-                            {item.situacao==='NOVO'?'Novo válido (GAIA)'
+                            {item.situacao==='NOVO'?'Novo com histórico validado'
                               :item.situacao==='LIBERAR_PENDENTE'?'Liberação pendente'
                               :item.situacao==='JA_NO_HISTORICO'?'Já no histórico'
-                              :item.situacao==='NAO_ENCONTRADO'?'Inexistente no GAIA'
+                              :item.situacao==='NAO_ENCONTRADO'?'Sem entrada e triagem comprovadas'
                               :'Já cadastrado'} {item.status_atual?'· '+item.status_atual:''}
                           </span>
                           {item.cadastrado_por && <span className="text-slate-500">
@@ -507,7 +507,7 @@ export default function LaboratorioIndividualV2Page() {
             ) : !!previa.avisoConferencia && (
               <p className="mt-3 rounded-lg bg-amber-50 p-2 text-xs font-semibold text-amber-900">
                 Não foi possível conferir os vouchers antes da importação: {previa.avisoConferencia}.
-                Não será possível importar até validar os vouchers com o GAIA.
+                Não será possível importar até validar o recebimento e a passagem pela triagem.
               </p>
             )}
             <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -535,7 +535,7 @@ export default function LaboratorioIndividualV2Page() {
 
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="text-sm font-black text-slate-900">Adicionar voucher individualmente</h2>
-          <p className="mt-2 text-xs text-slate-500">Somente voucher existente no GAIA. O cadastro não confirma recebimento nem libera à bancada.</p>
+          <p className="mt-2 text-xs text-slate-500">Somente voucher com histórico de recebimento e triagem. O cadastro não confirma recebimento físico nem libera à bancada.</p>
           <form className="mt-4 space-y-3" onSubmit={e=>{
             e.preventDefault();const v=normalizarVoucherLab(voucherManual);
             if(!regraVoucher.test(v)||v==='__IMEI__'){setErro('Informe um voucher válido.');return;}
