@@ -3,18 +3,22 @@ import assert from 'node:assert/strict';
 import * as XLSX from 'xlsx';
 import { COLUNAS_ESTOQUE, CAMPOS_ESTOQUE, linhaEstoque } from './relatorioEstoqueColumns.js';
 
-test('última coluna usa o percentual real, preservando as demais colunas', () => {
-  assert.equal(COLUNAS_ESTOQUE.length, 31);
-  assert.equal(COLUNAS_ESTOQUE.at(-1), 'Saúde da bateria (%)');
-  assert.equal(CAMPOS_ESTOQUE.at(-1), 'bateria_percentual');
+test('percentual da bateria e defeitos da triagem e laboratório preservados', () => {
+  assert.equal(COLUNAS_ESTOQUE.length, 37);
+  assert.equal(COLUNAS_ESTOQUE[30], 'Saúde da bateria (%)');
+  assert.equal(CAMPOS_ESTOQUE[30], 'bateria_percentual');
+  assert.equal(CAMPOS_ESTOQUE[31], 'defeitos_triagem');
+  assert.equal(CAMPOS_ESTOQUE[34], 'defeitos_laboratorio');
+  assert.equal(CAMPOS_ESTOQUE[35], 'defeitos_adicionados_laboratorio');
+  assert.equal(CAMPOS_ESTOQUE[36], 'defeitos_removidos_laboratorio');
   assert.equal(CAMPOS_ESTOQUE.includes('aging'), false);
   const linha = linhaEstoque({ voucher: 'YBV-TESTE', imei: '001234567890123', status_bateria: 'Saúde da bateria entre 80% e 85%', bateria_percentual: 83, aging: 245 });
-  assert.equal(linha.at(-1), 83);
+  assert.equal(linha[30], 83);
   assert.equal(linha[1], '001234567890123');
   assert.equal(linha[28], 'Saúde da bateria entre 80% e 85%');
-  assert.equal(linhaEstoque({ bateria_percentual: 0 }).at(-1), 0);
-  assert.equal(linhaEstoque({ bateria_percentual: 100 }).at(-1), 100);
-  assert.equal(linhaEstoque({ bateria_percentual: null, status_bateria: 'Acima de 80%', aging: 12 }).at(-1), null);
+  assert.equal(linhaEstoque({ bateria_percentual: 0 })[30], 0);
+  assert.equal(linhaEstoque({ bateria_percentual: 100 })[30], 100);
+  assert.equal(linhaEstoque({ bateria_percentual: null, status_bateria: 'Acima de 80%', aging: 12 })[30], null);
 });
 
 test('Excel gerado pelo worker exporta números e mantém ausências em branco', async () => {
@@ -32,6 +36,8 @@ test('Excel gerado pelo worker exporta números e mantém ausências em branco',
     const book = XLSX.read(resultado.buffer, { type: 'array' });
     const sheet = book.Sheets.warehouse;
     assert.equal(sheet.AE1.v, 'Saúde da bateria (%)');
+    assert.equal(sheet.AF1.v, 'Defeitos_Triagem');
+    assert.equal(sheet.AI1.v, 'Defeitos_Laboratorio');
     assert.equal(sheet.AE2.t, 'n');
     assert.equal(sheet.AE2.v, 87);
     assert.equal(sheet.AE3.t, 'n');
