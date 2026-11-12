@@ -566,7 +566,7 @@ export default function LaboratorioIndividualV2Page() {
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col items-start gap-3">
           <div>
             <h2 className="flex items-center gap-2 text-sm font-black text-slate-900"><Truck size={17} className="text-violet-700"/> Devolução ao Warehouse</h2>
             <p className="mt-1 text-xs text-slate-500"><b>{Number(estados.concluido||0).toLocaleString('pt-BR')}</b> aparelhos concluídos disponíveis para expedição. A minuta registra o envio; o recebimento deve ser conferido no Warehouse.</p>
@@ -638,7 +638,7 @@ export default function LaboratorioIndividualV2Page() {
                     </label>}
                     <button type="button" onClick={()=>abrir(i)}
                       className={BOTAO+' border-violet-200 bg-violet-50 text-violet-700'}>
-                      {i.status==='concluido'?'Ver registro':'Abrir técnico'}
+                      {i.status==='concluido'?'Ver registro':i.status==='aguardando_recebimento'?'Confirmar recebimento':'Abrir técnico'}
                     </button>
                   </div>
                 </td>
@@ -676,8 +676,16 @@ export default function LaboratorioIndividualV2Page() {
           {item.alerta_origem&&<div className="mt-3 flex gap-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-800"><AlertTriangle size={16} className="shrink-0"/>{item.alerta_origem}</div>}
 
           {item.status==='aguardando_recebimento'&&
-            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-900">
-              Cadastro de um fluxo antigo. Reenvie a planilha para liberação automática à bancada técnica, sem nova confirmação.
+            <div className="mt-4 space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-900">
+              <p>Voucher cadastrado, aguardando conferência física. Confirme somente após identificar o aparelho.</p>
+              <button type="button" disabled={ocupado||item.origem!=='individual'}
+                onClick={async()=>{
+                  if(!window.confirm('Confirma que o voucher '+item.voucher+' foi recebido fisicamente?'))return;
+                  const retorno=await executar(item,'receber',{},'Recebimento confirmado. Voucher liberado ao técnico.');
+                  if(retorno?.item)setItem({...retorno.item,origem:item.origem});
+                }} className={BOTAO+' border-emerald-700 bg-emerald-600 text-white'}>
+                <PackageCheck size={16}/> Confirmar recebimento físico
+              </button>
             </div>}
 
           {['recebido','em_reparo','concluido'].includes(item.status)&&<>
@@ -711,7 +719,8 @@ export default function LaboratorioIndividualV2Page() {
                 {!defeitos.length&&<span className="text-xs text-slate-400">Sem defeitos confirmados.</span>}
               </div>
               {item.status!=='concluido'&&<>
-                <div className="mt-3 flex flex-wrap gap-2">
+                {!admin&&<p className="mt-3 text-xs font-semibold text-amber-800">Somente administradores podem adicionar defeitos. A confirmação e remoção dos já cadastrados continuam disponíveis.</p>}
+                {admin&&<div className="mt-3 flex flex-wrap gap-2">
                   <input value={novoDefeito} onChange={e=>setNovoDefeito(e.target.value)}
                     maxLength={150} className={CAMPO+' min-w-36 flex-1'} placeholder="Descrever outro defeito"/>
                   <button type="button" disabled={!novoDefeito.trim()||ocupado}
@@ -721,8 +730,8 @@ export default function LaboratorioIndividualV2Page() {
                 <input value={buscaDefeito} onChange={e=>setBuscaDefeito(e.target.value)}
                   className={CAMPO+' mt-3 w-full'} placeholder="Pesquisar defeitos do catálogo da triagem"/>
                 <div className="mt-2 max-h-32 overflow-y-auto rounded-lg border border-slate-100 p-2">
-                  {encontrados.map(d=><button type="button" key={d.id} disabled={ocupado}
-                    onClick={()=>setDefeitos(xs=>xs.includes(d.nome)?xs.filter(v=>v!==d.nome):[...xs,d.nome])}
+                  {encontrados.map(d=><button type="button" key={d.id} disabled={ocupado||(!admin&&!defeitos.includes(d.nome))}
+                    onClick={()=>setDefeitos(xs=>xs.includes(d.nome)?xs.filter(v=>v!==d.nome):admin?[...xs,d.nome]:xs)}
                     className={'m-1 rounded-md px-2 py-1.5 text-[11px] font-semibold '+(defeitos.includes(d.nome)?'bg-violet-700 text-white':'bg-slate-100 text-slate-700')}>
                     {d.nome}
                   </button>)}
