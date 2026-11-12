@@ -47,3 +47,18 @@ export async function conferirVouchersLaboratorio(vouchers) {
   }
   return resultado;
 }
+
+export async function confirmarRecebimentoLaboratorio(vouchers) {
+  if (!Array.isArray(vouchers) || vouchers.length < 1) {
+    throw new Error('Selecione vouchers em Aguardando recebimento.');
+  }
+  let confirmados=0;
+  for (let i=0; i<vouchers.length; i+=100) {
+    const {data,error}=await supabase.rpc('assurant_reparo_lab_confirmar_recebimento',{
+      p_vouchers:vouchers.slice(i,i+100)
+    });
+    if (error) throw new Error(error.message||'Não foi possível confirmar recebimento.');
+    confirmados+=Number(data?.confirmados||0);
+  }
+  return confirmados;
+}
