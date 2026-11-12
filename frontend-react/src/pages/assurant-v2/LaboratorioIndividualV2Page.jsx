@@ -14,7 +14,8 @@ const ESTADOS = [
   ['','Todos'],['aguardando_recebimento','Aguardando recebimento'],
   ['recebido','Aguardando técnico'],['em_reparo','Em reparo'],
   ['concluido','Concluído'],['em_devolucao','Em devolução'],
-  ['devolvido_warehouse','Devolvido ao Warehouse']
+  ['devolvido_warehouse','Devolvido ao Warehouse'],
+  ['divergencia_voucher','Divergência GAIA']
 ];
 const rotulo = {
   aguardando_recebimento:'Aguardando recebimento',
@@ -22,7 +23,8 @@ const rotulo = {
   em_reparo:'Em reparo',
   concluido:'Reparo concluído',
   em_devolucao:'Em devolução',
-  devolvido_warehouse:'Devolvido ao Warehouse'
+  devolvido_warehouse:'Devolvido ao Warehouse',
+  divergencia_voucher:'Divergência de voucher · GAIA'
 };
 const cor = {
   aguardando_recebimento:'bg-amber-100 text-amber-800',
@@ -30,7 +32,8 @@ const cor = {
   em_reparo:'bg-violet-100 text-violet-800',
   concluido:'bg-emerald-100 text-emerald-800',
   em_devolucao:'bg-orange-100 text-orange-800',
-  devolvido_warehouse:'bg-slate-100 text-slate-700'
+  devolvido_warehouse:'bg-slate-100 text-slate-700',
+  divergencia_voucher:'bg-rose-100 text-rose-800'
 };
 const dataHora = v => v ? new Date(v).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'}) : '—';
 const limpo = v => String(v ?? '').trim().toUpperCase();
@@ -678,6 +681,7 @@ export default function LaboratorioIndividualV2Page() {
           </div>
           {item.alerta_origem&&<div className="mt-3 flex gap-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-800"><AlertTriangle size={16} className="shrink-0"/>{item.alerta_origem}</div>}
 
+          {item.status==='divergencia_voucher'&&<p className="mt-4 rounded-xl bg-rose-50 p-3 text-xs font-bold text-rose-800">Voucher sem correspondência no GAIA/triagem. Bloqueado para reparo e recebimento até regularização da origem.</p>}
           {item.status==='aguardando_recebimento'&&
             <div className="mt-4 space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-900">
               <p>Voucher cadastrado, aguardando conferência física. Confirme somente após identificar o aparelho.</p>
