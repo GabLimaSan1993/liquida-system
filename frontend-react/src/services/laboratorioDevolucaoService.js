@@ -43,7 +43,7 @@ export function imprimirMinutaLaboratorio(dados, janela) {
    '<table><thead><tr><th>#</th><th>Voucher</th><th>IMEI / série</th><th>Aparelho</th><th>OS</th><th>Resultado</th></tr></thead><tbody>'+tabela+'</tbody></table>'+
    '<div class="ass"><div>Entrega · Laboratório</div><div>Transporte / conferência</div><div>Recebimento · Warehouse</div></div>'+
    '<p class="note">Documento de transferência interna. Não é documento fiscal. A emissão apenas registra o envio administrativo; o recebimento físico deverá ser conferido e confirmado pelo Warehouse. Não altera o WMS ou o Oracle automaticamente.</p>'+
-   '<script>window.addEventListener("load",()=>{window.focus();window.print()})<\\/script></body></html>';
+   '<script>window.addEventListener("load",()=>{window.focus();window.print()})</script></body></html>';
   janela.document.open();
   janela.document.write(html);
   janela.document.close();
