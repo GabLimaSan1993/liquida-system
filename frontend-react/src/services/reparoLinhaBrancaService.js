@@ -162,3 +162,24 @@ export async function salvarExecucaoReparo(os, execucao, areaExecucao) {
   if (osError) throw osError;
   return true;
 }
+
+/**
+ * Conclusão com material fisicamente instalado, apesar de compra/requisição
+ * administrativa ainda aberta. Não inventa entrada de estoque, nem baixa compra.
+ * Execução, avanço da OS e auditoria ocorrem em uma única transação no banco.
+ */
+export async function concluirReparoComPecaFisica(os, execucao, area, origemPeca) {
+  const {data,error}=await supabase.rpc("linha_branca_lavadora_concluir_com_peca_fisica",{
+    p_os_id:os.id,
+    p_area:area,
+    p_diagnostico:execucao.diagnostico_final,
+    p_servicos:execucao.servicos,
+    p_pecas:execucao.pecas,
+    p_observacoes:execucao.observacoes||null,
+    p_origem_peca:origemPeca,
+    p_dt_inicio:execucao.dt_inicio||null,
+  });
+  if(error)throw new Error(error.message||"Falha ao concluir reparo com conferência física.");
+  if(!data?.ok)throw new Error("O banco não confirmou a conclusão do reparo.");
+  return data;
+}
