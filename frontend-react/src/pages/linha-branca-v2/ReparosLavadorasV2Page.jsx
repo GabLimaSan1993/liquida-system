@@ -26,6 +26,7 @@ import {
   osAguardandoCmp,
   osAguardandoPeca,
   salvarExecucaoReparo,
+  concluirReparoComPecaFisica,
 } from "../../services/reparoLinhaBrancaService.js";
 import {
   REPAROS_ELETRICOS_LAVADORAS,
@@ -87,6 +88,8 @@ export default function ReparosLavadorasV2Page() {
   const [pecaSelecionadaId, setPecaSelecionadaId] = useState("");
   const [quantidadePeca, setQuantidadePeca] = useState("1");
   const [defeitoVinculado, setDefeitoVinculado] = useState("");
+  const [pecaFisicaConfirmada,setPecaFisicaConfirmada]=useState(false);
+  const [origemPecaFisica,setOrigemPecaFisica]=useState("");
 
   const selectedOs = useMemo(
     () => osList.find((item) => String(item.id) === String(selectedOsId)) || null,
@@ -256,6 +259,8 @@ export default function ReparosLavadorasV2Page() {
     setPecaSelecionadaId("");
     setQuantidadePeca("1");
     setDefeitoVinculado("");
+    setPecaFisicaConfirmada(false);
+    setOrigemPecaFisica("");
     setSelectedOsId(String(os.id));
     setAreaAtual(pendentes[0] || "");
     setBusca("");
@@ -273,6 +278,8 @@ export default function ReparosLavadorasV2Page() {
     setPecaSelecionadaId("");
     setQuantidadePeca("1");
     setDefeitoVinculado("");
+    setPecaFisicaConfirmada(false);
+    setOrigemPecaFisica("");
     setExecucao({ ...EMPTY, dt_inicio: new Date().toISOString() });
   }
 
@@ -351,7 +358,12 @@ export default function ReparosLavadorasV2Page() {
     if (!selectedOs || !areaAtual || !execucao.diagnostico_final.trim() || !execucao.servicos.length) {
       return setMensagem("Informe o diagnóstico e selecione ao menos um serviço executado.");
     }
-    if (necessidadesAbertas.length) return setMensagem("Há requisições de peças ou compras em aberto. Receba o material e conclua o serviço somente após executá-lo.");
+    if (necessidadesAbertas.length) {
+      if (!pecaFisicaConfirmada || origemPecaFisica.trim().length < 8 || !execucao.pecas.length)
+        return setMensagem("Com compras/requisições abertas, só conclua se a peça estiver realmente instalada: identifique a peça, confirme fisicamente e informe de onde veio.");
+      if (!window.confirm("Confirma que TODAS as peças pendentes foram FISICAMENTE INSTALADAS nesta lavadora? A OS avançará para a próxima etapa; a compra/requisição continuará aberta para conciliação administrativa."))
+        return;
+    }
     if (!podeExecutar) return setMensagem(selectedOs?.retorno_pos_reparo_exclusivo_carlos ? "Retorno reprovado na bancada: somente Carlos Dias pode refazer este reparo." : "Nível N3 disponível para Carlos Dias e Alexandre Gabriel; N1/N2 também para Kauã. Retorno reprovado na bancada segue exclusivo de Carlos Dias.");
     if(areaAtual==="Reparo Estético"){
       try{
@@ -363,20 +375,25 @@ export default function ReparosLavadorasV2Page() {
       setSaving(true);
       const numeroOs = selectedOs.numero_os;
       const haviaMaisAreas = !selectedOs.__especialidade_indefinida && areasPendentes.length > 1;
-      await salvarExecucaoReparo(selectedOs, {
-        tecnico,
-        dt_inicio: execucao.dt_inicio,
-        diagnostico_final: execucao.diagnostico_final,
-        servico_executado: execucao.servicos.join(", "),
-        peca_trocada: execucao.pecas.length > 0,
-        descricao_peca: execucao.pecas.join(", "),
-        observacoes: execucao.observacoes,
-      }, areaAtual);
+      const conciliacao=necessidadesAbertas.length
+        ? await concluirReparoComPecaFisica(selectedOs,execucao,areaAtual,origemPecaFisica.trim())
+        : await salvarExecucaoReparo(selectedOs, {
+          tecnico,
+          dt_inicio: execucao.dt_inicio,
+          diagnostico_final: execucao.diagnostico_final,
+          servico_executado: execucao.servicos.join(", "),
+          peca_trocada: execucao.pecas.length > 0,
+          descricao_peca: execucao.pecas.join(", "),
+          observacoes: execucao.observacoes,
+        }, areaAtual);
       limpar();
       await carregarOs();
-      setMensagem(haviaMaisAreas
+      setMensagem((haviaMaisAreas
         ? `Reparo da OS ${numeroOs} concluído nesta especialidade. A OS segue para a próxima área.`
-        : `Reparo da OS ${numeroOs} concluído. Equipamento encaminhado para Bancada Pós-Reparo.`);
+        : `Reparo da OS ${numeroOs} concluído. Equipamento encaminhado para Bancada Pós-Reparo.`) +
+        (conciliacao?.compras_pendentes_para_conciliar || conciliacao?.requisicoes_pendentes_para_conciliar
+          ? " Conferência física registrada com usuário e data. A compra/requisição NÃO foi baixada: conferir a origem e regularizar o estoque/compras."
+          : ""));
     } catch (error) {
       setMensagem(`Erro ao salvar reparo: ${error.message}`);
     } finally {
@@ -533,8 +550,41 @@ export default function ReparosLavadorasV2Page() {
                 </div>
               </section>
               <div className="mt-4"><div className="text-[11px] font-black text-slate-600">Peças efetivamente utilizadas na execução</div><div className="mt-2 flex gap-2"><input value={execucao.novaPeca} onChange={(e) => setExecucao((a) => ({ ...a, novaPeca: e.target.value }))} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); adicionarPeca(); } }} placeholder="Digite a peça" className="h-10 flex-1 rounded-xl border border-slate-200 px-3 text-sm" /><button type="button" onClick={adicionarPeca} className="flex h-10 items-center gap-2 rounded-xl border border-slate-200 px-3 text-xs font-black"><PackagePlus className="h-4 w-4" /> Adicionar</button></div><div className="mt-2 flex flex-wrap gap-2">{execucao.pecas.map((peca, index) => <span key={`${peca}-${index}`} className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-bold text-slate-600">{peca}</span>)}</div></div>
-            <button type="button" onClick={salvar} disabled={saving || !selectedOs || !podeExecutar || necessidadesAbertas.length > 0 || (areaAtual==="Reparo Estético" && fotosEsteticasPendentes) || !areaAtual || !execucao.diagnostico_final.trim() || !execucao.servicos.length} className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#5B35C9] text-xs font-black text-white disabled:bg-slate-300"><Check className="h-4 w-4" /> Concluir reparo executado desta área</button>
-             {necessidadesAbertas.length > 0 && <p className="mt-2 text-xs font-bold text-amber-800">Conclusão bloqueada: existem peças requisitadas ou compras pendentes para esta OS.</p>}
+            {necessidadesAbertas.length>0&&
+              <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-4">
+                <div className="flex items-center gap-2 text-xs font-black text-amber-950"><AlertTriangle className="h-4 w-4"/> Compra/requisição em aberto</div>
+                <p className="mt-2 text-xs leading-relaxed text-amber-900">
+                  A pendência administrativa NÃO significa que a peça esteja fisicamente ausente.
+                  Se o componente foi realmente instalado, é possível concluir o serviço após uma confirmação rastreável.
+                  A compra continuará aberta para conciliação, sem registrar recebimento ou alterar estoque automaticamente.
+                </p>
+                <label className="mt-3 flex items-start gap-2 text-xs font-bold text-amber-950">
+                  <input type="checkbox" className="mt-0.5" checked={pecaFisicaConfirmada}
+                    onChange={e=>setPecaFisicaConfirmada(e.target.checked)} disabled={saving} />
+                  Confirmo que TODAS as peças pendentes listadas acima foram fisicamente instaladas na lavadora.
+                </label>
+                <label className="mt-3 block text-xs font-bold text-amber-950">
+                  Origem física da peça / justificativa (obrigatório)
+                  <textarea rows={2} value={origemPecaFisica} disabled={saving}
+                    onChange={e=>setOrigemPecaFisica(e.target.value)}
+                    placeholder="Ex.: peça entregue diretamente pela equipe de compras, documento a conciliar"
+                    className="mt-2 w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm text-slate-900" />
+                </label>
+                <p className="mt-2 text-[11px] text-amber-900">
+                  Informe em “Peças efetivamente utilizadas” o PN ou a descrição de cada peça pendente.
+                  O sistema registrará a conferência física e manterá o aging administrativo separado.
+                </p>
+              </div>}
+            <button type="button" onClick={salvar}
+              disabled={saving || !selectedOs || !podeExecutar ||
+                (necessidadesAbertas.length>0 && (!pecaFisicaConfirmada || origemPecaFisica.trim().length<8 || !execucao.pecas.length)) ||
+                (areaAtual==="Reparo Estético" && fotosEsteticasPendentes) ||
+                !areaAtual || !execucao.diagnostico_final.trim() || !execucao.servicos.length}
+              className="mt-5 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#5B35C9] px-3 py-2 text-xs font-black text-white disabled:bg-slate-300">
+              <Check className="h-4 w-4" /> {necessidadesAbertas.length>0
+                ? "Concluir reparo com peça física confirmada"
+                : "Concluir reparo executado desta área"}
+            </button>
           </div>
 
           {historico ? <div className="rounded-2xl border border-slate-200 bg-white p-5"><div className="flex items-center gap-2 text-sm font-black text-slate-900"><History className="h-4 w-4 text-[#5B35C9]" /> Histórico técnico</div><div className="mt-4 grid gap-3 md:grid-cols-4"><div className="rounded-xl bg-violet-50 p-3"><div className="text-[10px] font-black text-violet-500">Retornos de loja</div>{historico.retornos.map((item) => <div key={item.id} className="mt-2 text-[10px] text-violet-700">Retorno #{item.numero_retorno} · {item.motivo} · {item.status}</div>)}</div><div className="rounded-xl bg-slate-50 p-3"><div className="text-[10px] font-black text-slate-400">Ciclos</div>{historico.ciclos.slice(-4).map((item) => <div key={item.id} className="mt-2 text-[10px] text-slate-600">{item.etapa_teste} · ciclo {item.numero_ciclo} · {item.status}</div>)}</div><div className="rounded-xl bg-slate-50 p-3"><div className="text-[10px] font-black text-slate-400">Reparos anteriores</div>{historico.reparos.slice(-4).map((item) => <div key={item.id} className="mt-2 text-[10px] text-slate-600">{item.area_execucao} · {item.servico_executado || item.diagnostico_final}</div>)}</div><div className="rounded-xl bg-slate-50 p-3"><div className="text-[10px] font-black text-slate-400">Laudos</div>{historico.laudos.slice(-4).map((item) => <div key={item.id} className="mt-2 text-[10px] text-slate-600">{item.titulo}</div>)}</div></div></div> : null}
