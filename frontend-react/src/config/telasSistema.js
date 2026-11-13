@@ -34,7 +34,7 @@ export const TELAS = [
     { id: "/v2/assurant", label: "Assurant — Acesso ao Workspace", grupo: "Assurant" },
 
   { id: "/v2/assurant/recebimento", label: "Recebimento — Lojas", grupo: "Assurant — Operação" },
-  { id: "/v2/assurant/recebimento/gestao", label: "Recebimento — Gestão", grupo: "Assurant — Operação" },
+  { id: "/v2/assurant/recebimento/gestao", label: "Gestão de Recebimento — Atual (Assurant V2)", grupo: "Assurant — Operação" },
 
   { id: "/v2/assurant/online/vinculacao", label: "Vinculação de Objetos", grupo: "Assurant — Operação Trade-In Online" },
   { id: "/v2/assurant/online/triagem-als", label: "Triagem ALS", grupo: "Assurant — Operação Trade-In Online" },
@@ -83,8 +83,8 @@ export const TELAS = [
   { id: "/linha-branca/bancada-testes",   label: "Linha Branca — Bancada de Testes", grupo: "Linha Branca" },
   { id: "/linha-branca/limpeza",          label: "Linha Branca — Limpeza",           grupo: "Linha Branca" },
   { id: "/linha-branca/qualidade",        label: "Linha Branca — Qualidade",         grupo: "Linha Branca" },
-  { id: "/recebimento",                   label: "Assurant — Recebimento YBV",       grupo: "Assurant" },
-  { id: "/recebimento/gestao",            label: "Assurant — Gestão de Recebimento", grupo: "Assurant" },
+  { id: "/recebimento",                   label: "Recebimento YBV — Sistema antigo (legado)",       grupo: "Assurant — Legado" },
+  { id: "/recebimento/gestao",            label: "Gestão de Recebimento — Sistema antigo (legado)", grupo: "Assurant — Legado" },
   { id: "/assurant/dashboard",            label: "Assurant — Dashboard",             grupo: "Assurant" },
   { id: "/assurant/sla",                  label: "Assurant — SLA & Rastreabilidade", grupo: "Assurant" },
   { id: "/assurant/layout",               label: "Assurant — Layout Warehouse",      grupo: "Assurant" },
