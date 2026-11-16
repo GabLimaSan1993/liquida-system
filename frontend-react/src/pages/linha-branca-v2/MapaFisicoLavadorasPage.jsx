@@ -1,15 +1,14 @@
 import {useCallback,useEffect,useMemo,useState} from "react";
 import {
- AlertCircle,ArrowLeftRight,Boxes,CalendarDays,Check,ChevronDown,
- ClipboardList,Clock3,Loader2,MapPinned,PackagePlus,RefreshCw,Search,
- Trash2,Warehouse,X,WashingMachine
+ AlertCircle,ArrowLeftRight,CalendarDays,Check,
+ Loader2,MapPinned,PackagePlus,RefreshCw,Search,
+ Trash2,Warehouse,X
 } from "lucide-react";
 import {supabase} from "../../lib/supabase.js";
 import {useAuth} from "../../AuthContext.jsx";
 
 const TRIAGEM=Array.from({length:20},(_,i)=>String(i+1).padStart(2,"0"));
 const COLUNAS=["A","B","C"];
-const ENDERECOS=COLUNAS.flatMap(col=>Array.from({length:10},(_,i)=>col+(i+1)));
 const hojeSP=()=>{
  const p=new Intl.DateTimeFormat("en-CA",{
   year:"numeric",month:"2-digit",day:"2-digit",timeZone:"America/Sao_Paulo"
@@ -61,7 +60,7 @@ function Posicao({item,codigo,tipo,selecionar,modo,exibirVazias,busca,tecnico}){
   className={"group min-w-0 rounded-xl border p-2.5 text-left transition "+
     (tipo==="triagem"?"min-h-[88px]":"min-h-[60px]")+
     " "+TONALIDADE[estado]+
-    ((!visivel||!buscaOk||!tecnicoOk)?" opacity-30":"")}>
+    (!visivel?" invisible pointer-events-none":(!buscaOk||!tecnicoOk)?" opacity-30":"")}>
   <div className="flex items-center justify-between gap-1">
    <strong className="font-mono text-[11px] font-black tracking-wide">{codigo}</strong>
    <span className="rounded-md bg-white/75 px-1.5 py-0.5 text-[9px] font-bold" title="OS distintas que passaram na data selecionada">
