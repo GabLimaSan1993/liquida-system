@@ -266,8 +266,8 @@ export default function ComplementosProducaoLinhaBranca({
 
   <section className={card}>
    <Titulo Icon={Factory} eyebrow="Base histórica de Aging · externo"
-    titulo="Kardex de entrada e saída · OS"
-    descricao="Entrada pela Dt_Abert e saída operacional pela primeira aparição em QCC, com data DtUltLog. Uma OS é contabilizada uma única vez em cada evento, mesmo presente em múltiplos arquivos."/>
+    titulo="Kardex de entrada e saída · Lavadoras"
+    descricao="Exclusivamente lavadoras de roupa. Entrada pela Dt_Abert; saída operacional pela primeira aparição em QCC, com data DtUltLog. Cada OS é contabilizada uma vez por evento, independentemente dos snapshots."/>
    {mostrarKardex&&<div className="mb-4 grid gap-3 sm:grid-cols-3">
      {[
       ["Entradas no período",kardex?.resumo?.entradas],
@@ -299,8 +299,8 @@ export default function ComplementosProducaoLinhaBranca({
 
   <section className={card}>
    <Titulo Icon={Activity} eyebrow="Aging de produtos expedidos · histórico externo"
-    titulo="Tempo médio e mediano das OS expedidas"
-    descricao="Dias corridos entre Dt_Abert e DtUltLog nas OS identificadas pela etapa Expedido; ordenação pelo mês ou dia da última movimentação. Só entram registros com datas válidas."/>
+    titulo="Tempo médio e mediano das lavadoras expedidas"
+    descricao="Somente lavadoras de roupa expedidas: dias corridos entre Dt_Abert e DtUltLog, agrupados pela última movimentação. OS sem datas válidas não entram no tempo médio."/>
    {!valido||erroKardex||carregandoKardex||!mostrarKardex?
     <GraficoVazio carregando={carregandoKardex} erro={erroKardex}/>:
     <div className="h-[290px] w-full">
@@ -324,7 +324,7 @@ export default function ComplementosProducaoLinhaBranca({
      Histórico disponível: {cobertura.primeiro_upload||"—"} a {cobertura.ultimo_upload||"—"} ·
      {numero(cobertura.uploads)} arquivos · {numero(cobertura.os_unicas)} OS distintas ·
      {numero(cobertura.qcc_identificadas)} QCC · {numero(cobertura.expedidos_identificados)} Expedido.
-     O histórico de Aging não contém autoria confiável por colaborador para estas etapas; por isso o filtro de colaborador não é aplicado aos dois gráficos externos. Período e categoria do cabeçalho são aplicados.
+     Este histórico está permanentemente restrito a lavadoras de roupa, mesmo que a categoria do cabeçalho esteja em Todas. Não existe autoria confiável por colaborador no Aging, por isso o filtro de colaborador não se aplica a estes gráficos.
    </p>
   </section>
  </div>;
