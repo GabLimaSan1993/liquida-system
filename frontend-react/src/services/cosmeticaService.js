@@ -55,7 +55,13 @@ export function calcularGradeFinal({ tela, laterais, traseira, temDefeitoFuncion
     };
   }
 
-  const bateriaBaixa = String(bateria || "").trim() === BATERIA_REBAIXA;
+  // O valor numérico é a fonte primária; a descrição só serve para cadastros legados.
+  // Assim, 70–79% com estética REGULAR nunca aparece como REGULAR ou OUTLET.
+  const temPercentual = bateriaPercentual !== null && bateriaPercentual !== undefined &&
+    bateriaPercentual !== "" && Number.isFinite(Number(bateriaPercentual));
+  const bateriaBaixa = temPercentual
+    ? Number(bateriaPercentual) >= 70 && Number(bateriaPercentual) <= 79
+    : String(bateria || "").trim() === BATERIA_REBAIXA;
   if (!bateriaBaixa) {
     return { grade: base, gradeCosmetica: base, rebaixado: false, motivo: null };
   }
