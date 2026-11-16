@@ -5,6 +5,7 @@ import {
  XAxis,YAxis,CartesianGrid,Tooltip,Legend
 } from "recharts";
 import {supabase} from "../../lib/supabase.js";
+import TempoCicloHigienizacaoLavadoras from "./TempoCicloHigienizacaoLavadoras.jsx";
 
 const ETAPAS=[
  {id:"Triagem",label:"Triagem",key:"triagem",cor:"#7c3aed"},
@@ -81,6 +82,7 @@ export default function ComplementosProducaoLinhaBranca({
  const [base,setBase]=useState(null);
  const [filtrado,setFiltrado]=useState(null);
  const [kardex,setKardex]=useState(null);
+ const [abrirAgingExterno,setAbrirAgingExterno]=useState(false);
  const [kardexOperacional,setKardexOperacional]=useState(null);
  const [reparoCiclo,setReparoCiclo]=useState(null);
  const [carregandoBase,setCarregandoBase]=useState(true);
@@ -152,7 +154,7 @@ export default function ComplementosProducaoLinhaBranca({
  },[inicio,fim,agrupar,versao,valido]);
 
  useEffect(()=>{
-  if(!valido){setKardex(null);setCarregandoKardex(false);return;}
+  if(!valido||!abrirAgingExterno){setCarregandoKardex(false);return;}
   const ctrl=new AbortController();
   setCarregandoKardex(true);setErroKardex("");
   consultar("linha_branca_aging_kardex_historico",{
@@ -161,7 +163,7 @@ export default function ComplementosProducaoLinhaBranca({
     .catch(e=>{if(!ctrl.signal.aborted){setKardex(null);setErroKardex(e.message);}})
     .finally(()=>{if(!ctrl.signal.aborted)setCarregandoKardex(false);});
   return ()=>ctrl.abort();
- },[inicio,fim,agrupar,area,versao,valido]);
+ },[inicio,fim,agrupar,area,versao,valido,abrirAgingExterno]);
 
  const disponiveis=useMemo(()=>[...new Set([
    ...(base?.ranking||[]).map(x=>x.tecnico),...colaboradores,
@@ -329,6 +331,13 @@ export default function ComplementosProducaoLinhaBranca({
      </p>}
   </section>
 
+  <TempoCicloHigienizacaoLavadoras periodo={periodo} versao={versao}/>
+  <details
+    className="rounded-2xl border border-slate-200 bg-white shadow-sm"
+    onToggle={e=>setAbrirAgingExterno(e.currentTarget.open)}>
+    <summary className="cursor-pointer select-none px-4 py-3 text-xs font-bold text-slate-600">
+      Histórico externo · Aging de lavadoras expedidas (consulta)
+    </summary>
   <section className={card}>
    <Titulo Icon={Activity} eyebrow="Aging de produtos expedidos · histórico externo"
     titulo="Tempo médio e mediano das lavadoras expedidas"
@@ -359,5 +368,6 @@ export default function ComplementosProducaoLinhaBranca({
      Este histórico está permanentemente restrito a lavadoras de roupa, mesmo que a categoria do cabeçalho esteja em Todas. Não existe autoria confiável por colaborador no Aging, por isso o filtro de colaborador não se aplica a estes gráficos.
    </p>
   </section>
+  </details>
  </div>;
 }
