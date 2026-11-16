@@ -8,6 +8,12 @@ export function bloqueioExigeLaudo(aparelhoBloqueado, defeitos) {
   const itens = (Array.isArray(defeitos) ? defeitos : String(defeitos || "").split(";"));
   return aparelhoBloqueado === true || itens.some(item => /^bloquead[oa](?:\s|$)|^bloqueio(?:\s|$)/i.test(String(item || "").trim()));
 }
+// A importação histórica pode registrar Não Liga somente na lista de defeitos,
+// sem criar os indicadores estruturados usados no fluxo mais recente.
+export function naoLigaExigeImeiContrato(defeitos) {
+  const itens = Array.isArray(defeitos) ? defeitos : String(defeitos || "").split(";");
+  return itens.some(item => /^(?:aparelho\s+)?n[aã]o\s+liga(?:\b|$)/i.test(String(item || "").trim()));
+}
 export function negativaLigaOuDesbloqueio(resposta) {
   if (!respostaFuncionalNegativa(resposta)) return false;
   const texto = String(resposta?.pergunta || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
