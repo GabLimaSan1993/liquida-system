@@ -14,6 +14,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "../../AuthContext.jsx";
+import ResumoProducaoLavadorasHoje from "./ResumoProducaoLavadorasHoje.jsx";
 import { supabase } from "../../lib/supabase.js";
 import FotosEsteticasLavadora from "../../components/linha-branca/FotosEsteticasLavadora.jsx";
 import { conferirEvidenciasEsteticas } from "../../services/lavadorasPreventivaService.js";
@@ -425,6 +426,9 @@ export default function ReparosLavadorasV2Page() {
 
       {mensagem ? <div className="mt-5 flex items-start justify-between rounded-2xl border border-violet-100 bg-violet-50 px-4 py-3 text-sm font-semibold text-violet-800"><span>{mensagem}</span><button type="button" onClick={() => setMensagem("")}><X className="h-4 w-4" /></button></div> : null}
 
+      <div className="mt-4">
+        <ResumoProducaoLavadorasHoje categoria="geral" tecnico={profile?.is_master?"":tecnico} compacto/>
+      </div>
       <section className="mt-6 grid gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
         <div className="rounded-2xl border border-slate-200 bg-white p-5"><div className="flex items-center justify-between"><h2 className="text-sm font-black text-slate-900">OS aguardando reparo</h2><span className="text-[10px] font-black text-slate-400">{loading ? "..." : osList.length}</span></div><div className="relative mt-4"><Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar OS, modelo ou serial" className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-3 text-sm outline-none" /></div><div className="mt-3 grid grid-cols-4 gap-1.5" role="group" aria-label="Filtrar por nível">
            {[["todos","Todos"],["N1","N1"],["N2","N2"],["N3","N3"]].map(([valor,rotulo]) => <button key={valor} type="button" onClick={()=>setFiltroNivel(valor)}
