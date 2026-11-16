@@ -47,6 +47,7 @@ function businessKey(record) {
 
 export default function ExportacaoVendasPdv() {
   const [periodo, setPeriodo] = useState("todos");
+  const [mes, setMes] = useState("todos");
   const [layout, setLayout] = useState("completo");
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(null);
@@ -57,6 +58,8 @@ export default function ExportacaoVendasPdv() {
     setBusy(true);
     setMessage(null);
     const anos = periodo === "todos" ? YEARS : [periodo];
+    const inicioMes = mes === "todos" ? null : periodo + "-" + String(mes).padStart(2, "0") + "-01";
+    const mesSeguinte = mes === "todos" ? null : new Date(Date.UTC(Number(periodo), Number(mes), 1)).toISOString().slice(0, 10);
     const cols = layout === "completo" ? COLUMNS : COLUMNS.filter(([,key]) => ESSENTIAL_KEYS.has(key));
     const fetchKeys = Array.from(new Set(["id","numero_nota","serial","sku","valor_final",...cols.map(([,key]) => key)]));
     const zip = new JSZip();
@@ -73,8 +76,8 @@ export default function ExportacaoVendasPdv() {
           const { data, error } = await supabase
             .from("loja_pdv_vendas")
             .select(fetchKeys.join(","))
-            .gte("emissao_em", ano + "-01-01")
-            .lt("emissao_em", (Number(ano) + 1) + "-01-01")
+            .gte("emissao_em", inicioMes || ano + "-01-01")
+            .lt("emissao_em", mesSeguinte || (Number(ano) + 1) + "-01-01")
             .gt("id", lastId)
             .order("id", { ascending: true })
             .limit(PAGE_SIZE);
@@ -94,7 +97,7 @@ export default function ExportacaoVendasPdv() {
         }
         if (rowsInYear > 0) {
           // BOM UTF-8 para Excel em português; CSV sem formatação desnecessária.
-          zip.file("Vendas_PDV_" + ano + ".csv", "\uFEFF" + lines.join("\r\n") + "\r\n");
+          zip.file("Vendas_PDV_" + ano + (mes === "todos" ? "" : "_" + String(mes).padStart(2, "0")) + ".csv", "\uFEFF" + lines.join("\r\n") + "\r\n");
         }
         lines = null;
       }
@@ -107,7 +110,7 @@ export default function ExportacaoVendasPdv() {
       const href = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = href;
-      a.download = "Loja_PDV_" + (periodo === "todos" ? "2024_2026" : periodo) + "_" + layout + ".zip";
+      a.download = "Loja_PDV_" + (periodo === "todos" ? "2024_2026" : periodo + (mes === "todos" ? "" : "_" + String(mes).padStart(2,"0"))) + "_" + layout + ".zip";
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -132,7 +135,7 @@ export default function ExportacaoVendasPdv() {
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block">
           <span className="mb-2 block text-xs font-semibold text-slate-600">Período</span>
-          <select value={periodo} onChange={(e) => setPeriodo(e.target.value)} disabled={busy} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-sm">
+          <select value={periodo} onChange={(e) => { setPeriodo(e.target.value); setMes("todos"); }} disabled={busy} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-sm">
             <option value="todos">2024 a 2026 — separado por ano</option>
             <option value="2026">Somente 2026</option>
             <option value="2025">Somente 2025</option>
@@ -147,6 +150,13 @@ export default function ExportacaoVendasPdv() {
           </select>
         </label>
       </div>
+      {periodo !== "todos" && <label className="mt-4 block max-w-sm">
+        <span className="mb-2 block text-xs font-semibold text-slate-600">Filtrar mês (opcional, para um ZIP menor)</span>
+        <select value={mes} disabled={busy} onChange={(e) => setMes(e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-sm">
+          <option value="todos">Ano completo</option>
+          {["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"].map((m,i) => <option key={m} value={i+1}>{m}</option>)}
+        </select>
+      </label>}
       <div className="mt-5 flex flex-wrap items-center justify-between gap-4">
         <span className="max-w-2xl text-xs leading-5 text-slate-500">
           O ZIP precisa ser extraído antes de abrir o CSV. Para preservar seriais, SKU e CNPJ com zeros à esquerda, importe pelo menu Dados → De Texto/CSV do Excel, definindo essas colunas como Texto.
