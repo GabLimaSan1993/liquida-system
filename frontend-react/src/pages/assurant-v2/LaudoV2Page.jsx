@@ -603,8 +603,11 @@ function FilaLaudo({
                     </div>
 
                     <div className="mt-0.5 truncate font-mono text-[10px] text-slate-400">
-                      {item.naoLigaDivergencia ? "IMEI não conferido — NÃO LIGA" : item.imei ||
-                        "IMEI não informado"}
+                      {item.naoLigaDivergencia
+                        ? "Contrato: " + (item.imei || "consultar ao abrir") + " · físico não conferido"
+                        : item.bloqueado
+                          ? "Bloqueado · IMEI do contrato consultado ao abrir"
+                          : item.imei || "IMEI não informado"}
                     </div>
 
                     <div className="mt-1 truncate text-[10px] font-semibold text-slate-600">
@@ -797,8 +800,9 @@ export default function LaudoV2Page() {
     ETAPAS_FOTO[
       idxFoto
     ];
-  const tituloFoto = (item) => dados?.naoLigaDivergencia && item?.id === "imei"
-    ? "Foto da etiqueta / voucher (aparelho não liga)"
+  const tituloFoto = (item) => dados?.usaImeiContrato &&
+    !dados?.imeiFisicoTriagem && item?.id === "imei"
+    ? "Foto da etiqueta / voucher (IMEI físico não acessível)"
     : item?.titulo;
 
   async function carregarFila() {
