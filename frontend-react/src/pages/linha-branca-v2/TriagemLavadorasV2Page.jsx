@@ -157,28 +157,6 @@ function StatusPill({ status }) {
   );
 }
 
-function MetricCard({ icon: Icon, value, label, helper, tone = "purple" }) {
-  const tones = {
-    purple: "bg-violet-50 text-violet-700",
-    blue: "bg-blue-50 text-blue-600",
-    red: "bg-rose-50 text-rose-600",
-    green: "bg-emerald-50 text-emerald-600",
-    indigo: "bg-indigo-50 text-indigo-600",
-  };
-  return (
-    <div className="flex min-h-[104px] items-center gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-4">
-      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${tones[tone]}`}>
-        <Icon className="h-5 w-5" />
-      </div>
-      <div className="min-w-0">
-        <div className="text-2xl font-black tracking-tight text-slate-900">{value}</div>
-        <div className="truncate text-xs font-black text-slate-700">{label}</div>
-        <div className="mt-1 truncate text-[10px] font-medium text-slate-400">{helper}</div>
-      </div>
-    </div>
-  );
-}
-
 function RingProgress({ percent, tone = "blue", children }) {
   const color = tone === "green" ? "#16a34a" : tone === "red" ? "#e11d48" : "#2563eb";
   return (
@@ -700,15 +678,6 @@ export default function TriagemLavadorasV2Page() {
           <button type="button" onClick={() => setMensagem("")} className="shrink-0 text-violet-400 hover:text-violet-700"><X className="h-4 w-4" /></button>
         </div>
       ) : null}
-
-      <section className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <MetricCard icon={Clock3} value={metricas.aguardando} label="Aguardando triagem" helper="OS na fila de validação" />
-        <MetricCard icon={Play} value={metricas.emCiclo} label="Em ciclo" helper="1º ou 2º ciclo em execução" tone="blue" />
-        <MetricCard icon={AlertTriangle} value={metricas.erros} label="Paradas por erro" helper="Aguardando decisão técnica" tone="red" />
-        <MetricCard icon={CheckCircle2} value={metricas.aprovadasHoje} label="Aprovadas sem reparo hoje" helper="Dois ciclos concluídos" tone="green" />
-        <MetricCard icon={Settings2} value={`${metricas.taxa}%`} label="Aprovação sem reparo hoje" helper="Percentual das entregas de hoje" tone="indigo" />
-      </section>
-
 
       <div className="mt-4">
         <ResumoProducaoLavadorasHoje categoria="triagem" tecnico={verTodos?"":nomeOperador||""}/>
