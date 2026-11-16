@@ -366,13 +366,6 @@ export default function BancadaTestesLavadorasV2Page() {
 
       {mensagem ? <div className="mt-5 flex items-start justify-between rounded-2xl border border-violet-100 bg-violet-50 px-4 py-3 text-sm font-semibold text-violet-800"><span>{mensagem}</span><button type="button" onClick={() => setMensagem("")}><X className="h-4 w-4" /></button></div> : null}
 
-      <section className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat icon={Clock3} value={metricas.aguardando} label="Aguardando bancada" />
-        <Stat icon={Play} value={metricas.emTeste} label="Em teste agora" tone="blue" />
-        <Stat icon={AlertTriangle} value={metricas.erro} label="Paradas por erro" tone="red" />
-        <Stat icon={CheckCircle2} value={metricas.aguardandoResultado} label="Aguardando decisão final" tone="green" />
-      </section>
-
       <div className="mt-4"><ResumoProducaoLavadorasHoje categoria="bancada" tecnico={verTodos?"":nomeOperador||""} compacto/></div>
 
       <section className="mt-5 grid gap-5 2xl:grid-cols-[380px_minmax(0,1fr)_420px]">
