@@ -118,6 +118,8 @@ import TriagemClimatizacaoV2Page from "./pages/linha-branca-v2/TriagemClimatizac
 import ReparosClimatizacaoV2Page from "./pages/linha-branca-v2/ReparosClimatizacaoV2Page.jsx";
 import BancadaTestesClimatizacaoV2Page from "./pages/linha-branca-v2/BancadaTestesClimatizacaoV2Page.jsx";
 
+import LojaWorkspaceLayout from "./layout/LojaWorkspaceLayout.jsx";
+import VendasPdvUploadPage from "./pages/loja/VendasPdvUploadPage.jsx";
 import SistemasPage from "./pages/SistemasPage.jsx";
 import { getUserLanding } from "./services/userLanding.js";
 import DefinicaoAssurantV2Page from "./pages/assurant-v2/DefinicaoAssurantV2Page.jsx";
@@ -375,6 +377,14 @@ export default function App() {
       <Route path="/chamados" element={<ProtectedRoute tela="/chamados"><ChamadosPage /></ProtectedRoute>} />
       <Route path="/usuarios" element={<ProtectedRoute tela="/gerenciar-usuarios"><GestaoUsuariosPage /></ProtectedRoute>} />
       <Route path="/gerenciar-usuarios" element={<ProtectedRoute tela="/gerenciar-usuarios"><Navigate to="/usuarios" replace /></ProtectedRoute>} />
+
+      {/* LOJA — importação de vendas PDV */}
+      <Route path="/v2/loja" element={
+        <ProtectedRoute tela="/v2/loja/vendas/upload"><LojaWorkspaceLayout /></ProtectedRoute>
+      }>
+        <Route index element={<Navigate replace to="vendas/upload" />} />
+        <Route path="vendas/upload" element={<VendasPdvUploadPage />} />
+      </Route>
 
       {/* =====================================================
           LINHA BRANCA V2 - workspace unificado para todas as rotas
