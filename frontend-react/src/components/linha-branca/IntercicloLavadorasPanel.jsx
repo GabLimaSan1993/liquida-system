@@ -40,7 +40,7 @@ function restaurarRolagem(chave) {
   } catch { /* Sem acesso ao storage: não interromper o preenchimento. */ }
 }
 
-function FotoObrigatoria({osId,cicloId,categoria,item,fase="antes",fotos,onUploaded,disabled,onCameraOpen,onCameraReturn}) {
+function FotoEvidencia({osId,cicloId,categoria,item,fase="antes",fotos,onUploaded,disabled,onCameraOpen,onCameraReturn,obrigatoria=true}) {
  const [arquivoCarregando,setArquivoCarregando]=useState(false);
  const [erroFoto,setErroFoto]=useState("");
  const [url,setUrl]=useState("");
@@ -65,7 +65,7 @@ function FotoObrigatoria({osId,cicloId,categoria,item,fase="antes",fotos,onUploa
  }
  return <label className="flex min-h-16 cursor-pointer flex-wrap items-center gap-3 rounded-xl border border-dashed border-violet-200 bg-white p-3">
    <Camera className="h-5 w-5 text-violet-600"/>
-   <span className="flex-1 text-xs font-semibold text-slate-700">Foto {fase.toUpperCase()} · {item} <span className="text-rose-600">*</span>
+   <span className="flex-1 text-xs font-semibold text-slate-700">Foto {fase.toUpperCase()} · {item} {obrigatoria?<span className="text-rose-600">*</span>:<span className="text-slate-500">(opcional)</span>}
      <span className="mt-0.5 block text-[10px] text-slate-500">{foto?"Foto confirmada no Liquida (vinculada à OS)":"Toque para fotografar ou selecionar"}</span>
    </span>
    {url&&<img src={url} alt={"Evidência "+item} className="h-14 w-14 rounded-lg object-cover"/>}
@@ -151,17 +151,16 @@ export default function IntercicloLavadorasPanel({ciclo,operador,usuarioId,savin
  const depoisDaCamera=useCallback(()=>restaurarRolagem(idRascunho),[idRascunho]);
  const fotoExiste=(categoria,item,fase="antes")=>fotos.some(f=>f.categoria===categoria&&f.item===item&&f.fase===fase);
  const pendentes=ITENS_PREVENTIVA_LAVADORA.filter(i=>!["ok","nao_ok"].includes(checklist[i.chave]));
- const faltandoFoto=ITENS_PREVENTIVA_LAVADORA.filter(i=>i.foto&&!fotoExiste("preventiva",i.label==="Pés niveladores"?"PÉ NIVELADOR":"OXIDAÇÃO"));
+ const fotosPreventivasRegistradas=["PÉ NIVELADOR","OXIDAÇÃO"].filter(item=>fotoExiste("preventiva",item)).length;
  const fotosEsteticasPendentes=estetica==="sim"?defeitos.filter(d=>!fotoExiste("estetico",d)):[];
  const oxidação=checklist.oxidacao==="nao_ok";
  const naoConforme=ITENS_PREVENTIVA_LAVADORA.some(i=>i.chave!=="oxidacao"&&checklist[i.chave]==="nao_ok") || vazamento==="sim";
- const pronto=pendentes.length===0 && faltandoFoto.length===0 && fotosEsteticasPendentes.length===0
+ const pronto=pendentes.length===0 && fotosEsteticasPendentes.length===0
   && vazamento!=="" && estetica!=="" && (!lg || lgAplicada!=="")
   && (estetica!=="sim"||defeitos.length>0)
   && (!lg || lgAplicada!=="nao" || Boolean(observacoes.trim()));
  const faltas=[
   ...pendentes.map(x=>"Checklist: "+x.label),
-  ...faltandoFoto.map(x=>"Foto: "+x.label),
   ...fotosEsteticasPendentes.map(x=>"Foto ANTES: "+x),
   ...(vazamento===""?["Resposta: apresentou vazamento?"]:[]),
   ...(estetica===""?["Resposta: apresentou defeito estético?"]:[]),
@@ -200,7 +199,7 @@ export default function IntercicloLavadorasPanel({ciclo,operador,usuarioId,savin
   <div className="flex flex-wrap items-center gap-3">
    <ShieldCheck className="h-6 w-6 text-violet-700"/>
    <div className="flex-1"><h2 className="text-base font-bold text-slate-900">Preventiva obrigatória entre ciclos · OS {ciclo.os?.numero_os}</h2>
-     <p className="mt-1 text-xs text-slate-500">Conclua a conferência física, registre as fotos e verifique defeitos estéticos antes do ciclo 2.</p></div>
+     <p className="mt-1 text-xs text-slate-500">Conclua a conferência física e verifique os defeitos estéticos antes do ciclo 2. Fotos de pés niveladores e oxidação são opcionais.</p></div>
    <span className={`rounded-lg px-3 py-1 text-xs font-bold ${salvo?"bg-emerald-100 text-emerald-800":"bg-amber-100 text-amber-800"}`}>{salvo&&pronto?"Checklist registrado":"Pendente"}</span>
    <span className="rounded-lg bg-slate-100 px-3 py-1 text-[10px] font-semibold text-slate-600">{rascunhoRestaurado?"Rascunho recuperado":"Rascunho protegido automaticamente"}</span>
   </div>
@@ -229,7 +228,7 @@ export default function IntercicloLavadorasPanel({ciclo,operador,usuarioId,savin
   </label>
   <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 p-3">
    <span className="text-xs font-bold text-slate-700">
-    Fotos preventivas confirmadas: {2-faltandoFoto.length}/2
+    Fotos preventivas (opcionais): {fotosPreventivasRegistradas}/2
    </span>
    <button type="button" onClick={sincronizarFotos} disabled={sincronizandoFotos||ocupado}
     className="rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs font-bold text-violet-700 disabled:opacity-40">
@@ -237,8 +236,8 @@ export default function IntercicloLavadorasPanel({ciclo,operador,usuarioId,savin
    </button>
   </div>
   <div className="mt-3 grid gap-3 md:grid-cols-2">
-   <FotoObrigatoria {...fotoProps} categoria="preventiva" item="PÉ NIVELADOR"/>
-   <FotoObrigatoria {...fotoProps} categoria="preventiva" item="OXIDAÇÃO"/>
+   <FotoEvidencia {...fotoProps} categoria="preventiva" item="PÉ NIVELADOR" obrigatoria={false}/>
+   <FotoEvidencia {...fotoProps} categoria="preventiva" item="OXIDAÇÃO" obrigatoria={false}/>
   </div>
   <div className="mt-5 rounded-xl border border-slate-200 p-4">
    <h3 className="text-sm font-bold text-slate-900">Inspeção estética · não representa falha do ciclo</h3>
@@ -255,12 +254,12 @@ export default function IntercicloLavadorasPanel({ciclo,operador,usuarioId,savin
        <span>{nome}</span>
       </label>)}
      </div>
-     <div className="mt-4 space-y-2">{defeitos.map(nome=><FotoObrigatoria key={nome} {...fotoProps} categoria="estetico" item={nome} fase="antes"/>)}</div>
+     <div className="mt-4 space-y-2">{defeitos.map(nome=><FotoEvidencia key={nome} {...fotoProps} categoria="estetico" item={nome} fase="antes"/>)}</div>
    </>}
   </div>
-  {oxidação&&<p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-bold text-rose-800"><AlertTriangle className="mr-2 inline h-4 w-4"/>Oxidação identificada: não iniciar o 2º ciclo. Encaminhamento obrigatório para Carlos, reparo N3, com foto.</p>}
+  {oxidação&&<p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-bold text-rose-800"><AlertTriangle className="mr-2 inline h-4 w-4"/>Oxidação identificada: não iniciar o 2º ciclo. Encaminhamento obrigatório para avaliação de reparo N3. Foto opcional.</p>}
   {naoConforme&&!oxidação&&<p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-800">
-   Há não conformidade ou vazamento. Caso corrigido, atualize o checklist para OK. Se não puder corrigir na triagem, salve as evidências e encaminhe para avaliação e reparo N3 com Carlos Dias.
+   Há não conformidade ou vazamento. Caso corrigido, atualize o checklist para OK. Se não puder corrigir na triagem, salve o checklist e encaminhe para avaliação e reparo N3 com Carlos Dias.
   </p>}
   {faltas.length>0&&<div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
    <p className="text-xs font-black text-amber-900">Pendências para salvar e liberar o próximo passo ({faltas.length}):</p>
@@ -275,7 +274,7 @@ export default function IntercicloLavadorasPanel({ciclo,operador,usuarioId,savin
   <div className="mt-4 flex flex-wrap items-center gap-3">
    <button type="button" onClick={salvar} disabled={saving||ocupado||sincronizandoFotos}
      className="inline-flex h-11 items-center gap-2 rounded-xl border border-violet-300 bg-violet-50 px-5 text-xs font-bold text-violet-800 disabled:opacity-40">
-    {ocupado?<Loader2 className="h-4 w-4 animate-spin"/>:<CheckCircle2 className="h-4 w-4"/>} Salvar checklist e evidências
+    {ocupado?<Loader2 className="h-4 w-4 animate-spin"/>:<CheckCircle2 className="h-4 w-4"/>} Salvar checklist
    </button>
    {oxidação?<button type="button" disabled={!salvo||!pronto||saving||ocupado} onClick={()=>onOxidacao(ciclo)}
      className="inline-flex h-11 items-center gap-2 rounded-xl bg-rose-600 px-5 text-xs font-bold text-white disabled:opacity-40">
