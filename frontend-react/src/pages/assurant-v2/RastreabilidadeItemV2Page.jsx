@@ -1418,10 +1418,16 @@ export default function RastreabilidadeItemV2Page() {
                           <ClipboardCheck size={13} /> Origem Trade-in
                         </span>
                       )}
-                      {summary.status_triagem && (
-                        <span className={`rounded-full px-3 py-1.5 text-[10px] font-black ring-1 ring-inset ${statusTone(summary.status_triagem)}`}>
-                          Triagem: {pretty(summary.status_triagem)}
+                      {(summary.status_operacional || summary.status_triagem) && (
+                        <span className={`rounded-full px-3 py-1.5 text-[10px] font-black ring-1 ring-inset ${statusTone(summary.status_operacional || summary.status_triagem)}`}>
+                          Status atual: {pretty(summary.status_operacional || summary.status_triagem)}
                         </span>
+                      )}
+                      {summary.status_triagem && summary.status_operacional &&
+                        summary.status_triagem !== summary.status_operacional && (
+                          <span className={`rounded-full px-3 py-1.5 text-[10px] font-semibold ring-1 ring-inset ${statusTone(summary.status_triagem)}`}>
+                            Triagem: {pretty(summary.status_triagem)}
+                          </span>
                       )}
                       {summary.status_wms && (
                         <span className={`rounded-full px-3 py-1.5 text-[10px] font-black ring-1 ring-inset ${statusTone(summary.status_wms)}`}>
@@ -1479,6 +1485,7 @@ export default function RastreabilidadeItemV2Page() {
                   </div>
                   <DetailField label="Grade" value={summary.grade} />
                   <DetailField label="Condição" value={summary.condicao} />
+                  {summary.pedido_reservado && <DetailField label="Pedido reservado" value={summary.pedido_reservado} wide />}
                   <DetailField label="Status bateria" value={summary.status_bateria} />
                   <DetailField label="Produto / modelo" value={summary.modelo} wide />
                   <DetailField label="Local atual / último local" value={summary.local} wide />
