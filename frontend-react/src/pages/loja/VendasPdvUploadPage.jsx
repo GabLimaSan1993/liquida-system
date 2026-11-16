@@ -134,8 +134,15 @@ async function expandFiles(selected) {
 async function readSource(item) {
   if (/\.xlsx$/i.test(item.name)) return parseXlsx(await item.file.arrayBuffer(), item.name);
   const bytes = await item.file.arrayBuffer();
-  let text = new TextDecoder("utf-8").decode(bytes);
-  if (text.includes("\uFFFD")) text = new TextDecoder("windows-1252").decode(bytes);
+  // A própria exportação do PDV pode conter o caractere literal U+FFFD
+  // em uma descrição. Ele NÃO significa que o arquivo inteiro está em ANSI.
+  // Só usamos Windows-1252 quando os bytes realmente são UTF-8 inválido.
+  let text;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    text = new TextDecoder("windows-1252").decode(bytes);
+  }
   return parseCsv(text, item.name);
 }
 
@@ -174,6 +181,21 @@ export default function VendasPdvUploadPage() {
     try {
       const files = await expandFiles(selected);
       if (!files.length) throw new Error("Nenhuma planilha válida encontrada.");
+
+      // Valida TODOS os arquivos antes de gravar qualquer venda no banco.
+      // Um ZIP com erro em um mês não deve deixar somente os meses anteriores importados.
+      const invalidos = [];
+      for (const item of files) {
+        setProgress({ file: "Validando " + item.name, done: 0, total: 0, processedFiles: 0, totalFiles: files.length });
+        try {
+          await readSource(item);
+        } catch (error) {
+          invalidos.push(String(error?.message || error));
+        }
+      }
+      if (invalidos.length) {
+        throw new Error(invalidos.length + " arquivo(s) com problemas: " + invalidos.join(" | "));
+      }
       setProgress({ file: "", done: 0, total: 0, processedFiles: 0, totalFiles: files.length });
       for (let fileIndex = 0; fileIndex < files.length; fileIndex++) {
         const item = files[fileIndex];
