@@ -24,6 +24,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "../../AuthContext.jsx";
+import ResumoProducaoLavadorasHoje from "./ResumoProducaoLavadorasHoje.jsx";
 import { painelDoOperador } from "../../services/lavadorasOperador.js";
 import { nivelServicoLavadora, classificarTriagemLavadora, VISUAL_NIVEIS_LAVADORAS } from "../../services/reparosLavadorasNiveis.js";
 import OsBarcodeScanner from "../../components/OsBarcodeScanner.jsx";
@@ -699,10 +700,14 @@ export default function TriagemLavadorasV2Page() {
         <MetricCard icon={Clock3} value={metricas.aguardando} label="Aguardando triagem" helper="OS na fila de validação" />
         <MetricCard icon={Play} value={metricas.emCiclo} label="Em ciclo" helper="1º ou 2º ciclo em execução" tone="blue" />
         <MetricCard icon={AlertTriangle} value={metricas.erros} label="Paradas por erro" helper="Aguardando decisão técnica" tone="red" />
-        <MetricCard icon={CheckCircle2} value={metricas.aprovadasHoje} label="Aprovadas hoje" helper="Dois ciclos concluídos" tone="green" />
-        <MetricCard icon={Settings2} value={`${metricas.taxa}%`} label="Aprovação final" helper="Triagem sem reparo" tone="indigo" />
+        <MetricCard icon={CheckCircle2} value={metricas.aprovadasHoje} label="Aprovadas sem reparo hoje" helper="Dois ciclos concluídos" tone="green" />
+        <MetricCard icon={Settings2} value={`${metricas.taxa}%`} label="Aprovação em 2º ciclo (hist.)" helper="Taxa nos últimos ciclos carregados" tone="indigo" />
       </section>
 
+
+      <div className="mt-4">
+        <ResumoProducaoLavadorasHoje categoria="triagem" tecnico={verTodos?"":nomeOperador||""}/>
+      </div>
 
       {selectedCiclo?.status==="aguardando_segundo" && Number(selectedCiclo.numero_ciclo)===1 && (
         <div className="mt-5">
