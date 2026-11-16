@@ -1311,7 +1311,9 @@ export default function TriagemFuncionalV2Page() {
 
     setFeedback({
       tipo: "aviso",
-      msg: "Retriagem iniciada com os dados da última triagem carregados para revisão.",
+      msg: ultima.historicoIncompleto
+        ? "Revisão de registro legado iniciada. Não existe triagem funcional completa anterior; confira os dados do aparelho e registre a nova avaliação. O Laudo anterior será preservado."
+        : "Retriagem iniciada com os dados da última triagem carregados para revisão.",
     });
   }
 
@@ -2139,7 +2141,7 @@ export default function TriagemFuncionalV2Page() {
                         </div>
 
                         <p className="mt-1 text-[11px] leading-5 text-slate-500">
-                          Informe o motivo. A última triagem será carregada para você revisar, adicionar ou alterar informações.
+                          Informe o motivo. Se existir triagem funcional anterior, os dados serão carregados. Para casos antigos de Não liga sem histórico, será aberta uma revisão nova e auditada, sem apagar o Laudo.
                         </p>
 
                         <textarea
@@ -2222,7 +2224,9 @@ export default function TriagemFuncionalV2Page() {
                               Retriagem funcional
                             </div>
                             <div className="mt-1 font-medium">
-                              Os dados abaixo vieram da última triagem. Revise e altere somente o que for necessário.
+                              {ctx?.ultimaTriagem?.historicoIncompleto
+                                 ? "Este registro não possui triagem funcional anterior completa. Faça a avaliação novamente; o histórico do Laudo será preservado."
+                                 : "Os dados abaixo vieram da última triagem. Revise e altere somente o que for necessário."}
                             </div>
                             <div className="mt-1 text-[10px] opacity-80">
                               Motivo: {motivoRetriagem}
