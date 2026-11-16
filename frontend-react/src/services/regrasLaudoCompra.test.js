@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { codigoCondicaoCompra } from "./condicaoCompra.js";
-import { decidirDestino, resultadoFuncional } from "./regrasTriagemFuncional.js";
+import { decidirDestino, resultadoFuncional, bloqueioExigeLaudo, naoLigaExigeImeiContrato } from "./regrasTriagemFuncional.js";
 
 const negativa = (pergunta, extras = {}) => ({ pergunta, resposta: "não", divergente: false, ...extras });
 const cenarios = [
@@ -37,4 +37,15 @@ test("Sufixo da compra prevalece e não usa grade física", () => {
 test("TR dispensado de laudo continua BAD com negativa e com defeito adicional", () => {
   assert.equal(resultadoFuncional([negativa("Leitores biométricos funcionando?")], []), "BAD");
   assert.equal(resultadoFuncional([], ["Tela descascada"]), "BAD");
+});
+
+test("Laudo reconhece Bloqueado por defeito mesmo sem flag", () => {
+  assert.equal(bloqueioExigeLaudo(false, "Bloqueado senha; Tela quebrada"), true);
+  assert.equal(bloqueioExigeLaudo(false, "Bloqueado conta"), true);
+  assert.equal(bloqueioExigeLaudo(false, "Sem bloqueio; Tela quebrada"), false);
+});
+test("Laudo reconhece Não Liga pela importação histórica", () => {
+  assert.equal(naoLigaExigeImeiContrato("Aparelho Não Liga; Não carrega"), true);
+  assert.equal(naoLigaExigeImeiContrato("Não liga — divergência funcional"), true);
+  assert.equal(naoLigaExigeImeiContrato("Não inicializa; Tampa quebrada"), false);
 });
