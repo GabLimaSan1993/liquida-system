@@ -1,7 +1,7 @@
 import {useCallback,useEffect,useMemo,useState} from "react";
 import {
  AlertCircle,ArrowLeftRight,CalendarDays,Check,
- Loader2,MapPinned,PackagePlus,RefreshCw,Search,
+ Clock3,Loader2,MapPinned,PackagePlus,RefreshCw,Search,
  Trash2,Warehouse,X
 } from "lucide-react";
 import {supabase} from "../../lib/supabase.js";
@@ -46,20 +46,45 @@ const TONALIDADE={
  concluido:"border-emerald-200 bg-emerald-50 text-emerald-950 hover:border-emerald-400",
  conflito:"border-red-400 bg-red-100 text-red-950 hover:border-red-600"
 };
-function Posicao({item,codigo,tipo,selecionar,modo,exibirVazias,busca,tecnico}){
+// O aging usa SEMPRE a abertura da OS até a data atual em São Paulo,
+// não a data em que foi alocada no endereço.
+const TONALIDADE_AGING={
+ ate_7:"border-emerald-300 bg-emerald-100 text-emerald-950 hover:border-emerald-500",
+ "8_15":"border-lime-300 bg-lime-100 text-lime-950 hover:border-lime-500",
+ "16_30":"border-amber-300 bg-amber-100 text-amber-950 hover:border-amber-500",
+ "31_60":"border-orange-400 bg-orange-200 text-orange-950 hover:border-orange-500",
+ "61_90":"border-rose-400 bg-rose-200 text-rose-950 hover:border-rose-600",
+ mais_90:"border-red-800 bg-red-800 text-white hover:bg-red-900",
+ sem_data:"border-slate-300 bg-slate-100 text-slate-700",
+ data_invalida:"border-slate-300 bg-slate-100 text-slate-700"
+};
+const LEGENDA_AGING=[
+ ["0–7 dias","bg-emerald-100 border-emerald-300"],
+ ["8–15 dias","bg-lime-100 border-lime-300"],
+ ["16–30 dias","bg-amber-100 border-amber-300"],
+ ["31–60 dias","bg-orange-200 border-orange-400"],
+ ["61–90 dias","bg-rose-200 border-rose-400"],
+ ["> 90 dias","bg-red-800 border-red-800"]
+];
+function Posicao({item,codigo,tipo,selecionar,modo,exibirVazias,busca,tecnico,mapaCalor}){
  const estado=nivelStatus(item);
  const ativo=!!item?.os_id;
+ const agingAtivo=Boolean(tipo==="temporario"&&mapaCalor&&ativo);
+ const cor=agingAtivo?(TONALIDADE_AGING[item.faixa_aging]||TONALIDADE[estado]):TONALIDADE[estado];
  const visivel=exibirVazias||ativo;
  const buscaOk=!busca||[codigo,item?.numero_os,item?.modelo,item?.marca]
  .some(v=>String(v||"").toLocaleLowerCase("pt-BR").includes(busca.toLocaleLowerCase("pt-BR")));
  const tecnicoOk=!tecnico||String(item?.responsavel||"")===tecnico;
- return <button type="button" title={tipo==="triagem"?"Posto "+codigo:"Endereço "+codigo}
+ return <button type="button" title={
+   (tipo==="triagem"?"Posto ":"Endereço ")+codigo+
+   (agingAtivo&&item.aging_dias!=null?" · "+item.aging_dias+" dias desde a abertura da OS":"")
+ }
   onClick={()=>selecionar({tipo,codigo,item})}
   aria-label={(tipo==="triagem"?"Posto ":"Estoque ")+codigo+
     (ativo?", OS "+item.numero_os:", vazio")}
   className={"group block w-full min-w-0 rounded-xl border p-2.5 text-left transition "+
-    (tipo==="triagem"?"min-h-[88px]":"min-h-[60px]")+
-    " "+TONALIDADE[estado]+
+    (tipo==="triagem"?"min-h-[88px]":"min-h-[83px]")+
+    " "+cor+
     (!visivel?" invisible pointer-events-none":(!buscaOk||!tecnicoOk)?" opacity-30":"")}>
   <div className="flex items-center justify-between gap-1">
    <strong className="font-mono text-[11px] font-black tracking-wide">{codigo}</strong>
@@ -70,6 +95,9 @@ function Posicao({item,codigo,tipo,selecionar,modo,exibirVazias,busca,tecnico}){
   {ativo?<div className="mt-1.5 min-w-0">
    <p className="truncate text-[11px] font-black">OS {item.numero_os}</p>
    <p className="mt-0.5 truncate text-[10px] opacity-80">{modo==="modelo"?(item.modelo||"Modelo não informado"):(item.status_atual||item.status||"Em operação")}</p>
+   {agingAtivo&&<p className="mt-1 flex items-center gap-1 text-[10px] font-black">
+    <Clock3 size={11}/> {item.aging_dias==null?"Sem data de abertura":num(item.aging_dias)+" dias de OS"}
+   </p>}
    {Number(item.ocupantes||0)>1&&<p className="mt-1 truncate text-[9px] font-bold text-red-700">Conferir ocupação</p>}
   </div>:
   <p className="mt-2 text-[10px] font-semibold opacity-65">Livre</p>}
@@ -149,6 +177,19 @@ function DetalhePosicao({selecionada,mapa,onFechar,onAlterar,editavel}){
     <button type="button" onClick={onFechar} aria-label="Fechar" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X size={20}/></button>
    </div>
    <div className="space-y-5 p-5">
+    {tipo==="temporario"&&!livre&&<div className="rounded-xl border border-slate-200 bg-white p-4">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Aging desde a abertura da OS</p>
+      <p className="mt-1 text-2xl font-black tabular-nums text-slate-900">
+       {item.aging_dias==null?"Sem data":num(item.aging_dias)+" dias"}
+      </p>
+      <p className="mt-1 text-xs text-slate-500">
+       Abertura: {item.abertura_os?String(item.abertura_os).split("-").reverse().join("/"):"Não informada"}
+       {item.origem_data?" · "+item.origem_data:""}
+      </p>
+      <p className="mt-1 text-[11px] text-slate-500">
+       Tempo nesta posição: {tempoDecorrido(item.entrada_em)}. Este tempo não substitui o aging total.
+      </p>
+     </div>}
     <div className="grid grid-cols-2 gap-3 rounded-xl bg-slate-50 p-4 text-xs">
      <div><p className="font-medium text-slate-500">OS atual</p><p className="mt-1 text-base font-black text-slate-900">{item?.numero_os||"Livre"}</p></div>
      <div><p className="font-medium text-slate-500">Passaram no dia</p><p className="mt-1 text-base font-black">{num(item?.passaram_hoje)}</p></div>
@@ -157,6 +198,43 @@ function DetalhePosicao({selecionada,mapa,onFechar,onAlterar,editavel}){
      <div><p className="font-medium text-slate-500">Tempo na posição</p><p className="mt-1 font-semibold">{item?.entrada_em?tempoDecorrido(item.entrada_em):"—"}</p></div>
      {Number(item?.ocupantes||0)>1&&<p className="col-span-2 rounded-lg bg-rose-100 p-2 font-bold text-rose-700">Há mais de uma OS ativa nesta posição. Conferir fisicamente antes de movimentar.</p>}
     </div>
+    {tipo==="temporario"&&!livre&&<section className="rounded-xl border border-slate-200 bg-white p-4">
+     <div className="flex flex-wrap items-center justify-between gap-2">
+      <h4 className="text-sm font-black text-slate-900">Peças e necessidades pendentes</h4>
+      <span className="rounded-full bg-violet-50 px-2 py-1 text-[10px] font-bold text-violet-700">
+       {num(item.quantidade_necessidades||0)} indicação(ões)
+      </span>
+     </div>
+     {Array.isArray(item.necessidades)&&item.necessidades.length>0
+      ?<div className="mt-3 space-y-2">
+        {item.necessidades.map((p,i)=><div key={i} className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+         <div className="flex flex-wrap items-start justify-between gap-2">
+          <p className="flex-1 text-xs font-bold text-slate-900">{p.nome||"Peça não especificada"}</p>
+          <span className={"rounded-md px-2 py-1 text-[10px] font-semibold "+
+            (p.natureza==="pedido"?"bg-amber-100 text-amber-800":
+             p.natureza==="verificacao"?"bg-slate-200 text-slate-700":"bg-violet-100 text-violet-800")}>
+           {p.natureza==="pedido"?"Pedido aberto":p.natureza==="verificacao"?"Avaliação técnica":"Indicação técnica"}
+          </span>
+         </div>
+         <p className="mt-1 text-[11px] leading-4 text-slate-600">
+          {p.origem}{p.area?" · "+p.area:""}{p.pn?" · PN "+p.pn:""}
+          {p.quantidade?" · Qtd. "+p.quantidade:""}
+         </p>
+         <p className="mt-1 text-[10px] text-slate-500">
+          {p.status||"Pendente"}{p.solicitado_em?" · "+String(p.solicitado_em).split("-").reverse().join("/"):""}
+         </p>
+        </div>)}
+        <p className="text-[11px] leading-5 text-slate-500">
+         Indicações de Triagem/Reparo são necessidades em aberto, não necessariamente pedidos de compra.
+         Avaliações técnicas aparecem separadas das peças.
+        </p>
+       </div>
+      :<p className="mt-2 rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-800">
+        {item.situacao_pecas==="aguardando_peca_sem_registro"
+         ?"OS aguardando peça, mas sem necessidade vinculada: cadastrar ou conferir o componente pendente."
+         :"Não há necessidade de peça em aberto cadastrada para esta OS. Isso não comprova ausência de defeito."}
+       </p>}
+    </section>}
     {tipo==="triagem"?
      <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-600">
       As posições de Triagem refletem os ciclos registrados no Liquida. Iniciar, encerrar e
@@ -246,6 +324,8 @@ export default function MapaFisicoLavadorasPage({embutido=false}){
   hasAccess("/v2/linha-branca/gestao/estoque"));
  const [dia,setDia]=useState(hojeSP);
  const [dados,setDados]=useState(null),[carregando,setCarregando]=useState(true);
+ const [calor,setCalor]=useState(null),[erroCalor,setErroCalor]=useState("");
+ const [mapaCalor,setMapaCalor]=useState(true);
  const [erro,setErro]=useState("");
  const [versao,setVersao]=useState(0);
  const [selecionada,setSelecionada]=useState(null);
@@ -265,17 +345,39 @@ export default function MapaFisicoLavadorasPage({embutido=false}){
   return()=>ctrl.abort();
  },[dia,versao]);
  useEffect(()=>{
+  const ctrl=new AbortController();
+  setErroCalor("");
+  supabase.rpc("linha_branca_mapa_calor_estoque_linha")
+   .abortSignal(ctrl.signal)
+   .then(({data,error})=>{
+    if(ctrl.signal.aborted)return;
+    if(error)throw error;
+    setCalor(data);
+   })
+   .catch(e=>{if(!ctrl.signal.aborted){setErroCalor(e.message||"Aging indisponível");setCalor(null);}});
+  return()=>ctrl.abort();
+ },[versao]);
+ useEffect(()=>{
   const timer=window.setInterval(atualizar,60000);
   return()=>window.clearInterval(timer);
  },[atualizar]);
  const postos=useMemo(()=>new Map((dados?.postos||[]).map(x=>[x.codigo,x])),[dados]);
- const estoque=useMemo(()=>new Map((dados?.temporario||[]).map(x=>[x.codigo,x])),[dados]);
+ const estoque=useMemo(()=>{
+   const calorPorPosicao=new Map((calor?.registros||[]).map(x=>[x.codigo,x]));
+   return new Map((dados?.temporario||[]).map(x=>{
+    const complemento=calorPorPosicao.get(x.codigo);
+    // Não misturar aging/peças de ocupante anterior após uma transferência.
+    return [x.codigo,complemento&&complemento.os_id===x.os_id
+      ?{...x,...complemento}:x];
+   }));
+ },[dados,calor]);
  const responsaveis=useMemo(()=>[...new Set((dados?.postos||[])
   .concat(dados?.temporario||[]).map(x=>x.responsavel).filter(Boolean))].sort(),[dados]);
  const pos=(codigo,tipo)=>{
   const item=tipo==="triagem"?postos.get(codigo):estoque.get(codigo);
   return <Posicao key={codigo} codigo={codigo} tipo={tipo} item={item}
-   selecionar={setSelecionada} modo={modo} exibirVazias={vazias} busca={busca} tecnico={tecnico}/>;
+   selecionar={setSelecionada} modo={modo} exibirVazias={vazias} busca={busca} tecnico={tecnico}
+   mapaCalor={mapaCalor}/>;
  };
  const resumo=dados?.resumo||{};
  return <div className="space-y-4 text-slate-900">
@@ -306,6 +408,16 @@ export default function MapaFisicoLavadorasPage({embutido=false}){
    <Indicador rotulo="Passagens na Triagem" valor={resumo.triagem_passagens} descricao="OS por posto na data"/>
    <Indicador rotulo="Passagens no Temporário" valor={resumo.estoque_passagens} descricao="entradas por endereço na data"/>
   </div>
+  {calor?.resumo&&<div className="flex flex-wrap items-center gap-x-5 gap-y-1 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-[11px] text-slate-600">
+    <span><strong className="text-slate-900">Aging médio:</strong> {calor.resumo.aging_medio_dias==null?"—":String(calor.resumo.aging_medio_dias).replace(".",",")+" dias"}</span>
+    <span><strong className="text-slate-900">Acima de 30 dias:</strong> {num(calor.resumo.mais_30)} OS</span>
+    <span><strong className="text-slate-900">Acima de 90 dias:</strong> {num(calor.resumo.mais_90)} OS</span>
+    <span><strong className="text-slate-900">Com necessidades abertas:</strong> {num(calor.resumo.com_necessidades)} OS</span>
+    <span className="text-slate-400">Aging na data atual, independente do filtro de passagens</span>
+   </div>}
+  {erroCalor&&<p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+   Mapa de calor temporariamente indisponível: {erroCalor}. A ocupação das posições continua disponível.
+  </p>}
   <section className="flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200 bg-white p-3">
    <label className="min-w-[190px] flex-1 text-[11px] font-semibold text-slate-600">Localizar posição, OS ou modelo
     <div className="relative mt-1"><Search size={15} className="absolute left-3 top-2.5 text-slate-400"/>
@@ -329,6 +441,11 @@ export default function MapaFisicoLavadorasPage({embutido=false}){
    <label className="flex items-center gap-2 px-2 py-2 text-xs font-semibold text-slate-700">
     <input type="checkbox" checked={vazias} onChange={e=>setVazias(e.target.checked)} className="accent-violet-700"/> Exibir vazias
    </label>
+   <button type="button" aria-pressed={mapaCalor} onClick={()=>setMapaCalor(v=>!v)}
+    className={"flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold "+
+      (mapaCalor?"border-violet-300 bg-violet-50 text-violet-700":"border-slate-200 bg-white text-slate-600")}>
+    <Clock3 size={14}/> {mapaCalor?"Mapa de calor ativo":"Ativar mapa de calor"}
+   </button>
   </section>
   {erro&&<p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs font-bold text-rose-700">
     {erro} <button type="button" onClick={atualizar} className="ml-2 underline">Tentar novamente</button></p>}
@@ -346,10 +463,14 @@ export default function MapaFisicoLavadorasPage({embutido=false}){
      <p className="mt-1 text-[11px] text-slate-500">Superior 01–07 · Lateral 08–20 · Centro: estoque temporário 3 × 10</p>
     </div>
     <div className="flex flex-wrap gap-2 text-[10px]">
-     {[["Ocupada","bg-blue-100"],["Aguardando","bg-amber-100"],["Erro","bg-rose-100"],["Livre","bg-slate-100"]].map(([v,cor])=>
-      <span key={v} className="flex items-center gap-1.5 text-slate-600">
-       <span className={"h-2.5 w-2.5 rounded-sm "+cor}/>{v}
-      </span>)}
+     {mapaCalor
+      ? LEGENDA_AGING.map(([v,cor])=><span key={v} className="flex items-center gap-1.5 text-slate-600">
+         <span className={"h-2.5 w-2.5 rounded-sm border "+cor}/>{v}
+        </span>)
+      : [["Ocupada","bg-blue-100"],["Aguardando","bg-amber-100"],["Erro","bg-rose-100"],["Livre","bg-slate-100"]].map(([v,cor])=>
+        <span key={v} className="flex items-center gap-1.5 text-slate-600">
+         <span className={"h-2.5 w-2.5 rounded-sm "+cor}/>{v}
+        </span>)}
     </div>
    </div>
    <div className="overflow-x-auto pb-2">
@@ -379,7 +500,7 @@ export default function MapaFisicoLavadorasPage({embutido=false}){
     </div>
    </div>
    <p className="mt-3 text-[11px] leading-5 text-slate-500">
-    Ocupação exibida: posição atual no Liquida. O contador “/ dia” considera OS distintas que passaram em cada posto na data selecionada.
+    Ocupação exibida: posição atual no Liquida. As cores do estoque temporário representam os dias desde a abertura da OS até hoje, não o tempo de permanência na posição. O contador “/ dia” considera OS distintas que passaram em cada posto na data selecionada.
     A soma de passagens pode superar a quantidade total de OS, pois a mesma máquina pode passar em mais de uma posição.
    </p>
   </section>}
