@@ -4,10 +4,10 @@ export const ITENS_PREVENTIVA_LAVADORA = [
   {chave:"vedacao_painel",label:"Vedação do painel frontal"},
   {chave:"mangueiras",label:"Conexões e fixações das mangueiras"},
   {chave:"gaxetas",label:"Gaxetas"},
-  {chave:"pes",label:"Pés niveladores",foto:true},
+  {chave:"pes",label:"Pés niveladores"},
   {chave:"suspensao",label:"Suspensão"},
   {chave:"eletrica",label:"Conexões elétricas"},
-  {chave:"oxidacao",label:"Oxidação / corrosão",foto:true},
+  {chave:"oxidacao",label:"Oxidação / corrosão"},
 ];
 export const BUCKET_EVIDENCIAS_LAVADORA="linha-branca-evidencias";
 
