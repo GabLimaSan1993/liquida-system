@@ -1,6 +1,7 @@
 import { jsPDF } from "jspdf";
 import "jspdf-autotable";
 import { supabase } from "../lib/supabase";
+import { bloqueioExigeLaudo, naoLigaExigeImeiContrato } from "./regrasTriagemFuncional.js";
 
 // ══════════════════════════════════════════════════════════
 // LAUDO DE TRIAGEM
@@ -110,10 +111,15 @@ export async function carregarParaLaudo(voucher) {
   // O JSON da funcional guarda produto, divergências e o motivo do destino.
   let respostas = null;
   try { respostas = JSON.parse(t.respostas_funcional || "null"); } catch { respostas = null; }
-  const naoLigaDivergencia = respostas?.destino?.tipo_laudo === "DIVERGENCIA" &&
-    respostas?.destino?.tipo_divergencia === "NAO_LIGA";
-  const bloqueado = t.aparelho_bloqueado === true ||
-    respostas?.identificacao?.aparelho_bloqueado === true;
+  const naoLigaDivergencia =
+    (respostas?.destino?.tipo_laudo === "DIVERGENCIA" &&
+     respostas?.destino?.tipo_divergencia === "NAO_LIGA") ||
+    respostas?.origem === "nao_liga_declarado_na_funcional" ||
+    naoLigaExigeImeiContrato(t.defeitos_adicionais);
+  const bloqueado = bloqueioExigeLaudo(
+    t.aparelho_bloqueado === true || respostas?.identificacao?.aparelho_bloqueado === true,
+    t.defeitos_adicionais
+  );
   const usaImeiContrato = naoLigaDivergencia || bloqueado;
 
   // O voucher é a chave do contrato; nunca tentar localizar contrato pelo IMEI
@@ -197,9 +203,14 @@ export async function listarAguardandoLaudo() {
     return {
       voucher:   t.voucher,
       imei:      t.imei,
-      naoLigaDivergencia: r?.destino?.tipo_laudo === "DIVERGENCIA" &&
-        r?.destino?.tipo_divergencia === "NAO_LIGA",
-      bloqueado: t.aparelho_bloqueado === true || r?.identificacao?.aparelho_bloqueado === true,
+      naoLigaDivergencia: (r?.destino?.tipo_laudo === "DIVERGENCIA" &&
+        r?.destino?.tipo_divergencia === "NAO_LIGA") ||
+        r?.origem === "nao_liga_declarado_na_funcional" ||
+        naoLigaExigeImeiContrato(t.defeitos_adicionais),
+      bloqueado: bloqueioExigeLaudo(
+        t.aparelho_bloqueado === true || r?.identificacao?.aparelho_bloqueado === true,
+        t.defeitos_adicionais
+      ),
       modelo:    r?.produto?.modelo || t.modelo || null,
       marca:     r?.produto?.marca || null,
       motivo:    r?.destino?.motivo || null,
