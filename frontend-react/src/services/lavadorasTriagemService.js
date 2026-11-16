@@ -913,52 +913,17 @@ export async function aprovarPosReparo(ciclo, operador, observacoes = "") {
     throw new Error("Conclua o ciclo pós-reparo antes de aprovar a lavadora.");
   }
 
-  const historico = await fetchHistoricoLavadora(ciclo.os_id);
-  const { data, error } = await supabase
-    .from("linha_branca_lavadora_ciclos")
-    .update({ status: "concluido", resultado: "aprovado" })
-    .eq("id", ciclo.id)
-    .select("*")
-    .single();
-  if (error) throw error;
-
-  await criarLaudo({
-    osId: ciclo.os_id,
-    tipo: "pos_reparo_aprovado",
-    titulo: "Laudo Pós-Reparo - Lavadora aprovada",
-    resumo: "Produto aprovado em ciclo de validação após reparo, com histórico técnico preservado.",
-    dados: {
-      ciclo_pos_reparo: data,
-      ciclos_anteriores: historico.ciclos,
-      reparos: historico.reparos,
-      eventos: historico.eventos,
-      observacoes: observacoes || null,
-      conclusao: "Produto aprovado após reparo e liberado para Higienização.",
-    },
-    operador,
+  // Uma única transação no banco: avanço da OS + conclusão do ciclo + laudo + evento.
+  // Se houver erro de validação, nada é gravado e o usuário recebe a mensagem.
+  const { data, error } = await supabase.rpc("linha_branca_lavadora_aprovar_pos_reparo", {
+    p_ciclo_id: ciclo.id,
+    p_operador: operador || ciclo.operador || null,
+    p_observacoes: observacoes || null,
   });
-
-  const { error: osError } = await supabase
-    .from("ordens_servico")
-    .update({
-      status_atual: "Limpeza",
-      etapa_atual: "Limpeza",
-      area_destino: "Limpeza",
-      aprovado_bancada: true,
-      obs_bancada: observacoes || "Aprovado no teste pós-reparo.",
-      tecnico_bancada: operador || null,
-    })
-    .eq("id", ciclo.os_id);
-  if (osError) throw osError;
-
-  await registrarEventoLavadora({
-    cicloId: ciclo.id,
-    osId: ciclo.os_id,
-    tipoEvento: "Aprovado pós-reparo",
-    detalhes: "Lavadora liberada para Higienização.",
-    tempoExecutado: Number(ciclo.tempo_executado_segundos || DURACAO_CICLO_LAVADORA),
-    operador,
-  });
+  if (error) throw new Error(error.message || "Não foi possível liberar a lavadora para Higienização.");
+  if (!data?.ok || data.status !== "Limpeza") {
+    throw new Error("A aprovação não confirmou o avanço para Higienização.");
+  }
   return data;
 }
 
