@@ -4,6 +4,7 @@ import {
   Droplets, LayoutDashboard, LogOut, Menu, PackageOpen, PackageSearch,
   Refrigerator, Snowflake, UploadCloud, User, WashingMachine,
   Warehouse, Wrench, X, Layers3, TestTubeDiagonal, Trash2, ShieldCheck,
+  PanelLeftClose, PanelLeftOpen,
 } from "lucide-react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../AuthContext.jsx";
@@ -82,24 +83,40 @@ export default function LinhaBrancaWorkspaceLayout(){
   const location=useLocation();
   const {profile,hasAccess}=useAuth();
   const [mobileOpen,setMobileOpen]=useState(false);
+  const [compacto,setCompacto]=useState(false);
   const [abertos,setAbertos]=useState({gestao:true,operacao:true,lavadoras:true,destinacao:true});
   function toggle(k){setAbertos(v=>({...v,[k]:!v[k]}));}
   useEffect(()=>{setMobileOpen(false);},[location.pathname]);
   async function sair(){await signOut();navigate("/login",{replace:true});}
-  const nav=(mobile=false)=>(
+  const nav=(mobile=false)=>{
+    const reduzido=compacto&&!mobile;
+    const linksCompactos=NAVEGACAO.flatMap(grupo=>[
+      ...(grupo.itens||[]).map(item=>({...item,icone:item.icone||grupo.icone})),
+      ...(grupo.subgrupos||[]).flatMap(sub=>(sub.itens||[]).map(item=>({...item,icone:item.icone||sub.icone})))
+    ]).filter(item=>!item.desabilitado&&hasAccess(item.permissao||item.rota));
+    return (
     <div className="flex h-full flex-col bg-[linear-gradient(175deg,#321D49_0%,#241334_70%,#1E112B_100%)] text-white">
       <div className="flex h-[76px] shrink-0 items-center gap-3 border-b border-white/10 px-5">
         <img src="/brand/liquida-logo-icon.png" alt="LiquidaPreço"
           className="h-10 w-10 rounded-xl bg-white p-1 object-contain"/>
-        <div className="min-w-0 flex-1">
+{!reduzido&&<div className="min-w-0 flex-1">
           <div className="truncate text-sm font-black">Liquida System</div>
           <p className="mt-0.5 text-[10px] font-semibold tracking-[.12em] text-violet-200/70">LINHA BRANCA</p>
-        </div>
+        </div>}
         {mobile&&<button aria-label="Fechar menu" type="button" onClick={()=>setMobileOpen(false)}
           className="rounded-lg p-2 text-white/75 hover:bg-white/10"><X size={18}/></button>}
       </div>
       <nav aria-label="Navegação da Linha Branca" className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-5">
-        {NAVEGACAO.map(grupo=>{
+        {reduzido?
+          <div className="space-y-1">{linksCompactos.map((item,i)=>{
+            const I=item.icone||BarChart3;
+            return <NavLink key={item.rota+"-"+i} to={item.rota} end={!!item.exata}
+              title={item.nome} aria-label={item.nome}
+              className={({isActive})=>"flex h-10 items-center justify-center rounded-lg transition "+
+                (isActive?"bg-white text-[#43284F]":"text-white/65 hover:bg-white/10 hover:text-white")}>
+              <I size={18}/></NavLink>;
+          })}</div>
+        :NAVEGACAO.map(grupo=>{
           const GrupoIcon=grupo.icone;
           return <div key={grupo.id}>
             <button type="button" onClick={()=>toggle(grupo.id)}
@@ -136,27 +153,27 @@ export default function LinhaBrancaWorkspaceLayout(){
           </div>;
         })}
       </nav>
-      <div className="shrink-0 space-y-2 border-t border-white/10 p-4">
-        <button type="button" onClick={()=>navigate("/sistemas")}
-          className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold text-white/70 hover:bg-white/10 hover:text-white">
-          <ArrowLeft size={16}/> Voltar aos sistemas
+      <div className={"shrink-0 space-y-2 border-t border-white/10 "+(reduzido?"p-2":"p-4")}>
+        <button type="button" onClick={()=>navigate("/sistemas")} title="Voltar aos sistemas"
+          className={"flex w-full items-center gap-2 rounded-xl text-xs font-bold text-white/70 hover:bg-white/10 hover:text-white "+(reduzido?"justify-center p-2.5":"px-3 py-2.5")}>
+          <ArrowLeft size={16}/>{!reduzido&&"Voltar aos sistemas"}
         </button>
-        <div className="flex items-center gap-2 rounded-xl bg-white/5 px-3 py-3">
+        <div className={"flex items-center gap-2 rounded-xl bg-white/5 "+(reduzido?"justify-center p-1.5":"px-3 py-3")}>
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10">
             <User size={17}/>
           </div>
-          <div className="min-w-0 flex-1">
+          {!reduzido&&<div className="min-w-0 flex-1">
             <p className="truncate text-xs font-bold">{profile?.nome||"Usuário"}</p>
             <p className="text-[10px] text-white/45">Operação · Linha Branca</p>
-          </div>
-          <button type="button" onClick={sair} title="Sair" aria-label="Sair da conta"
-            className="rounded-lg p-2 text-white/60 hover:bg-white/10 hover:text-white"><LogOut size={16}/></button>
+          </div>}
+          {!reduzido&&<button type="button" onClick={sair} title="Sair" aria-label="Sair da conta"
+            className="rounded-lg p-2 text-white/60 hover:bg-white/10 hover:text-white"><LogOut size={16}/></button>}
         </div>
       </div>
     </div>
-  );
+  );};
   return <div className="min-h-screen bg-[#F5F6F9]">
-    <aside className="fixed inset-y-0 left-0 z-30 hidden w-[278px] lg:block">
+    <aside className={"fixed inset-y-0 left-0 z-30 hidden transition-all duration-200 lg:block "+(compacto?"w-[76px]":"w-[278px]")}>
       {nav()}
     </aside>
     {mobileOpen&&<div className="fixed inset-0 z-50 lg:hidden">
@@ -164,11 +181,18 @@ export default function LinhaBrancaWorkspaceLayout(){
         className="absolute inset-0 bg-slate-950/65"/>
       <aside className="relative h-full w-[285px] max-w-[88vw] shadow-2xl">{nav(true)}</aside>
     </div>}
-    <div className="min-w-0 lg:pl-[278px]">
+    <div className={"min-w-0 transition-all duration-200 "+(compacto?"lg:pl-[76px]":"lg:pl-[278px]")}>
       <header className="sticky top-0 z-20 flex h-[72px] items-center gap-3 border-b border-slate-200 bg-white/95 px-4 backdrop-blur sm:px-7">
         <button type="button" onClick={()=>setMobileOpen(true)}
           aria-label="Abrir menu de navegação" className="rounded-xl border border-slate-200 p-2.5 text-[#43284F] lg:hidden">
           <Menu size={20}/>
+        </button>
+        <button type="button" onClick={()=>setCompacto(v=>!v)}
+          title={compacto?"Expandir menu lateral":"Recolher menu lateral"}
+          aria-label={compacto?"Expandir menu lateral":"Recolher menu lateral"}
+          aria-expanded={!compacto}
+          className="hidden rounded-xl border border-slate-200 p-2.5 text-[#43284F] hover:bg-slate-50 lg:inline-flex">
+          {compacto?<PanelLeftOpen size={19}/>:<PanelLeftClose size={19}/>}
         </button>
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-black text-slate-900">Operação Linha Branca</div>
