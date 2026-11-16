@@ -172,7 +172,11 @@ export async function consultarVoucher(voucher) {
       respostasAnteriores?.bateria?.faixa ||
       existente.status_bateria ||
       null,
-    defeitos: filtrarDefeitosAdicionais(existente.defeitos_adicionais),
+    // "Não liga — divergência funcional" é marcador automático do fluxo,
+    // não defeito selecionável do catálogo. Não reenviar esse marcador na
+    // retriagem, pois a RPC o cria novamente e rejeita itens fora do catálogo.
+    defeitos: filtrarDefeitosAdicionais(existente.defeitos_adicionais)
+      .filter(defeito => !/^n[aã]o liga\s*[—–-]\s*diverg[eê]ncia funcional$/i.test(defeito)),
     bruto: respostasAnteriores,
   } : null;
 
