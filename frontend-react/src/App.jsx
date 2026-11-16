@@ -15,6 +15,7 @@ import {
   Route,
   Routes,
   useLocation,
+  Outlet,
 } from "react-router-dom";
 
 import {
@@ -107,7 +108,7 @@ import RefrigeracaoV2Page from "./pages/linha-branca-v2/RefrigeracaoV2Page.jsx";
 import TriagemRefrigeracaoV2Page from "./pages/linha-branca-v2/TriagemRefrigeracaoV2Page.jsx";
 import ReparosRefrigeracaoV2Page from "./pages/linha-branca-v2/ReparosRefrigeracaoV2Page.jsx";
 import BancadaTestesRefrigeracaoV2Page from "./pages/linha-branca-v2/BancadaTestesRefrigeracaoV2Page.jsx";
-import LavadorasV2Page from "./pages/linha-branca-v2/LavadorasV2Page.jsx";
+import MapaFisicoLavadorasPage from "./pages/linha-branca-v2/MapaFisicoLavadorasPage.jsx";
 import TriagemLavadorasV2Page from "./pages/linha-branca-v2/TriagemLavadorasV2Page.jsx";
 import ReparosLavadorasV2Page from "./pages/linha-branca-v2/ReparosLavadorasV2Page.jsx";
 import BancadaTestesLavadorasV2Page from "./pages/linha-branca-v2/BancadaTestesLavadorasV2Page.jsx";
@@ -121,9 +122,6 @@ import { getUserLanding } from "./services/userLanding.js";
 import DefinicaoAssurantV2Page from "./pages/assurant-v2/DefinicaoAssurantV2Page.jsx";
 import ValidacaoMeliV2Page from "./pages/assurant-v2/ValidacaoMeliV2Page.jsx";
 
-import RefrigeracaoWorkspaceLayout from "./layout/RefrigeracaoWorkspaceLayout.jsx";
-import LavadorasWorkspaceLayout from "./layout/LavadorasWorkspaceLayout.jsx";
-import ClimatizacaoWorkspaceLayout from "./layout/ClimatizacaoWorkspaceLayout.jsx";
 
 
 function ProtectedRoute({
@@ -378,150 +376,36 @@ export default function App() {
       <Route path="/gerenciar-usuarios" element={<ProtectedRoute tela="/gerenciar-usuarios"><Navigate to="/usuarios" replace /></ProtectedRoute>} />
 
       {/* =====================================================
-          LINHA BRANCA V2
+          LINHA BRANCA V2 - workspace unificado para todas as rotas
       ====================================================== */}
-
-      <Route
-        path="/v2/linha-branca"
-        element={
-          <ProtectedRoute tela="/v2/linha-branca">
-            <LinhaBrancaWorkspaceLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route
-          index
-          element={
-            <LinhaBrancaHomePage />
-          }
-        />
+      <Route path="/v2/linha-branca"
+        element={<ProtectedRoute><LinhaBrancaWorkspaceLayout /></ProtectedRoute>}>
+        <Route index element={<ProtectedRoute tela="/v2/linha-branca"><LinhaBrancaHomePage /></ProtectedRoute>}/>
         <Route path="uploads" element={<ProtectedRoute tela="/v2/linha-branca/uploads"><UploadAgingLinhaBrancaPage /></ProtectedRoute>} />
         <Route path="reparos-outros" element={<ProtectedRoute tela="/v2/linha-branca"><ReparoLinhaBrancaPage areaExecucao="Reparo Mecânico" somenteOutros /></ProtectedRoute>} />
         <Route path="gestao/producao" element={<ProtectedRoute tela="/v2/linha-branca/gestao/producao"><GestaoProducaoLinhaBrancaPage /></ProtectedRoute>} />
         <Route path="desmembramento" element={<ProtectedRoute tela="/v2/linha-branca/desmembramento"><DesmembramentoLinhaBrancaPage /></ProtectedRoute>} />
         <Route path="gestao/estoque" element={<ProtectedRoute tela="/v2/linha-branca/gestao/estoque"><GestaoEstoqueLinhaBrancaPage /></ProtectedRoute>} />
+        <Route path="lavadoras" element={<ProtectedRoute tela="/v2/linha-branca/lavadoras"><Outlet /></ProtectedRoute>}>
+          <Route index element={<MapaFisicoLavadorasPage />}/>
+          <Route path="triagem" element={<ProtectedRoute tela="/v2/linha-branca/lavadoras/triagem"><TriagemLavadorasV2Page /></ProtectedRoute>}/>
+          <Route path="reparos" element={<ProtectedRoute tela="/v2/linha-branca/lavadoras/reparos"><ReparosLavadorasV2Page /></ProtectedRoute>}/>
+          <Route path="testes" element={<ProtectedRoute tela="/v2/linha-branca/lavadoras/testes"><BancadaTestesLavadorasV2Page /></ProtectedRoute>}/>
+          <Route path="scrap" element={<ProtectedRoute tela="/v2/linha-branca/lavadoras/triagem"><ScrapLavadorasV2Page /></ProtectedRoute>}/>
+        </Route>
+        <Route path="refrigeracao" element={<ProtectedRoute tela="/v2/linha-branca/refrigeracao"><Outlet /></ProtectedRoute>}>
+          <Route index element={<RefrigeracaoV2Page />}/>
+          <Route path="triagem" element={<ProtectedRoute tela="/v2/linha-branca/refrigeracao/triagem"><TriagemRefrigeracaoV2Page /></ProtectedRoute>}/>
+          <Route path="reparos" element={<ProtectedRoute tela="/v2/linha-branca/refrigeracao/reparos"><ReparosRefrigeracaoV2Page /></ProtectedRoute>}/>
+          <Route path="testes" element={<ProtectedRoute tela="/v2/linha-branca/refrigeracao/testes"><BancadaTestesRefrigeracaoV2Page /></ProtectedRoute>}/>
+        </Route>
+        <Route path="climatizacao" element={<ProtectedRoute tela="/v2/linha-branca/climatizacao"><Outlet /></ProtectedRoute>}>
+          <Route index element={<ClimatizacaoV2Page />}/>
+          <Route path="triagem" element={<ProtectedRoute tela="/v2/linha-branca/climatizacao/triagem"><TriagemClimatizacaoV2Page /></ProtectedRoute>}/>
+          <Route path="reparos" element={<ProtectedRoute tela="/v2/linha-branca/climatizacao/reparos"><ReparosClimatizacaoV2Page /></ProtectedRoute>}/>
+          <Route path="testes" element={<ProtectedRoute tela="/v2/linha-branca/climatizacao/testes"><BancadaTestesClimatizacaoV2Page /></ProtectedRoute>}/>
+        </Route>
       </Route>
-
-
-      <Route
-        path="/v2/linha-branca/refrigeracao"
-        element={
-          <ProtectedRoute tela="/v2/linha-branca/refrigeracao">
-            <RefrigeracaoWorkspaceLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route
-          index
-          element={
-            <RefrigeracaoV2Page />
-          }
-        />
-
-        <Route
-          path="triagem"
-          element={
-            <ProtectedRoute tela="/v2/linha-branca/refrigeracao/triagem"><TriagemRefrigeracaoV2Page /></ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="reparos"
-          element={
-            <ProtectedRoute tela="/v2/linha-branca/refrigeracao/reparos"><ReparosRefrigeracaoV2Page /></ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="testes"
-          element={
-            <ProtectedRoute tela="/v2/linha-branca/refrigeracao/testes"><BancadaTestesRefrigeracaoV2Page /></ProtectedRoute>
-          }
-        />
-      </Route>
-
-
-      <Route
-        path="/v2/linha-branca/climatizacao"
-        element={
-          <ProtectedRoute tela="/v2/linha-branca/climatizacao">
-            <ClimatizacaoWorkspaceLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route
-          index
-          element={
-            <ClimatizacaoV2Page />
-          }
-        />
-
-        <Route
-          path="triagem"
-          element={
-            <ProtectedRoute tela="/v2/linha-branca/climatizacao/triagem"><TriagemClimatizacaoV2Page /></ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="reparos"
-          element={
-            <ProtectedRoute tela="/v2/linha-branca/climatizacao/reparos"><ReparosClimatizacaoV2Page /></ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="testes"
-          element={
-            <ProtectedRoute tela="/v2/linha-branca/climatizacao/testes"><BancadaTestesClimatizacaoV2Page /></ProtectedRoute>
-          }
-        />
-      </Route>
-
-
-      <Route
-        path="/v2/linha-branca/lavadoras"
-        element={
-          <ProtectedRoute tela="/v2/linha-branca/lavadoras">
-            <LavadorasWorkspaceLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route
-          index
-          element={
-            <LavadorasV2Page />
-          }
-        />
-
-        <Route
-          path="triagem"
-          element={
-            <ProtectedRoute tela="/v2/linha-branca/lavadoras/triagem"><TriagemLavadorasV2Page /></ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="reparos"
-          element={
-            <ProtectedRoute tela="/v2/linha-branca/lavadoras/reparos"><ReparosLavadorasV2Page /></ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="testes"
-          element={
-            <ProtectedRoute tela="/v2/linha-branca/lavadoras/testes"><BancadaTestesLavadorasV2Page /></ProtectedRoute>
-          }
-        />
-        <Route
-          path="scrap"
-          element={
-            <ProtectedRoute tela="/v2/linha-branca/lavadoras/triagem"><ScrapLavadorasV2Page /></ProtectedRoute>
-          }
-        />
-      </Route>
-
 
       {/* =====================================================
           ASSURANT WAREHOUSE V2
