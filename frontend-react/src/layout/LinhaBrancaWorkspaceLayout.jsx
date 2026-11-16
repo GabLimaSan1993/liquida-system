@@ -86,7 +86,14 @@ export default function LinhaBrancaWorkspaceLayout(){
   const [compacto,setCompacto]=useState(false);
   const [abertos,setAbertos]=useState({gestao:true,operacao:true,lavadoras:true,destinacao:true});
   function toggle(k){setAbertos(v=>({...v,[k]:!v[k]}));}
-  useEffect(()=>{setMobileOpen(false);},[location.pathname]);
+  useEffect(()=>{
+    setMobileOpen(false);
+    // O mesmo menu acompanha toda a Linha Branca e mantém aberta a categoria visitada.
+    const area=location.pathname.startsWith("/v2/linha-branca/lavadoras")?"lavadoras"
+      :location.pathname.startsWith("/v2/linha-branca/refrigeracao")?"refrigeracao"
+      :location.pathname.startsWith("/v2/linha-branca/climatizacao")?"climatizacao":null;
+    if(area)setAbertos(p=>p.operacao&&p[area]?p:{...p,operacao:true,[area]:true});
+  },[location.pathname]);
   async function sair(){await signOut();navigate("/login",{replace:true});}
   const nav=(mobile=false)=>{
     const reduzido=compacto&&!mobile;
@@ -106,7 +113,7 @@ export default function LinhaBrancaWorkspaceLayout(){
         {mobile&&<button aria-label="Fechar menu" type="button" onClick={()=>setMobileOpen(false)}
           className="rounded-lg p-2 text-white/75 hover:bg-white/10"><X size={18}/></button>}
       </div>
-      <nav aria-label="Navegação da Linha Branca" className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-5">
+      <nav aria-label="Navegação da Linha Branca" className="lb-menu-scroll min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-5">
         {reduzido?
           <div className="space-y-1">{linksCompactos.map((item,i)=>{
             const I=item.icone||BarChart3;
