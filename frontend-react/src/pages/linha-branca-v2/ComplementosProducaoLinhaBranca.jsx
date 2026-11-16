@@ -81,14 +81,17 @@ export default function ComplementosProducaoLinhaBranca({
  const [base,setBase]=useState(null);
  const [filtrado,setFiltrado]=useState(null);
  const [kardex,setKardex]=useState(null);
+ const [kardexOperacional,setKardexOperacional]=useState(null);
  const [reparoCiclo,setReparoCiclo]=useState(null);
  const [carregandoBase,setCarregandoBase]=useState(true);
  const [carregandoFiltro,setCarregandoFiltro]=useState(false);
  const [carregandoKardex,setCarregandoKardex]=useState(true);
+ const [carregandoOperacional,setCarregandoOperacional]=useState(true);
  const [carregandoReparo,setCarregandoReparo]=useState(true);
  const [erroBase,setErroBase]=useState("");
  const [erroFiltro,setErroFiltro]=useState("");
  const [erroKardex,setErroKardex]=useState("");
+ const [erroOperacional,setErroOperacional]=useState("");
  const [erroReparo,setErroReparo]=useState("");
  const {inicio,fim,agrupar}=periodo;
  const valido=Boolean(inicio&&fim&&fim>=inicio&&numDias(inicio,fim)<=1095);
@@ -136,6 +139,19 @@ export default function ComplementosProducaoLinhaBranca({
  },[inicio,fim,agrupar,area,departamento,colaboradorLocal,tecnico,versao,valido]);
 
  useEffect(()=>{
+  if(!valido){setKardexOperacional(null);setCarregandoOperacional(false);return;}
+  const ctrl=new AbortController();
+  setCarregandoOperacional(true);setErroOperacional("");
+  consultar("linha_branca_kardex_operacional_lavadoras",{
+    p_inicio:inicio,p_fim:fim,p_agrupar:agrupar
+  },ctrl.signal)
+    .then(d=>{if(!ctrl.signal.aborted)setKardexOperacional(d);})
+    .catch(e=>{if(!ctrl.signal.aborted){setKardexOperacional(null);setErroOperacional(e.message);}})
+    .finally(()=>{if(!ctrl.signal.aborted)setCarregandoOperacional(false);});
+  return ()=>ctrl.abort();
+ },[inicio,fim,agrupar,versao,valido]);
+
+ useEffect(()=>{
   if(!valido){setKardex(null);setCarregandoKardex(false);return;}
   const ctrl=new AbortController();
   setCarregandoKardex(true);setErroKardex("");
@@ -159,6 +175,11 @@ export default function ComplementosProducaoLinhaBranca({
   [produtivo,inicio,fim,agrupar]);
  const kardexSerie=useMemo(()=>completarSerie(kardex?.serie,inicio,fim,agrupar,true),
   [kardex,inicio,fim,agrupar]);
+ const serieOperacional=useMemo(()=>completarSerie(kardexOperacional?.serie,inicio,fim,agrupar,true)
+  .map(d=>({...d,entradas_triagem:Number(d.entradas_triagem||0),
+    saidas_higienizacao:Number(d.saidas_higienizacao||0),
+    aguardando_triagem:Number(d.aguardando_triagem||0)})),
+  [kardexOperacional,inicio,fim,agrupar]);
  const temResultados=Boolean((produtivo?.curvas||[]).length);
  const mediaGeral=produtivo?.tempos||[];
  const cobertura=kardex?.cobertura||{};
@@ -265,36 +286,47 @@ export default function ComplementosProducaoLinhaBranca({
   </section>
 
   <section className={card}>
-   <Titulo Icon={Factory} eyebrow="Base histórica de Aging · externo"
-    titulo="Kardex de entrada e saída · Lavadoras"
-    descricao="Exclusivamente lavadoras de roupa. Entrada pela Dt_Abert; saída operacional pela primeira aparição em QCC, com data DtUltLog. Cada OS é contabilizada uma vez por evento, independentemente dos snapshots."/>
-   {mostrarKardex&&<div className="mb-4 grid gap-3 sm:grid-cols-3">
+   <Titulo Icon={Factory} eyebrow="Movimentações reais · Liquida System"
+    titulo="Kardex operacional de lavadoras"
+    descricao="Entrada: primeiro início de Triagem registrado no Liquida. Saída: primeira movimentação para Higienização/Limpeza. Refurbish aguardando: OS abertas no período, sem entrada na Triagem e ainda pendentes."/>
+   {!!kardexOperacional&&<div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
      {[
-      ["Entradas no período",kardex?.resumo?.entradas],
-      ["Saídas identificadas em QCC",kardex?.resumo?.saidas_qcc],
-      ["Expedido no período",kardex?.resumo?.expedidos]
+      ["Iniciaram Triagem",kardexOperacional?.resumo?.entradas_triagem],
+      ["Foram para Higienização",kardexOperacional?.resumo?.saidas_higienizacao],
+      ["Abertas como Refurbish",kardexOperacional?.resumo?.abertas_refurbish],
+      ["Refurbish aguardando Triagem",kardexOperacional?.resumo?.aguardando_triagem]
      ].map(([t,v])=><div key={t} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
       <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{t}</p>
       <p className="mt-1 text-2xl font-black text-slate-900">{numero(v)}</p>
      </div>)}
     </div>}
-   {!valido||erroKardex||carregandoKardex||!mostrarKardex?
-    <GraficoVazio carregando={carregandoKardex} erro={erroKardex}/>:
-    <div className="h-[290px] w-full">
+   {!valido||erroOperacional||carregandoOperacional||!kardexOperacional?
+    <GraficoVazio carregando={carregandoOperacional} erro={erroOperacional}/>:
+    <div className="h-[300px] w-full">
      <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={kardexSerie} margin={{top:8,right:16,bottom:5,left:-18}} barGap={2}>
+      <BarChart data={serieOperacional} margin={{top:8,right:16,bottom:5,left:-18}} barGap={2}>
        <CartesianGrid strokeDasharray="3 3" vertical={false}/>
        <XAxis dataKey="rotulo" interval="preserveStartEnd" minTickGap={38} tick={{fontSize:10}}/>
        <YAxis allowDecimals={false} tick={{fontSize:10}}/>
-       <Tooltip formatter={v=>[numero(v),"OS"]}/><Legend wrapperStyle={{fontSize:11}}/>
-       <Bar dataKey="entradas" name="Entrada · Dt_Abert" fill="#7c3aed" maxBarSize={24}/>
-       <Bar dataKey="saidas_qcc" name="Saída · QCC (DtUltLog)" fill="#0891b2" maxBarSize={24}/>
+       <Tooltip formatter={v=>[numero(v),"OS distintas"]}/>
+       <Legend wrapperStyle={{fontSize:11}}/>
+       <Bar dataKey="entradas_triagem" name="Entrada · Triagem no Liquida" fill="#7c3aed" maxBarSize={24}/>
+       <Bar dataKey="saidas_higienizacao" name="Saída · Higienização" fill="#0891b2" maxBarSize={24}/>
+       <Bar dataKey="aguardando_triagem" name="Refurbish abertas e ainda aguardando" fill="#d97706" maxBarSize={24}/>
       </BarChart>
      </ResponsiveContainer>
     </div>}
    <p className="mt-2 flex items-start gap-2 text-[11px] leading-5 text-slate-500">
-    <Info size={14} className="mt-0.5 shrink-0"/> QCC é um marco operacional, não confirmação fiscal de expedição. O DtUltLog pode ser anterior ao upload; estas datas refletem o histórico recebido, e não uma série completa de transições do sistema externo.
+    <Info size={14} className="mt-0.5 shrink-0"/>
+    Entradas e saídas são eventos efetivos, contados uma vez por OS, na data do acontecimento.
+    A barra de Refurbish aguardando representa OS abertas na data exibida que ainda estão na fila hoje,
+    e não uma terceira movimentação. Não inclui retornos de loja nem secadoras nessa barra.
    </p>
+   {Number(kardexOperacional?.resumo?.inconsistencias_sem_inicio||0)>0&&
+     <p className="mt-2 text-[11px] font-semibold text-amber-800">
+      Atenção: {numero(kardexOperacional.resumo.inconsistencias_sem_inicio)} OS abertas como Refurbish no período
+      não possuem início de Triagem registrado, mas já estão em outra etapa. Foram excluídas da fila de aguardando.
+     </p>}
   </section>
 
   <section className={card}>
