@@ -724,11 +724,11 @@ export default function TriagemLavadorasV2Page() {
             })}
             onOxidacao={ciclo=>executarAcao(async ()=>{
               await encaminharPreventivaLavadora(ciclo.id,"oxidacao",operador);
-              setMensagem("Oxidação registrada com foto. OS encaminhada exclusivamente a Carlos Dias (N3).");
+              setMensagem("Oxidação registrada no checklist. OS encaminhada exclusivamente a Carlos Dias (N3).");
             })}
             onNaoConforme={ciclo=>executarAcao(async ()=>{
               await encaminharNaoConformidadeLavadora(ciclo.id,operador);
-              setMensagem("Preventiva não conforme registrada com fotos. OS encaminhada para avaliação e reparo N3 com Carlos Dias.");
+              setMensagem("Preventiva não conforme registrada no checklist. OS encaminhada para avaliação e reparo N3 com Carlos Dias.");
             })}
           />
         </div>
