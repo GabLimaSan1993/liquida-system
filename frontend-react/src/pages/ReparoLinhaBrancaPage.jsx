@@ -13,6 +13,9 @@ import {
   REPAROS_MECANICOS,
   REPAROS_ELETRICOS,
   REPAROS_ESTETICOS,
+  REPAROS_MECANICOS_LAVADORAS,
+  REPAROS_ELETRICOS_LAVADORAS,
+  REPAROS_ESTETICOS_LAVADORAS,
 } from "../services/linhaBrancaService.js";
 import { useAuth } from "../AuthContext.jsx";
 
@@ -132,7 +135,13 @@ export default function ReparoLinhaBrancaPage({ areaExecucao, somenteOutros = fa
     [osList, selectedOsId]
   );
 
-  const { campo, lista: listaCompleta } = REPAROS_POR_AREA[areaExecucao] || {};
+  const { campo, lista: listaGenerica } = REPAROS_POR_AREA[areaExecucao] || {};
+  const lavadoraSelecionada = Boolean(selectedOs && identificarTipoLavadora(selectedOs.categoria));
+  const listaCompleta = lavadoraSelecionada
+    ? areaExecucao === "Reparo Elétrico" ? REPAROS_ELETRICOS_LAVADORAS
+      : areaExecucao === "Reparo Mecânico" ? REPAROS_MECANICOS_LAVADORAS
+      : REPAROS_ESTETICOS_LAVADORAS
+    : listaGenerica;
 
   const reparosTriados = useMemo(() => {
     if (!triagem || !campo) return [];
