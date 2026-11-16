@@ -128,6 +128,14 @@ export const CATALOGO_REPAROS_LAVADORAS = Object.freeze({
       "nivel": "N3"
     },
     {
+      "nome": "SENSOR HALL",
+      "nivel": "N3"
+    },
+    {
+      "nome": "TRAVA DA PORTA",
+      "nivel": "N2"
+    },
+    {
       "nome": "PLACA SELETORA",
       "nivel": "N3"
     },
