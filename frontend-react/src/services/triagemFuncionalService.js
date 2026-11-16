@@ -101,7 +101,7 @@ export async function consultarVoucher(voucher) {
 
   const { data: existente, error: errT } = await supabase
     .from("assurant_triagem")
-    .select("id, imei, sku, modelo, grade, status_atual, data_funcional, local, criado_em, devolucao_id, respostas_funcional, status_bateria, bateria_percentual, defeitos_adicionais, resultado_triagem_funcional, funcional_por, origem_triagem")
+    .select("id, imei, sku, modelo, grade, status_atual, data_funcional, data_laudo, data_cosmetico, data_alocacao, data_oracle, oracle_confirmado_em, local, criado_em, devolucao_id, respostas_funcional, status_bateria, bateria_percentual, defeitos_adicionais, resultado_triagem_funcional, funcional_por, origem_triagem")
     .eq("voucher", v)
     .maybeSingle();
   if (errT) throw new Error(errT.message);
@@ -143,7 +143,15 @@ export async function consultarVoucher(voucher) {
     }
   }
 
-  const ultimaTriagem = existente?.data_funcional ? {
+  // Registros antigos de Não liga/Laudo podem ter etapa definida, mas não
+  // possuir data_funcional nem questionário. Permitir revisão auditada sem
+  // fabricar uma triagem anterior; os campos existentes são referência.
+  const registroLegadoRevisavel = !!existente &&
+    ["Aguardando laudo", "Aguardando triagem cosmética"].includes(existente.status_atual) &&
+    !existente.data_cosmetico && !existente.data_alocacao &&
+    !existente.data_oracle && !existente.oracle_confirmado_em;
+  const ultimaTriagem = (existente?.data_funcional || registroLegadoRevisavel) ? {
+    historicoIncompleto: !existente.data_funcional,
     imei: existente.imei || null,
     sku: existente.sku || null,
     modelo: existente.modelo || null,
@@ -179,7 +187,7 @@ export async function consultarVoucher(voucher) {
     tipoPerguntas: canal === "DEV"
       ? (canalDoVoucher(devolucao?.voucher_origem) || "YBV")
       : canal,
-    jaTriado: !!existente?.data_funcional,
+    jaTriado: !!existente?.data_funcional || registroLegadoRevisavel,
     bloqueado: !!etapa,
     etapa,
     ultimaTriagem,
