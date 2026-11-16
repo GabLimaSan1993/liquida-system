@@ -59,7 +59,7 @@ export async function carregarParaLaudo(voucher) {
 
   const { data: t, error } = await supabase
     .from("assurant_triagem")
-    .select("id, voucher, imei, sku, modelo, cliente, loja, condicao, status_atual, respostas_funcional, defeitos_adicionais, data_funcional")
+    .select("id, voucher, imei, sku, modelo, cliente, loja, condicao, status_atual, aparelho_bloqueado, respostas_funcional, defeitos_adicionais, data_funcional")
     .eq("voucher", v)
     .maybeSingle();
   if (error) throw new Error(error.message);
@@ -112,6 +112,25 @@ export async function carregarParaLaudo(voucher) {
   try { respostas = JSON.parse(t.respostas_funcional || "null"); } catch { respostas = null; }
   const naoLigaDivergencia = respostas?.destino?.tipo_laudo === "DIVERGENCIA" &&
     respostas?.destino?.tipo_divergencia === "NAO_LIGA";
+  const bloqueado = t.aparelho_bloqueado === true ||
+    respostas?.identificacao?.aparelho_bloqueado === true;
+  const usaImeiContrato = naoLigaDivergencia || bloqueado;
+
+  // O voucher é a chave do contrato; nunca tentar localizar contrato pelo IMEI
+  // digitado, pois nos casos Bloqueado/Não liga ele pode não ser acessível.
+  let referenciaContrato = null;
+  if (usaImeiContrato) {
+    const { data, error: erroReferencia } = await supabase.rpc("assurant_laudo_imei_referencia", {
+      p_voucher: v,
+    });
+    if (erroReferencia) throw new Error("Erro ao consultar IMEI do contrato: " + erroReferencia.message);
+    referenciaContrato = data;
+    if (!primeiroTexto(referenciaContrato?.imei_contrato)) {
+      return { ok:false,
+        erro:`Voucher ${v} sem IMEI de contrato localizado. Regularize o cadastro do Trade-in antes de elaborar o laudo; não é permitido inventar IMEI.`
+      };
+    }
+  }
 
 
   // Registros antigos do GAIA/funcional trazem "Pergunta: Resposta: Não"
@@ -139,10 +158,16 @@ export async function carregarParaLaudo(voucher) {
     ok: true,
     triagemId: t.id,
     naoLigaDivergencia,
+    bloqueado,
+    usaImeiContrato,
     tipoLaudo: naoLigaDivergencia ? "DIVERGENCIA" : "TRIAGEM",
     identificacaoNaoBipada: respostas?.identificacao?.identificacao_nao_bipada === true,
     voucher: t.voucher,
-    imei: t.imei,
+    imei: usaImeiContrato ? referenciaContrato.imei_contrato : t.imei,
+    imeiContrato: usaImeiContrato ? referenciaContrato.imei_contrato : null,
+    imeiFisicoTriagem: usaImeiContrato ? referenciaContrato.imei_fisico_triagem : t.imei,
+    imeiOrigem: usaImeiContrato ? "contrato" : "triagem",
+    imeiTriagem: t.imei,
     produto: respostas?.produto || null,
     cliente: primeiroTexto(tradein?.cliente, t.cliente),
     loja: primeiroTexto(tradein?.loja, t.loja),
@@ -227,8 +252,11 @@ export function gerarPdfLaudo(dados, fotos, observacao, opcoes = {}) {
       ["Nome do cliente:", dados.cliente || "—", "Loja:", dados.loja || "—"],
       ["Marca:", dados.produto?.marca || "—", "Modelo:", dados.produto?.modelo || "—"],
       ["Capacidade:", dados.produto?.armazenamento || "—", "Cor:", dados.produto?.cor || "—"],
-      ["IMEI:", dados.naoLigaDivergencia ? "NAO CONFERIDO (APARELHO NAO LIGA)" : dados.imei || "—",
+      [dados.usaImeiContrato ? "IMEI do contrato:" : "IMEI:", dados.imei || "—",
        "Voucher:", dados.voucher || "—"],
+      ["Origem da identificação:", dados.usaImeiContrato ? "CONTRATO / TRADE-IN" : "TRIAGEM FUNCIONAL",
+       "IMEI físico na triagem:", dados.imeiFisicoTriagem || "NÃO CONFERIDO"],
+
     ],
   });
   y = doc.lastAutoTable.finalY + 8;
@@ -310,7 +338,19 @@ export async function salvarLaudo({ dados, fotos, observacao, userId }) {
   // Recheck at save time, including screens opened before a deployment.
   const atualizado = await carregarParaLaudo(dados.voucher);
   if (!atualizado.ok) return atualizado;
-  dados = completarIdentificacao(dados, atualizado, {}, {
+  // Nunca confiar no IMEI antigo da tela: na emissão o contrato é consultado
+  // novamente. Preservar os campos preenchidos pelo operador, mas usar a
+  // identificação de referência validada no servidor.
+  dados = completarIdentificacao({
+    ...dados,
+    imei: atualizado.imei,
+    imeiContrato: atualizado.imeiContrato,
+    imeiFisicoTriagem: atualizado.imeiFisicoTriagem,
+    imeiOrigem: atualizado.imeiOrigem,
+    naoLigaDivergencia: atualizado.naoLigaDivergencia,
+    bloqueado: atualizado.bloqueado,
+    usaImeiContrato: atualizado.usaImeiContrato,
+  }, atualizado, {}, {
     ...atualizado.produto, capacidade: atualizado.produto?.armazenamento,
   });
   const ausentes = camposAusentesLaudo(dados);
@@ -328,6 +368,9 @@ export async function salvarLaudo({ dados, fotos, observacao, userId }) {
     id:           laudoId,
     voucher:      dados.voucher,
     imei:         dados.imei || null,
+    imei_contrato: dados.imeiContrato || null,
+    imei_fisico_triagem: dados.imeiFisicoTriagem || null,
+    origem_imei: dados.imeiOrigem || 'triagem',
     motivo:       dados.motivo || null,
     divergencias: dados.divergencias || [],
     defeitos:     (dados.defeitos || []).join("; ") || null,
