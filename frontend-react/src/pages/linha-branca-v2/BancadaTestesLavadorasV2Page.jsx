@@ -19,6 +19,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "../../AuthContext.jsx";
+import ResumoProducaoLavadorasHoje from "./ResumoProducaoLavadorasHoje.jsx";
 import { painelDoOperador } from "../../services/lavadorasOperador.js";
 import {
   REPAROS_ELETRICOS_LAVADORAS,
@@ -371,6 +372,8 @@ export default function BancadaTestesLavadorasV2Page() {
         <Stat icon={AlertTriangle} value={metricas.erro} label="Paradas por erro" tone="red" />
         <Stat icon={CheckCircle2} value={metricas.aguardandoResultado} label="Aguardando decisão final" tone="green" />
       </section>
+
+      <div className="mt-4"><ResumoProducaoLavadorasHoje categoria="bancada" tecnico={verTodos?"":nomeOperador||""} compacto/></div>
 
       <section className="mt-5 grid gap-5 2xl:grid-cols-[380px_minmax(0,1fr)_420px]">
         <div className="rounded-2xl border border-slate-200 bg-white p-5">
