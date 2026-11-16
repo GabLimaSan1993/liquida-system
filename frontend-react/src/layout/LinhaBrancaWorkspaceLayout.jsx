@@ -96,9 +96,9 @@ export default function LinhaBrancaWorkspaceLayout(){
     ]).filter(item=>!item.desabilitado&&hasAccess(item.permissao||item.rota));
     return (
     <div className="flex h-full flex-col bg-[linear-gradient(175deg,#321D49_0%,#241334_70%,#1E112B_100%)] text-white">
-      <div className="flex h-[76px] shrink-0 items-center gap-3 border-b border-white/10 px-5">
+      <div className={"flex h-[76px] shrink-0 items-center gap-3 border-b border-white/10 "+(reduzido?"justify-center px-2":"px-5")}>
         <img src="/brand/liquida-logo-icon.png" alt="LiquidaPreço"
-          className="h-10 w-10 rounded-xl bg-white p-1 object-contain"/>
+          className="h-10 w-10 shrink-0 rounded-xl bg-white p-1 object-contain"/>
 {!reduzido&&<div className="min-w-0 flex-1">
           <div className="truncate text-sm font-black">Liquida System</div>
           <p className="mt-0.5 text-[10px] font-semibold tracking-[.12em] text-violet-200/70">LINHA BRANCA</p>
