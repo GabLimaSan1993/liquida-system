@@ -185,7 +185,7 @@ export async function carregarParaLaudo(voucher) {
 export async function listarAguardandoLaudo() {
   const { data, error } = await supabase
     .from("assurant_triagem")
-    .select("voucher, imei, modelo, sku, data_funcional, respostas_funcional, defeitos_adicionais")
+    .select("voucher, imei, modelo, sku, aparelho_bloqueado, data_funcional, respostas_funcional, defeitos_adicionais")
     .eq("status_atual", "Aguardando laudo")
     .order("data_funcional", { ascending: true });
   if (error) throw new Error(error.message);
@@ -199,6 +199,7 @@ export async function listarAguardandoLaudo() {
       imei:      t.imei,
       naoLigaDivergencia: r?.destino?.tipo_laudo === "DIVERGENCIA" &&
         r?.destino?.tipo_divergencia === "NAO_LIGA",
+      bloqueado: t.aparelho_bloqueado === true || r?.identificacao?.aparelho_bloqueado === true,
       modelo:    r?.produto?.modelo || t.modelo || null,
       marca:     r?.produto?.marca || null,
       motivo:    r?.destino?.motivo || null,
