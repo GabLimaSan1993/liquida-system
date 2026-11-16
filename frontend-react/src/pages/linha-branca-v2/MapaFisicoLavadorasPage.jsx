@@ -352,15 +352,15 @@ export default function MapaFisicoLavadorasPage(){
     </div>
    </div>
    <div className="overflow-x-auto pb-2">
-    <div className="mx-auto w-full min-w-[840px] max-w-[1060px] rounded-3xl border border-slate-200 bg-[#F6F7FA] p-4 sm:p-5">
+    <div className="mx-auto w-full min-w-[840px] max-w-[960px] rounded-3xl border border-slate-200 bg-[#F6F7FA] p-4 sm:p-5">
      <div className="ml-[122px] grid grid-cols-7 gap-2.5">
       {TRIAGEM.slice(0,7).map(c=>pos(c,"triagem"))}
      </div>
      <div className="mt-3 grid grid-cols-[112px_minmax(0,1fr)] gap-3">
-      <div className="grid grid-rows-[repeat(13,minmax(63px,1fr))] gap-2">
+      <div className="grid grid-rows-[repeat(13,minmax(75px,1fr))] gap-2">
        {TRIAGEM.slice(7).map(c=>pos(c,"triagem"))}
       </div>
-      <div className="relative flex min-h-[940px] flex-col items-center justify-start rounded-2xl border border-dashed border-slate-300 bg-white/55 px-4 py-10">
+      <div className="relative flex min-h-[1080px] flex-col items-center justify-start rounded-2xl border border-dashed border-slate-300 bg-white/55 px-4 py-10">
        <div className="mb-5 text-center">
         <p className="text-[10px] font-black uppercase tracking-[0.14em] text-violet-700">Centro da sala</p>
         <h3 className="mt-1 flex items-center justify-center gap-2 text-sm font-black text-slate-900"><Warehouse size={16}/> Estoque Temporário Linha</h3>
