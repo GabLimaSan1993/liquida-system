@@ -5,6 +5,7 @@ import {buscarProdutividadeLinhaBranca} from "../../services/mapaDepartamentosLi
 import FluxoLinhaBrancaPeriodo from "./FluxoLinhaBrancaPeriodo.jsx";
 import ReparosAnaliseNiveisLinhaBranca from "./ReparosAnaliseNiveisLinhaBranca.jsx";
 import ComplementosProducaoLinhaBranca from "./ComplementosProducaoLinhaBranca.jsx";
+import ResumoProducaoLavadorasHoje from "./ResumoProducaoLavadorasHoje.jsx";
 
 const hojeSP=()=>{
  const parts=new Intl.DateTimeFormat("en-US",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date());
@@ -136,12 +137,15 @@ export default function ProdutividadeDepartamentosLinhaBranca({onVoltar}){
    {(departamento||tecnico)&&<button type="button" onClick={()=>{setDepartamento("");setTecnico("")}} className="mt-2 text-xs font-bold text-violet-700">Limpar filtros de equipe e departamento</button>}
   </section>
   {dados&&<FluxoLinhaBrancaPeriodo dados={dados} periodo={periodo}/>}
+  {dados&&periodo.inicio<=dataHoje&&periodo.fim>=dataHoje
+    &&(!area||area==="Lavadoras")&&!departamento&&
+    <ResumoProducaoLavadorasHoje categoria="geral" dia={dataHoje} tecnico={tecnico} versao={versao}/>}
   {erro&&<p role="alert" className="rounded-xl bg-rose-50 p-4 text-xs font-semibold text-rose-700">{erro}</p>}
   {!dados&&carregando&&<div className="flex items-center justify-center gap-3 rounded-xl bg-violet-50 p-10 text-sm font-bold text-violet-700"><Loader2 className="h-5 w-5 animate-spin"/>Consultando produção...</div>}
   {dados&&<>
    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
     <Stat nome="OS com ações no Liquida" valor={geral.os_movimentadas} descricao="Máquinas distintas com ações feitas nos módulos internos" Icon={Activity}/>
-    <Stat nome="Atividades registradas" valor={geral.atividades_produtivas} descricao="Ciclos, reparos, diagnósticos e registros de bancada" Icon={BarChart3}/>
+    <Stat nome="Apontamentos registrados" valor={geral.atividades_produtivas} descricao="Quantidade de registros, não máquinas produzidas" Icon={BarChart3}/>
     <Stat nome="Ciclos executados" valor={geral.ciclos} descricao="Triagem funcional e bancada pós-reparo" Icon={Clock3}/>
     <button type="button" onClick={()=>setAbrirReparos(true)} className="w-full rounded-2xl text-left outline-none focus-visible:ring-2 focus-visible:ring-violet-500">
       <Stat nome="Reparos concluídos" valor={geral.reparos} descricao="Clique: níveis N1/N2/N3, tipos e defeitos por colaborador" Icon={Wrench}/>
@@ -153,8 +157,8 @@ export default function ProdutividadeDepartamentosLinhaBranca({onVoltar}){
     <div className="rounded-xl border border-slate-200 bg-white p-4 text-xs"><strong className="text-xl font-black text-slate-900">{horas(geral.tempo_operacao_segundos)}</strong><p className="mt-1 text-slate-500">Tempo registrado de ciclos e reparos — não horas de presença</p></div>
    </div>
    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-    <h2 className="text-base font-black">Evolução da produção</h2>
-    <p className="mt-1 text-xs text-slate-500">Ciclos, reparos e diagnósticos por {periodo.agrupar==="mes"?"mês":"dia"}, apenas quando apontados no Liquida.</p>
+    <h2 className="text-base font-black">Evolução dos apontamentos</h2>
+    <p className="mt-1 text-xs text-slate-500">Apontamentos de ciclos, reparos e diagnósticos (uma OS pode gerar mais de um registro) por {periodo.agrupar==="mes"?"mês":"dia"}, apenas quando apontados no Liquida.</p>
     {evolucao.length?<div className="mt-4 h-64 w-full">
      <ResponsiveContainer width="100%" height="100%"><BarChart data={evolucao} margin={{top:8,right:10,bottom:4,left:-20}}>
       <CartesianGrid strokeDasharray="3 3" vertical={false}/>
@@ -169,9 +173,9 @@ export default function ProdutividadeDepartamentosLinhaBranca({onVoltar}){
    </section>
    <div className="grid gap-4 xl:grid-cols-2">
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-     <div className="p-4"><h2 className="text-sm font-black">Atividades por área controlada no Liquida</h2><p className="mt-1 text-xs text-slate-500">Somente atividades realizadas nos módulos de Triagem, Reparos e Bancada. Cada OS pode ter vários ciclos e execuções.</p></div>
+     <div className="p-4"><h2 className="text-sm font-black">Atividades por área controlada no Liquida</h2><p className="mt-1 text-xs text-slate-500">Apontamentos de Triagem, Reparos e Bancada; diagnósticos e ciclos podem pertencer à mesma OS. Use Entregas para medir avanço de etapa.</p></div>
      <div className="max-h-[520px] overflow-auto"><table className="w-full min-w-[580px] text-left text-xs">
-      <thead className="sticky top-0 bg-slate-50 text-[10px] uppercase text-slate-500"><tr>{["Departamento","OS com registros","Execuções","Ciclos","Reparos","Etapas entregues"].map(t=><th key={t} className="px-3 py-2">{t}</th>)}</tr></thead>
+      <thead className="sticky top-0 bg-slate-50 text-[10px] uppercase text-slate-500"><tr>{["Departamento","OS com registros","Apontamentos","Ciclos","Reparos","Etapas entregues"].map(t=><th key={t} className="px-3 py-2">{t}</th>)}</tr></thead>
       <tbody className="divide-y divide-slate-100">{setores.map(s=><tr key={s.departamento} className="hover:bg-violet-50/40">
        <td className="px-3 py-3"><button type="button" onClick={()=>s.departamento==="Reparo"?setAbrirReparos(true):setDepartamento(s.departamento)} className="text-left font-bold text-violet-700">{s.departamento}{s.departamento==="Reparo"?" · Detalhar N1/N2/N3":""}</button></td>
        {[s.os_unicas,s.atividades,s.ciclos,s.reparos,s.etapas_concluidas].map((v,i)=><td key={i} className="px-3 py-3 tabular-nums">{numerar(v)}</td>)}
@@ -181,7 +185,7 @@ export default function ProdutividadeDepartamentosLinhaBranca({onVoltar}){
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
      <div className="p-4"><h2 className="text-sm font-black">Produtividade por colaborador e departamento</h2><p className="mt-1 text-xs text-slate-500">Somente registros identificados no Liquida. “Não identificado” evidencia lacunas de apontamento.</p></div>
      <div className="max-h-[520px] overflow-auto"><table className="w-full min-w-[680px] text-left text-xs">
-      <thead className="sticky top-0 bg-slate-50 text-[10px] uppercase text-slate-500"><tr>{["Técnico","Departamento","OS com registros","Execuções","Entregas","Ciclos","Reparos","Diagnósticos"].map(t=><th key={t} className="px-3 py-2">{t}</th>)}</tr></thead>
+      <thead className="sticky top-0 bg-slate-50 text-[10px] uppercase text-slate-500"><tr>{["Técnico","Departamento","OS com registros","Apontamentos","Entregas","Ciclos","Reparos","Diagnósticos"].map(t=><th key={t} className="px-3 py-2">{t}</th>)}</tr></thead>
       <tbody className="divide-y divide-slate-100">{tecnicos.map((t,i)=><tr key={t.tecnico+"-"+t.departamento+"-"+i} className="hover:bg-violet-50/40">
        <td className="px-3 py-3"><button type="button" onClick={()=>{setTecnico(t.tecnico);if(t.departamento==="Reparo")setAbrirReparos(true)}} className="text-left font-bold text-violet-700">{t.tecnico}</button></td>
        <td className="px-3 py-3 text-slate-600">{t.departamento}</td>
