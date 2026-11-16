@@ -1218,6 +1218,10 @@ export default function TriagemFuncionalV2Page() {
   }
 
   function iniciarRetriagem() {
+    if (ctx?.impedimentoRetriagem) {
+      mostrarErro(ctx.impedimentoRetriagem.motivo || "Retriagem bloqueada pelo estoque.");
+      return;
+    }
     const motivo =
       motivoRetriagem
         .trim();
@@ -2113,7 +2117,7 @@ export default function TriagemFuncionalV2Page() {
                 {ctx.bloqueado ? (
                   <Panel
                     title="Aparelho já processado"
-                    subtitle="O voucher já possui triagem funcional. Você pode revisar a triagem com motivo obrigatório."
+                    subtitle={ctx.impedimentoRetriagem ? "Retriagem indisponível até regularização operacional." : "O voucher já possui triagem funcional. Você pode revisar a triagem com motivo obrigatório."}
                     icon={
                       ShieldAlert
                     }
@@ -2130,6 +2134,7 @@ export default function TriagemFuncionalV2Page() {
                             <strong>
                               {ctx.etapa
                                 ?.nome ||
+                                ctx.existente?.status_atual ||
                                 "Não informada"}
                             </strong>
                           </div>
@@ -2155,6 +2160,21 @@ export default function TriagemFuncionalV2Page() {
                         </div>
                       </Aviso>
 
+                      {ctx.impedimentoRetriagem ? (
+                        <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                          <p className="text-xs font-black text-amber-900">Retriagem bloqueada antes de iniciar os testes</p>
+                          <p className="mt-2 text-xs leading-5 text-amber-900">{ctx.impedimentoRetriagem.motivo}</p>
+                          {ctx.impedimentoRetriagem.endereco && (
+                            <p className="mt-2 text-xs font-bold text-amber-950">Endereço físico: {ctx.impedimentoRetriagem.endereco}</p>
+                          )}
+                          {ctx.impedimentoRetriagem.voucher_estoque && ctx.impedimentoRetriagem.voucher_estoque !== ctx.voucher && (
+                            <p className="mt-1 text-xs text-amber-900">Vínculo WMS no voucher: {ctx.impedimentoRetriagem.voucher_estoque}</p>
+                          )}
+                          <button type="button" onClick={reiniciar} className="mt-3 rounded-xl border border-amber-300 bg-white px-4 py-2 text-xs font-bold text-amber-900">
+                            Bipar outro voucher
+                          </button>
+                        </div>
+                      ) : (
                       <div className="mt-5 rounded-2xl border border-violet-100 bg-violet-50/40 p-4">
                         <div className="text-[10px] font-black uppercase tracking-[0.12em] text-violet-600">
                           Triar novamente
@@ -2208,6 +2228,7 @@ export default function TriagemFuncionalV2Page() {
                           </button>
                         </div>
                       </div>
+                      )}
                     </div>
                   </Panel>
                 ) : (

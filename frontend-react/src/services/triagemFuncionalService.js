@@ -180,6 +180,18 @@ export async function consultarVoucher(voucher) {
     bruto: respostasAnteriores,
   } : null;
 
+  // A elegibilidade é verificada no banco ANTES de abrir a bancada.
+  // Um WMS confirmado precisa ser regularizado fisicamente, jamais "zerado"
+  // apenas para permitir que a funcional seja concluída.
+  let impedimentoRetriagem = null;
+  if (ultimaTriagem) {
+    const { data: elegibilidade, error: erroElegibilidade } = await supabase.rpc(
+      "assurant_triagem_retriagem_elegibilidade", { p_voucher: v }
+    );
+    if (erroElegibilidade) throw new Error(erroElegibilidade.message);
+    if (elegibilidade?.pode_retriar === false) impedimentoRetriagem = elegibilidade;
+  }
+
   return {
     ok: true,
     voucher: v,
@@ -192,9 +204,10 @@ export async function consultarVoucher(voucher) {
       ? (canalDoVoucher(devolucao?.voucher_origem) || "YBV")
       : canal,
     jaTriado: !!existente?.data_funcional || registroLegadoRevisavel,
-    bloqueado: !!etapa,
+    bloqueado: !!etapa || !!ultimaTriagem,
     etapa,
     ultimaTriagem,
+    impedimentoRetriagem,
     existente: existente || null,
   };
 }
