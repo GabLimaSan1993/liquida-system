@@ -726,7 +726,7 @@ export default function LaboratorioIndividualV2Page() {
                 {!defeitos.length&&<span className="text-xs text-slate-400">Sem defeitos confirmados.</span>}
               </div>
               {item.status!=='concluido'&&<>
-                {!admin&&<p className="mt-3 text-xs font-semibold text-amber-800">Somente administradores podem adicionar defeitos. A confirmação e remoção dos já cadastrados continuam disponíveis.</p>}
+                {!admin&&<p className="mt-3 text-xs font-semibold text-amber-800">Selecione livremente os defeitos do catálogo abaixo. Apenas cadastrar um defeito novo, fora do catálogo, exige perfil administrador.</p>}
                 {admin&&<div className="mt-3 flex flex-wrap gap-2">
                   <input value={novoDefeito} onChange={e=>setNovoDefeito(e.target.value)}
                     maxLength={150} className={CAMPO+' min-w-36 flex-1'} placeholder="Descrever outro defeito"/>
@@ -737,8 +737,8 @@ export default function LaboratorioIndividualV2Page() {
                 <input value={buscaDefeito} onChange={e=>setBuscaDefeito(e.target.value)}
                   className={CAMPO+' mt-3 w-full'} placeholder="Pesquisar defeitos do catálogo da triagem"/>
                 <div className="mt-2 max-h-32 overflow-y-auto rounded-lg border border-slate-100 p-2">
-                  {encontrados.map(d=><button type="button" key={d.id} disabled={ocupado||(!admin&&!defeitos.includes(d.nome))}
-                    onClick={()=>setDefeitos(xs=>xs.includes(d.nome)?xs.filter(v=>v!==d.nome):admin?[...xs,d.nome]:xs)}
+                  {encontrados.map(d=><button type="button" key={d.id} disabled={ocupado}
+                    onClick={()=>setDefeitos(xs=>xs.includes(d.nome)?xs.filter(v=>v!==d.nome):[...xs,d.nome])}
                     className={'m-1 rounded-md px-2 py-1.5 text-[11px] font-semibold '+(defeitos.includes(d.nome)?'bg-violet-700 text-white':'bg-slate-100 text-slate-700')}>
                     {d.nome}
                   </button>)}
