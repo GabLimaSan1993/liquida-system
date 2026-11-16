@@ -30,11 +30,6 @@ const MODULOS_FUTUROS = [
     icon: Monitor,
   },
   {
-    nome: "Loja",
-    descricao: "Operação de loja",
-    icon: ShoppingBag,
-  },
-  {
     nome: "Back Office",
     descricao: "Gestão administrativa",
     icon: Briefcase,
@@ -235,6 +230,21 @@ export default function SistemasPage() {
               nome="Assurant Warehouse"
               descricao="Operação Assurant"
               icon={Warehouse}
+            />
+          )}
+
+          {hasAccess("/v2/loja/vendas/upload") ? (
+            <ModuloDisponivel
+              nome="Loja"
+              descricao="Importação e gestão da base de vendas PDV"
+              icon={ShoppingBag}
+              onClick={() => navigate("/v2/loja/vendas/upload")}
+            />
+          ) : (
+            <ModuloIndisponivel
+              nome="Loja"
+              descricao="Operação de loja"
+              icon={ShoppingBag}
             />
           )}
 
