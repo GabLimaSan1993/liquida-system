@@ -4,6 +4,7 @@ import Papa from "papaparse";
 import * as XLSX from "xlsx";
 import { AlertCircle, CheckCircle2, Database, FileSpreadsheet, FileUp, LoaderCircle, RotateCcw, UploadCloud } from "lucide-react";
 import { supabase } from "../../lib/supabase.js";
+import ExportacaoVendasPdv from "./ExportacaoVendasPdv.jsx";
 
 const FIELDS = [
   ["Status da Nota", "status_da_nota"],
@@ -296,6 +297,7 @@ export default function VendasPdvUploadPage() {
           </button>
         </div>
       </section>
+      <ExportacaoVendasPdv />
       <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4"><h2 className="text-sm font-semibold">Histórico de uploads</h2><button type="button" onClick={refresh} title="Atualizar" className="rounded-md p-1 text-slate-400 hover:text-slate-700"><RotateCcw size={16}/></button></div>
         <div className="overflow-x-auto"><table className="min-w-full text-left text-sm">
