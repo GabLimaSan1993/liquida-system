@@ -11,10 +11,17 @@ export function tipoDoAparelho(modelo = "", tipoCatalogo = "") {
   return "CELULAR";
 }
 
+export function segundoImeiOpcional(modelo = "", tipoCatalogo = "") {
+  if (tipoDoAparelho(modelo, tipoCatalogo) !== "CELULAR") return false;
+  const nome = String(modelo).toUpperCase();
+  return /\bIPHONE\s*X\b/.test(nome)
+    || /\b(?:SAMSUNG\s+)?(?:GALAXY\s+)?S6(?:\s+EDGE(?:\s+PLUS)?)?\b/.test(nome);
+}
+
 export function exigeDoisImeis(modelo = "", tipoCatalogo = "", aparelhoBloqueado = false, danosTela = false) {
   if (danosTela || aparelhoBloqueado || tipoDoAparelho(modelo, tipoCatalogo) !== "CELULAR") return false;
   const nome = String(modelo).toUpperCase();
-  return !(/\bIPHONE\s*[5678](?:S|C)?(?:\b|(?=PLUS))/.test(nome) || /\b(?:MOTO(?:ROLA)?\s+)?ONE\s+(?:MICRO|MACRO)\b/.test(nome));
+  return !(/\bIPHONE\s*[5678](?:S|C)?(?:\b|(?=PLUS))/.test(nome) || /\b(?:MOTO(?:ROLA)?\s+)?ONE\s+(?:MICRO|MACRO)\b/.test(nome) || segundoImeiOpcional(modelo, tipoCatalogo));
 }
 
 export function erroIdentificacao(tipo, codigo, imei2 = "", { modelo = "", aparelhoBloqueado = false, danosTela = false } = {}) {

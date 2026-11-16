@@ -1,4 +1,4 @@
-import { tipoDoAparelho, erroIdentificacao, exigeDoisImeis } from "../../services/identificacaoAparelho";
+import { tipoDoAparelho, erroIdentificacao, exigeDoisImeis, segundoImeiOpcional } from "../../services/identificacaoAparelho";
 import { identificarAparelho, etiquetaDivergencia, registrarNaoLiga } from "../../services/divergenciasImeiService";
 import {
   useEffect,
@@ -899,7 +899,8 @@ export default function TriagemFuncionalV2Page() {
 
   const tipoAparelho = tipoDoAparelho(produto.modelo, catalogo.produtos.find(p => p.modelo === produto.modelo && p.marca === produto.marca)?.tipo);
   const doisImeis = exigeDoisImeis(produto.modelo, tipoAparelho, aparelhoBloqueado, danosTela);
-  const erroCodigo = erroIdentificacao(tipoAparelho, imeiDigitado, doisImeis ? imei2Digitado : null, { modelo: produto.modelo, aparelhoBloqueado, danosTela });
+  const mostrarImei2 = doisImeis || (!aparelhoBloqueado && !danosTela && segundoImeiOpcional(produto.modelo, tipoAparelho));
+  const erroCodigo = erroIdentificacao(tipoAparelho, imeiDigitado, mostrarImei2 ? imei2Digitado : null, { modelo: produto.modelo, aparelhoBloqueado, danosTela });
 
   const produtoCompleto =
     Boolean(
@@ -1439,7 +1440,7 @@ export default function TriagemFuncionalV2Page() {
     setCarregando(true);
     try {
       const resposta = await identificarAparelho({
-        voucher: ctx.voucher, imei1: imeiDigitado, imei2: doisImeis ? imei2Digitado : null, aparelhoBloqueado, danosTela,
+        voucher: ctx.voucher, imei1: imeiDigitado, imei2: mostrarImei2 ? imei2Digitado : null, aparelhoBloqueado, danosTela,
         modelo: produto.modelo, sku: resolverSku(catalogo.produtos, { marca:produto.marca,modelo:produto.modelo,capacidade:produto.armazenamento,cor:produto.cor }).sku,
       });
       setValidacao(resposta);
@@ -1846,7 +1847,7 @@ export default function TriagemFuncionalV2Page() {
             validacao?.imei_canonico || imeiDigitado.trim(),
 
           imei1: imeiDigitado.trim(),
-          imei2: doisImeis ? imei2Digitado.trim() : null,
+          imei2: mostrarImei2 ? imei2Digitado.trim() : null,
           aparelhoBloqueado,
           danosTela,
 
@@ -2536,8 +2537,8 @@ export default function TriagemFuncionalV2Page() {
                   </button>
 
                   <div className="max-w-[760px] space-y-4 rounded-2xl border border-violet-100 bg-violet-50/40 p-5">
-                    <div className="text-xs font-black text-violet-700">{danosTela || aparelhoBloqueado ? (danosTela ? "Danos da tela" : "Bloqueado") + " · identificação opcional" : tipoAparelho === "CELULAR" ? (doisImeis ? "Celular · dois IMEIs obrigatórios" : "Celular · um IMEI obrigatório") : `${tipoAparelho === "TABLET" ? "Tablet" : "Relógio"} · referência / serial`}</div>
-                    <p className="text-xs text-slate-600">{danosTela || aparelhoBloqueado ? "Informe somente um IMEI, se conseguir consultá-lo fisicamente. Se não for possível, continue sem preencher. A falta de bipagem será identificada sem validar artificialmente o IMEI cadastral." : tipoAparelho === "CELULAR" ? (doisImeis ? "Digite *#06# no aparelho e bipe os dois códigos. Cada IMEI deve ter exatamente 15 dígitos e ser diferente do outro." : "Bipe o único IMEI disponível, com exatamente 15 dígitos. As perguntas da triagem continuam normalmente.") : "Bipe o código de referência ou número de série. Letras, números, ponto, hífen e barra são aceitos."}</p>
+                    <div className="text-xs font-black text-violet-700">{danosTela || aparelhoBloqueado ? (danosTela ? "Danos da tela" : "Bloqueado") + " · identificação opcional" : tipoAparelho === "CELULAR" ? (doisImeis ? "Celular · dois IMEIs obrigatórios" : mostrarImei2 ? "Celular · IMEI 2 opcional" : "Celular · um IMEI obrigatório") : `${tipoAparelho === "TABLET" ? "Tablet" : "Relógio"} · referência / serial`}</div>
+                    <p className="text-xs text-slate-600">{danosTela || aparelhoBloqueado ? "Informe somente um IMEI, se conseguir consultá-lo fisicamente. Se não for possível, continue sem preencher. A falta de bipagem será identificada sem validar artificialmente o IMEI cadastral." : tipoAparelho === "CELULAR" ? (doisImeis ? "Digite *#06# no aparelho e bipe os dois códigos. Cada IMEI deve ter exatamente 15 dígitos e ser diferente do outro." : mostrarImei2 ? "Bipe o IMEI 1 com 15 dígitos. O IMEI 2 pode ficar vazio; se informado, deve ter 15 dígitos e ser diferente do primeiro." : "Bipe o único IMEI disponível, com exatamente 15 dígitos. As perguntas da triagem continuam normalmente.") : "Bipe o código de referência ou número de série. Letras, números, ponto, hífen e barra são aceitos."}</p>
                     <label className="block text-xs font-bold text-slate-700">{tipoAparelho === "CELULAR" ? (danosTela || aparelhoBloqueado ? "IMEI (opcional)" : "IMEI 1") : `Referência / serial${danosTela || aparelhoBloqueado ? " (opcional)" : ""}`}
                       <input autoFocus value={imeiDigitado} inputMode={tipoAparelho === "CELULAR" ? "numeric" : "text"}
                         maxLength={tipoAparelho === "CELULAR" ? 15 : 64}
@@ -2546,10 +2547,10 @@ export default function TriagemFuncionalV2Page() {
                         onKeyDown={e=>{if(e.key === "Enter") {e.preventDefault();if(doisImeis) document.getElementById("triagem-imei2")?.focus();else handleValidarImei();}}}
                         className="mt-2 h-12 w-full rounded-xl border border-violet-200 bg-white px-4 font-mono text-lg" />
                     </label>
-                    {doisImeis && <label className="block text-xs font-bold text-slate-700">IMEI 2
+                    {mostrarImei2 && <label className="block text-xs font-bold text-slate-700">{doisImeis ? "IMEI 2" : "IMEI 2 (opcional)"}
                       <input id="triagem-imei2" maxLength={15} value={imei2Digitado} inputMode="numeric" autoComplete="off" spellCheck={false}
                         onChange={e=>{setImei2Digitado(e.target.value.trim());setConferenciaImeis(false);setImeiConferidoPeloOperador(false);setValidacao(null);}}
-                        onKeyDown={e=>{if(e.key === "Enter") {e.preventDefault();abrirConferenciaImeis();}}}
+                        onKeyDown={e=>{if(e.key === "Enter") {e.preventDefault();doisImeis ? abrirConferenciaImeis() : handleValidarImei();}}}
                         className="mt-2 h-12 w-full rounded-xl border border-violet-200 bg-white px-4 font-mono text-lg" />
                     </label>}
                     {erroCodigo && (imeiDigitado || imei2Digitado) && <p role="alert" className="text-xs font-bold text-rose-700">{erroCodigo}</p>}

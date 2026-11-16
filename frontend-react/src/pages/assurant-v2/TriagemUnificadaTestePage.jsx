@@ -6,7 +6,7 @@ import { supabase } from "../../lib/supabase.js";
 import { consultarVoucher, listarDefeitos, carregarCatalogo, resolverSku } from "../../services/triagemFuncionalService.js";
 import { buscarOpcoes, calcularGradeFinal } from "../../services/cosmeticaService.js";
 import { codigoCondicaoCompra } from "../../services/condicaoCompra.js";
-import { tipoDoAparelho, exigeDoisImeis, erroIdentificacao } from "../../services/identificacaoAparelho.js";
+import { tipoDoAparelho, exigeDoisImeis, erroIdentificacao, segundoImeiOpcional } from "../../services/identificacaoAparelho.js";
 
 const CAMPO = "h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm font-medium text-slate-700 outline-none transition placeholder:text-slate-300 focus:border-violet-300 focus:ring-4 focus:ring-violet-100";
 const BOTAO = "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-violet-700 px-5 py-3 text-xs font-bold text-white shadow-sm transition hover:bg-violet-800 disabled:cursor-not-allowed disabled:opacity-40";
@@ -72,7 +72,8 @@ export default function TriagemUnificadaTestePage(){
  const tipoCatalogo=catalogo.produtos.find(p=>p.modelo===produto.modelo&&p.marca===produto.marca)?.tipo;
  const tipoAparelho=tipoDoAparelho(produto.modelo,tipoCatalogo);
  const doisImeis=exigeDoisImeis(produto.modelo,tipoAparelho,condicao==="bloqueado",condicao==="danos_tela");
- const erroCodigo=erroIdentificacao(tipoAparelho,imei,doisImeis?imei2:null,
+ const mostrarImei2=doisImeis||(condicao!=="bloqueado"&&condicao!=="danos_tela"&&segundoImeiOpcional(produto.modelo,tipoAparelho));
+ const erroCodigo=erroIdentificacao(tipoAparelho,imei,mostrarImei2?imei2:null,
    {modelo:produto.modelo,aparelhoBloqueado:condicao==="bloqueado",danosTela:condicao==="danos_tela"});
  const defeitosEfetivos=useMemo(()=>[...new Set([
     ...defeitos,
@@ -138,7 +139,7 @@ export default function TriagemUnificadaTestePage(){
   try{
    const dados={voucher:ctx.voucher,
      marca:produto.marca,modelo:produto.modelo,capacidade:produto.armazenamento,cor:produto.cor,
-     sku:sku.sku,imei:imei.trim()||null,imei2:doisImeis?imei2.trim()||null:null,condicao:condicao||"normal",
+     sku:sku.sku,imei:imei.trim()||null,imei2:mostrarImei2?imei2.trim()||null:null,condicao:condicao||"normal",
      camera_frontal_funciona:cameras.frontal,camera_traseira_funciona:cameras.traseira,
      tela_sem_falhas_ou_danos:telaSemFalhasOuDanos,botao_faltando:botaoFaltando,
      defeitos:defeitosEfetivos,
@@ -231,7 +232,7 @@ export default function TriagemUnificadaTestePage(){
          onKeyDown={e=>{if(e.key==="Enter"&&doisImeis){e.preventDefault();document.getElementById("unificada-imei2")?.focus();}}}
         />
       </label>
-      {doisImeis&&<label className="block space-y-2 text-xs font-bold text-slate-700">IMEI 2
+      {mostrarImei2&&<label className="block space-y-2 text-xs font-bold text-slate-700">{doisImeis?"IMEI 2":"IMEI 2 (opcional)"}
         <input id="unificada-imei2" type="text" inputMode="numeric" autoComplete="off" spellCheck={false}
           maxLength={15} className={CAMPO} placeholder="Bipe o IMEI 2" value={imei2}
           onChange={e=>setImei2(e.target.value.replace(/\D/g,""))}/>

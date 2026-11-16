@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { tipoDoAparelho, erroIdentificacao, exigeDoisImeis } from "./identificacaoAparelho.js";
+import { tipoDoAparelho, erroIdentificacao, exigeDoisImeis, segundoImeiOpcional } from "./identificacaoAparelho.js";
 test("danos da tela permite um IMEI opcional sem aceitar código malformado ou segundo código", () => {
   assert.equal(exigeDoisImeis("GALAXY S24", "", false, true), false);
   assert.equal(erroIdentificacao("CELULAR", "", null, { modelo: "GALAXY S24", danosTela: true }), null);
@@ -64,7 +64,7 @@ test("modelos de IMEI único e celulares de dois IMEIs não se confundem", () =>
     assert.equal(exigeDoisImeis(modelo), false, modelo);
     assert.equal(erroIdentificacao("CELULAR", "123456789012345", null, { modelo }), null, modelo);
   }
-  for (const modelo of ["IPHONE 15", "IPHONE 16", "IPHONE 16 PRO MAX", "GALAXY S24", "GALAXY A06", "MOTO G6", "GALAXY S6", "SAMSUNG GALAXY J4 PLUS", "GALAXY J7 PRIME", "SAMSUNG J 5", "GALAXY J5 PRIME"]) {
+  for (const modelo of ["IPHONE 15", "IPHONE 16", "IPHONE 16 PRO MAX", "GALAXY S24", "GALAXY A06", "MOTO G6", "SAMSUNG GALAXY J4 PLUS", "GALAXY J7 PRIME", "SAMSUNG J 5", "GALAXY J5 PRIME"]) {
     assert.equal(exigeDoisImeis(modelo), true, modelo);
     assert.ok(erroIdentificacao("CELULAR", "123456789012345", null, { modelo }), modelo);
     assert.equal(erroIdentificacao("CELULAR", "123456789012345", "123456789012346", { modelo }), null, modelo);
@@ -85,4 +85,26 @@ test("iPhones 7 e Motorola One Micro/Macro aceitam um IMEI, sem afetar iPhone 17
     assert.equal(exigeDoisImeis(modelo), true, modelo);
     assert.ok(erroIdentificacao("CELULAR", "123456789012345", null, { modelo }), modelo);
   }
+});
+
+
+test("Galaxy S6, S6 Edge e iPhone X permitem IMEI 2 opcional, sem perder validação", () => {
+  for (const modelo of [
+    "S6", "GALAXY S6", "SAMSUNG GALAXY S6 32GB BLACK",
+    "S6 EDGE", "SAMSUNG GALAXY S6 EDGE PLUS 32GB BLACK",
+    "IPHONE X", "APPLE IPHONE X 64GB GRAY",
+  ]) {
+    assert.equal(segundoImeiOpcional(modelo), true, modelo);
+    assert.equal(exigeDoisImeis(modelo), false, modelo);
+    assert.equal(erroIdentificacao("CELULAR", "123456789012345", "", { modelo }), null, modelo);
+    assert.equal(erroIdentificacao("CELULAR", "123456789012345", "123456789012346", { modelo }), null, modelo);
+    assert.ok(erroIdentificacao("CELULAR", "12345678901234", "", { modelo }), modelo);
+    assert.ok(erroIdentificacao("CELULAR", "123456789012345", "12345", { modelo }), modelo);
+    assert.ok(erroIdentificacao("CELULAR", "123456789012345", "123456789012345", { modelo }), modelo);
+  }
+  for (const modelo of ["IPHONE XR", "IPHONE XS", "IPHONE XS MAX", "GALAXY S24", "GALAXY S60"]) {
+    assert.equal(segundoImeiOpcional(modelo), false, modelo);
+    assert.equal(exigeDoisImeis(modelo), true, modelo);
+  }
+  assert.equal(segundoImeiOpcional("SAMSUNG GALAXY TAB S6 LITE"), false);
 });
