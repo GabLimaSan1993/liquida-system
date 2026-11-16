@@ -466,19 +466,24 @@ export default function TriagemLavadorasV2Page() {
   const metricas = useMemo(() => {
     const emCiclo = painel.ciclos.filter((item) => item.status === "em_ciclo").length;
     const erros = painel.ciclos.filter((item) => item.status === "pausado_erro").length;
-    const aprovadasHoje = painel.ciclos.filter(
-      (item) => item.status === "concluido" && Number(item.numero_ciclo) === 2 && hoje(item.concluido_em)
-    ).length;
-    const finalizados = painel.ciclos.filter(
-      (item) => Number(item.numero_ciclo) === 2 && ["concluido", "enviado_reparo"].includes(item.status)
-    );
-    const aprovados = finalizados.filter((item) => item.status === "concluido").length;
+    // Um diagnóstico pode gerar vários registros. O resultado conta UMA OS por destino
+    // e usa a data em que a triagem foi entregue, não a data de início do teste.
+    const aprovadas = new Set();
+    const enviadasReparo = new Set();
+    painel.ciclos.forEach(item => {
+      if(!hoje(item.concluido_em))return;
+      if(item.status==="enviado_reparo")enviadasReparo.add(String(item.os_id));
+      if(item.status==="concluido" && Number(item.numero_ciclo)===2 &&
+        item.resultado==="aprovado")aprovadas.add(String(item.os_id));
+    });
+    const totalEntregues=new Set([...aprovadas,...enviadasReparo]).size;
     return {
       aguardando: painel.aguardando.length,
-      emCiclo,
-      erros,
-      aprovadasHoje,
-      taxa: finalizados.length ? Math.round((aprovados / finalizados.length) * 100) : 0,
+      emCiclo,erros,
+      aprovadasHoje: aprovadas.size,
+      entreguesHoje: totalEntregues,
+      paraReparoHoje: enviadasReparo.size,
+      taxa: totalEntregues?Math.round(aprovadas.size/totalEntregues*100):0
     };
   }, [painel]);
 
@@ -701,7 +706,7 @@ export default function TriagemLavadorasV2Page() {
         <MetricCard icon={Play} value={metricas.emCiclo} label="Em ciclo" helper="1º ou 2º ciclo em execução" tone="blue" />
         <MetricCard icon={AlertTriangle} value={metricas.erros} label="Paradas por erro" helper="Aguardando decisão técnica" tone="red" />
         <MetricCard icon={CheckCircle2} value={metricas.aprovadasHoje} label="Aprovadas sem reparo hoje" helper="Dois ciclos concluídos" tone="green" />
-        <MetricCard icon={Settings2} value={`${metricas.taxa}%`} label="Aprovação em 2º ciclo (hist.)" helper="Taxa nos últimos ciclos carregados" tone="indigo" />
+        <MetricCard icon={Settings2} value={`${metricas.taxa}%`} label="Aprovação sem reparo hoje" helper="Percentual das entregas de hoje" tone="indigo" />
       </section>
 
 
