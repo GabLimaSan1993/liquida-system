@@ -31,13 +31,13 @@ const NAVEGACAO = [
         {nome:"Bancada de testes",rota:"/v2/linha-branca/lavadoras/testes"},
         {nome:"Scrap",rota:"/v2/linha-branca/lavadoras/scrap",permissao:"/v2/linha-branca/lavadoras/triagem"},
       ]},
-      {id:"refrigeracao",titulo:"Refrigeração",icone:Refrigerator,itens:[
+      {id:"refrigeracao",titulo:"Refrigeração",icone:Refrigerator,emDesenvolvimento:true,itens:[
         {nome:"Visão da linha",rota:"/v2/linha-branca/refrigeracao",exata:true},
         {nome:"Triagem",rota:"/v2/linha-branca/refrigeracao/triagem"},
         {nome:"Reparos",rota:"/v2/linha-branca/refrigeracao/reparos"},
         {nome:"Bancada de testes",rota:"/v2/linha-branca/refrigeracao/testes"},
       ]},
-      {id:"climatizacao",titulo:"Climatização",icone:Snowflake,itens:[
+      {id:"climatizacao",titulo:"Climatização",icone:Snowflake,emDesenvolvimento:true,itens:[
         {nome:"Visão da linha",rota:"/v2/linha-branca/climatizacao",exata:true},
         {nome:"Triagem",rota:"/v2/linha-branca/climatizacao/triagem"},
         {nome:"Reparos",rota:"/v2/linha-branca/climatizacao/reparos"},
@@ -99,7 +99,7 @@ export default function LinhaBrancaWorkspaceLayout(){
     const reduzido=compacto&&!mobile;
     const linksCompactos=NAVEGACAO.flatMap(grupo=>[
       ...(grupo.itens||[]).map(item=>({...item,icone:item.icone||grupo.icone})),
-      ...(grupo.subgrupos||[]).flatMap(sub=>(sub.itens||[]).map(item=>({...item,icone:item.icone||sub.icone})))
+      ...(grupo.subgrupos||[]).filter(sub=>!sub.emDesenvolvimento).flatMap(sub=>(sub.itens||[]).map(item=>({...item,icone:item.icone||sub.icone})))
     ]).filter(item=>!item.desabilitado&&hasAccess(item.permissao||item.rota));
     return (
     <div className="flex h-full flex-col bg-[linear-gradient(175deg,#321D49_0%,#241334_70%,#1E112B_100%)] text-white">
@@ -139,6 +139,14 @@ export default function LinhaBrancaWorkspaceLayout(){
                   item={item} hasAccess={hasAccess} onNavigate={()=>setMobileOpen(false)}/>)}
                 {(grupo.subgrupos||[]).map(sub=>{
                   const SubIcon=sub.icone;
+                  if(sub.emDesenvolvimento)return (
+                    <div key={sub.id} aria-disabled="true" title={sub.titulo+" — Em desenvolvimento"}
+                      className="mt-1 flex items-center gap-2 rounded-lg px-3 py-2.5 text-xs text-white/45">
+                      <SubIcon size={15} className="shrink-0"/>
+                      <span className="min-w-0 flex-1 truncate font-semibold">{sub.titulo}</span>
+                      <span className="text-[9px] font-semibold">Em desenvolvimento</span>
+                    </div>
+                  );
                   const disponiveis=sub.itens.some(item=>item.desabilitado||hasAccess(item.permissao||item.rota));
                   if(!disponiveis)return null;
                   return <div key={sub.id} className="mt-1">
