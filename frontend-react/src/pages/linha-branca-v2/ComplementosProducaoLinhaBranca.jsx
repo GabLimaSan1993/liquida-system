@@ -16,6 +16,17 @@ const decimal=v=>Number(v||0).toLocaleString("pt-BR",{maximumFractionDigits:1});
 const tempo=v=>v==null?"—":Number(v)>=3600?
  (Math.floor(Number(v)/3600)+"h "+Math.round(Number(v)%3600/60)+"min"):
  (Math.round(Number(v)/60)+" min");
+// Ciclo corrido, incluindo eventuais esperas entre a saída da triagem e a conclusão.
+const tempoCiclo=v=>{
+ if(v==null)return "—";
+ const minutos=Math.round(Number(v)/60);
+ const dias=Math.floor(minutos/1440);
+ const horas=Math.floor((minutos%1440)/60);
+ const mins=minutos%60;
+ if(dias)return dias+"d "+horas+"h";
+ if(horas)return horas+"h "+mins+"min";
+ return mins+" min";
+};
 const numDias=(a,b)=>Math.round((Date.parse(b+"T00:00:00Z")-Date.parse(a+"T00:00:00Z"))/86400000);
 const formatoData=(data,mes)=>mes?
  String(data).slice(5,7)+"/"+String(data).slice(0,4):
@@ -70,15 +81,33 @@ export default function ComplementosProducaoLinhaBranca({
  const [base,setBase]=useState(null);
  const [filtrado,setFiltrado]=useState(null);
  const [kardex,setKardex]=useState(null);
+ const [reparoCiclo,setReparoCiclo]=useState(null);
  const [carregandoBase,setCarregandoBase]=useState(true);
  const [carregandoFiltro,setCarregandoFiltro]=useState(false);
  const [carregandoKardex,setCarregandoKardex]=useState(true);
+ const [carregandoReparo,setCarregandoReparo]=useState(true);
  const [erroBase,setErroBase]=useState("");
  const [erroFiltro,setErroFiltro]=useState("");
  const [erroKardex,setErroKardex]=useState("");
+ const [erroReparo,setErroReparo]=useState("");
  const {inicio,fim,agrupar}=periodo;
  const valido=Boolean(inicio&&fim&&fim>=inicio&&numDias(inicio,fim)<=1095);
  const efetivo=tecnico||colaboradorLocal;
+
+ // Consulta independente: não altera o relógio dos ciclos de Triagem/Bancada.
+ useEffect(()=>{
+  if(!valido){setReparoCiclo(null);setCarregandoReparo(false);return;}
+  const ctrl=new AbortController();
+  setCarregandoReparo(true);setErroReparo("");
+  consultar("linha_branca_tempo_ciclo_reparos",{
+    p_inicio:inicio,p_fim:fim,p_area:area||null,
+    p_departamento:departamento||null,p_tecnico:efetivo||null
+  },ctrl.signal)
+    .then(d=>{if(!ctrl.signal.aborted)setReparoCiclo(d);})
+    .catch(e=>{if(!ctrl.signal.aborted){setReparoCiclo(null);setErroReparo(e.message);}})
+    .finally(()=>{if(!ctrl.signal.aborted)setCarregandoReparo(false);});
+  return ()=>ctrl.abort();
+ },[inicio,fim,area,departamento,efetivo,versao,valido]);
 
  useEffect(()=>{
   if(!valido){setBase(null);setCarregandoBase(false);return;}
@@ -173,8 +202,8 @@ export default function ComplementosProducaoLinhaBranca({
 
   <section className={card}>
    <Titulo Icon={Clock3} eyebrow="Tempo operacional · Liquida System" titulo="Tempos médios e medianas por etapa"
-    descricao={"Duração cronometrada dos ciclos concluídos dentro de "+inicio+" a "+fim+
-      ". Reparos continuam contabilizados na produção, porém o tempo real não é aferido: o intervalo de preenchimento do formulário não representa execução física."}/>
+    descricao={"Período: "+inicio+" a "+fim+
+      ". Triagem e Bancada preservam seus cronômetros. Reparo mede o tempo corrido desde a SAÍDA da Triagem; para OS sem triagem, desde a entrada em Reparo, até a conclusão. Inclui esperas por peças."}/>
    {!valido||erroProd||esperando?<GraficoVazio carregando={esperando} erro={erroProd}/>:
     <div className="grid gap-3 md:grid-cols-3">
       {ETAPAS.map(e=>{
@@ -185,13 +214,19 @@ export default function ComplementosProducaoLinhaBranca({
         </div>
         <div className="mt-4 grid grid-cols-2 gap-3">
          <div><p className="text-[10px] font-bold uppercase text-slate-500">Média</p>
-          <p className="mt-1 text-xl font-black text-slate-900">{e.id==="Reparo"?"Não aferido":tempo(t.media_segundos)}</p></div>
+          <p className="mt-1 text-xl font-black text-slate-900">{e.id==="Reparo"?(carregandoReparo?"Consultando…":erroReparo?"Indisponível":tempoCiclo(reparoCiclo?.media_segundos)):tempo(t.media_segundos)}</p></div>
          <div><p className="text-[10px] font-bold uppercase text-slate-500">Mediana</p>
-          <p className="mt-1 text-xl font-black text-slate-900">{e.id==="Reparo"?"Não aferido":tempo(t.mediana_segundos)}</p></div>
+          <p className="mt-1 text-xl font-black text-slate-900">{e.id==="Reparo"?(carregandoReparo?"Consultando…":erroReparo?"Indisponível":tempoCiclo(reparoCiclo?.mediana_segundos)):tempo(t.mediana_segundos)}</p></div>
         </div>
         <p className="mt-3 text-[11px] text-slate-500">
          {e.id==="Reparo"
-         ?numero(t.produtos)+" OS com reparo registrado · sem cronômetro operacional"
+         ?carregandoReparo?"Carregando os tempos de ciclo…"
+           :erroReparo?"Falha ao consultar os tempos: "+erroReparo
+           :numero(reparoCiclo?.duracoes_validas)+" de "+numero(reparoCiclo?.produtos)+
+            " OS com marco inicial · "+numero(reparoCiclo?.triagem)+" após triagem · "+
+            numero(reparoCiclo?.entrada_direta_reparo)+" entrada direta"+
+            (Number(reparoCiclo?.cadastro_ja_em_reparo||0)>0
+              ?" · "+numero(reparoCiclo?.cadastro_ja_em_reparo)+" desde primeiro cadastro disponível":"")
          :numero(t.duracoes_validas)+" execuções cronometradas · "+numero(t.produtos)+" OS"}
         </p>
        </div>;
