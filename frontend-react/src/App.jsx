@@ -109,6 +109,7 @@ import TriagemRefrigeracaoV2Page from "./pages/linha-branca-v2/TriagemRefrigerac
 import ReparosRefrigeracaoV2Page from "./pages/linha-branca-v2/ReparosRefrigeracaoV2Page.jsx";
 import BancadaTestesRefrigeracaoV2Page from "./pages/linha-branca-v2/BancadaTestesRefrigeracaoV2Page.jsx";
 import MapaFisicoLavadorasPage from "./pages/linha-branca-v2/MapaFisicoLavadorasPage.jsx";
+import LinhaBrancaModuloEmDesenvolvimento from "./pages/linha-branca-v2/LinhaBrancaModuloEmDesenvolvimento.jsx";
 import TriagemLavadorasV2Page from "./pages/linha-branca-v2/TriagemLavadorasV2Page.jsx";
 import ReparosLavadorasV2Page from "./pages/linha-branca-v2/ReparosLavadorasV2Page.jsx";
 import BancadaTestesLavadorasV2Page from "./pages/linha-branca-v2/BancadaTestesLavadorasV2Page.jsx";
@@ -393,18 +394,14 @@ export default function App() {
           <Route path="testes" element={<ProtectedRoute tela="/v2/linha-branca/lavadoras/testes"><BancadaTestesLavadorasV2Page /></ProtectedRoute>}/>
           <Route path="scrap" element={<ProtectedRoute tela="/v2/linha-branca/lavadoras/triagem"><ScrapLavadorasV2Page /></ProtectedRoute>}/>
         </Route>
-        <Route path="refrigeracao" element={<ProtectedRoute tela="/v2/linha-branca/refrigeracao"><Outlet /></ProtectedRoute>}>
-          <Route index element={<RefrigeracaoV2Page />}/>
-          <Route path="triagem" element={<ProtectedRoute tela="/v2/linha-branca/refrigeracao/triagem"><TriagemRefrigeracaoV2Page /></ProtectedRoute>}/>
-          <Route path="reparos" element={<ProtectedRoute tela="/v2/linha-branca/refrigeracao/reparos"><ReparosRefrigeracaoV2Page /></ProtectedRoute>}/>
-          <Route path="testes" element={<ProtectedRoute tela="/v2/linha-branca/refrigeracao/testes"><BancadaTestesRefrigeracaoV2Page /></ProtectedRoute>}/>
-        </Route>
-        <Route path="climatizacao" element={<ProtectedRoute tela="/v2/linha-branca/climatizacao"><Outlet /></ProtectedRoute>}>
-          <Route index element={<ClimatizacaoV2Page />}/>
-          <Route path="triagem" element={<ProtectedRoute tela="/v2/linha-branca/climatizacao/triagem"><TriagemClimatizacaoV2Page /></ProtectedRoute>}/>
-          <Route path="reparos" element={<ProtectedRoute tela="/v2/linha-branca/climatizacao/reparos"><ReparosClimatizacaoV2Page /></ProtectedRoute>}/>
-          <Route path="testes" element={<ProtectedRoute tela="/v2/linha-branca/climatizacao/testes"><BancadaTestesClimatizacaoV2Page /></ProtectedRoute>}/>
-        </Route>
+        <Route path="refrigeracao/*"
+          element={<ProtectedRoute tela="/v2/linha-branca/refrigeracao">
+            <LinhaBrancaModuloEmDesenvolvimento familia="Refrigeração"/>
+          </ProtectedRoute>}/>
+        <Route path="climatizacao/*"
+          element={<ProtectedRoute tela="/v2/linha-branca/climatizacao">
+            <LinhaBrancaModuloEmDesenvolvimento familia="Climatização"/>
+          </ProtectedRoute>}/>
       </Route>
 
       {/* =====================================================
