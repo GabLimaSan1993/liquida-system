@@ -357,13 +357,15 @@ function ContextoLaudo({
 
     {
       label:
-        "IMEI",
-      value:
-        dados.naoLigaDivergencia
-          ? "Não conferido — aparelho não liga"
-          : dados.imei || "—",
+        dados.usaImeiContrato ? "IMEI do contrato" : "IMEI",
+      value: dados.imei || "—",
       mono: true,
     },
+    ...(dados.usaImeiContrato ? [{
+      label:"IMEI físico na triagem",
+      value: dados.imeiFisicoTriagem || "Não conferido fisicamente",
+      mono:true,
+    }] : []),
 
     {
       label:
