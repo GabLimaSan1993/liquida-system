@@ -180,7 +180,7 @@ function DetalhePosicao({selecionada,mapa,onFechar,onAlterar,editavel}){
     {tipo==="temporario"&&!livre&&<div className="rounded-xl border border-slate-200 bg-white p-4">
       <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Aging desde a abertura da OS</p>
       <p className="mt-1 text-2xl font-black tabular-nums text-slate-900">
-       {item.aging_dias==null?"Sem data":num(item.aging_dias)+" dias"}
+       {item.abertura_os===undefined?"Consultando…":item.aging_dias==null?"Sem data":num(item.aging_dias)+" dias"}
       </p>
       <p className="mt-1 text-xs text-slate-500">
        Abertura: {item.abertura_os?String(item.abertura_os).split("-").reverse().join("/"):"Não informada"}
@@ -202,10 +202,14 @@ function DetalhePosicao({selecionada,mapa,onFechar,onAlterar,editavel}){
      <div className="flex flex-wrap items-center justify-between gap-2">
       <h4 className="text-sm font-black text-slate-900">Peças e necessidades pendentes</h4>
       <span className="rounded-full bg-violet-50 px-2 py-1 text-[10px] font-bold text-violet-700">
-       {num(item.quantidade_necessidades||0)} indicação(ões)
+       {Array.isArray(item.necessidades)?num(item.quantidade_necessidades||0)+" necessidade(s)":"Consultando"}
       </span>
      </div>
-     {Array.isArray(item.necessidades)&&item.necessidades.length>0
+     {!Array.isArray(item.necessidades)
+      ?<p className="mt-2 rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-600">
+        Os dados de peças ainda não foram carregados. Atualize o mapa para consultar as necessidades da OS.
+       </p>
+      :item.necessidades.length>0
       ?<div className="mt-3 space-y-2">
         {item.necessidades.map((p,i)=><div key={i} className="rounded-lg border border-slate-100 bg-slate-50 p-3">
          <div className="flex flex-wrap items-start justify-between gap-2">
