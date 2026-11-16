@@ -96,7 +96,7 @@ export default function LaboratorioReparoV2Page() {
   const alternarDefeitoCatalogo=nome=>{
     setDefeitos(atuais=>atuais.some(x=>normalizarDefeito(x)===normalizarDefeito(nome))
       ? atuais.filter(x=>normalizarDefeito(x)!==normalizarDefeito(nome))
-      : (admin ? [...atuais,nome] : atuais));
+      : [...atuais,nome]);
   };
   const itens=detalhe?.itens || [];
   const manifests=detalhe?.romaneios || [];
@@ -261,7 +261,7 @@ export default function LaboratorioReparoV2Page() {
                         defeitosFiltrados.length?<div className="flex flex-wrap gap-2">
                           {defeitosFiltrados.map(d=>{
                             const selecionado=defeitos.some(x=>normalizarDefeito(x)===normalizarDefeito(d.nome));
-                            return <button key={d.id} type="button" aria-pressed={selecionado} disabled={busy||(!admin&&!selecionado)} title={d.categoria||d.nome}
+                            return <button key={d.id} type="button" aria-pressed={selecionado} disabled={busy} title={d.categoria||d.nome}
                               onClick={()=>alternarDefeitoCatalogo(d.nome)}
                               className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors disabled:opacity-50 ${selecionado?'border-violet-700 bg-violet-700 text-white':'border-slate-200 bg-white text-slate-700 hover:border-violet-300 hover:bg-violet-50'}`}>
                               {selecionado&&<Check size={13}/>} {d.nome}
@@ -270,7 +270,7 @@ export default function LaboratorioReparoV2Page() {
                         </div>:<p className="py-4 text-center text-xs text-slate-500">Nenhum defeito encontrado para esta pesquisa.</p>}
                     </div>
                   </div>
-                  {!admin&&<p className="mt-2 text-xs font-semibold text-amber-700">Adicionar novos defeitos é permitido somente para administradores.</p>}
+                  {!admin&&<p className="mt-2 text-xs font-semibold text-amber-700">Você pode selecionar e remover defeitos do catálogo. Apenas cadastrar um novo defeito exige perfil administrador.</p>}
                   {admin&&<form onSubmit={e=>{e.preventDefault();const v=novoDefeito.trim();if(v&&!defeitos.some(d=>normalizarDefeito(d)===normalizarDefeito(v)))setDefeitos(a=>[...a,v]);setNovoDefeito('');}} className="mt-3 flex flex-wrap gap-2">
                     <input className={campo+' min-w-48 flex-1'} value={novoDefeito} onChange={e=>setNovoDefeito(e.target.value)} placeholder="Adicionar outro defeito" maxLength={150}/>
                     <button disabled={!novoDefeito.trim()} className={botao+' border border-slate-200 bg-white text-violet-700 hover:bg-violet-50'}><Plus size={15}/>Adicionar</button></form>}
