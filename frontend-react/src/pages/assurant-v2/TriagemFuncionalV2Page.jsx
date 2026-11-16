@@ -1107,6 +1107,9 @@ export default function TriagemFuncionalV2Page() {
       setCtx(
         resposta
       );
+      // O estado de revisão pertence ao voucher atual, nunca ao anterior.
+      setModoRetriagem(false);
+      setMotivoRetriagem("");
       setCondicaoInicial("");
       setImeiDigitado("");
       setImei2Digitado("");
@@ -1173,6 +1176,9 @@ export default function TriagemFuncionalV2Page() {
       setCtx(
         resposta
       );
+      // O estado de revisão pertence ao voucher atual, nunca ao anterior.
+      setModoRetriagem(false);
+      setMotivoRetriagem("");
       setCondicaoInicial("");
       setImeiDigitado("");
       setImei2Digitado("");
@@ -1374,6 +1380,14 @@ export default function TriagemFuncionalV2Page() {
 
   async function finalizarNaoLiga() {
     if (carregando || !ctx?.voucher) return;
+    const etapaAnterior = ctx?.existente?.status_atual || "";
+    const jaNoLaudoOuCosmetica = ["Aguardando laudo", "Aguardando triagem cosmética"].includes(etapaAnterior);
+    const motivo = motivoRetriagem.trim();
+    if (jaNoLaudoOuCosmetica && motivo.length < 3) {
+      mostrarErro("Este aparelho já avançou para Laudo/Cosmética. Para refazer a funcional, informe o motivo da retriagem antes de concluir.");
+      return;
+    }
+    const revisaoComMotivo = (modoRetriagem || jaNoLaudoOuCosmetica) && motivo.length >= 3;
     setCarregando(true);
     try {
       const resolucaoSku = resolverSku(catalogo.produtos, {
@@ -1385,15 +1399,20 @@ export default function TriagemFuncionalV2Page() {
       const resposta = await registrarNaoLiga(ctx.voucher, {
         defeitos: defeitosTodos,
         produto: { ...produto, sku: resolucaoSku?.sku || ctx.tradein?.sku_base || null },
-        retriagem: modoRetriagem,
-        motivoRetriagem,
+        retriagem: revisaoComMotivo,
+        motivoRetriagem: motivo,
       });
       if (resposta?.divergencia && !resposta?.nao_liga_local) {
         exibirDivergencia(resposta);
         return;
       }
-      if (!resposta?.ok || resposta.status !== "Aguardando laudo") {
-        throw new Error(resposta?.erro || "Não foi possível confirmar o envio ao Laudo.");
+      // Uma retriagem após Laudo já elaborado pode permanecer na Cosmética:
+      // preservar a etapa e o laudo original é intencional, não um erro.
+      const statusPermitidos = revisaoComMotivo
+        ? ["Aguardando laudo", "Aguardando triagem cosmética"]
+        : ["Aguardando laudo"];
+      if (!resposta?.ok || !statusPermitidos.includes(resposta.status)) {
+        throw new Error(resposta?.erro || "Não foi possível concluir a retriagem funcional.");
       }
       setFinalizacaoPendente(null);
       exibirDivergencia(resposta);
@@ -3089,6 +3108,22 @@ export default function TriagemFuncionalV2Page() {
                     </div>
                   </div>
 
+                  {condicaoInicial === "nao_liga" &&
+                    ["Aguardando laudo", "Aguardando triagem cosmética"].includes(ctx?.existente?.status_atual) &&
+                    !modoRetriagem && (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                        <p className="text-xs font-bold text-amber-900">
+                          Este voucher já está em Laudo/Cosmética. Informe o motivo para registrar a retriagem, sem apagar o histórico anterior.
+                        </p>
+                        <textarea
+                          rows={2}
+                          value={motivoRetriagem}
+                          onChange={event => setMotivoRetriagem(event.target.value)}
+                          placeholder="Motivo da retriagem (obrigatório)"
+                          className="mt-2 w-full rounded-lg border border-amber-300 bg-white p-3 text-sm"
+                        />
+                      </div>
+                    )}
                   <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-4">
                     <button
                       type="button"
