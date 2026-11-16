@@ -57,7 +57,7 @@ function Posicao({item,codigo,tipo,selecionar,modo,exibirVazias,busca,tecnico}){
   onClick={()=>selecionar({tipo,codigo,item})}
   aria-label={(tipo==="triagem"?"Posto ":"Estoque ")+codigo+
     (ativo?", OS "+item.numero_os:", vazio")}
-  className={"group min-w-0 rounded-xl border p-2.5 text-left transition "+
+  className={"group block w-full min-w-0 rounded-xl border p-2.5 text-left transition "+
     (tipo==="triagem"?"min-h-[88px]":"min-h-[60px]")+
     " "+TONALIDADE[estado]+
     (!visivel?" invisible pointer-events-none":(!buscaOk||!tecnicoOk)?" opacity-30":"")}>
@@ -366,7 +366,7 @@ export default function MapaFisicoLavadorasPage(){
         <p className="mt-1 text-[11px] text-slate-500">30 posições · 1 lavadora por endereço</p>
        </div>
        <div className="grid w-full max-w-[540px] grid-cols-3 gap-3">
-        {COLUNAS.map(letra=><div key={letra} className="space-y-2">
+        {COLUNAS.map(letra=><div key={letra} className="flex min-w-0 flex-col gap-2">
           <div className="rounded-lg bg-slate-100 p-2 text-center text-xs font-black text-violet-800">Coluna {letra}</div>
           {Array.from({length:10},(_,i)=>pos(letra+(i+1),"temporario"))}
         </div>)}
