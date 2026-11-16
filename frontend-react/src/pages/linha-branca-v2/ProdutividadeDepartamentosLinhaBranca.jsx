@@ -4,6 +4,7 @@ import {ResponsiveContainer,BarChart,Bar,XAxis,YAxis,CartesianGrid,Tooltip,Legen
 import {buscarProdutividadeLinhaBranca} from "../../services/mapaDepartamentosLinhaBrancaService.js";
 import FluxoLinhaBrancaPeriodo from "./FluxoLinhaBrancaPeriodo.jsx";
 import ReparosAnaliseNiveisLinhaBranca from "./ReparosAnaliseNiveisLinhaBranca.jsx";
+import ComplementosProducaoLinhaBranca from "./ComplementosProducaoLinhaBranca.jsx";
 
 const hojeSP=()=>{
  const parts=new Intl.DateTimeFormat("en-US",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date());
@@ -189,6 +190,15 @@ export default function ProdutividadeDepartamentosLinhaBranca({onVoltar}){
      </table></div>
     </section>
    </div>
+   {/* Recursos adicionais: indicadores e tabelas acima são mantidos integralmente. */}
+   <ComplementosProducaoLinhaBranca
+     periodo={periodo}
+     area={area}
+     departamento={departamento}
+     tecnico={tecnico}
+     colaboradores={opcoes.tecnicos}
+     versao={versao}
+   />
    <details className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
     <summary className="cursor-pointer text-sm font-black">Últimos registros do período ({Math.min(movimentos.length,100)})</summary>
     <p className="mt-2 text-[11px] text-slate-500">Amostra das 100 movimentações e atividades mais recentes, para auditoria por OS.</p>
