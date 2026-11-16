@@ -173,8 +173,8 @@ export default function ComplementosProducaoLinhaBranca({
 
   <section className={card}>
    <Titulo Icon={Clock3} eyebrow="Tempo operacional · Liquida System" titulo="Tempos médios e medianas por etapa"
-    descricao={"Duração das execuções concluídas dentro de "+inicio+" a "+fim+
-      ". Considera tempo efetivo dos ciclos e intervalo entre início e fim dos reparos; diagnósticos sem cronômetro não entram no cálculo."}/>
+    descricao={"Duração cronometrada dos ciclos concluídos dentro de "+inicio+" a "+fim+
+      ". Reparos continuam contabilizados na produção, porém o tempo real não é aferido: o intervalo de preenchimento do formulário não representa execução física."}/>
    {!valido||erroProd||esperando?<GraficoVazio carregando={esperando} erro={erroProd}/>:
     <div className="grid gap-3 md:grid-cols-3">
       {ETAPAS.map(e=>{
@@ -185,12 +185,14 @@ export default function ComplementosProducaoLinhaBranca({
         </div>
         <div className="mt-4 grid grid-cols-2 gap-3">
          <div><p className="text-[10px] font-bold uppercase text-slate-500">Média</p>
-          <p className="mt-1 text-xl font-black text-slate-900">{tempo(t.media_segundos)}</p></div>
+          <p className="mt-1 text-xl font-black text-slate-900">{e.id==="Reparo"?"Não aferido":tempo(t.media_segundos)}</p></div>
          <div><p className="text-[10px] font-bold uppercase text-slate-500">Mediana</p>
-          <p className="mt-1 text-xl font-black text-slate-900">{tempo(t.mediana_segundos)}</p></div>
+          <p className="mt-1 text-xl font-black text-slate-900">{e.id==="Reparo"?"Não aferido":tempo(t.mediana_segundos)}</p></div>
         </div>
         <p className="mt-3 text-[11px] text-slate-500">
-         {numero(t.duracoes_validas)} execuções com tempo registrado · {numero(t.produtos)} OS
+         {e.id==="Reparo"
+         ?numero(t.produtos)+" OS com reparo registrado · sem cronômetro operacional"
+         :numero(t.duracoes_validas)+" execuções cronometradas · "+numero(t.produtos)+" OS"}
         </p>
        </div>;
       })}
