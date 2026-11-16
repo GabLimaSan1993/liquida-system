@@ -240,7 +240,7 @@ function DetalhePosicao({selecionada,mapa,onFechar,onAlterar,editavel}){
  </div>;
 }
 
-export default function MapaFisicoLavadorasPage(){
+export default function MapaFisicoLavadorasPage({embutido=false}){
  const {hasAccess,profile}=useAuth();
  const editavel=Boolean(profile?.is_master||hasAccess("/v2/linha-branca/lavadoras/triagem")||
   hasAccess("/v2/linha-branca/gestao/estoque"));
@@ -281,8 +281,10 @@ export default function MapaFisicoLavadorasPage(){
  return <div className="space-y-4 text-slate-900">
   <header className="flex flex-wrap items-start justify-between gap-3">
    <div>
-    <p className="text-[10px] font-black uppercase tracking-[.17em] text-violet-700">Linha Branca · Lavadoras</p>
-    <h1 className="mt-1 text-2xl font-black tracking-tight sm:text-3xl">Mapa da Linha</h1>
+    <p className="text-[10px] font-black uppercase tracking-[.17em] text-violet-700">{embutido?"Operação ativa · Lavadoras":"Linha Branca · Lavadoras"}</p>
+    {embutido
+      ? <h2 className="mt-1 text-xl font-black tracking-tight sm:text-2xl">Mapa da linha de Lavadoras</h2>
+      : <h1 className="mt-1 text-2xl font-black tracking-tight sm:text-3xl">Mapa da Linha</h1>}
     <p className="mt-1 text-xs text-slate-500">20 postos de Triagem · Estoque Temporário Linha A1–C10 · ocupação atual e fluxo do dia</p>
    </div>
    <div className="flex flex-wrap items-center gap-2">
