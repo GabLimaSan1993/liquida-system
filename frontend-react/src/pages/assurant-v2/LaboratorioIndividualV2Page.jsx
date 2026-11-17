@@ -13,19 +13,18 @@ const BOTAO = 'inline-flex items-center justify-center gap-2 rounded-lg border p
 const CAMPO = 'rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-violet-500';
 const ESTADOS = [
   ['','Todos'],['aguardando_recebimento','Aguardando recebimento'],
-  ['recebido','Aguardando técnico'],['em_reparo','Em reparo'],
-  ['concluido','Concluído'],['em_devolucao','Em devolução'],
-  ['devolvido_warehouse','Devolvido ao Warehouse'],
-  ['divergencia_voucher','Divergência GAIA']
+  ['recebido','Aguardando técnico'],
+  ['concluido','Concluído'],['em_devolucao','Aguardando Recebimento Warehouse'],
+  ['devolvido_warehouse','Recebido pelo Warehouse']
 ];
 const rotulo = {
   aguardando_recebimento:'Aguardando recebimento',
   recebido:'Aguardando técnico',
-  em_reparo:'Em reparo',
+  em_reparo:'Aguardando técnico',
   concluido:'Reparo concluído',
-  em_devolucao:'Em devolução',
-  devolvido_warehouse:'Devolvido ao Warehouse',
-  divergencia_voucher:'Divergência de voucher · GAIA'
+  em_devolucao:'Aguardando Recebimento Warehouse',
+  devolvido_warehouse:'Recebido pelo Warehouse',
+  divergencia_voucher:'Pendente de regularização'
 };
 const cor = {
   aguardando_recebimento:'bg-amber-100 text-amber-800',
@@ -191,7 +190,7 @@ export default function LaboratorioIndividualV2Page() {
     setItem(i);setOs(i.os_numero||i.os_referencia||'');
     setDefeitos(Array.isArray(i.defeitos_atual)?i.defeitos_atual:[]);
     setResultado(i.resultado||'reparado');setObservacoes(i.observacoes||'');
-    setNovoDefeito('');setErro('');setEtapaAdmin(i.status||'');setMotivoAdmin('');
+    setNovoDefeito('');setErro('');setEtapaAdmin(i.status==='em_reparo'?'recebido':(i.status||''));setMotivoAdmin('');
   }
 
   async function abrirVoucherJaCadastrado(voucher) {
@@ -467,7 +466,7 @@ export default function LaboratorioIndividualV2Page() {
     if(ocupado)return;
     const quantidade=todos?Number(dados.resumo?.concluido||0):selecionados.length;
     if(!quantidade){setErro('Não há aparelhos concluídos selecionados para devolução.');return;}
-    if(!window.confirm('Gerar minuta de devolução para '+quantidade+' aparelho(s) concluído(s)? Os produtos passarão para Em devolução, sem movimentação automática de estoque.'))return;
+    if(!window.confirm('Gerar minuta de devolução para '+quantidade+' aparelho(s) concluído(s)? Os produtos passarão para Aguardando Recebimento Warehouse, sem movimentação automática de estoque.'))return;
     setOcupado(true);setErro('');setSucesso('');
     try{
       const retorno=await gerarMinutaLaboratorio(todos?null:selecionados,todos);
@@ -896,7 +895,6 @@ export default function LaboratorioIndividualV2Page() {
                 <label className="text-xs font-semibold">Etapa
                   <select className={CAMPO+' mt-1 block w-full'} value={etapaAdmin} onChange={e=>setEtapaAdmin(e.target.value)} disabled={ocupado}>
                     <option value="recebido">Aguardando técnico</option>
-                    <option value="em_reparo">Em reparo</option>
                     <option value="concluido">Concluído</option>
                   </select>
                 </label>
