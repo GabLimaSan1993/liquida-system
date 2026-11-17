@@ -523,6 +523,8 @@ export default function LaboratorioIndividualV2Page() {
     const imei=codigoMinuta.trim();
     if(!/^\d{15}$/.test(imei)){
       setErroMinuta('Bipe um IMEI válido de 15 dígitos.');
+      setCodigoMinuta('');
+      scanMinutaRef.current?.focus();
       return;
     }
     if(selecionados.some(i=>i.imei===imei)){
@@ -546,8 +548,10 @@ export default function LaboratorioIndividualV2Page() {
       setSelecionados(atuais=>[...atuais,itemResolvido]);
       setUltimoScan('Adicionado: '+itemResolvido.voucher+' · '+imei);
       setCodigoMinuta('');
-    }catch(err){setErroMinuta(err.message||'Falha na bipagem do IMEI.');}
-    finally{setOcupado(false);scanMinutaRef.current?.focus();}
+    }catch(err){
+      setErroMinuta(err.message||'Falha na bipagem do IMEI.');
+      setCodigoMinuta('');
+    }finally{setOcupado(false);scanMinutaRef.current?.focus();}
   }
 
   async function emitirMinuta(){
