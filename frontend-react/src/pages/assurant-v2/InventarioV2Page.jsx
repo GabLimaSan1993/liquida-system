@@ -1120,7 +1120,7 @@ function TabContagem({
               </div>
 
               <div className="mt-0.5 text-[10px] text-slate-400">
-                Leia o IMEI ou serial encontrado fisicamente neste endereço.
+                Leia o IMEI, serial ou voucher físico deste endereço. Sem IMEI no WMS, use o voucher.
               </div>
             </div>
           </div>
@@ -1147,7 +1147,7 @@ function TabContagem({
                 e.target.value
               )
             }
-            placeholder="Bipe o IMEI ou serial..."
+            placeholder="Bipe o IMEI, serial ou voucher..."
             autoComplete="off"
             className="h-12 flex-1 rounded-xl border border-slate-200 bg-white px-4 font-mono text-sm font-semibold text-slate-700 outline-none transition focus:border-violet-300 focus:ring-4 focus:ring-violet-50"
           />
