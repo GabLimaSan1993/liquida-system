@@ -691,12 +691,26 @@ export default function LaboratorioIndividualV2Page() {
             Retornos solicitados pelo Warehouse: {minutas.reduce((s,m)=>s+Number(m.retorno_warehouse_pendente||0),0)} aparelho(s) não recebido(s) fisicamente. Consulte as minutas sinalizadas para conciliação com o laboratório.
           </p>}
           <div className="flex flex-wrap gap-2">
-            {minutas.slice(0,8).map(m=><button type="button" key={m.id} disabled={ocupado}
-              onClick={()=>void imprimirMinuta(m.id)}
-              className={BOTAO+' border-slate-200 bg-slate-50 text-slate-700 hover:bg-violet-50'}>
-              <Printer size={14}/> LAB-DEV-{String(m.numero).padStart(6,'0')} · {m.total} aparelhos
-              {!!m.retorno_warehouse_pendente&&<span className="rounded bg-amber-100 px-2 py-1 text-[10px] font-black text-amber-900">{m.retorno_warehouse_pendente} devolução(ões) Warehouse</span>}
-            </button>)}
+            {minutas.slice(0,8).map(m=>{
+              const classificacao=classificacaoLaboratorio(m.classificacao);
+              const corMinuta=m.classificacao==='reparado'
+                ? 'border-lime-400 bg-lime-100 text-lime-950 hover:bg-lime-200'
+                : m.classificacao==='sem_reparo'
+                  ? 'border-blue-400 bg-blue-100 text-blue-950 hover:bg-blue-200'
+                  : m.classificacao==='irrecuperavel'
+                    ? 'border-red-400 bg-red-100 text-red-950 hover:bg-red-200'
+                    : 'border-amber-400 bg-amber-50 text-amber-950 hover:bg-amber-100';
+              return <button type="button" key={m.id} disabled={ocupado}
+                onClick={()=>void imprimirMinuta(m.id)}
+                title={'Imprimir '+(classificacao?.rotulo||'Minuta mista (legado)')+' · LAB-DEV-'+String(m.numero).padStart(6,'0')}
+                className={BOTAO+' border '+corMinuta}>
+                <Printer size={14}/> LAB-DEV-{String(m.numero).padStart(6,'0')} · {m.total} aparelho(s)
+                <span className="rounded-md border border-current/25 px-2 py-0.5 text-[10px] font-black">
+                  {classificacao?.rotulo||'Mista (legado)'}
+                </span>
+                {!!m.retorno_warehouse_pendente&&<span className="rounded bg-amber-100 px-2 py-1 text-[10px] font-black text-amber-900">{m.retorno_warehouse_pendente} devolução(ões) Warehouse</span>}
+              </button>;
+            })}
           </div>
         </div>}
       </section>
