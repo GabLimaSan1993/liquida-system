@@ -511,6 +511,31 @@ export default function LaboratorioIndividualV2Page() {
       {erro&&<div role="alert" className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-800"><AlertTriangle size={17} className="mt-0.5 shrink-0"/>{erro}</div>}
       {sucesso&&<div role="status" className="flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800"><CheckCircle2 size={17} className="mt-0.5 shrink-0"/>{sucesso}</div>}
 
+      <section className="rounded-2xl border border-violet-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-base font-black text-slate-900">Abertura GAIA — confirmar recebimento</h2>
+            <p className="mt-1 text-xs text-slate-500">Importe o Aging após abrir as OS no GAIA, com as colunas <b>Voucher</b> e <b>OS GAIA</b>. A confirmação só será aceita para aparelhos enviados pelo Warehouse.</p>
+          </div>
+          <label className={BOTAO+' cursor-pointer border-violet-300 bg-violet-50 text-violet-800'}>
+            <Upload size={16}/> Importar Voucher + OS GAIA
+            <input type="file" className="sr-only" accept=".xlsx,.xls,.ods,.csv" disabled={ocupado} onChange={prepararArquivoGaia}/>
+          </label>
+        </div>
+        {arquivoGaia&&<div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 p-4">
+          <div><p className="text-sm font-bold text-slate-800">{arquivoGaia.arquivo}</p>
+            <p className="mt-1 text-xs text-slate-500">{arquivoGaia.pares.length.toLocaleString('pt-BR')} pares Voucher + OS GAIA · aba {arquivoGaia.aba}</p></div>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" disabled={ocupado} onClick={()=>setArquivoGaia(null)} className={BOTAO+' border-slate-200 bg-white'}>Cancelar</button>
+            <button type="button" disabled={ocupado} onClick={()=>void confirmarArquivoGaia()}
+              className={BOTAO+' border-emerald-700 bg-emerald-600 text-white'}>
+              <PackageCheck size={16}/> Confirmar recebimento da planilha
+            </button>
+          </div>
+        </div>}
+        <p className="mt-3 text-[11px] text-slate-500">A abertura das OS ocorre no GAIA. Esta importação vincula as OS ao voucher no Liquida System e registra a conferência física, sem movimentar estoque WMS ou Oracle.</p>
+      </section>
+
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_330px]">
         <section className="rounded-2xl border border-violet-200 bg-white p-5 shadow-sm">
           <div className="flex items-center gap-2"><FileSpreadsheet size={20} className="text-violet-700"/><h2 className="text-base font-black">Importar vouchers para Aguardando recebimento</h2></div>
@@ -655,12 +680,28 @@ export default function LaboratorioIndividualV2Page() {
             <h2 className="flex items-center gap-2 text-sm font-black text-slate-900"><Truck size={17} className="text-violet-700"/> Devolução ao Warehouse</h2>
             <p className="mt-1 text-xs text-slate-500"><b>{Number(estados.concluido||0).toLocaleString('pt-BR')}</b> aparelhos concluídos disponíveis para expedição. A minuta registra o envio; o recebimento deve ser conferido no Warehouse.</p>
           </div>
-          <button type="button" disabled={ocupado||!Number(estados.concluido||0)}
-            onClick={()=>void emitirMinuta(true)}
-            className={BOTAO+' w-full sm:w-auto border-violet-700 bg-violet-700 text-white'}>
-            <Truck size={15}/> Gerar minuta / Devolução
-          </button>
+          <label className={BOTAO+' cursor-pointer border-violet-300 bg-violet-50 text-violet-800'}>
+            <Upload size={16}/> Importar planilha para minuta
+            <input type="file" accept=".xlsx,.xls,.ods,.csv" className="sr-only" disabled={ocupado} onChange={prepararArquivoMinuta}/>
+          </label>
+          <a download="Modelo_Minuta_Laboratorio.csv" href={'data:text/csv;charset=utf-8,'+encodeURIComponent('Voucher\nYBV123456\n')}
+            className="text-xs font-bold text-violet-700 underline">Modelo por voucher</a>
         </div>
+        {arquivoMinuta&&<div className="mt-4 space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div><p className="text-xs font-bold text-slate-900">{arquivoMinuta.arquivo}</p>
+              <p className="mt-1 text-xs text-slate-600">{arquivoMinuta.itens?.length||0} aptos · {arquivoMinuta.falhas?.length||0} pendentes de regularização</p></div>
+            <div className="flex gap-2">
+              <button type="button" onClick={()=>setArquivoMinuta(null)} disabled={ocupado} className={BOTAO+' border-slate-200 bg-white'}>Limpar</button>
+              <button type="button" onClick={()=>void emitirMinutaDaPlanilha()}
+                disabled={ocupado||!!arquivoMinuta.falhas?.length||!arquivoMinuta.itens?.length}
+                className={BOTAO+' border-emerald-700 bg-emerald-600 text-white'}><Truck size={15}/> Gerar minuta da planilha</button>
+            </div>
+          </div>
+          {!!arquivoMinuta.falhas?.length&&<div className="max-h-32 overflow-auto text-xs text-rose-700">
+            {arquivoMinuta.falhas.slice(0,30).map((x,i)=><p key={i}>{x.voucher}: {x.motivo}</p>)}
+          </div>}
+        </div>}
         {filtro==='concluido'&&<div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
           <button type="button" disabled={ocupado||!(dados.itens||[]).length}
             onClick={alternarPaginaConcluidos} className={BOTAO+' border-slate-200 bg-white text-slate-700'}>
@@ -846,6 +887,34 @@ export default function LaboratorioIndividualV2Page() {
                 : <p className="mt-3 text-xs font-bold text-emerald-700">Reparo concluído em {dataHora(item.concluido_em)}. Consulte o histórico de saída no Warehouse.</p>}
             </section>
           </>}
+
+          {admin && ['recebido','em_reparo','concluido'].includes(item.status) &&
+            <section className="mt-4 space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <h3 className="text-sm font-black text-amber-900">Administrador · correção de laudo técnico e etapa</h3>
+              <p className="text-xs text-amber-800">Correções auditadas somente antes da devolução ao Warehouse. Itens já vinculados a uma minuta precisam ser regularizados antes.</p>
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="text-xs font-semibold">Etapa
+                  <select className={CAMPO+' mt-1 block w-full'} value={etapaAdmin} onChange={e=>setEtapaAdmin(e.target.value)} disabled={ocupado}>
+                    <option value="recebido">Aguardando técnico</option>
+                    <option value="em_reparo">Em reparo</option>
+                    <option value="concluido">Concluído</option>
+                  </select>
+                </label>
+                <label className="text-xs font-semibold">Resultado do laudo técnico
+                  <select className={CAMPO+' mt-1 block w-full'} value={resultado} onChange={e=>setResultado(e.target.value)} disabled={ocupado}>
+                    <option value="reparado">Reparado</option><option value="sem_reparo">Não Reparado Desbloqueado</option><option value="irrecuperavel">Scrap - Não Liga / Bloqueado</option>
+                  </select>
+                </label>
+              </div>
+              <label className="block text-xs font-semibold">Motivo da correção (obrigatório)
+                <textarea className={CAMPO+' mt-1 block w-full'} value={motivoAdmin} onChange={e=>setMotivoAdmin(e.target.value)}
+                  rows={2} maxLength={500} placeholder="Descreva por que a etapa ou laudo técnico precisa ser ajustado" disabled={ocupado}/>
+              </label>
+              <button type="button" onClick={()=>void salvarCorrecaoAdmin()} disabled={ocupado||motivoAdmin.trim().length<10}
+                className={BOTAO+' border-amber-700 bg-amber-800 text-white'}>
+                <ClipboardCheck size={15}/> Salvar correção auditada
+              </button>
+            </section>}
 
           {item.origem==='individual'&&<p className="mt-4 text-[11px] text-amber-800">Voucher importado individualmente: o reparo é registrado sem pedido ou romaneio artificial. A devolução física ao Warehouse deve ser conciliada antes de qualquer baixa, entrada Oracle ou movimentação de estoque.</p>}
           {item.origem==='historico'&&<p className="mt-4 text-[11px] text-slate-500">Voucher já existente no histórico do laboratório. O vínculo de origem foi preservado exclusivamente para rastreabilidade e devolução anterior.</p>}
