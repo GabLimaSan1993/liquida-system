@@ -294,7 +294,7 @@ export default function LaboratorioReparoV2Page() {
                 {!!validarConclusaoLaboratorio(resultado,defeitos)&&
                   <p role="status" className="text-xs font-semibold text-rose-700">{validarConclusaoLaboratorio(resultado,defeitos)}</p>}
                 <div className="flex flex-wrap gap-2"><button className={botao+' border border-slate-200 bg-white text-violet-700 hover:bg-violet-50'} onClick={salvarDefeitos} disabled={busy}>Salvar revisão dos defeitos</button>
-                  <button className={botao+' bg-emerald-600 text-white hover:bg-emerald-700'} onClick={concluir} disabled={busy||!edicao.os_numero}><CheckCircle2 size={16}/>Fechar reparo</button></div>
+                  <button className={botao+' bg-emerald-600 text-white hover:bg-emerald-700'} onClick={concluir} disabled={busy||!edicao.os_numero||!!validarConclusaoLaboratorio(resultado,defeitos)}><CheckCircle2 size={16}/>Fechar reparo</button></div>
               </div>}
             </div>}
             {aba==='devolucao'&&<div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
