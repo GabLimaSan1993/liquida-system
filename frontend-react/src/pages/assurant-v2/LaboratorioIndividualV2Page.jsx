@@ -507,7 +507,7 @@ export default function LaboratorioIndividualV2Page() {
   }
 
   function escolherTipoMinuta(tipo){
-    if(!classificacaoLaboratorio(tipo))return;
+    if(tipo&&!classificacaoLaboratorio(tipo))return;
     if(selecionados.length&&!window.confirm('Mudar a classificação irá limpar os IMEIs bipados. Continuar?'))return;
     setTipoMinuta(tipo);
     setSelecionados([]);
@@ -567,8 +567,8 @@ export default function LaboratorioIndividualV2Page() {
       if(revisao.itens.some(i=>!anterior.has(chaveItem(i))))
         throw new Error('Houve divergência entre os IMEIs bipados e a conferência. Revise a lista.');
       const retorno=await gerarMinutaLaboratorio(revisao.itens.map(i=>({id:i.id,origem:i.origem})),false);
-      fecharModalMinuta();
-      setModalMinuta(false);setSelecionados([]);setTipoMinuta('');setCodigoMinuta('');setArquivoMinuta(null);
+      setModalMinuta(false);setSelecionados([]);setTipoMinuta('');setCodigoMinuta('');
+      setArquivoMinuta(null);setErroMinuta('');setUltimoScan('');
       setSucesso('Minuta LAB-DEV-'+String(retorno.numero).padStart(6,'0')+
         ' emitida com '+retorno.total+' aparelho(s) '+classificacaoLaboratorio(tipoMinuta).rotulo+
         '. Use Imprimir minuta abaixo para o documento físico.');
@@ -661,6 +661,15 @@ export default function LaboratorioIndividualV2Page() {
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="mb-4 flex flex-wrap items-center gap-2 border-b border-slate-100 pb-3">
+          <span className="text-xs font-bold text-slate-600">Filtrar fila por resultado:</span>
+          <button type="button" className={BOTAO+' '+(!resultadoFiltro?'border-violet-700 bg-violet-700 text-white':'border-slate-200 bg-white')}
+            onClick={()=>{setResultadoFiltro('');setPagina(0);}}>Todos</button>
+          {CLASSIFICACOES_LAB.map(op=><button key={op.valor} type="button"
+            aria-pressed={resultadoFiltro===op.valor}
+            className={BOTAO+' border '+op.classe+(resultadoFiltro===op.valor?' ring-2 ring-violet-500':'')}
+            onClick={()=>{setResultadoFiltro(op.valor);setPagina(0);}}>{op.rotulo}</button>)}
+        </div>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="flex items-center gap-2 text-sm font-black text-slate-900"><Truck size={17} className="text-violet-700"/> Devolução ao Warehouse</h2>
