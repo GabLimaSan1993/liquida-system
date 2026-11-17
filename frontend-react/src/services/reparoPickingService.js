@@ -26,7 +26,7 @@ export async function exportarReparo(pedido, itens, modo, statusDestino = '') {
   const XLSX = await import('xlsx');
   const rows = itens.map(i => ({
     Pedido: pedido.lote, IMEI: String(i.imei), Voucher: i.voucher || '',
-    SKU: i.sku || '', Modelo: i.modelo || '', Grade: i.grade || '',
+    SKU: i.sku || '', Modelo: i.modelo || '', Grade: i.grade || '', 'Defeitos Adicionais': i.defeitos_adicionais || '',
     'Local WMS': i.local_wms || '', 'Status Picking': i.status,
     Pendência: i.pendencia || '', 'Bipado em': i.bipado_em || '',
     'Status anterior Liquida': i.status_anterior || '',
@@ -85,16 +85,21 @@ export async function exportarPlanilhaWarehouseGaia(pedidoId) {
   const XLSX = await import("xlsx");
   const rows=data.itens.map(x=>({
     "Voucher": x.voucher || "",
+    "IMEI": String(x.imei || ""),
     "Modelo comercial": x.modelo_comercial || "",
+    "SKU": String(x.sku || ""),
+    "Grade": x.grade || "",
+    "Defeitos Adicionais": x.defeitos_adicionais || "",
     "Modelo Fabricante": x.modelo_fabricante || "",
     "Marca": x.marca || "",
-    "Defeito da triagem": x.defeito_triagem || ""
+    "Defeito da triagem": x.defeito_triagem || "",
+    "OS GAIA": x.os_gaia || ""
   }));
-  const sheet=XLSX.utils.json_to_sheet(rows,{header:["Voucher","Modelo comercial","Modelo Fabricante","Marca","Defeito da triagem"]});
+  const sheet=XLSX.utils.json_to_sheet(rows,{header:["Voucher","IMEI","Modelo comercial","SKU","Grade","Defeitos Adicionais","Modelo Fabricante","Marca","Defeito da triagem","OS GAIA"]});
   sheet["!autofilter"]={ref:sheet["!ref"]};
-  sheet["!cols"]=[{wch:25},{wch:55},{wch:30},{wch:24},{wch:70}];
+  sheet["!cols"]=[{wch:25},{wch:21},{wch:55},{wch:25},{wch:16},{wch:65},{wch:30},{wch:24},{wch:70},{wch:22}];
   const livro=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(livro,sheet,"Envio ao Gaia");
-  XLSX.writeFile(livro,"Warehouse_GAIA_Envio_Laboratorio_"+new Date().toISOString().slice(0,10)+".xlsx");
+  XLSX.writeFile(livro,"Warehouse_Envio_Laboratorio_"+new Date().toISOString().slice(0,10)+".xlsx");
   return rows.length;
 }
