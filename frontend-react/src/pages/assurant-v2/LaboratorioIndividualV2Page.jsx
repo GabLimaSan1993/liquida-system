@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../AuthContext.jsx';
-import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, FileSpreadsheet, PackageCheck, RefreshCw, Search, Upload, Wrench, X, Truck, Printer, Download } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, FileSpreadsheet, PackageCheck, RefreshCw, Search, Upload, Wrench, X, Truck, Printer, Download, ScanLine, Trash2 } from 'lucide-react';
 import { laboratorioIndividual, conferirVouchersLaboratorio, confirmarRecebimentoLaboratorio, receberVoucherOsGaia, resolverVouchersMinuta, corrigirLaudoEtapaAdmin } from '../../services/laboratorioIndividualService.js';
 import { lerVoucherOsGaia, lerVouchersMinuta } from '../../services/laboratorioPlanilhasGaia.js';
 import { laboratorioReparo } from '../../services/laboratorioReparoService.js';
@@ -156,6 +156,12 @@ export default function LaboratorioIndividualV2Page() {
   const [minutas,setMinutas]=useState([]);
   const [arquivoGaia,setArquivoGaia]=useState(null);
   const [arquivoMinuta,setArquivoMinuta]=useState(null);
+  const [modalMinuta,setModalMinuta]=useState(false);
+  const [tipoMinuta,setTipoMinuta]=useState('');
+  const [codigoMinuta,setCodigoMinuta]=useState('');
+  const [erroMinuta,setErroMinuta]=useState('');
+  const [ultimoScan,setUltimoScan]=useState('');
+  const scanMinutaRef=useRef(null);
   const [etapaAdmin,setEtapaAdmin]=useState('');
   const [motivoAdmin,setMotivoAdmin]=useState('');
   const limite=100;
@@ -180,6 +186,9 @@ export default function LaboratorioIndividualV2Page() {
 
   useEffect(()=>{void carregar();},[carregar]);
   useEffect(()=>{void carregarMinutas();},[carregarMinutas]);
+  useEffect(()=>{
+    if(modalMinuta&&tipoMinuta)scanMinutaRef.current?.focus();
+  },[modalMinuta,tipoMinuta]);
   useEffect(()=>{
     let ativo=true;
     listarDefeitos(true).then(r=>{if(ativo) setCatalogo(r||[]);}).catch(()=>{});
@@ -269,35 +278,24 @@ export default function LaboratorioIndividualV2Page() {
     finally{setOcupado(false);}
   }
 
-  async function prepararArquivoMinuta(e) {
+  async function prepararArquivoMinuta(e){
     const arquivo=e.target.files?.[0];e.target.value='';
-    if(!arquivo||ocupado)return;
-    setOcupado(true);setErro('');setSucesso('');setArquivoMinuta(null);
-    try {
+    if(!arquivo||ocupado||!tipoMinuta)return;
+    setOcupado(true);setErroMinuta('');setUltimoScan('');
+    try{
       const previa=await lerVouchersMinuta(arquivo);
       const conferencia=await resolverVouchersMinuta(previa.identificadores);
-      setArquivoMinuta({...previa,...conferencia});
-      if(conferencia.falhas.length) {
-        setErro(conferencia.falhas.length+' identificador(es) não estão Concluídos, são ambíguos ou já estão em minuta. Corrija a planilha.');
-      } else {
-        setSucesso(previa.identificadores.length+' Voucher(s)/IMEI(s) conferidos. Escolha a classificação final do romaneio.');
-      }
-    }catch(err){setErro(err.message||'Erro na planilha de minuta.');}
-    finally{setOcupado(false);}
-  }
-
-  async function emitirMinutaDaPlanilha() {
-    if(ocupado||!arquivoMinuta?.itens?.length||arquivoMinuta.falhas?.length)return;
-    try {validarClassificacaoUnica(arquivoMinuta.itens,resultadoFiltro);}catch(e){setErro(e.message);return;}
-    if(!window.confirm('Gerar minuta '+classificacaoLaboratorio(resultadoFiltro).rotulo+' para '+arquivoMinuta.itens.length+' aparelhos da planilha?'))return;
-    setOcupado(true);setErro('');setSucesso('');
-    try {
-      const r=await gerarMinutaLaboratorio(arquivoMinuta.itens,false);
-      setSucesso('Minuta LAB-DEV-'+String(r.numero).padStart(6,'0')+' emitida com '+r.total+' aparelhos da planilha.');
-      setArquivoMinuta(null);setSelecionados([]);
-      await carregar();await carregarMinutas();
-    }catch(err){setErro(err.message||'Não foi possível emitir a minuta da planilha.');}
-    finally{setOcupado(false);}
+      if(conferencia.falhas.length)
+        throw new Error(conferencia.falhas.slice(0,6).map(x=>(x.identificador||x.voucher)+': '+x.motivo).join('; ')+
+          '. Nenhum aparelho desta planilha foi adicionado.');
+      validarClassificacaoUnica(conferencia.itens,tipoMinuta);
+      const existentes=new Set(selecionados.map(chaveItem));
+      const novos=conferencia.itens.filter(i=>!existentes.has(chaveItem(i)));
+      setSelecionados(atuais=>[...atuais,...novos]);
+      setArquivoMinuta({arquivo:previa.arquivo,adicionados:novos.length});
+      setUltimoScan(novos.length+' aparelho(s) adicionado(s) pela planilha.');
+    }catch(err){setErroMinuta(err.message||'Falha na planilha de minuta.');}
+    finally{setOcupado(false);scanMinutaRef.current?.focus();}
   }
 
   async function salvarCorrecaoAdmin() {
@@ -486,38 +484,96 @@ export default function LaboratorioIndividualV2Page() {
   }
 
   const chaveItem=i=>i.origem+':'+i.id;
-  function alternarSelecao(i) {
-    if(i.status!=='concluido'||i.resultado!==resultadoFiltro)return;
-    setSelecionados(atuais=>atuais.some(x=>chaveItem(x)===chaveItem(i))
-      ?atuais.filter(x=>chaveItem(x)!==chaveItem(i))
-      :[...atuais,{id:i.id,origem:i.origem,resultado:i.resultado}]);
+
+  function abrirModalMinuta(){
+    setModalMinuta(true);
+    setTipoMinuta('');
+    setCodigoMinuta('');
+    setSelecionados([]);
+    setErroMinuta('');
+    setUltimoScan('');
+    setArquivoMinuta(null);
   }
-  function alternarPaginaConcluidos() {
-    const concluidos=(dados.itens||[]).filter(i=>i.status==='concluido'&&i.resultado===resultadoFiltro);
-    if(!concluidos.length)return;
-    const todas=concluidos.every(i=>selecionados.some(x=>chaveItem(x)===chaveItem(i)));
-    if(todas){
-      const chaves=new Set(concluidos.map(chaveItem));
-      setSelecionados(a=>a.filter(i=>!chaves.has(chaveItem(i))));
-    } else {
-      setSelecionados(a=>[...a,...concluidos.filter(i=>!a.some(x=>chaveItem(x)===chaveItem(i))).map(i=>({id:i.id,origem:i.origem,resultado:i.resultado}))]);
-    }
-  }
-  async function emitirMinuta(todos=false) {
+
+  function fecharModalMinuta(){
     if(ocupado)return;
-    if(todos){setErro('Emissão em massa indisponível: selecione uma classificação e aparelhos individualmente.');return;}
-    try {validarClassificacaoUnica(selecionados,resultadoFiltro);}catch(e){setErro(e.message);return;}
-    const quantidade=selecionados.length;
-    if(!quantidade){setErro('Não há aparelhos concluídos selecionados para devolução.');return;}
-    if(!window.confirm('Gerar minuta '+classificacaoLaboratorio(resultadoFiltro).rotulo+' para '+quantidade+' aparelho(s)? Não haverá alteração automática no estoque.'))return;
-    setOcupado(true);setErro('');setSucesso('');
+    setModalMinuta(false);
+    setTipoMinuta('');
+    setCodigoMinuta('');
+    setSelecionados([]);
+    setErroMinuta('');
+    setUltimoScan('');
+    setArquivoMinuta(null);
+  }
+
+  function escolherTipoMinuta(tipo){
+    if(!classificacaoLaboratorio(tipo))return;
+    if(selecionados.length&&!window.confirm('Mudar a classificação irá limpar os IMEIs bipados. Continuar?'))return;
+    setTipoMinuta(tipo);
+    setSelecionados([]);
+    setCodigoMinuta('');
+    setErroMinuta('');
+    setUltimoScan('');
+    setArquivoMinuta(null);
+  }
+
+  async function biparImeiMinuta(e){
+    e.preventDefault();
+    if(ocupado||!tipoMinuta)return;
+    const imei=codigoMinuta.trim();
+    if(!/^\d{15}$/.test(imei)){
+      setErroMinuta('Bipe um IMEI válido de 15 dígitos.');
+      return;
+    }
+    if(selecionados.some(i=>i.imei===imei)){
+      setErroMinuta('O IMEI '+imei+' já foi bipado nesta minuta.');
+      setCodigoMinuta('');
+      scanMinutaRef.current?.focus();
+      return;
+    }
+    setOcupado(true);
+    setErroMinuta('');
     try{
-      const retorno=await gerarMinutaLaboratorio(todos?null:selecionados,todos);
-      setSelecionados([]);
-      setSucesso('Minuta LAB-DEV-'+String(retorno.numero).padStart(6,'0')+' emitida para '+retorno.total+' aparelhos. Clique em Imprimir minuta abaixo para gerar o documento.');
-      await carregar();
-      await carregarMinutas();
-    }catch(e){setErro(e.message||'Falha ao emitir minuta de devolução.');}
+      const r=await resolverVouchersMinuta([imei]);
+      const itemResolvido=r.itens?.[0];
+      if(r.falhas?.length||!itemResolvido)
+        throw new Error(r.falhas?.[0]?.motivo||'IMEI não localizado em Concluídos.');
+      if(itemResolvido.resultado!==tipoMinuta)
+        throw new Error('IMEI '+imei+' classificado como '+(classificacaoLaboratorio(itemResolvido.resultado)?.rotulo||'sem resultado')+
+          '. Esta minuta aceita somente '+classificacaoLaboratorio(tipoMinuta).rotulo+'.');
+      if(selecionados.some(i=>chaveItem(i)===chaveItem(itemResolvido)))
+        throw new Error('Este aparelho já consta nesta minuta.');
+      setSelecionados(atuais=>[...atuais,itemResolvido]);
+      setUltimoScan('Adicionado: '+itemResolvido.voucher+' · '+imei);
+      setCodigoMinuta('');
+    }catch(err){setErroMinuta(err.message||'Falha na bipagem do IMEI.');}
+    finally{setOcupado(false);scanMinutaRef.current?.focus();}
+  }
+
+  async function emitirMinuta(){
+    if(ocupado||!tipoMinuta)return;
+    try {validarClassificacaoUnica(selecionados,tipoMinuta);}
+    catch(e){setErroMinuta(e.message);return;}
+    if(!window.confirm('Emitir minuta de '+classificacaoLaboratorio(tipoMinuta).rotulo+
+      ' com '+selecionados.length+' aparelho(s) bipado(s)?'))return;
+    setOcupado(true);setErroMinuta('');setErro('');setSucesso('');
+    try{
+      // Revalidar todos os aparelhos imediatamente antes da emissão.
+      const revisao=await resolverVouchersMinuta(selecionados.map(i=>i.imei||i.voucher));
+      if(revisao.falhas?.length||revisao.itens?.length!==selecionados.length)
+        throw new Error('Um ou mais aparelhos mudaram de etapa ou já estão em outra minuta. Refaça a conferência.');
+      validarClassificacaoUnica(revisao.itens,tipoMinuta);
+      const anterior=new Set(selecionados.map(chaveItem));
+      if(revisao.itens.some(i=>!anterior.has(chaveItem(i))))
+        throw new Error('Houve divergência entre os IMEIs bipados e a conferência. Revise a lista.');
+      const retorno=await gerarMinutaLaboratorio(revisao.itens.map(i=>({id:i.id,origem:i.origem})),false);
+      fecharModalMinuta();
+      setModalMinuta(false);setSelecionados([]);setTipoMinuta('');setCodigoMinuta('');setArquivoMinuta(null);
+      setSucesso('Minuta LAB-DEV-'+String(retorno.numero).padStart(6,'0')+
+        ' emitida com '+retorno.total+' aparelho(s) '+classificacaoLaboratorio(tipoMinuta).rotulo+
+        '. Use Imprimir minuta abaixo para o documento físico.');
+      await carregar();await carregarMinutas();
+    }catch(e){setErroMinuta(e.message||'Falha ao gerar a minuta. Nenhum aparelho novo foi selecionado.');}
     finally{setOcupado(false);}
   }
   async function imprimirMinuta(id) {
@@ -605,52 +661,17 @@ export default function LaboratorioIndividualV2Page() {
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          <span className="text-xs font-bold text-slate-600">Resultado final / filtro de romaneio:</span>
-          <button type="button" className={BOTAO+' '+(!resultadoFiltro?'border-violet-600 bg-violet-700 text-white':'border-slate-200 bg-white')} onClick={()=>{setResultadoFiltro('');setSelecionados([]);setPagina(0);}}>Todos</button>
-          {CLASSIFICACOES_LAB.map(op=><button type="button" key={op.valor} onClick={()=>{setResultadoFiltro(op.valor);setSelecionados([]);setPagina(0);}}
-            aria-pressed={resultadoFiltro===op.valor} className={BOTAO+' border '+op.classe+(resultadoFiltro===op.valor?' ring-2 ring-violet-500':'')}>
-            {op.rotulo}</button>)}
-        </div>
-        <div className="flex flex-col items-start gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="flex items-center gap-2 text-sm font-black text-slate-900"><Truck size={17} className="text-violet-700"/> Devolução ao Warehouse</h2>
-            <p className="mt-1 text-xs text-slate-500"><b>{Number(estados.concluido||0).toLocaleString('pt-BR')}</b> aparelhos concluídos disponíveis para expedição. A minuta registra o envio; o recebimento deve ser conferido no Warehouse.</p>
+            <p className="mt-1 text-xs text-slate-500"><b>{Number(estados.concluido||0).toLocaleString('pt-BR')}</b> aparelhos concluídos. Gere a minuta escolhendo primeiro o resultado e depois bipando os IMEIs.</p>
           </div>
-          <label className={BOTAO+' cursor-pointer border-violet-300 bg-violet-50 text-violet-800'}>
-            <Upload size={16}/> Importar planilha para minuta
-            <input type="file" accept=".xlsx,.xls,.ods,.csv" className="sr-only" disabled={ocupado} onChange={prepararArquivoMinuta}/>
-          </label>
-          <a download="Modelo_Minuta_Laboratorio.csv" href={'data:text/csv;charset=utf-8,'+encodeURIComponent('Voucher\nYBV123456\n')}
-            className="text-xs font-bold text-violet-700 underline">Modelo por voucher (também aceita coluna IMEI)</a>
+          <button type="button" onClick={abrirModalMinuta} disabled={ocupado}
+            className={BOTAO+' border-violet-700 bg-violet-700 px-5 py-3 text-white hover:bg-violet-800'}>
+            <Truck size={16}/> Gerar minuta
+          </button>
         </div>
-        {arquivoMinuta&&<div className="mt-4 space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div><p className="text-xs font-bold text-slate-900">{arquivoMinuta.arquivo}</p>
-              <p className="mt-1 text-xs text-slate-600">{arquivoMinuta.itens?.length||0} aptos · {arquivoMinuta.falhas?.length||0} pendentes de regularização</p></div>
-            <div className="flex gap-2">
-              <button type="button" onClick={()=>setArquivoMinuta(null)} disabled={ocupado} className={BOTAO+' border-slate-200 bg-white'}>Limpar</button>
-              <button type="button" onClick={()=>void emitirMinutaDaPlanilha()}
-                disabled={ocupado||!resultadoFiltro||!!arquivoMinuta.falhas?.length||!arquivoMinuta.itens?.length}
-                className={BOTAO+' border-emerald-700 bg-emerald-600 text-white'}><Truck size={15}/> Gerar minuta da planilha</button>
-            </div>
-          </div>
-          {!!arquivoMinuta.falhas?.length&&<div className="max-h-32 overflow-auto text-xs text-rose-700">
-            {arquivoMinuta.falhas.slice(0,30).map((x,i)=><p key={i}>{x.voucher||x.identificador||x.imei||'Identificador'}: {x.motivo}</p>)}
-          </div>}
-        </div>}
-        {filtro==='concluido'&&<div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
-          <button type="button" disabled={ocupado||!(dados.itens||[]).length}
-            onClick={alternarPaginaConcluidos} className={BOTAO+' border-slate-200 bg-white text-slate-700'}>
-            Selecionar/desmarcar página
-          </button>
-          <span className="text-xs font-semibold text-slate-600">{selecionados.length} selecionados</span>
-          <button type="button" disabled={ocupado||!resultadoFiltro||!selecionados.length}
-            onClick={()=>void emitirMinuta(false)} className={BOTAO+' border-emerald-700 bg-emerald-600 text-white'}>
-            <Truck size={15}/> Gerar minuta dos selecionados
-          </button>
-        </div>}
-        {!!minutas.length&&<div className="mt-3 border-t border-slate-100 pt-3">
+        {!!minutas.length&&<div className="mt-4 border-t border-slate-100 pt-3">
           <p className="mb-2 text-[11px] font-bold text-slate-600">Minutas emitidas · imprimir ou salvar como PDF</p>
           <div className="flex flex-wrap gap-2">
             {minutas.slice(0,8).map(m=><button type="button" key={m.id} disabled={ocupado}
@@ -699,11 +720,6 @@ export default function LaboratorioIndividualV2Page() {
                 <td className="p-3 text-[11px] text-slate-500">{dataHora(i.recebido_em||i.criado_em)}</td>
                 <td className="p-3">
                   <div className="flex flex-wrap items-center gap-2">
-                    {i.status==='concluido'&&<label className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-700">
-                      <input type="checkbox" aria-label={'Selecionar para devolução '+i.voucher}
-                        checked={selecionados.some(x=>chaveItem(x)===chaveItem(i))}
-                        disabled={ocupado||!resultadoFiltro||i.resultado!==resultadoFiltro} onChange={()=>alternarSelecao(i)}/> Selecionar
-                    </label>}
                     <button type="button" onClick={()=>abrir(i)}
                       className={BOTAO+' border-violet-200 bg-violet-50 text-violet-700'}>
                       {i.status==='concluido'?'Ver registro':i.status==='aguardando_recebimento'?'Confirmar recebimento':'Abrir técnico'}
@@ -726,6 +742,101 @@ export default function LaboratorioIndividualV2Page() {
           </div>
         </div>
       </section>
+
+      {modalMinuta&&<div role="dialog" aria-modal="true" aria-labelledby="titulo-gerar-minuta"
+        className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/65 p-3">
+        <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+          <div className="flex items-start justify-between gap-3 border-b border-slate-100 p-5">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-violet-700">Laboratório · Devolução ao Warehouse</p>
+              <h2 id="titulo-gerar-minuta" className="mt-1 text-xl font-black text-slate-900">Gerar minuta de devolução</h2>
+              <p className="mt-1 text-xs text-slate-500">{tipoMinuta?'Bipe os IMEIs para formar a minuta.':'Selecione primeiro o resultado final dos aparelhos.'}</p>
+            </div>
+            <button type="button" aria-label="Fechar janela de minuta" disabled={ocupado}
+              onClick={fecharModalMinuta} className={BOTAO+' border-slate-200 bg-white text-slate-700'}>
+              <X size={17}/>
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
+            {!tipoMinuta?<>
+              <p className="text-sm font-semibold text-slate-700">Qual tipo de minuta deseja gerar?</p>
+              <div className="grid gap-3 sm:grid-cols-3">
+                {CLASSIFICACOES_LAB.map(op=><button type="button" key={op.valor}
+                  onClick={()=>escolherTipoMinuta(op.valor)} className={'rounded-xl border-2 p-5 text-center text-base font-black transition hover:shadow-md '+op.classe}>
+                  {op.rotulo}
+                </button>)}
+              </div>
+            </>:<>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="font-bold text-slate-600">Tipo:</span>
+                  <span className={'rounded-md border px-3 py-1.5 text-xs font-black '+classificacaoLaboratorio(tipoMinuta).classe}>
+                    {classificacaoLaboratorio(tipoMinuta).rotulo}
+                  </span>
+                </div>
+                <button type="button" disabled={ocupado} onClick={()=>escolherTipoMinuta('')}
+                  className={BOTAO+' border-slate-200 bg-white text-slate-600'}>Alterar tipo</button>
+              </div>
+              <form onSubmit={biparImeiMinuta} className="flex flex-wrap gap-2">
+                <input ref={scanMinutaRef} autoFocus inputMode="numeric" autoComplete="off"
+                  aria-label="Bipar IMEI para a minuta" placeholder="Bipar IMEI de 15 dígitos"
+                  value={codigoMinuta} onChange={e=>setCodigoMinuta(e.target.value)}
+                  disabled={ocupado} className={CAMPO+' min-w-52 flex-1 font-mono text-base'}/>
+                <button type="submit" disabled={ocupado||!codigoMinuta.trim()}
+                  className={BOTAO+' border-violet-700 bg-violet-700 px-5 text-white'}>
+                  <ScanLine size={16}/> Adicionar IMEI
+                </button>
+              </form>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs font-semibold text-slate-600">
+                  Ou adicione pela planilha de Voucher/IMEI:
+                </p>
+                <label className={BOTAO+' cursor-pointer border-slate-200 bg-white text-slate-700'}>
+                  <Upload size={15}/> Importar planilha
+                  <input type="file" accept=".xlsx,.xls,.ods,.csv" disabled={ocupado}
+                    onChange={prepararArquivoMinuta} className="sr-only"/>
+                </label>
+              </div>
+              {arquivoMinuta&&<p className="text-[11px] text-slate-500">
+                {arquivoMinuta.arquivo} · {arquivoMinuta.adicionados} adicionado(s)
+              </p>}
+              {erroMinuta&&<p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-800">
+                {erroMinuta}
+              </p>}
+              {ultimoScan&&<p role="status" className="rounded-lg bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">{ultimoScan}</p>}
+              <div className="overflow-hidden rounded-xl border border-slate-200">
+                <div className="flex items-center justify-between bg-slate-50 px-4 py-3">
+                  <p className="text-sm font-black text-slate-800">Aparelhos bipados</p>
+                  <span className="text-sm font-black text-violet-700">{selecionados.length}</span>
+                </div>
+                <div className="max-h-64 overflow-y-auto">
+                  {selecionados.length?<table className="w-full text-left text-xs">
+                    <thead className="sticky top-0 bg-white text-slate-500"><tr>
+                      <th className="p-3">Voucher</th><th className="p-3">IMEI</th><th className="p-3">Resultado</th><th className="p-3 text-right">Ação</th>
+                    </tr></thead>
+                    <tbody className="divide-y divide-slate-100">{selecionados.map(i=><tr key={chaveItem(i)}>
+                      <td className="p-3 font-bold">{i.voucher||'—'}</td>
+                      <td className="p-3 font-mono">{i.imei||'—'}</td>
+                      <td className="p-3">{classificacaoLaboratorio(i.resultado)?.rotulo||'—'}</td>
+                      <td className="p-3 text-right"><button type="button" aria-label={'Remover '+(i.imei||i.voucher)}
+                        disabled={ocupado} onClick={()=>setSelecionados(a=>a.filter(x=>chaveItem(x)!==chaveItem(i)))}
+                        className={BOTAO+' border-rose-200 bg-white text-rose-700'}><Trash2 size={14}/></button></td>
+                    </tr>)}</tbody>
+                  </table>:<p className="p-6 text-center text-sm text-slate-500">Nenhum IMEI bipado.</p>}
+                </div>
+              </div>
+            </>}
+          </div>
+          <div className="flex items-center justify-between gap-3 border-t border-slate-100 bg-white p-4">
+            <button type="button" disabled={ocupado} onClick={fecharModalMinuta}
+              className={BOTAO+' border-slate-200 bg-white text-slate-600'}>Cancelar</button>
+            {tipoMinuta&&<button type="button" disabled={ocupado||!selecionados.length}
+              onClick={()=>void emitirMinuta()} className={BOTAO+' border-emerald-700 bg-emerald-600 px-5 py-3 text-white'}>
+              <Truck size={16}/> Gerar minuta · {selecionados.length} aparelho(s)
+            </button>}
+          </div>
+        </div>
+      </div>}
 
       {item&&<div role="dialog" aria-modal="true" aria-labelledby="titulo-item-lab"
         className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3">
