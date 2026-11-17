@@ -1,13 +1,12 @@
-
--- Laboratorio: confirmacao individual de OS sem contaminar o malote inteiro.
+-- Laboratório: recebe cada linha da planilha de OS independentemente.
 CREATE OR REPLACE FUNCTION public.assurant_reparo_lab_receber_os_gaia_parcial(p_linhas jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER
 SET search_path TO 'pg_catalog','public','liquida_private'
 SET statement_timeout TO '45s'
 AS $$
 DECLARE
- v_user uuid:=auth.uid();
- v_linha jsonb; v_voucher text; v_imei text; v_os text; v_motivo text; v_duplicados int;
+ v_user uuid:=auth.uid(); v_linha jsonb; v_voucher text; v_imei text; v_os text;
+ v_motivo text; v_duplicados int;
  v_h liquida_private.reparo_lab_itens%rowtype;
  v_a liquida_private.reparo_lab_avulsos%rowtype;
  v_confirmados int:=0; v_recusados jsonb:='[]'::jsonb; v_ord int:=0;
@@ -27,14 +26,19 @@ BEGIN
   v_motivo:=NULL;
   BEGIN
    IF jsonb_typeof(v_linha)<>'object' OR
-      (v_voucher<>'' AND (v_voucher !~ '^[A-Z0-9][A-Z0-9_-]{2,59}
+      (v_voucher<>'' AND (v_voucher !~ '^[A-Z0-9][A-Z0-9_-]{2,59}$' OR v_voucher ~ '^[0-9]{15}$')) OR
+      (v_imei<>'' AND v_imei !~ '^[0-9]{15}$') OR
+      (v_voucher='' AND v_imei='') OR
+      v_os !~ '^[A-Za-z0-9._/-]{2,60}$'
+   THEN RAISE EXCEPTION 'Voucher/IMEI/OS inválidos'; END IF;
+   v_h:=NULL;v_a:=NULL;
    SELECT * INTO v_h FROM liquida_private.reparo_lab_itens
      WHERE (v_voucher<>'' AND upper(btrim(voucher))=v_voucher)
-        OR (v_imei<>'' AND upper(btrim(coalesce(imei,'')))=v_imei)
+       OR (v_imei<>'' AND upper(btrim(coalesce(imei,'')))=v_imei)
      ORDER BY atualizado_em DESC NULLS LAST,id DESC LIMIT 1 FOR UPDATE;
    SELECT * INTO v_a FROM liquida_private.reparo_lab_avulsos
      WHERE (v_voucher<>'' AND upper(btrim(voucher))=v_voucher)
-        OR (v_imei<>'' AND upper(btrim(coalesce(imei,'')))=v_imei) FOR UPDATE;
+       OR (v_imei<>'' AND upper(btrim(coalesce(imei,'')))=v_imei) FOR UPDATE;
    IF (v_h.id IS NULL AND v_a.id IS NULL) OR (v_h.id IS NOT NULL AND v_a.id IS NOT NULL)
    THEN RAISE EXCEPTION 'Voucher/IMEI inexistente ou duplicado no Laboratório'; END IF;
    SELECT count(*) INTO v_duplicados FROM liquida_private.reparo_lab_itens
