@@ -11,8 +11,8 @@ const references = [
 const compact = [0, 1, 3, 4, 10, 13, 21, 22, 23, 24, 25, 26, 31, 32, 33, 34];
 const num = value => Number(value || 0).toLocaleString('pt-BR');
 const ETAPAS_LAB = [
-  'Aguardando Recebimento', 'Aguardando Técnico', 'Em Reparo', 'Aguardando Peças',
-  'Concluído', 'Em Devolução', 'Devolvido ao Warehouse', 'Divergência de Voucher',
+  'Aguardando Recebimento', 'Aguardando Técnico', 'Aguardando Peças',
+  'Concluído', 'Aguardando Recebimento Warehouse', 'Recebido pelo Warehouse',
 ];
 const date = value => value ? new Date(value).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '—';
 const cell = (item, index) => {
