@@ -121,7 +121,7 @@ BEGIN
    v_falhas:=v_falhas||jsonb_build_array(jsonb_build_object('identificador',v_chave,'motivo','Identificador inválido'));
    CONTINUE;
   END IF;
-  SELECT count(*) AS matches,max(id) AS id,max(origem) AS origem,max(voucher) AS voucher,max(imei) AS imei,max(status) AS status,max(resultado) AS resultado,bool_or(vinculado) AS vinculado
+  SELECT count(*) AS matches,max(id::text)::uuid AS id,max(origem) AS origem,max(voucher) AS voucher,max(imei) AS imei,max(status) AS status,max(resultado) AS resultado,bool_or(vinculado) AS vinculado
     INTO v_item
   FROM (
    SELECT a.id,'individual'::text origem,a.voucher,a.imei,a.status,a.resultado,
