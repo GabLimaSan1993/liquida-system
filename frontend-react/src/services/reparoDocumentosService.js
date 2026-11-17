@@ -39,8 +39,10 @@ export function imprimirMinutaReparo(pedido, itens, processo) {
   const linhas = separados.map((i, index) => `
     <tr><td>${index + 1}</td><td>${escapeHtml(i.imei)}</td>
     <td>${escapeHtml(i.voucher || '—')}</td>
-    <td>${escapeHtml(i.modelo || i.sku || 'Modelo não informado')}</td>
+    <td>${escapeHtml(i.modelo || 'Modelo não informado')}</td>
+    <td>${escapeHtml(i.sku || '—')}</td>
     <td>${escapeHtml(i.grade || '—')}</td>
+    <td>${escapeHtml(i.defeitos_adicionais || '—')}</td>
     <td>${escapeHtml(i.local_wms || '—')}</td></tr>`).join('');
   abrirImpressao('Minuta de envio ao laboratório', `
     <div class="kicker">LIQUIDA SYSTEM · TRANSFERÊNCIA INTERNA</div>
@@ -50,10 +52,10 @@ export function imprimirMinutaReparo(pedido, itens, processo) {
       <div><p><b>Emissão:</b> ${escapeHtml(dataBR(new Date()))}</p>
       <p><b>Quantidade efetivamente bipada:</b> ${separados.length}</p>
       <p><b>Sem faturamento:</b> Sim</p></div></div>
-    <table><thead><tr><th>#</th><th>IMEI / Série</th><th>Voucher</th><th>Descrição do produto</th><th>Grade origem</th><th>Local WMS</th></tr></thead>
+    <table><thead><tr><th>#</th><th>IMEI / Série</th><th>Voucher</th><th>Modelo</th><th>SKU</th><th>Grade</th><th>Defeitos Adicionais</th><th>Local WMS</th></tr></thead>
     <tbody>${linhas}</tbody></table>
     <div class="sign"><div>Expedição / Warehouse</div><div>Transportador</div><div>Recebimento / Laboratório</div></div>
-    <p class="note">Documento interno de conferência; não substitui movimentação Oracle nem documento fiscal. Itens bloqueados ou não bipados foram excluídos.</p>
+    <p class="note">Prévia para conferência interna. A emissão do malote no sistema ocorre ao clicar em Gerar minuta e enviar ao laboratório. Não substitui movimentação Oracle nem documento fiscal.</p>
   `);
 }
 
