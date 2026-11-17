@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Download, RefreshCw, ScanLine } from 'lucide-react';
 import { supabase } from '../lib/supabase.js';
+import { classificacaoLaboratorio } from '../services/laboratorioClassificacao.js';
 
 const resultadoLabel = {
   irrecuperavel: 'Scrap / irrecuperável',
@@ -289,7 +290,7 @@ export default function ReparoRetornoPanel({ modo = 'armazenagem' }) {
         </tr></thead>
         <tbody className="divide-y divide-slate-100">{filtrados.slice(pagina*100,pagina*100+100).map(i=>{
           const diff=alteracoesDefeitos(i);
-          return <tr key={i.origem+':'+i.id} className="align-top hover:bg-violet-50/30">
+          return <tr key={i.origem+':'+i.id} className={'align-top '+(classificacaoLaboratorio(i.resultado_lab)?.linha||'hover:bg-violet-50/30')}>
             <td className="p-3"><strong className="font-mono text-violet-800">{i.voucher||'—'}</strong>
               <p className="mt-1 font-mono text-slate-600">{i.imei||'IMEI a conferir'}</p></td>
             <td className="p-3">{i.modelo||'A conferir'}
@@ -298,7 +299,7 @@ export default function ReparoRetornoPanel({ modo = 'armazenagem' }) {
               {statusLab[i.status]||i.status}</span>
               {i.minuta_numero&&<p className="mt-1 font-mono text-slate-500">LAB-DEV-{String(i.minuta_numero).padStart(6,'0')}</p>}
               {i.lote&&<p className="mt-1 text-slate-500">{i.lote}</p>}</td>
-            <td className="p-3 font-semibold">{resultadoLabel[i.resultado_lab]||'Não informado'}</td>
+            <td className="p-3 font-semibold">{classificacaoLaboratorio(i.resultado_lab)?.rotulo||'Não informado'}</td>
             <td className="max-w-64 whitespace-normal p-3">{diff.origem.join('; ')||'Nenhum registrado'}</td>
             <td className="max-w-64 whitespace-normal p-3">{diff.finais.join('; ')||'Sem defeitos ativos'}</td>
             <td className="max-w-72 whitespace-normal p-3">
