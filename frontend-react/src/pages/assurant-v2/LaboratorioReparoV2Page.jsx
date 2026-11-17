@@ -3,6 +3,7 @@ import { ClipboardList, Wrench, Truck, PackageCheck, Printer, RefreshCw, ArrowLe
 import { useAuth } from '../../AuthContext.jsx';
 import { laboratorioReparo } from '../../services/laboratorioReparoService.js';
 import { listarDefeitos } from '../../services/triagemFuncionalService.js';
+import { DEFEITOS_SCRAP, validarConclusaoLaboratorio, selecionarDefeitoScrap } from '../../services/laboratorioConclusaoValidacao.js';
 
 const formatarData = v => v ? new Date(v).toLocaleString('pt-BR', {timeZone:'America/Sao_Paulo'}) : '—';
 const nRom = r => 'LAB-' + (r.tipo === 'envio' ? 'ENV-' : r.tipo === 'importacao' ? 'IMP-' : 'DEV-') + String(r.numero || 0).padStart(6,'0');
@@ -152,6 +153,8 @@ export default function LaboratorioReparoV2Page() {
   async function concluir(){
     if (!edicao || busy) return;
     if(!edicao.os_numero) {setErro('Confirme a OS na validação técnica antes de fechar o reparo.');return;}
+    const erroValidacao=validarConclusaoLaboratorio(resultado,defeitos);
+    if(erroValidacao){setErro(erroValidacao);return;}
     setBusy(true);setErro('');setSucesso('');
     try {
       await laboratorioReparo('salvar_defeitos',{p_pedido_id:pedidoId,p_item_id:edicao.id,p_defeitos:defeitos});
@@ -279,6 +282,17 @@ export default function LaboratorioReparoV2Page() {
                   <label className="text-xs font-bold text-slate-700">Resultado do reparo<select className={'mt-1 '+campo} value={resultado} onChange={e=>setResultado(e.target.value)}><option value="reparado">Reparado</option><option value="sem_reparo">Não Reparado Desbloqueado</option><option value="irrecuperavel">Scrap - Não Liga / Bloqueado</option></select></label>
                   <label className="text-xs font-bold text-slate-700">Observações técnicas<textarea className={'mt-1 '+campo} rows={2} value={observacoes} onChange={e=>setObservacoes(e.target.value)} placeholder="Serviço realizado, peças, testes e pendências"/></label>
                 </div>
+                {resultado==='irrecuperavel'&&
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                    <p className="text-xs font-bold text-amber-900">Motivo do Scrap (obrigatório)</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {DEFEITOS_SCRAP.map(nome=><button type="button" key={nome} disabled={busy}
+                        onClick={()=>setDefeitos(atuais=>selecionarDefeitoScrap(atuais,nome))}
+                        className={botao+' border '+(defeitos.includes(nome)?'border-violet-700 bg-violet-700 text-white':'border-amber-300 bg-white text-amber-900')}>{nome}</button>)}
+                    </div>
+                  </div>}
+                {!!validarConclusaoLaboratorio(resultado,defeitos)&&
+                  <p role="status" className="text-xs font-semibold text-rose-700">{validarConclusaoLaboratorio(resultado,defeitos)}</p>}
                 <div className="flex flex-wrap gap-2"><button className={botao+' border border-slate-200 bg-white text-violet-700 hover:bg-violet-50'} onClick={salvarDefeitos} disabled={busy}>Salvar revisão dos defeitos</button>
                   <button className={botao+' bg-emerald-600 text-white hover:bg-emerald-700'} onClick={concluir} disabled={busy||!edicao.os_numero}><CheckCircle2 size={16}/>Fechar reparo</button></div>
               </div>}
