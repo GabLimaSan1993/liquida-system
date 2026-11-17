@@ -78,9 +78,21 @@ export default function MalotesReparoLaboratorio({ onRecebimentoAtualizado }) {
     setOcupado(true); setErro(''); setAviso('');
     try {
       const resp = await consultarMalotes(acao, malote.romaneio.id, valor);
-      setMalote(resp);
+      setMalote(atual => {
+        if (!atual || !['bipar', 'desfazer'].includes(acao)) return resp;
+        const alterado = resp.ultimo_conferido;
+        return {
+          ...atual, ...resp,
+          itens: (atual.itens || []).map(i => i.id === alterado?.id
+            ? { ...i, conferido_em: alterado.conferido_em, conferido_codigo: acao === 'desfazer' ? null : valor }
+            : i),
+        };
+      });
+      setLista(atuais => atuais.map(lote => lote.id === resp.romaneio?.id ? {
+        ...lote, conferidos: resp.conferidos, faltantes: resp.faltantes,
+        conferencia_concluida_em: resp.romaneio.conferencia_concluida_em,
+      } : lote));
       setCodigo('');
-      await listar();
       if (acao === 'bipar') {
         setAviso('Conferido: ' + resp.ultimo_conferido?.voucher +
           ' · ' + (resp.ultimo_conferido?.modelo || resp.ultimo_conferido?.sku || '') +
@@ -91,7 +103,7 @@ export default function MalotesReparoLaboratorio({ onRecebimentoAtualizado }) {
         setAviso('Malote conferido e minuta GAIA gerada. Preencha a coluna OS GAIA depois de abrir as OS.');
         await baixarMinuta(resp);
       }
-      if (onRecebimentoAtualizado) onRecebimentoAtualizado();
+      if (onRecebimentoAtualizado && acao === 'gerar_minuta') onRecebimentoAtualizado();
     } catch (e) { setErro(e.message); }
     finally { setOcupado(false); inputRef.current?.focus(); }
   }
