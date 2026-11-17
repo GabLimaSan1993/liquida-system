@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ClipboardCheck, Download, PackageCheck, RefreshCw, ScanBarcode, Undo2 } from 'lucide-react';
+import { ClipboardCheck, Download, PackageCheck, RefreshCw, ScanBarcode, Undo2, CornerUpLeft } from 'lucide-react';
 import { supabase } from '../../lib/supabase.js';
 
 const campo = 'rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-violet-500';
@@ -17,7 +17,7 @@ async function consultarMalotes(acao, id = null, codigo = null) {
 
 async function baixarMinuta(malote) {
   const XLSX = await import('xlsx');
-  const itens = malote?.itens || [];
+  const itens = (malote?.itens || []).filter(i=>i.conferido_em && i.status!=='devolucao_pendente_warehouse');
   if (!malote?.romaneio?.conferencia_concluida_em || !itens.length) {
     throw new Error('A planilha GAIA só é liberada após conferir todos os aparelhos.');
   }
@@ -52,13 +52,13 @@ export default function MalotesReparoLaboratorio({ onRecebimentoAtualizado }) {
 
   const listar = useCallback(async () => {
     const resp = await consultarMalotes('listar');
-    setLista(resp.malotes || []);
+    setLista((resp.malotes || []).filter(x=>!x.conferencia_concluida_em));
   }, []);
 
   useEffect(() => {
     let ativo = true;
     consultarMalotes('listar')
-      .then(resp => { if (ativo) setLista(resp.malotes || []); })
+      .then(resp => { if (ativo) setLista((resp.malotes || []).filter(x=>!x.conferencia_concluida_em)); })
       .catch(e => { if (ativo) setErro(e.message); });
     return () => { ativo = false; };
   }, []);
@@ -79,6 +79,7 @@ export default function MalotesReparoLaboratorio({ onRecebimentoAtualizado }) {
     try {
       const resp = await consultarMalotes(acao, malote.romaneio.id, valor);
       setMalote(atual => {
+        if(acao==='gerar_minuta')return null;
         if (!atual || !['bipar', 'desfazer'].includes(acao)) return resp;
         const alterado = resp.ultimo_conferido;
         return {
@@ -88,9 +89,9 @@ export default function MalotesReparoLaboratorio({ onRecebimentoAtualizado }) {
             : i),
         };
       });
-      setLista(atuais => atuais.map(lote => lote.id === resp.romaneio?.id ? {
+      setLista(atuais => (acao==='gerar_minuta'?atuais.filter(lote=>lote.id!==resp.romaneio?.id):atuais).map(lote => lote.id === resp.romaneio?.id ? {
         ...lote, conferidos: resp.conferidos, faltantes: resp.faltantes,
-        conferencia_concluida_em: resp.romaneio.conferencia_concluida_em,
+        conferencia_concluida_em: resp.romaneio.conferencia_concluida_em, devolucoes_pendentes: resp.devolucoes_pendentes,
       } : lote));
       setCodigo('');
       if (acao === 'bipar') {
@@ -99,9 +100,13 @@ export default function MalotesReparoLaboratorio({ onRecebimentoAtualizado }) {
           ' · ' + resp.conferidos + ' de ' + resp.total);
       } else if (acao === 'desfazer') {
         setAviso('Bipagem desfeita. O aparelho voltou para a conferência.');
+       } else if (acao === 'solicitar_devolucao') {
+        setAviso('Devolução ao Warehouse solicitada para o item faltante; não foi registrado recebimento físico no laboratório.');
+      } else if (acao === 'restaurar_devolucao') {
+        setAviso('Solicitação de devolução cancelada. Aparelho voltou à conferência.');
       } else if (acao === 'gerar_minuta') {
-        setAviso('Malote conferido e minuta GAIA gerada. Preencha a coluna OS GAIA depois de abrir as OS.');
-        await baixarMinuta(resp);
+        if(resp.conferidos>0)await baixarMinuta(resp);
+        setAviso('Conferência encerrada. O malote saiu da fila; '+resp.conferidos+' aparelhos recebidos e '+resp.devolucoes_pendentes+' encaminhados para retorno ao Warehouse.');
       }
       if (onRecebimentoAtualizado && acao === 'gerar_minuta') onRecebimentoAtualizado();
     } catch (e) { setErro(e.message); }
@@ -123,7 +128,7 @@ export default function MalotesReparoLaboratorio({ onRecebimentoAtualizado }) {
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
         <h2 className="flex items-center gap-2 text-base font-black text-slate-900"><ScanBarcode size={19} className="text-violet-700"/>Malotes de envio Warehouse → Laboratório</h2>
-        <p className="mt-1 text-xs text-slate-500">Cada minuta nasce do picking concluído. Confira os aparelhos físicos antes de gerar a planilha para abertura das OS no GAIA.</p>
+        <p className="mt-1 text-xs text-slate-500">Confira o que chegou; itens faltantes devem ser marcados para devolução ao Warehouse, sem recebimento fictício.</p>
       </div>
       <button type="button" className={botao + ' border-slate-200'} disabled={ocupado}
         onClick={async () => { try { await listar(); if (malote) await selecionar(malote.romaneio.id); } catch(e) { setErro(e.message); } }}>
@@ -139,7 +144,7 @@ export default function MalotesReparoLaboratorio({ onRecebimentoAtualizado }) {
           (malote?.romaneio?.id === lote.id ? 'border-violet-500 bg-violet-50' : 'border-slate-200 bg-slate-50 hover:border-violet-300')}>
         <span className="block font-bold text-slate-900">LAB-ENV-{String(lote.numero).padStart(6, '0')}</span>
         <span className="mt-1 block text-slate-600">{lote.lote} · {lote.conferidos}/{lote.total} bipados</span>
-        <span className="block text-slate-400">{lote.conferencia_concluida_em ? 'Conferido' : 'Aguardando conferência'}</span>
+        <span className="block text-slate-400">{lote.devolucoes_pendentes ? lote.devolucoes_pendentes+' pendente(s) de devolução · ' : ''}{lote.conferencia_concluida_em ? 'Conferido' : 'Aguardando conferência'}</span>
       </button>)}
       {!lista.length && <p className="text-xs text-slate-500">Nenhum malote de picking Warehouse disponível. Ao concluir um picking, a minuta aparecerá aqui automaticamente.</p>}
     </div>
@@ -147,14 +152,14 @@ export default function MalotesReparoLaboratorio({ onRecebimentoAtualizado }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-sm font-bold text-slate-900">{malote.romaneio.lote}</p>
-          <p className="text-xs text-slate-500">{malote.conferidos} de {malote.total} conferidos · {malote.faltantes} pendentes · {dataBR(malote.romaneio.criado_em)}</p>
+          <p className="text-xs text-slate-500">{malote.conferidos} de {malote.total} conferidos · {malote.devolucoes_pendentes||0} solicitados ao Warehouse · {malote.faltantes} sem decisão · {dataBR(malote.romaneio.criado_em)}</p>
         </div>
         {fechado ? <button type="button" disabled={ocupado} onClick={() => void baixar()}
           className={botao + ' border-emerald-700 bg-emerald-600 text-white'}><Download size={15}/>Baixar minuta com OS GAIA</button>
           : <button type="button" disabled={ocupado || !malote.total || malote.faltantes !== 0}
             onClick={() => void executar('gerar_minuta')}
             className={botao + ' border-emerald-700 bg-emerald-600 text-white'}>
-            <ClipboardCheck size={15}/>Concluir conferência e gerar minuta
+            <ClipboardCheck size={15}/>Confirmar recebidos e encerrar malote
           </button>}
       </div>
       {!fechado && <form className="flex flex-wrap gap-2" onSubmit={e => { e.preventDefault(); if (codigo.trim()) void executar('bipar', codigo.trim()); }}>
@@ -169,7 +174,7 @@ export default function MalotesReparoLaboratorio({ onRecebimentoAtualizado }) {
       <div className="max-h-80 overflow-auto rounded-xl border border-slate-200">
         <table className="w-full min-w-[980px] text-left text-xs">
           <thead className="sticky top-0 bg-slate-50 text-slate-500"><tr>
-            {['Voucher','IMEI / Série','Modelo','SKU','Grade','Defeitos Adicionais','Conferência'].map(h => <th key={h} className="px-3 py-2">{h}</th>)}
+            {['Voucher','IMEI / Série','Modelo','SKU','Grade','Defeitos Adicionais','Conferência / Devolução'].map(h => <th key={h} className="px-3 py-2">{h}</th>)}
           </tr></thead>
           <tbody className="divide-y divide-slate-100">{items.map(item => <tr key={item.id} className={item.conferido_em ? 'bg-emerald-50/40' : ''}>
             <td className="px-3 py-2 font-semibold">{item.voucher}</td>
@@ -178,12 +183,23 @@ export default function MalotesReparoLaboratorio({ onRecebimentoAtualizado }) {
             <td className="px-3 py-2">{item.sku || '—'}</td>
             <td className="px-3 py-2">{item.grade || '—'}</td>
             <td className="max-w-72 px-3 py-2 whitespace-normal">{item.defeitos_adicionais || '—'}</td>
-            <td className="px-3 py-2">{item.conferido_em ?
+            <td className="px-3 py-2">{item.status==='devolucao_pendente_warehouse'
+              ? <span className="flex flex-wrap items-center gap-2 text-blue-800">Retorno solicitado
+                  {!fechado&&<button type="button" disabled={ocupado} className={botao+' border-blue-300 bg-white'}
+                    onClick={()=>void executar('restaurar_devolucao',item.voucher)}>Desfazer</button>}
+                </span>
+              : item.conferido_em ?
               <span className="flex items-center gap-2 text-emerald-700">Conferido
                 {!fechado && <button type="button" disabled={ocupado} title="Desfazer conferência"
                   onClick={() => void executar('desfazer', item.voucher)}
                   className="rounded border border-emerald-300 px-1.5 py-1"><Undo2 size={13}/></button>}
-              </span> : <span className="text-amber-700">Pendente</span>}</td>
+              </span> : <span className="flex flex-wrap items-center gap-2 text-amber-700">Não recebido
+                {!fechado&&<button type="button" disabled={ocupado}
+                  className={botao+' border-blue-300 bg-blue-50 text-blue-800'}
+                  onClick={()=>{if(window.confirm('Marcar '+item.voucher+' como faltante e solicitar devolução ao Warehouse?'))void executar('solicitar_devolucao',item.voucher);}}>
+                  <CornerUpLeft size={13}/>Devolver ao Warehouse
+                </button>}
+              </span>}</td>
           </tr>)}</tbody>
         </table>
       </div>
