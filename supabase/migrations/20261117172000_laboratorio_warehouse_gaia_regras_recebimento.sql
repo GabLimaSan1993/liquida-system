@@ -62,12 +62,16 @@ CREATE OR REPLACE FUNCTION public.assurant_reparo_warehouse_planilha_gaia(p_pedi
 AS $function$
 declare v jsonb;
 begin
- if auth.uid() is null or not exists(
+ if auth.uid() is null or not (
+   liquida_private.reparo_autorizado('picking')
+   or liquida_private.reparo_autorizado('oracle')
+   or exists(
   select 1 from public.user_profiles u where u.id=auth.uid() and (
     u.is_master is true or
     '/v2/assurant/b2b/reparo/importar'=any(coalesce(u.telas_permitidas,'{}'::text[]))
     or '/v2/assurant/b2b/reparo'=any(coalesce(u.telas_permitidas,'{}'::text[]))
   )
+   )
  ) then raise exception 'Sem permissão Warehouse para exportar a planilha do Laboratório.' using errcode='42501'; end if;
  if p_pedido_id is null or not exists(
   select 1 from liquida_private.reparo_pedidos p
