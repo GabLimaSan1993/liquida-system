@@ -8,7 +8,7 @@ const references = [
   ['recebimento', 'Recebimento'], ['funcional', 'Triagem funcional'], ['cosmetica', 'Triagem cosmética'],
   ['laudo', 'Laudo'], ['alocacao', 'Alocação'], ['oracle', 'Oracle'], ['criacao', 'Criação'], ['atualizacao', 'Atualização'],
 ];
-const compact = [0, 1, 3, 4, 10, 13, 21, 22, 23, 24, 25, 26, 31, 32, 33, 34];
+const compact = [0, 1, 3, 4, 10, 13, 21, 22, 23, 24, 25, 26, 31, 32, 33];
 const num = value => Number(value || 0).toLocaleString('pt-BR');
 const ETAPAS_LAB = [
   'Aguardando Recebimento', 'Aguardando Técnico', 'Aguardando Peças',
@@ -160,7 +160,7 @@ export default function RelatorioEstoqueV2Page() {
     {selected && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" onClick={() => setSelected(null)}>
       <div role="dialog" aria-modal="true" aria-label="Detalhes do aparelho" className="max-h-[90vh] w-full max-w-4xl overflow-auto rounded-2xl bg-white p-6" onClick={e => e.stopPropagation()}>
         <div className="mb-5 flex items-start justify-between gap-3"><div><h2 className="text-xl font-bold">{selected.voucher}</h2><p className="mt-1 text-sm text-slate-500">{selected.imei} • {selected.status_atual}</p></div><button autoFocus aria-label="Fechar detalhes" onClick={() => setSelected(null)}><X/></button></div>
-        <dl className="grid gap-3 sm:grid-cols-2">{COLUNAS_ESTOQUE.map((label, index) => <div key={label} className={[27,31,34,35,36].includes(index) ? 'rounded-lg bg-slate-50 p-3 sm:col-span-2' : 'rounded-lg bg-slate-50 p-3'}><dt className="text-xs text-slate-500">{label.replaceAll('_', ' ')}</dt><dd className="mt-1 whitespace-pre-wrap break-words text-sm">{cell(selected, index)}</dd></div>)}</dl>
+        <dl className="grid gap-3 sm:grid-cols-2">{COLUNAS_ESTOQUE.map((label, index) => <div key={label} className={[27,33,34,35].includes(index) ? 'rounded-lg bg-slate-50 p-3 sm:col-span-2' : 'rounded-lg bg-slate-50 p-3'}><dt className="text-xs text-slate-500">{label.replaceAll('_', ' ')}</dt><dd className="mt-1 whitespace-pre-wrap break-words text-sm">{cell(selected, index)}</dd></div>)}</dl>
       </div>
     </div>}
   </div>;
