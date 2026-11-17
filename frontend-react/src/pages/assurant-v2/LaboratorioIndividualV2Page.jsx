@@ -7,6 +7,7 @@ import { laboratorioIndividual, conferirVouchersLaboratorio, confirmarRecebiment
 import { lerVoucherOsGaia, lerVouchersMinuta } from '../../services/laboratorioPlanilhasGaia.js';
 import { laboratorioReparo } from '../../services/laboratorioReparoService.js';
 import { listarDefeitos } from '../../services/triagemFuncionalService.js';
+import { DEFEITOS_SCRAP, validarConclusaoLaboratorio, selecionarDefeitoScrap } from '../../services/laboratorioConclusaoValidacao.js';
 import { gerarMinutaLaboratorio, listarMinutasLaboratorio, detalharMinutaLaboratorio, imprimirMinutaLaboratorio } from '../../services/laboratorioDevolucaoService.js';
 
 const BOTAO = 'inline-flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-40';
@@ -295,6 +296,10 @@ export default function LaboratorioIndividualV2Page() {
   async function salvarCorrecaoAdmin() {
     if(!admin||!item||ocupado)return;
     if(motivoAdmin.trim().length<10){setErro('Informe pelo menos 10 caracteres no motivo da correção administrativa.');return;}
+    if(etapaAdmin==='concluido'){
+      const erroValidacao=validarConclusaoLaboratorio(resultado,defeitos);
+      if(erroValidacao){setErro(erroValidacao);return;}
+    }
     if(!window.confirm('Registrar correção auditada do laudo técnico e da etapa para '+item.voucher+'?'))return;
     setOcupado(true);setErro('');setSucesso('');
     try {
@@ -432,6 +437,8 @@ export default function LaboratorioIndividualV2Page() {
 
   async function fecharReparo() {
     if(!item?.os_numero){setErro('Confirme a OS antes de concluir o reparo.');return;}
+    const erroValidacao=validarConclusaoLaboratorio(resultado,defeitos);
+    if(erroValidacao){setErro(erroValidacao);return;}
     if(!window.confirm('Concluir o reparo de '+item.voucher+' com o resultado '+resultado+'?'))return;
     setOcupado(true);setErro('');setSucesso('');
     try{
@@ -878,6 +885,17 @@ export default function LaboratorioIndividualV2Page() {
                     onChange={e=>setObservacoes(e.target.value)} className={CAMPO+' mt-1 block w-full'} placeholder="Procedimentos e testes realizados"/>
                 </label>
               </div>
+              {resultado==='irrecuperavel'&&(item.status!=='concluido'||admin)&&
+                <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <p className="text-xs font-bold text-amber-900">Motivo do Scrap (obrigatório)</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {DEFEITOS_SCRAP.map(nome=><button type="button" key={nome} disabled={ocupado}
+                      onClick={()=>setDefeitos(atuais=>selecionarDefeitoScrap(atuais,nome))}
+                      className={BOTAO+' '+(defeitos.includes(nome)?'border-violet-700 bg-violet-700 text-white':'border-amber-300 bg-white text-amber-900')}>{nome}</button>)}
+                  </div>
+                </div>}
+              {(item.status!=='concluido'||admin)&&!!validarConclusaoLaboratorio(resultado,defeitos)&&
+                <p role="status" className="mt-3 text-xs font-semibold text-rose-700">{validarConclusaoLaboratorio(resultado,defeitos)}</p>}
               {item.status!=='concluido'
                 ? <button type="button" onClick={fecharReparo} disabled={ocupado||!item.os_numero}
                     className={BOTAO+' mt-3 border-emerald-700 bg-emerald-600 text-white'}>
