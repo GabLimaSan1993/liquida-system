@@ -45,30 +45,36 @@ async function lerArquivo(arquivo, aceitarImei=false) {
 }
 
 export async function lerVoucherOsGaia(arquivo) {
-  const dados = await lerArquivo(arquivo);
-  if (dados.colOs < 0 || dados.colOs === dados.colVoucher)
+  const dados = await lerArquivo(arquivo, true);
+  if (dados.colOs < 0 || dados.colOs === dados.colVoucher || dados.colOs === dados.colImei)
     throw new Error("A planilha deve conter duas colunas: Voucher e OS GAIA.");
   const pares = [];
-  const porVoucher = new Set(), porOs = new Set(), erros = [];
+  const porVoucher = new Set(), porImei = new Set(), porOs = new Set(), erros = [];
   for (let i=dados.cabecalho+1;i<dados.linhas.length;i++) {
     const linha = dados.linhas[i] || [];
     if (linha.every(v => String(v ?? "").trim() === "")) continue;
-    const voucher = voucherNormalizado(linha[dados.colVoucher]);
+    const valorVoucher=dados.colVoucher>=0 ? linha[dados.colVoucher] : null;
+    const voucher=String(valorVoucher??'').trim() ? voucherNormalizado(valorVoucher) : null;
+    const rawImei=dados.colImei>=0 ? linha[dados.colImei] : '';
+    const imei=(typeof rawImei==='number' && Number.isSafeInteger(rawImei) ? rawImei.toFixed(0) : String(rawImei??'')).trim().replace(/\\.0$/,'');
+    const imeiPresente=Boolean(String(rawImei??'').trim());
+    const imeiValido=imeiPresente && /^\\d{15}$/.test(imei);
     const os_gaia = String(linha[dados.colOs] ?? "").trim().replace(/\.0$/,"");
-    if (!voucher || !/^[A-Za-z0-9._/-]{2,60}$/.test(os_gaia)) {
+    if ((String(valorVoucher??'').trim() && !voucher) || (imeiPresente && !imeiValido) || (!voucher && !imeiValido) || !/^[A-Za-z0-9._/-]{2,60}$/.test(os_gaia)) {
       erros.push("Linha " + (i+1) + ": voucher ou OS GAIA inválido");
       continue;
     }
-    if (porVoucher.has(voucher) || porOs.has(os_gaia.toUpperCase())) {
+    if ((voucher && porVoucher.has(voucher)) || (imeiValido && porImei.has(imei)) || porOs.has(os_gaia.toUpperCase())) {
       erros.push("Linha " + (i+1) + ": voucher ou OS GAIA duplicado");
       continue;
     }
-    porVoucher.add(voucher);
+    if(voucher)porVoucher.add(voucher);
+    if(imeiValido)porImei.add(imei);
     porOs.add(os_gaia.toUpperCase());
-    pares.push({ voucher, os_gaia });
+    pares.push({ voucher, imei:imeiValido?imei:null, os_gaia });
     if (pares.length>5000) throw new Error("Limite de 5.000 registros por arquivo.");
   }
-  if (!pares.length) throw new Error("Não encontrei registros de Voucher + OS GAIA.");
+  if (!pares.length) throw new Error("Não encontrei registros de Voucher/IMEI + OS GAIA.");
   return { ...dados, pares, erros };
 }
 
