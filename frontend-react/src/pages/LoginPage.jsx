@@ -28,6 +28,9 @@ export default function LoginPage() {
       setError("");
 
       await signIn(email, password);
+      // Após qualquer novo login, buscar o bundle atual do Vercel.
+      // Evita que uma aba antiga continue executando código anterior ao deploy.
+      window.location.replace("/?atualizacao=" + Date.now());
     } catch (err) {
       setError("E-mail ou senha incorretos.");
     } finally {
