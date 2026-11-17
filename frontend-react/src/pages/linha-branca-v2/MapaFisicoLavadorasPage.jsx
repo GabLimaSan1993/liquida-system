@@ -464,7 +464,7 @@ export default function MapaFisicoLavadorasPage({embutido=false}){
    <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
     <div>
      <h2 className="flex items-center gap-2 text-sm font-black"><MapPinned size={16} className="text-violet-700"/> Planta operacional</h2>
-     <p className="mt-1 text-[11px] text-slate-500">Superior 01–07 · Lateral 08–20 · Centro: estoque temporário 3 × 10</p>
+     <p className="mt-1 text-[11px] text-slate-500">Superior 07–01 (esquerda → direita) · Lateral 08–20 · Centro: estoque temporário 3 × 10</p>
     </div>
     <div className="flex flex-wrap gap-2 text-[10px]">
      {mapaCalor
@@ -480,7 +480,7 @@ export default function MapaFisicoLavadorasPage({embutido=false}){
    <div className="overflow-x-auto pb-2">
     <div className="mx-auto w-full min-w-[840px] max-w-[960px] rounded-3xl border border-slate-200 bg-[#F6F7FA] p-4 sm:p-5">
      <div className="ml-[122px] grid grid-cols-7 gap-2.5">
-      {TRIAGEM.slice(0,7).map(c=>pos(c,"triagem"))}
+      {TRIAGEM.slice(0,7).reverse().map(c=>pos(c,"triagem"))}
      </div>
      <div className="mt-3 grid grid-cols-[112px_minmax(0,1fr)] gap-3">
       <div className="grid grid-rows-[repeat(13,minmax(75px,1fr))] gap-2">
