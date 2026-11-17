@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Download, Upload, RefreshCw, Wrench, ArrowLeft, CheckCircle2 } from 'lucide-react';
-import { operarReparo, operarReparoPorVouchers, exportarReparo, exportarFilaOracleReparo } from '../services/reparoPickingService.js';
+import { operarReparo, operarReparoPorVouchers, exportarReparo, exportarFilaOracleReparo, exportarPlanilhaWarehouseGaia } from '../services/reparoPickingService.js';
 import { lerUploadReparoFlexivel, baixarModeloReparoVoucher } from '../services/reparoUpload.js';
 import { useAuth } from '../AuthContext.jsx';
 import { imprimirMinutaReparo, imprimirEtiquetasCaixasReparo } from '../services/reparoDocumentosService.js';
@@ -30,6 +30,7 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
   const arquivoRef = useRef(null);
   const [upload, setUpload] = useState(null);
   const [relatorioImportacao, setRelatorioImportacao] = useState(null);
+  const [ultimoEnvioLab, setUltimoEnvioLab] = useState(null);
   const oracle = modo === 'oracle';
 
   async function selecionarArquivo(event) {
@@ -102,7 +103,8 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
       const data = await operarReparo(acao, detail.pedido.id, extra);
       setPedidos(p => p.map(x => x.id === data.pedido.id ? data.pedido : x));
       if (acao === 'concluir') {
-        setDetail(null); setMessage('Picking concluído. Romaneio de envio ao laboratório gerado automaticamente. Pedido disponível em Integração Oracle → Reparos.');
+        setUltimoEnvioLab(data?.pedido?.id || detail.pedido.id);
+        setDetail(null); setMessage('Picking concluído. Romaneio de envio ao Laboratório gerado. Baixe a planilha para abertura das OS no GAIA.');
         await carregar();
       } else {
         setDetail(data);
@@ -118,6 +120,16 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
     setBusy(true); setError('');
     try { await exportarReparo(detail.pedido, detail.itens, modo, destino); }
     catch (err) { setError(err.message); }
+    finally { setBusy(false); }
+  }
+
+  async function baixarEntregaGaia(pedidoId) {
+    if (!pedidoId || busy) return;
+    setBusy(true);setError("");
+    try {
+      const total=await exportarPlanilhaWarehouseGaia(pedidoId);
+      setMessage(total+" aparelhos exportados para abertura no GAIA. O relatório não confirma recebimento físico.");
+    } catch(err) { setError(err.message || "Erro ao exportar planilha GAIA."); }
     finally { setBusy(false); }
   }
 
@@ -160,6 +172,12 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
         {oracle && <button disabled={busy} onClick={baixarFilaOracle} className="flex items-center gap-2 rounded-xl border border-violet-300 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-800"><Download size={14} />Fila Oracle dos IMEIs bipados</button>}
         {detail && <button disabled={busy} onClick={() => { setDetail(null); carregar(); }} className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs"><ArrowLeft size={14} />Pedidos</button>}
         {detail && <button disabled={busy} onClick={exportar} className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs"><Download size={14} />{oracle ? 'Exportar movimentação' : 'Exportar picking'}</button>}
+        {((oracle && detail?.pedido?.id) || (!oracle && ultimoEnvioLab)) && (
+          <button type="button" disabled={busy} onClick={()=>void baixarEntregaGaia(oracle ? detail.pedido.id : ultimoEnvioLab)}
+            className="flex items-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800">
+            <Download size={14} /> Planilha Warehouse → GAIA (5 campos)
+          </button>
+        )}
         {detail && !oracle && <>
           <label className="text-xs font-semibold text-slate-600">Classificação do processo
             <input list="tipos-reparo" value={tipoProcesso} onChange={e => setTipoProcesso(e.target.value)}
