@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Download, PackageCheck, RefreshCw, ScanLine, X } from 'lucide-react';
+import { Download, PackageCheck, RefreshCw, ScanLine, Search, CornerUpLeft, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase.js';
 import { classificacaoLaboratorio } from '../../services/laboratorioClassificacao.js';
 
@@ -32,6 +32,8 @@ export default function RetornoLaboratorioMinutas(){
   const [detalhe,setDetalhe]=useState(null);
   const [leitura,setLeitura]=useState('');
   const [filtro,setFiltro]=useState('');
+  const [minutasBusca,setMinutasBusca]=useState(null);
+  const [pesquisaAtiva,setPesquisaAtiva]=useState('');
   const [tipo,setTipo]=useState('');
   const [ocupado,setOcupado]=useState(false);
   const [carregando,setCarregando]=useState(true);
@@ -53,13 +55,76 @@ export default function RetornoLaboratorioMinutas(){
     return()=>{ativo=false;};
   },[]);
 
+  async function pesquisar(event){
+    event.preventDefault();
+    if(ocupado)return;
+    const codigo=filtro.trim().toUpperCase();
+    if(!codigo){
+      setMinutasBusca(null);
+      setPesquisaAtiva('');
+      setErro('');
+      return;
+    }
+    if(codigo.length<2){setErro('Informe pelo menos 2 caracteres da minuta, voucher ou IMEI.');return;}
+    setOcupado(true);setErro('');setAviso('');
+    try{
+      const r=await consultar('buscar',null,codigo);
+      const resultados=r.minutas||[];
+      setMinutasBusca(resultados);
+      setPesquisaAtiva(codigo);
+      if(resultados.length===1 && (/^[0-9]{15}$/.test(codigo)||/^[A-Z]{3,5}[0-9]{4,}$/.test(codigo))){
+        setDetalhe(await consultar('detalhar',resultados[0].id));
+        setLeitura('');
+      }else{setDetalhe(null);}
+      if(!resultados.length)setErro('Nenhuma minuta encontrada para '+codigo+'.');
+    }catch(e){setErro(e.message);}
+    finally{setOcupado(false);inputRef.current?.focus();}
+  }
+
+  function limparPesquisa(){
+    setFiltro('');
+    setMinutasBusca(null);
+    setPesquisaAtiva('');
+    setErro('');
+    setDetalhe(null);
+  }
+
+  async function devolverAoLaboratorio(item){
+    if(ocupado||!detalhe?.minuta||item.status!=='em_devolucao'||item.devolucao_lab_solicitada_em)return;
+    const identificador=item.imei||item.voucher;
+    if(!window.confirm('O aparelho '+item.voucher+' NÃO foi recebido fisicamente no Warehouse? Registrar devolução ao Laboratório e retirar este aparelho da conferência desta minuta?'))return;
+    setOcupado(true);setErro('');setAviso('');
+    try{
+      const r=await consultar('devolver_laboratorio',detalhe.minuta.id,identificador);
+      const [lista,registro]=await Promise.all([consultar('listar'),consultar('detalhar',detalhe.minuta.id)]);
+      setMinutas(lista.minutas||[]);
+      if(pesquisaAtiva){
+        const busca=await consultar('buscar',null,pesquisaAtiva);
+        setMinutasBusca(busca.minutas||[]);
+      }
+      if(Number(registro.minuta.pendentes||0)===0){
+        setDetalhe(null);
+        setAviso('Minuta '+numeroMinuta(registro.minuta.numero)+' conferida com divergência. '+(registro.minuta.devolucoes_laboratorio||0)+' item(ns) devolvidos ao Laboratório.');
+      }else{
+        setDetalhe(registro);
+        setAviso('Devolução ao Laboratório solicitada: '+r.voucher+'. O Warehouse não registrou recebimento físico.');
+      }
+    }catch(e){setErro(e.message||'Falha ao solicitar devolução ao Laboratório.');}
+    finally{setOcupado(false);}
+  }
+
   async function atualizar(){
     if(ocupado)return;
     setOcupado(true);setErro('');setAviso('');
     try{
       const recentes=await carregar();
+      if(pesquisaAtiva){
+        const busca=await consultar('buscar',null,pesquisaAtiva);
+        setMinutasBusca(busca.minutas||[]);
+      }
       if(detalhe){
-        const encontrada=recentes.some(m=>m.id===detalhe.minuta.id);
+        const encontrada=recentes.some(m=>m.id===detalhe.minuta.id)
+            ||pesquisaAtiva;
         setDetalhe(encontrada?await consultar('detalhar',detalhe.minuta.id):null);
       }
     }catch(e){setErro(e.message);}
@@ -85,6 +150,10 @@ export default function RetornoLaboratorioMinutas(){
         consultar('listar'),consultar('detalhar',detalhe.minuta.id)
       ]);
       setMinutas(lista.minutas||[]);
+      if(pesquisaAtiva){
+        const busca=await consultar('buscar',null,pesquisaAtiva);
+        setMinutasBusca(busca.minutas||[]);
+      }
       setLeitura('');
       if(Number(registro.minuta?.pendentes||0)===0){
         setDetalhe(null);
@@ -128,9 +197,9 @@ export default function RetornoLaboratorioMinutas(){
     finally{setOcupado(false);}
   }
 
-  const visiveis=minutas.filter(m=>
+  const visiveis=(minutasBusca??minutas).filter(m=>
     (!tipo||m.classificacao===tipo) &&
-    (!filtro.trim()||[numeroMinuta(m.numero),m.numero,labelMinuta(m.classificacao)]
+    (minutasBusca!==null||!filtro.trim()||[numeroMinuta(m.numero),m.numero,labelMinuta(m.classificacao)]
       .some(x=>String(x).toLocaleLowerCase('pt-BR').includes(filtro.toLocaleLowerCase('pt-BR').trim())))
   );
   const itens=detalhe?.itens||[];
@@ -157,9 +226,18 @@ export default function RetornoLaboratorioMinutas(){
         <span className="rounded-lg bg-slate-100 px-3 py-2 font-semibold text-slate-700">{minutas.length} minutas pendentes</span>
         <span className="font-semibold text-slate-500">{totais.recebidos} / {totais.total} aparelhos recebidos</span>
       </div>
-      <input className={CAMPO+' w-full max-w-xs'} value={filtro}
-        onChange={e=>setFiltro(e.target.value)} aria-label="Pesquisar minuta"
-        placeholder="Pesquisar número da minuta" autoComplete="off"/>
+      <form onSubmit={e=>void pesquisar(e)} className="flex w-full max-w-xl flex-wrap items-center gap-2">
+        <input className={CAMPO+' min-w-52 flex-1'} value={filtro}
+          onChange={e=>{setFiltro(e.target.value);setMinutasBusca(null);setPesquisaAtiva('');}}
+          aria-label="Pesquisar minuta por Voucher, IMEI ou número"
+          placeholder="Pesquisar minuta, voucher ou IMEI" autoComplete="off"/>
+        <button type="submit" disabled={ocupado||filtro.trim().length<2}
+          className={BOTAO+' border-violet-700 bg-violet-700 px-4 text-white'}>
+          <Search size={15}/>Pesquisar
+        </button>
+        {!!pesquisaAtiva&&<button type="button" disabled={ocupado} onClick={limparPesquisa}
+          className={BOTAO+' border-slate-200 bg-white text-slate-700'}>Limpar</button>}
+      </form>
     </div>
 
     <div className="flex flex-wrap items-center gap-2">
@@ -191,11 +269,16 @@ export default function RetornoLaboratorioMinutas(){
           <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/80">
             <div className={'h-full rounded-full '+tema.barra} style={{width:percentual+'%'}}/>
           </div>
-          <p className="mt-2 text-[11px] text-slate-500">{dataBR(m.criado_em)}</p>
+          <p className="mt-2 text-[11px] text-slate-500">
+            {dataBR(m.criado_em)}
+            {!!m.devolucoes_laboratorio&&<span className="mt-1 block font-bold text-amber-800">
+              {m.devolucoes_laboratorio} devolvido(s) ao laboratório
+            </span>}
+          </p>
         </button>;
       })}
       {!carregando&&!visiveis.length&&<p className="w-full py-8 text-center text-sm text-slate-500">
-        {minutas.length?'Nenhuma minuta nesta classificação.':'Nenhuma minuta aguardando recebimento do Warehouse.'}
+        {pesquisaAtiva?'Nenhuma minuta localizada para '+pesquisaAtiva+'.':minutas.length?'Nenhuma minuta nesta classificação.':'Nenhuma minuta aguardando recebimento do Warehouse.'}
       </p>}
       {carregando&&<p className="py-6 text-sm text-slate-500">Carregando minutas...</p>}
     </div>
@@ -209,6 +292,7 @@ export default function RetornoLaboratorioMinutas(){
           </span>
           <span className="text-xs font-semibold text-slate-500">
             {detalhe.minuta.recebidos} de {detalhe.minuta.total} recebidos · {detalhe.minuta.pendentes} pendentes
+            {!!detalhe.minuta.devolucoes_laboratorio&&' · '+detalhe.minuta.devolucoes_laboratorio+' devolução(ões) ao Laboratório'}
           </span>
         </div>
         <button type="button" onClick={()=>{setDetalhe(null);setErro('');setLeitura('');}}
@@ -217,7 +301,7 @@ export default function RetornoLaboratorioMinutas(){
         </button>
       </div>
 
-      <form onSubmit={e=>void bipar(e)} className="flex flex-wrap gap-2">
+      {Number(detalhe.minuta.pendentes||0)>0&&<form onSubmit={e=>void bipar(e)} className="flex flex-wrap gap-2">
         <input ref={inputRef} autoFocus value={leitura} onChange={e=>setLeitura(e.target.value)}
           placeholder="Bipar Voucher ou IMEI desta minuta" autoComplete="off"
           aria-label="Voucher ou IMEI do aparelho recebido"
@@ -226,12 +310,12 @@ export default function RetornoLaboratorioMinutas(){
           className={BOTAO+' border-violet-700 bg-violet-700 px-4 text-white'}>
           <ScanLine size={16}/>Confirmar chegada
         </button>
-      </form>
+      </form>}
 
       <div className="max-h-[430px] overflow-auto rounded-xl border border-slate-200">
         <table className="w-full min-w-[950px] text-left text-xs">
           <thead className="sticky top-0 bg-slate-50 text-slate-600">
-            <tr>{['Voucher','IMEI / Série','Modelo / OS','Classificação','Conferência'].map(t=><th key={t} className="px-3 py-3 font-bold">{t}</th>)}</tr>
+            <tr>{['Voucher','IMEI / Série','Modelo / OS','Classificação','Conferência','Ação'].map(t=><th key={t} className="px-3 py-3 font-bold">{t}</th>)}</tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {itens.map(i=><tr key={i.origem+':'+i.item_id} className={corMinuta(i.resultado).linha}>
@@ -239,14 +323,23 @@ export default function RetornoLaboratorioMinutas(){
               <td className="px-3 py-3 font-mono">{i.imei||'Não informado'}</td>
               <td className="px-3 py-3">{i.modelo||'—'}<p className="mt-0.5 text-[11px] text-slate-500">OS {i.os_numero||'—'}</p></td>
               <td className="px-3 py-3"><span className={'rounded border px-2 py-1 text-[10px] font-bold '+corMinuta(i.resultado).chip}>{labelMinuta(i.resultado)}</span></td>
-              <td className="px-3 py-3">{i.status==='devolvido_warehouse'
-                ? <span className="inline-flex items-center gap-1 font-bold text-emerald-700"><PackageCheck size={14}/>Recebido {dataBR(i.recebido_em)}</span>
-                : <span className="font-semibold text-amber-800">{textoStatus(i.status)}</span>}</td>
+              <td className="px-3 py-3">{i.devolucao_lab_solicitada_em
+                ? <span className="font-bold text-blue-800">Devolução solicitada ao Laboratório</span>
+                : i.status==='devolvido_warehouse'
+                  ? <span className="inline-flex items-center gap-1 font-bold text-emerald-700"><PackageCheck size={14}/>Recebido {dataBR(i.recebido_em)}</span>
+                  : <span className="font-semibold text-amber-800">{textoStatus(i.status)}</span>}</td>
+              <td className="px-3 py-3">
+                {i.status==='em_devolucao'&&!i.devolucao_lab_solicitada_em&&<button
+                  type="button" disabled={ocupado} onClick={()=>void devolverAoLaboratorio(i)}
+                  className={BOTAO+' border-blue-300 bg-white text-blue-800 hover:bg-blue-50'}>
+                  <CornerUpLeft size={14}/>Devolver ao Laboratório
+                </button>}
+              </td>
             </tr>)}
           </tbody>
         </table>
       </div>
-      <p className="text-[11px] text-slate-500">Somente aparelhos desta minuta podem ser recebidos. A confirmação é física; não presume movimentação no Oracle ou no WMS.</p>
+      <p className="text-[11px] text-slate-500">A devolução ao Laboratório registra uma divergência individual por aparelho não recebido, sem confirmar entrada física e sem movimentar WMS ou Oracle.</p>
     </div>}
   </section>;
 }
