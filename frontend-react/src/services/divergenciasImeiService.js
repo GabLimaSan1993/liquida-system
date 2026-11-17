@@ -28,7 +28,38 @@ export { etiquetaDivergencia } from "./etiquetaDivergencia";
 export async function listarDivergencias() {
   const { data, error } = await supabase.rpc("assurant_divergencias_listar");
   if (error) throw new Error(error.message);
-  return data;
+
+  // Evidência informativa: um produto "Sem Ordem" pode já constar em alguma
+  // planilha, mesmo que não exista uma ordem de trade-in ativa.
+  const casos = data?.casos || [];
+  const ids = casos
+    .filter((c) => c.tipo_problema === "sem_ordem" && c.id)
+    .map((c) => c.id);
+  if (!ids.length) return data;
+
+  try {
+    const { data: historicos, error: erroHistorico } = await supabase.rpc(
+      "assurant_divergencias_historico_planilhas",
+      { p_ids: ids },
+    );
+    if (erroHistorico) throw erroHistorico;
+    const porCaso = new Map(
+      (Array.isArray(historicos) ? historicos : []).map((item) => [
+        item.caso_id,
+        Array.isArray(item.registros) ? item.registros : [],
+      ]),
+    );
+    return {
+      ...data,
+      casos: casos.map((c) => c.tipo_problema === "sem_ordem"
+        ? { ...c, historico_planilhas: porCaso.get(c.id) || [] }
+        : c),
+    };
+  } catch (e) {
+    // Uma falha na consulta auxiliar não deve impedir a decisão dos casos.
+    console.warn("Não foi possível consultar histórico das planilhas:", e);
+    return data;
+  }
 }
 export async function enviarEmailDivergencia(caso, confirmada) {
   const { data, error } = await supabase.rpc("assurant_divergencia_enviar_email", {
