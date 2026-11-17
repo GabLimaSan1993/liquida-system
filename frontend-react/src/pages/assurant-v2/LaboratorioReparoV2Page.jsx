@@ -6,7 +6,7 @@ import { listarDefeitos } from '../../services/triagemFuncionalService.js';
 
 const formatarData = v => v ? new Date(v).toLocaleString('pt-BR', {timeZone:'America/Sao_Paulo'}) : '—';
 const nRom = r => 'LAB-' + (r.tipo === 'envio' ? 'ENV-' : r.tipo === 'importacao' ? 'IMP-' : 'DEV-') + String(r.numero || 0).padStart(6,'0');
-const statusNome = {aguardando_recebimento:'Aguardando recebimento',recebido:'Recebido · aguarda validação técnica',em_reparo:'Em reparo',concluido:'Reparo concluído',em_devolucao:'Aguardando warehouse',devolvido_warehouse:'Devolvido ao warehouse'};
+const statusNome = {aguardando_recebimento:'Aguardando recebimento',recebido:'Aguardando técnico',em_reparo:'Aguardando técnico',concluido:'Reparo concluído',em_devolucao:'Aguardando Recebimento Warehouse',devolvido_warehouse:'Recebido pelo Warehouse'};
 const escapar = v => String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const normalizarDefeito = v => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').trim();
 const nomeResultadoLaboratorio = {
@@ -193,7 +193,7 @@ export default function LaboratorioReparoV2Page() {
                 {envio&&<button className={botao+' bg-violet-700 text-white hover:bg-violet-800'} onClick={()=>imprimirRomaneio(envio,itens,detalhe.pedido?.lote)}><Printer size={16}/>{envio.tipo==='importacao'?'Relação para conferência ':'Romaneio de envio '}{nRom(envio)}</button>}
               </div>
               <div className="mt-4 grid gap-2 sm:grid-cols-4">{[
-                ['Aguardando laboratório',contagem('aguardando_recebimento')],['Para validação técnica / reparando',contagem('recebido')+contagem('em_reparo')],
+                ['Aguardando laboratório',contagem('aguardando_recebimento')],['Aguardando técnico',contagem('recebido')+contagem('em_reparo')],
                 ['Concluídos',contagem('concluido')],['Devolução / warehouse',contagem('em_devolucao')+contagem('devolvido_warehouse')]
                 ].map(([k,v])=><div key={k} className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-3"><div className="text-xl font-bold leading-tight text-violet-700">{v}</div><div className="text-xs text-slate-500">{k}</div></div>)}</div>
             </div>
