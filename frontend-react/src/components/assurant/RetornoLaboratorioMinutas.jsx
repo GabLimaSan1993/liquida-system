@@ -66,7 +66,7 @@ export default function RetornoLaboratorioMinutas(){
       return;
     }
     if(codigo.length<2){setErro('Informe pelo menos 2 caracteres da minuta, voucher ou IMEI.');return;}
-    setOcupado(true);setErro('');setAviso('');
+    setOcupado(true);setErro('');setAviso('');setTipo('');
     try{
       const r=await consultar('buscar',null,codigo);
       const resultados=r.minutas||[];
