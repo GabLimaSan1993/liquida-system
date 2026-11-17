@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Download, RefreshCw, ScanLine } from 'lucide-react';
 import { supabase } from '../lib/supabase.js';
 import { classificacaoLaboratorio } from '../services/laboratorioClassificacao.js';
+import RetornoLaboratorioMinutas from './assurant/RetornoLaboratorioMinutas.jsx';
 
 const resultadoLabel = {
   irrecuperavel: 'Scrap / irrecuperável',
@@ -71,7 +72,7 @@ export default function ReparoRetornoPanel({ modo = 'armazenagem' }) {
     } catch (e) { setErro(e.message || 'Não foi possível consultar os retornos.'); }
     finally { setLoading(false); }
   }, [oracle]);
-  useEffect(() => { carregar(); }, [carregar]);
+  useEffect(() => { if(oracle)void carregar(); }, [oracle,carregar]);
 
   async function executar(item) {
     if (busy) return;
@@ -246,90 +247,9 @@ export default function ReparoRetornoPanel({ modo = 'armazenagem' }) {
   }
 
 
-  const totalConcluidos=itens.filter(i=>i.status==='concluido').length;
-  const totalDevolucao=itens.filter(i=>i.status==='em_devolucao').length;
-  const totalPaginas=Math.max(1,Math.ceil(filtrados.length/100));
-  if (!oracle) return <section className="space-y-4 rounded-2xl border border-violet-200 bg-white p-4 shadow-sm md:p-5">
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div>
-        <h2 className="text-base font-black text-slate-900">Retorno de Reparo · Recebimento Warehouse</h2>
-        <p className="mt-1 text-xs text-slate-600">Retornos concluídos e faltas de malote solicitadas pelo Laboratório. O Warehouse confirma o recebimento físico antes da baixa da pendência.</p>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={baixarRelatorio} disabled={!!busy}
-          className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold"><Download size={15}/>Exportar retorno e defeitos</button>
-        <button type="button" onClick={carregar} disabled={loading||!!busy}
-          className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold"><RefreshCw size={15}/>Atualizar</button>
-      </div>
-    </div>
-    <div className="flex flex-wrap gap-3 text-xs font-semibold">
-      <span className="rounded-lg bg-slate-100 px-3 py-2">Concluído · {totalConcluidos.toLocaleString('pt-BR')}</span>
-      <span className="rounded-lg bg-violet-100 px-3 py-2 text-violet-800">Em devolução · {totalDevolucao.toLocaleString('pt-BR')}</span>
-    </div>
-    <form onSubmit={bipar} className="flex flex-wrap gap-2">
-      <input ref={inputRef} value={leitura} onChange={e=>setLeitura(e.target.value)}
-        autoComplete="off" placeholder="Bipar voucher ou IMEI da minuta de devolução"
-        aria-label="Bipar retorno de laboratório"
-        className="min-w-64 flex-1 rounded-lg border border-slate-200 p-3 font-mono text-sm"/>
-      <button disabled={!!busy||!leitura.trim()}
-        className="inline-flex items-center gap-2 rounded-lg bg-violet-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">
-        <ScanLine size={16}/>Confirmar chegada ao Warehouse
-      </button>
-    </form>
-    {erro&&<p className="rounded-lg bg-rose-50 p-3 text-sm font-semibold text-rose-700" role="alert">{erro}</p>}
-    {mensagem&&<p className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800" role="status">{mensagem}</p>}
-    <input value={filtro} onChange={e=>{setFiltro(e.target.value);setPagina(0);}}
-      placeholder="Filtrar voucher, IMEI, OS, status, resultado ou defeito"
-      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"/>
-    <div className="overflow-x-auto rounded-lg border border-slate-200">
-      <table className="w-full min-w-[1650px] text-left text-xs">
-        <thead className="bg-slate-50 text-slate-600"><tr>
-          {['Voucher / IMEI','Modelo / OS','Etapa / minuta','Resultado técnico','Defeitos da triagem',
-            'Defeitos finais do laboratório','Alterações (adicionados / removidos)','Recebimento físico'].map(h=>
-            <th key={h} className="p-3 font-bold">{h}</th>)}
-        </tr></thead>
-        <tbody className="divide-y divide-slate-100">{filtrados.slice(pagina*100,pagina*100+100).map(i=>{
-          const diff=alteracoesDefeitos(i);
-          return <tr key={i.origem+':'+i.id} className={'align-top '+(classificacaoLaboratorio(i.resultado_lab)?.linha||'hover:bg-violet-50/30')}>
-            <td className="p-3"><strong className="font-mono text-violet-800">{i.voucher||'—'}</strong>
-              <p className="mt-1 font-mono text-slate-600">{i.imei||'IMEI a conferir'}</p></td>
-            <td className="p-3">{i.modelo||'A conferir'}
-              <p className="mt-1 text-slate-500">OS {i.os_numero||'—'}</p></td>
-            <td className="p-3"><span className={'font-bold '+(i.status==='em_devolucao'?'text-violet-800':'text-slate-700')}>
-              {statusLab[i.status]||i.status}</span>
-              {i.minuta_numero&&<p className="mt-1 font-mono text-slate-500">LAB-DEV-{String(i.minuta_numero).padStart(6,'0')}</p>}
-              {i.lote&&<p className="mt-1 text-slate-500">{i.lote}</p>}</td>
-            <td className="p-3 font-semibold">{classificacaoLaboratorio(i.resultado_lab)?.rotulo||'Não informado'}</td>
-            <td className="max-w-64 whitespace-normal p-3">{diff.origem.join('; ')||'Nenhum registrado'}</td>
-            <td className="max-w-64 whitespace-normal p-3">{diff.finais.join('; ')||'Sem defeitos ativos'}</td>
-            <td className="max-w-72 whitespace-normal p-3">
-              {diff.adicionados.length>0&&<p className="font-semibold text-amber-800">Adicionados: {diff.adicionados.join('; ')}</p>}
-              {diff.removidos.length>0&&<p className="mt-1 font-semibold text-emerald-800">Removidos: {diff.removidos.join('; ')}</p>}
-              {!diff.adicionados.length&&!diff.removidos.length&&<span className="text-slate-500">Sem alterações</span>}
-            </td>
-            <td className="p-3">
-              <button type="button" onClick={()=>executar(i)} disabled={!!busy||!i.liberado_laboratorio}
-                className="rounded-lg bg-violet-700 px-3 py-2 font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300">
-                {i.liberado_laboratorio?(i.status==='devolucao_pendente_warehouse'?'Confirmar falta recebida':'Receber no Warehouse'):'Aguardar minuta'}
-              </button>
-            </td>
-          </tr>;
-        })}
-        {!loading&&!filtrados.length&&<tr><td className="p-6 text-center text-slate-500" colSpan={8}>Nenhum aparelho localizado nessas etapas.</td></tr>}
-        </tbody>
-      </table>
-    </div>
-    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
-      <span>{filtrados.length.toLocaleString('pt-BR')} aparelhos · página {Math.min(pagina+1,totalPaginas)} de {totalPaginas}</span>
-      <div className="flex gap-2">
-        <button type="button" disabled={pagina===0||loading} onClick={()=>setPagina(p=>Math.max(0,p-1))}
-          className="rounded-lg border px-3 py-2 disabled:opacity-40">Anterior</button>
-        <button type="button" disabled={pagina+1>=totalPaginas||loading} onClick={()=>setPagina(p=>p+1)}
-          className="rounded-lg border px-3 py-2 disabled:opacity-40">Próxima</button>
-      </div>
-    </div>
-    <p className="text-xs text-slate-500">A confirmação do Warehouse altera o Laboratório para Devolvido ao Warehouse imediatamente. Movimentação WMS/Oracle somente no fluxo com saída original comprovada; importações sem WMS registram exclusivamente a chegada física.</p>
-  </section>;
+  // Fora da rotina Oracle, a tela de retorno é estritamente por minuta:
+  // nada de listar os aparelhos Concluídos antes de gerar o romaneio.
+  if (!oracle) return <RetornoLaboratorioMinutas />;
 
   return <section className="space-y-4 rounded-2xl border border-violet-200 bg-white p-5 shadow-sm">
     <div className="flex flex-wrap items-center justify-between gap-3">
