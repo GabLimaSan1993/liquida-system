@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Download, RefreshCw, ScanLine } from 'lucide-react';
 import { supabase } from '../lib/supabase.js';
+import { classificacaoLaboratorio } from '../services/laboratorioClassificacao.js';
 
 const resultadoLabel = {
   irrecuperavel: 'Scrap / irrecuperável',
@@ -26,6 +27,7 @@ function alteracoesDefeitos(item) {
 const statusLab = {
   concluido:'Concluído — aguardando minuta',
   em_devolucao:'Em devolução — pronto para recebimento',
+  devolucao_pendente_warehouse:'Falta no malote — devolução solicitada',
 };
 const statusLabel = {
   bipado: 'Separado para reparo',
@@ -74,12 +76,14 @@ export default function ReparoRetornoPanel({ modo = 'armazenagem' }) {
   async function executar(item) {
     if (busy) return;
     if (!oracle) {
-      if (item.status!=='em_devolucao' || !item.liberado_laboratorio) {
-        setErro('Este aparelho ainda está Concluído. O laboratório deve emitir a minuta antes do recebimento no Warehouse.');
+      if (!['em_devolucao','devolucao_pendente_warehouse'].includes(item.status) || !item.liberado_laboratorio) {
+        setErro('Este aparelho não está liberado para recebimento físico no Warehouse.');
         return;
       }
       if (!window.confirm('Confirmar chegada física do voucher '+(item.voucher||item.imei)+
-        ' ao Warehouse? O resultado e os defeitos finais serão preservados.')) return;
+        ' ao Warehouse? '+(item.status==='devolucao_pendente_warehouse'
+          ? 'Trata-se de item faltante no malote e NÃO recebido pelo Laboratório; não haverá movimentação automática WMS/Oracle.'
+          : 'O resultado e os defeitos finais serão preservados.'))) return;
       setBusy(item.id);setErro('');setMensagem('');
       try {
         const {data,error}=await supabase.rpc('assurant_reparo_retorno_laboratorio',{
@@ -249,7 +253,7 @@ export default function ReparoRetornoPanel({ modo = 'armazenagem' }) {
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
         <h2 className="text-base font-black text-slate-900">Retorno de Reparo · Recebimento Warehouse</h2>
-        <p className="mt-1 text-xs text-slate-600">Mesmos vouchers das etapas Concluído e Em devolução do Laboratório, com avaliação dos defeitos. Somente Em devolução pode ser bipado.</p>
+        <p className="mt-1 text-xs text-slate-600">Retornos concluídos e faltas de malote solicitadas pelo Laboratório. O Warehouse confirma o recebimento físico antes da baixa da pendência.</p>
       </div>
       <div className="flex flex-wrap gap-2">
         <button type="button" onClick={baixarRelatorio} disabled={!!busy}
@@ -286,7 +290,7 @@ export default function ReparoRetornoPanel({ modo = 'armazenagem' }) {
         </tr></thead>
         <tbody className="divide-y divide-slate-100">{filtrados.slice(pagina*100,pagina*100+100).map(i=>{
           const diff=alteracoesDefeitos(i);
-          return <tr key={i.origem+':'+i.id} className="align-top hover:bg-violet-50/30">
+          return <tr key={i.origem+':'+i.id} className={'align-top '+(classificacaoLaboratorio(i.resultado_lab)?.linha||'hover:bg-violet-50/30')}>
             <td className="p-3"><strong className="font-mono text-violet-800">{i.voucher||'—'}</strong>
               <p className="mt-1 font-mono text-slate-600">{i.imei||'IMEI a conferir'}</p></td>
             <td className="p-3">{i.modelo||'A conferir'}
@@ -295,7 +299,7 @@ export default function ReparoRetornoPanel({ modo = 'armazenagem' }) {
               {statusLab[i.status]||i.status}</span>
               {i.minuta_numero&&<p className="mt-1 font-mono text-slate-500">LAB-DEV-{String(i.minuta_numero).padStart(6,'0')}</p>}
               {i.lote&&<p className="mt-1 text-slate-500">{i.lote}</p>}</td>
-            <td className="p-3 font-semibold">{resultadoLabel[i.resultado_lab]||'Não informado'}</td>
+            <td className="p-3 font-semibold">{classificacaoLaboratorio(i.resultado_lab)?.rotulo||'Não informado'}</td>
             <td className="max-w-64 whitespace-normal p-3">{diff.origem.join('; ')||'Nenhum registrado'}</td>
             <td className="max-w-64 whitespace-normal p-3">{diff.finais.join('; ')||'Sem defeitos ativos'}</td>
             <td className="max-w-72 whitespace-normal p-3">
@@ -306,7 +310,7 @@ export default function ReparoRetornoPanel({ modo = 'armazenagem' }) {
             <td className="p-3">
               <button type="button" onClick={()=>executar(i)} disabled={!!busy||!i.liberado_laboratorio}
                 className="rounded-lg bg-violet-700 px-3 py-2 font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300">
-                {i.liberado_laboratorio?'Receber no Warehouse':'Aguardar minuta'}
+                {i.liberado_laboratorio?(i.status==='devolucao_pendente_warehouse'?'Confirmar falta recebida':'Receber no Warehouse'):'Aguardar minuta'}
               </button>
             </td>
           </tr>;

@@ -10,6 +10,7 @@ import { listarDefeitos } from '../../services/triagemFuncionalService.js';
 import { DEFEITOS_SCRAP, validarConclusaoLaboratorio, selecionarDefeitoScrap } from '../../services/laboratorioConclusaoValidacao.js';
 import { gerarMinutaLaboratorio, listarMinutasLaboratorio, detalharMinutaLaboratorio, imprimirMinutaLaboratorio } from '../../services/laboratorioDevolucaoService.js';
 import MalotesReparoLaboratorio from '../../components/assurant/MalotesReparoLaboratorio.jsx';
+import { CLASSIFICACOES_LAB, classificacaoLaboratorio, validarClassificacaoUnica } from '../../services/laboratorioClassificacao.js';
 
 const BOTAO = 'inline-flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-40';
 const CAMPO = 'rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-violet-500';
@@ -133,6 +134,8 @@ export default function LaboratorioIndividualV2Page() {
   const [texto,setTexto]=useState('');
   const [busca,setBusca]=useState('');
   const [filtro,setFiltro]=useState('');
+  const [resultadoFiltro,setResultadoFiltro]=useState('');
+  const [recusasGaia,setRecusasGaia]=useState([]);
   const [pagina,setPagina]=useState(0);
   const [carregando,setCarregando]=useState(true);
   const [ocupado,setOcupado]=useState(false);
@@ -160,11 +163,11 @@ export default function LaboratorioIndividualV2Page() {
   const carregar=useCallback(async()=>{
     setCarregando(true);
     try {
-      const r=await laboratorioIndividual('listar',{busca,status:filtro||null,offset:pagina*limite,limite});
+      const r=await laboratorioIndividual('listar',{busca,status:filtro||null,resultado:resultadoFiltro||null,offset:pagina*limite,limite});
       setDados(r||{itens:[],total:0,resumo:{}});
     } catch(e){setErro(e.message||'Não foi possível consultar os vouchers.');}
     finally{setCarregando(false);}
-  },[busca,filtro,pagina]);
+  },[busca,filtro,resultadoFiltro,pagina]);
 
   const carregarMinutas=useCallback(async()=>{
     try{
@@ -242,22 +245,24 @@ export default function LaboratorioIndividualV2Page() {
   async function prepararArquivoGaia(e) {
     const arquivo=e.target.files?.[0]; e.target.value='';
     if(!arquivo||ocupado)return;
-    setOcupado(true);setErro('');setSucesso('');setArquivoGaia(null);
+    setOcupado(true);setErro('');setSucesso('');setArquivoGaia(null);setRecusasGaia([]);
     try{
       const previa=await lerVoucherOsGaia(arquivo);
       setArquivoGaia(previa);
-      setSucesso('Planilha validada: '+previa.pares.length+' vouchers com OS GAIA. O malote precisa estar totalmente conferido e com minuta gerada.');
+      setSucesso('Arquivo lido: '+previa.pares.length+' pares válidos em formato; '+previa.erros.length+' linhas com erro de preenchimento. Apenas itens em Aguardando recebimento serão confirmados.');
     }catch(err){setErro(err.message||'Falha na leitura de Voucher + OS GAIA.');}
     finally{setOcupado(false);}
   }
 
   async function confirmarArquivoGaia() {
     if(ocupado||!arquivoGaia?.pares.length)return;
-    if(!window.confirm('Importar OS GAIA de '+arquivoGaia.pares.length+' vouchers? Malotes incompletos serão recusados.'))return;
+    if(!window.confirm('Conferir '+arquivoGaia.pares.length+' pares de OS GAIA? Apenas aparelhos em Aguardando recebimento serão aceitos, os demais recusados.'))return;
     setOcupado(true);setErro('');setSucesso('');
     try{
       const r=await receberVoucherOsGaia(arquivoGaia.pares);
-      setSucesso(r.confirmados+' recebido(s) fisicamente com OS GAIA. '+r.jaRecebidos+' já conferidos; nenhum duplicado.');
+      const todasRecusas=[...(arquivoGaia.erros||[]).map(motivo=>({motivo})),...(r.recusados||[])];
+      setRecusasGaia(todasRecusas);
+      setSucesso(r.confirmados+' recebimento(s) com OS confirmado(s); '+todasRecusas.length+' linha(s) recusada(s), sem entrar no Laboratório.');
       setArquivoGaia(null);setFiltro('recebido');setPagina(0);setBusca('');setTexto('');
       await carregar();
     }catch(err){setErro(err.message||'Falha no recebimento via GAIA.');}
@@ -270,12 +275,12 @@ export default function LaboratorioIndividualV2Page() {
     setOcupado(true);setErro('');setSucesso('');setArquivoMinuta(null);
     try {
       const previa=await lerVouchersMinuta(arquivo);
-      const conferencia=await resolverVouchersMinuta(previa.vouchers);
+      const conferencia=await resolverVouchersMinuta(previa.identificadores);
       setArquivoMinuta({...previa,...conferencia});
       if(conferencia.falhas.length) {
-        setErro(conferencia.falhas.length+' voucher(s) não estão Concluídos ou já estão em minuta. Corrija a planilha antes de gerar outra.');
+        setErro(conferencia.falhas.length+' identificador(es) não estão Concluídos, são ambíguos ou já estão em minuta. Corrija a planilha.');
       } else {
-        setSucesso(previa.vouchers.length+' vouchers Concluídos conferidos. A minuta será gerada somente para esta lista.');
+        setSucesso(previa.identificadores.length+' Voucher(s)/IMEI(s) conferidos. Escolha a classificação final do romaneio.');
       }
     }catch(err){setErro(err.message||'Erro na planilha de minuta.');}
     finally{setOcupado(false);}
@@ -283,7 +288,8 @@ export default function LaboratorioIndividualV2Page() {
 
   async function emitirMinutaDaPlanilha() {
     if(ocupado||!arquivoMinuta?.itens?.length||arquivoMinuta.falhas?.length)return;
-    if(!window.confirm('Gerar minuta apenas para os '+arquivoMinuta.itens.length+' vouchers validados na planilha?'))return;
+    try {validarClassificacaoUnica(arquivoMinuta.itens,resultadoFiltro);}catch(e){setErro(e.message);return;}
+    if(!window.confirm('Gerar minuta '+classificacaoLaboratorio(resultadoFiltro).rotulo+' para '+arquivoMinuta.itens.length+' aparelhos da planilha?'))return;
     setOcupado(true);setErro('');setSucesso('');
     try {
       const r=await gerarMinutaLaboratorio(arquivoMinuta.itens,false);
@@ -481,27 +487,29 @@ export default function LaboratorioIndividualV2Page() {
 
   const chaveItem=i=>i.origem+':'+i.id;
   function alternarSelecao(i) {
-    if(i.status!=='concluido')return;
+    if(i.status!=='concluido'||i.resultado!==resultadoFiltro)return;
     setSelecionados(atuais=>atuais.some(x=>chaveItem(x)===chaveItem(i))
       ?atuais.filter(x=>chaveItem(x)!==chaveItem(i))
-      :[...atuais,{id:i.id,origem:i.origem}]);
+      :[...atuais,{id:i.id,origem:i.origem,resultado:i.resultado}]);
   }
   function alternarPaginaConcluidos() {
-    const concluidos=(dados.itens||[]).filter(i=>i.status==='concluido');
+    const concluidos=(dados.itens||[]).filter(i=>i.status==='concluido'&&i.resultado===resultadoFiltro);
     if(!concluidos.length)return;
     const todas=concluidos.every(i=>selecionados.some(x=>chaveItem(x)===chaveItem(i)));
     if(todas){
       const chaves=new Set(concluidos.map(chaveItem));
       setSelecionados(a=>a.filter(i=>!chaves.has(chaveItem(i))));
     } else {
-      setSelecionados(a=>[...a,...concluidos.filter(i=>!a.some(x=>chaveItem(x)===chaveItem(i))).map(i=>({id:i.id,origem:i.origem}))]);
+      setSelecionados(a=>[...a,...concluidos.filter(i=>!a.some(x=>chaveItem(x)===chaveItem(i))).map(i=>({id:i.id,origem:i.origem,resultado:i.resultado}))]);
     }
   }
   async function emitirMinuta(todos=false) {
     if(ocupado)return;
-    const quantidade=todos?Number(dados.resumo?.concluido||0):selecionados.length;
+    if(todos){setErro('Emissão em massa indisponível: selecione uma classificação e aparelhos individualmente.');return;}
+    try {validarClassificacaoUnica(selecionados,resultadoFiltro);}catch(e){setErro(e.message);return;}
+    const quantidade=selecionados.length;
     if(!quantidade){setErro('Não há aparelhos concluídos selecionados para devolução.');return;}
-    if(!window.confirm('Gerar minuta de devolução para '+quantidade+' aparelho(s) concluído(s)? Os produtos passarão para Aguardando Recebimento Warehouse, sem movimentação automática de estoque.'))return;
+    if(!window.confirm('Gerar minuta '+classificacaoLaboratorio(resultadoFiltro).rotulo+' para '+quantidade+' aparelho(s)? Não haverá alteração automática no estoque.'))return;
     setOcupado(true);setErro('');setSucesso('');
     try{
       const retorno=await gerarMinutaLaboratorio(todos?null:selecionados,todos);
@@ -560,7 +568,7 @@ export default function LaboratorioIndividualV2Page() {
         </div>
         {arquivoGaia&&<div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 p-4">
           <div><p className="text-sm font-bold text-slate-800">{arquivoGaia.arquivo}</p>
-            <p className="mt-1 text-xs text-slate-500">{arquivoGaia.pares.length.toLocaleString('pt-BR')} pares Voucher + OS GAIA · aba {arquivoGaia.aba}</p></div>
+            <p className="mt-1 text-xs text-slate-500">{arquivoGaia.pares.length.toLocaleString('pt-BR')} pares de OS · {arquivoGaia.erros.length} linhas inválidas · aba {arquivoGaia.aba}</p></div>
           <div className="flex flex-wrap gap-2">
             <button type="button" disabled={ocupado} onClick={()=>setArquivoGaia(null)} className={BOTAO+' border-slate-200 bg-white'}>Cancelar</button>
             <button type="button" disabled={ocupado} onClick={()=>void confirmarArquivoGaia()}
@@ -568,6 +576,10 @@ export default function LaboratorioIndividualV2Page() {
               <PackageCheck size={16}/> Confirmar recebimento da planilha
             </button>
           </div>
+        </div>}
+        {!!recusasGaia.length&&<div role="alert" className="mt-3 max-h-36 overflow-auto rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+          <p className="mb-1 font-bold">{recusasGaia.length} linha(s) recusada(s) na vinculação:</p>
+          {recusasGaia.map((e,i)=><p key={i}>{e.voucher||e.imei||e.identificador||'Linha'} — {e.motivo}</p>)}
         </div>}
         <p className="mt-3 text-[11px] text-slate-500">A abertura das OS ocorre no GAIA. A importação apenas confirma a OS de aparelhos já conferidos no malote; não movimenta WMS nem Oracle.</p>
       </section>
@@ -593,6 +605,13 @@ export default function LaboratorioIndividualV2Page() {
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-bold text-slate-600">Resultado final / filtro de romaneio:</span>
+          <button type="button" className={BOTAO+' '+(!resultadoFiltro?'border-violet-600 bg-violet-700 text-white':'border-slate-200 bg-white')} onClick={()=>{setResultadoFiltro('');setSelecionados([]);setPagina(0);}}>Todos</button>
+          {CLASSIFICACOES_LAB.map(op=><button type="button" key={op.valor} onClick={()=>{setResultadoFiltro(op.valor);setSelecionados([]);setPagina(0);}}
+            aria-pressed={resultadoFiltro===op.valor} className={BOTAO+' border '+op.classe+(resultadoFiltro===op.valor?' ring-2 ring-violet-500':'')}>
+            {op.rotulo}</button>)}
+        </div>
         <div className="flex flex-col items-start gap-3">
           <div>
             <h2 className="flex items-center gap-2 text-sm font-black text-slate-900"><Truck size={17} className="text-violet-700"/> Devolução ao Warehouse</h2>
@@ -603,7 +622,7 @@ export default function LaboratorioIndividualV2Page() {
             <input type="file" accept=".xlsx,.xls,.ods,.csv" className="sr-only" disabled={ocupado} onChange={prepararArquivoMinuta}/>
           </label>
           <a download="Modelo_Minuta_Laboratorio.csv" href={'data:text/csv;charset=utf-8,'+encodeURIComponent('Voucher\nYBV123456\n')}
-            className="text-xs font-bold text-violet-700 underline">Modelo por voucher</a>
+            className="text-xs font-bold text-violet-700 underline">Modelo por voucher (também aceita coluna IMEI)</a>
         </div>
         {arquivoMinuta&&<div className="mt-4 space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -612,12 +631,12 @@ export default function LaboratorioIndividualV2Page() {
             <div className="flex gap-2">
               <button type="button" onClick={()=>setArquivoMinuta(null)} disabled={ocupado} className={BOTAO+' border-slate-200 bg-white'}>Limpar</button>
               <button type="button" onClick={()=>void emitirMinutaDaPlanilha()}
-                disabled={ocupado||!!arquivoMinuta.falhas?.length||!arquivoMinuta.itens?.length}
+                disabled={ocupado||!resultadoFiltro||!!arquivoMinuta.falhas?.length||!arquivoMinuta.itens?.length}
                 className={BOTAO+' border-emerald-700 bg-emerald-600 text-white'}><Truck size={15}/> Gerar minuta da planilha</button>
             </div>
           </div>
           {!!arquivoMinuta.falhas?.length&&<div className="max-h-32 overflow-auto text-xs text-rose-700">
-            {arquivoMinuta.falhas.slice(0,30).map((x,i)=><p key={i}>{x.voucher}: {x.motivo}</p>)}
+            {arquivoMinuta.falhas.slice(0,30).map((x,i)=><p key={i}>{x.voucher||x.identificador||x.imei||'Identificador'}: {x.motivo}</p>)}
           </div>}
         </div>}
         {filtro==='concluido'&&<div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
@@ -626,7 +645,7 @@ export default function LaboratorioIndividualV2Page() {
             Selecionar/desmarcar página
           </button>
           <span className="text-xs font-semibold text-slate-600">{selecionados.length} selecionados</span>
-          <button type="button" disabled={ocupado||!selecionados.length}
+          <button type="button" disabled={ocupado||!resultadoFiltro||!selecionados.length}
             onClick={()=>void emitirMinuta(false)} className={BOTAO+' border-emerald-700 bg-emerald-600 text-white'}>
             <Truck size={15}/> Gerar minuta dos selecionados
           </button>
@@ -656,12 +675,15 @@ export default function LaboratorioIndividualV2Page() {
             <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-600">
               <tr>
                 <th className="p-3">Voucher</th><th className="p-3">IMEI / Série</th>
-                <th className="p-3">Aparelho</th><th className="p-3">Status</th>
+                <th className="p-3">Aparelho</th><th className="p-3">Status</th><th className="p-3">Resultado final</th>
                 <th className="p-3">OS</th><th className="p-3">Entrada</th><th className="p-3">Ação</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {(dados.itens||[]).map(i=><tr key={i.id} className="hover:bg-violet-50/40">
+              {(dados.itens||[]).map(i=><tr key={i.origem+':'+i.id}
+                className={['concluido','em_devolucao','devolvido_warehouse'].includes(i.status)
+                  ? (classificacaoLaboratorio(i.resultado)?.linha||'hover:bg-violet-50/40')
+                  : 'hover:bg-violet-50/40'}>
                 <td className="p-3">
                   <button type="button" className="text-left font-black text-violet-700 hover:underline"
                     onClick={()=>abrir(i)}>{i.voucher}</button>
@@ -670,6 +692,9 @@ export default function LaboratorioIndividualV2Page() {
                 <td className="p-3 font-mono">{i.imei||'A validar'}</td>
                 <td className="p-3">{i.modelo||'A conferir'}{i.alerta_origem&&<p className="mt-1 max-w-60 text-[10px] text-amber-800">{i.alerta_origem}</p>}</td>
                 <td className="p-3"><span className={'inline-flex rounded-md px-2 py-1 text-[10px] font-bold '+(cor[i.status]||'bg-slate-100')}>{rotulo[i.status]||i.status}</span></td>
+                <td className="p-3">{classificacaoLaboratorio(i.resultado)
+                  ? <span className={'inline-flex rounded-md border px-2 py-1 text-[10px] font-black '+classificacaoLaboratorio(i.resultado).classe}>{classificacaoLaboratorio(i.resultado).rotulo}</span>
+                  : <span className="text-slate-400">—</span>}</td>
                 <td className="p-3">{i.os_numero||i.os_referencia||'Pendente'}{!i.os_numero&&i.os_referencia&&<p className="text-[10px] text-slate-400">Não validada</p>}</td>
                 <td className="p-3 text-[11px] text-slate-500">{dataHora(i.recebido_em||i.criado_em)}</td>
                 <td className="p-3">
@@ -677,7 +702,7 @@ export default function LaboratorioIndividualV2Page() {
                     {i.status==='concluido'&&<label className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-700">
                       <input type="checkbox" aria-label={'Selecionar para devolução '+i.voucher}
                         checked={selecionados.some(x=>chaveItem(x)===chaveItem(i))}
-                        disabled={ocupado} onChange={()=>alternarSelecao(i)}/> Selecionar
+                        disabled={ocupado||!resultadoFiltro||i.resultado!==resultadoFiltro} onChange={()=>alternarSelecao(i)}/> Selecionar
                     </label>}
                     <button type="button" onClick={()=>abrir(i)}
                       className={BOTAO+' border-violet-200 bg-violet-50 text-violet-700'}>
@@ -686,8 +711,8 @@ export default function LaboratorioIndividualV2Page() {
                   </div>
                 </td>
               </tr>)}
-              {carregando&&<tr><td colSpan={7} className="p-8 text-center text-slate-500">Carregando vouchers...</td></tr>}
-              {!carregando&&!(dados.itens||[]).length&&<tr><td colSpan={7} className="p-8 text-center text-slate-500">Nenhum aparelho encontrado. Você pode importar uma planilha contendo apenas os vouchers.</td></tr>}
+              {carregando&&<tr><td colSpan={8} className="p-8 text-center text-slate-500">Carregando vouchers...</td></tr>}
+              {!carregando&&!(dados.itens||[]).length&&<tr><td colSpan={8} className="p-8 text-center text-slate-500">Nenhum aparelho encontrado. Confira seus filtros.</td></tr>}
             </tbody>
           </table>
         </div>
