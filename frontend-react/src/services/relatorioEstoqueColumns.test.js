@@ -3,19 +3,25 @@ import assert from 'node:assert/strict';
 import * as XLSX from 'xlsx';
 import { COLUNAS_ESTOQUE, CAMPOS_ESTOQUE, linhaEstoque } from './relatorioEstoqueColumns.js';
 
-test('percentual da bateria e defeitos da triagem e laboratório preservados', () => {
-  assert.equal(COLUNAS_ESTOQUE.length, 37);
+test('percentual da bateria, defeitos adicionais e laboratório preservados sem coluna duplicada', () => {
+  assert.equal(COLUNAS_ESTOQUE.length, 36);
   assert.equal(COLUNAS_ESTOQUE[30], 'Saúde da bateria (%)');
   assert.equal(CAMPOS_ESTOQUE[30], 'bateria_percentual');
-  assert.equal(CAMPOS_ESTOQUE[31], 'defeitos_triagem');
-  assert.equal(CAMPOS_ESTOQUE[34], 'defeitos_laboratorio');
-  assert.equal(CAMPOS_ESTOQUE[35], 'defeitos_adicionados_laboratorio');
-  assert.equal(CAMPOS_ESTOQUE[36], 'defeitos_removidos_laboratorio');
+  assert.equal(CAMPOS_ESTOQUE[19], 'defeitos_adicionais');
+  assert.equal(CAMPOS_ESTOQUE.includes('defeitos_triagem'), false);
+  assert.equal(CAMPOS_ESTOQUE[31], 'status_laboratorio');
+  assert.equal(CAMPOS_ESTOQUE[32], 'resultado_laboratorio');
+  assert.equal(CAMPOS_ESTOQUE[33], 'defeitos_laboratorio');
+  assert.equal(CAMPOS_ESTOQUE[34], 'defeitos_adicionados_laboratorio');
+  assert.equal(CAMPOS_ESTOQUE[35], 'defeitos_removidos_laboratorio');
   assert.equal(CAMPOS_ESTOQUE.includes('aging'), false);
-  const linha = linhaEstoque({ voucher: 'YBV-TESTE', imei: '001234567890123', status_bateria: 'Saúde da bateria entre 80% e 85%', bateria_percentual: 83, aging: 245 });
+  const linha = linhaEstoque({ voucher: 'YBV-TESTE', imei: '001234567890123', status_bateria: 'Saúde da bateria entre 80% e 85%', bateria_percentual: 83, defeitos_adicionais: 'Tela quebrada', defeitos_triagem: 'Duplicado', status_laboratorio: 'Aguardando Técnico', aging: 245 });
   assert.equal(linha[30], 83);
   assert.equal(linha[1], '001234567890123');
   assert.equal(linha[28], 'Saúde da bateria entre 80% e 85%');
+  assert.equal(linha[19], 'Tela quebrada');
+  assert.equal(linha[31], 'Aguardando Técnico');
+  assert.equal(linha.includes('Duplicado'), false);
   assert.equal(linhaEstoque({ bateria_percentual: 0 })[30], 0);
   assert.equal(linhaEstoque({ bateria_percentual: 100 })[30], 100);
   assert.equal(linhaEstoque({ bateria_percentual: null, status_bateria: 'Acima de 80%', aging: 12 })[30], null);
@@ -36,8 +42,10 @@ test('Excel gerado pelo worker exporta números e mantém ausências em branco',
     const book = XLSX.read(resultado.buffer, { type: 'array' });
     const sheet = book.Sheets.warehouse;
     assert.equal(sheet.AE1.v, 'Saúde da bateria (%)');
-    assert.equal(sheet.AF1.v, 'Defeitos_Triagem');
-    assert.equal(sheet.AI1.v, 'Defeitos_Laboratorio');
+    assert.equal(sheet.T1.v, 'Defeitos_Adicionais');
+    assert.equal(sheet.AF1.v, 'Status_Laboratorio');
+    assert.equal(sheet.AG1.v, 'Resultado_Laboratorio');
+    assert.equal(sheet.AH1.v, 'Defeitos_Laboratorio');
     assert.equal(sheet.AE2.t, 'n');
     assert.equal(sheet.AE2.v, 87);
     assert.equal(sheet.AE3.t, 'n');
