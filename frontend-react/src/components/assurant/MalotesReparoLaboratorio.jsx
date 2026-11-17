@@ -16,7 +16,7 @@ async function consultarMalotes(acao, id = null, codigo = null) {
 }
 
 async function baixarMinuta(malote) {
-  const { default: XLSX } = await import('xlsx');
+  const XLSX = await import('xlsx');
   const itens = malote?.itens || [];
   if (!malote?.romaneio?.conferencia_concluida_em || !itens.length) {
     throw new Error('A planilha GAIA só é liberada após conferir todos os aparelhos.');
