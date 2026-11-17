@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase.js';
+import { classificacaoLaboratorio } from './laboratorioClassificacao.js';
 
 async function executar(acao, campos={}) {
   const { data, error } = await supabase.rpc('assurant_reparo_lab_devolucao', {
@@ -28,17 +29,21 @@ export function imprimirMinutaLaboratorio(dados, janela) {
   const rom=dados?.romaneio, itens=dados?.itens||[];
   if (!rom?.id || !itens.length) throw new Error('Minuta sem itens.');
   const nome='LAB-DEV-'+String(rom.numero).padStart(6,'0');
+  const classificacao=classificacaoLaboratorio(itens[0]?.resultado);
+  if(!classificacao || itens.some(i=>i.resultado!==classificacao.valor))
+    throw new Error('Minuta inválida: os aparelhos precisam ter a mesma classificação final.');
+  const tom=classificacao.valor==='reparado'?'#d9f99d':classificacao.valor==='sem_reparo'?'#bfdbfe':'#fecaca';
   const tabela=itens.map((i,k) =>
-    '<tr><td>'+ (k+1) +'</td><td>'+esc(i.voucher)+'</td><td>'+
+    '<tr style="background:'+tom+'"><td>'+ (k+1) +'</td><td>'+esc(i.voucher)+'</td><td>'+
     esc(i.imei||'A validar')+'</td><td>'+esc(i.modelo||'A conferir')+
     '</td><td>'+esc(i.os_numero||'—')+'</td><td>'+
-    esc(i.resultado==='reparado'?'Reparado':i.resultado==='sem_reparo'?'Não reparado desbloqueado':i.resultado==='irrecuperavel'?'Scrap / bloqueado':'—')+
+    esc(classificacao.rotulo)+
     '</td></tr>'
   ).join('');
   const html='<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>'+esc(nome)+'</title>'+
    '<style>body{font:12px Arial,sans-serif;color:#182033;margin:24px}h1{font-size:22px;margin:6px 0}.kicker{font-weight:bold;color:#5b3aa0;letter-spacing:1.5px}.meta{display:flex;justify-content:space-between;gap:30px;border-top:2px solid #222;border-bottom:2px solid #222;padding:12px 0;margin-top:12px}.meta p{margin:5px 0}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border:1px solid #cbd0db;padding:6px;text-align:left;vertical-align:top;font-size:10px}th{background:#eee}.ass{display:flex;gap:38px;margin-top:60px}.ass div{flex:1;border-top:1px solid #333;padding-top:7px;text-align:center}.note{margin-top:15px;font-size:10px;color:#555}@page{size:A4 landscape;margin:12mm}@media print{body{margin:0}}</style></head><body>'+
    '<div class="kicker">LIQUIDA SYSTEM · TRANSFERÊNCIA INTERNA</div><h1>Minuta de devolução ao Warehouse</h1>'+
-   '<div class="meta"><div><p><b>Número:</b> '+esc(nome)+'</p><p><b>Origem:</b> Laboratório de Reparos</p><p><b>Destino:</b> Warehouse</p></div>'+
+   '<div class="meta"><div><p><b>Número:</b> '+esc(nome)+'</p><p><b>Classificação final:</b> '+esc(classificacao.rotulo)+'</p><p><b>Origem:</b> Laboratório de Reparos</p><p><b>Destino:</b> Warehouse</p></div>'+
    '<div><p><b>Emissão:</b> '+esc(dataBR(rom.criado_em))+'</p><p><b>Emitido por:</b> '+esc(rom.criado_por_nome||'Laboratório')+'</p><p><b>Total de aparelhos:</b> '+itens.length+'</p></div></div>'+
    '<table><thead><tr><th>#</th><th>Voucher</th><th>IMEI / série</th><th>Aparelho</th><th>OS</th><th>Resultado</th></tr></thead><tbody>'+tabela+'</tbody></table>'+
    '<div class="ass"><div>Entrega · Laboratório</div><div>Transporte / conferência</div><div>Recebimento · Warehouse</div></div>'+
