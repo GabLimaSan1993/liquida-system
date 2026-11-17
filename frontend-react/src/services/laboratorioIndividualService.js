@@ -62,3 +62,37 @@ export async function confirmarRecebimentoLaboratorio(vouchers) {
   }
   return confirmados;
 }
+
+
+export async function receberVoucherOsGaia(linhas) {
+  if (!Array.isArray(linhas) || !linhas.length) throw new Error("Planilha sem Voucher + OS GAIA.");
+  let confirmados=0, jaRecebidos=0;
+  for (let i=0;i<linhas.length;i+=150) {
+    const {data,error}=await supabase.rpc("assurant_reparo_lab_receber_os_gaia",{p_linhas:linhas.slice(i,i+150)});
+    if (error) throw new Error("Lote " + (Math.floor(i/150)+1) + ": " + error.message);
+    confirmados+=Number(data?.confirmados||0);
+    jaRecebidos+=Number(data?.ja_recebidos||0);
+  }
+  return {confirmados,jaRecebidos};
+}
+
+export async function resolverVouchersMinuta(vouchers) {
+  const itens=[],falhas=[];
+  for (let i=0;i<vouchers.length;i+=200) {
+    const {data,error}=await supabase.rpc("assurant_reparo_lab_resolver_minuta_planilha",{p_vouchers:vouchers.slice(i,i+200)});
+    if (error) throw new Error(error.message);
+    itens.push(...(data?.itens||[]));
+    falhas.push(...(data?.falhas||[]));
+  }
+  return {itens,falhas};
+}
+
+export async function corrigirLaudoEtapaAdmin({origem,id,status,resultado,defeitos,observacoes,motivo}) {
+  const {data,error}=await supabase.rpc("assurant_reparo_lab_admin_corrigir",{
+    p_origem:origem, p_item_id:id,p_status:status,p_resultado:resultado,
+    p_defeitos:defeitos,p_observacoes:observacoes,p_motivo:motivo
+  });
+  if (error) throw new Error(error.message);
+  if (!data?.ok) throw new Error("Correção administrativa não confirmada.");
+  return data;
+}
