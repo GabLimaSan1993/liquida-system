@@ -782,7 +782,7 @@ export default function LaboratorioIndividualV2Page() {
               {(item.status!=='concluido'||admin)&&!!validarConclusaoLaboratorio(resultado,defeitos)&&
                 <p role="status" className="mt-3 text-xs font-semibold text-rose-700">{validarConclusaoLaboratorio(resultado,defeitos)}</p>}
               {item.status!=='concluido'
-                ? <button type="button" onClick={fecharReparo} disabled={ocupado||!item.os_numero}
+                ? <button type="button" onClick={fecharReparo} disabled={ocupado||!item.os_numero||!!validarConclusaoLaboratorio(resultado,defeitos)}
                     className={BOTAO+' mt-3 border-emerald-700 bg-emerald-600 text-white'}>
                     <CheckCircle2 size={16}/> Concluir reparo
                   </button>
