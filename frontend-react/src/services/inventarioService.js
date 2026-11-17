@@ -434,7 +434,7 @@ const anterior =
   await supabase.from("inventario_itens").insert({
     contagem_id:       contagemId,
     ciclo_id:          cont.ciclo_id,
-    imei,
+    imei: identificador,
     veredito:          conflito ? "conflito" : "sobra",
     endereco_anterior: anterior,
     bipado_em:         agora,
@@ -450,7 +450,7 @@ const anterior =
     .from("inventario_itens")
     .select("id")
     .eq("ciclo_id", cont.ciclo_id)
-    .eq("imei", imei)
+    .eq("imei", identificador)
     .eq("veredito", "falta")
     .is("reconciliado_em", null)
     .limit(1)
