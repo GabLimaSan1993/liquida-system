@@ -3,7 +3,8 @@ import * as XLSX from 'xlsx';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../AuthContext.jsx';
 import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, FileSpreadsheet, PackageCheck, RefreshCw, Search, Upload, Wrench, X, Truck, Printer, Download } from 'lucide-react';
-import { laboratorioIndividual, conferirVouchersLaboratorio, confirmarRecebimentoLaboratorio } from '../../services/laboratorioIndividualService.js';
+import { laboratorioIndividual, conferirVouchersLaboratorio, confirmarRecebimentoLaboratorio, receberVoucherOsGaia, resolverVouchersMinuta, corrigirLaudoEtapaAdmin } from '../../services/laboratorioIndividualService.js';
+import { lerVoucherOsGaia, lerVouchersMinuta } from '../../services/laboratorioPlanilhasGaia.js';
 import { laboratorioReparo } from '../../services/laboratorioReparoService.js';
 import { listarDefeitos } from '../../services/triagemFuncionalService.js';
 import { gerarMinutaLaboratorio, listarMinutasLaboratorio, detalharMinutaLaboratorio, imprimirMinutaLaboratorio } from '../../services/laboratorioDevolucaoService.js';
@@ -149,6 +150,10 @@ export default function LaboratorioIndividualV2Page() {
   const [observacoes,setObservacoes]=useState('');
   const [selecionados,setSelecionados]=useState([]);
   const [minutas,setMinutas]=useState([]);
+  const [arquivoGaia,setArquivoGaia]=useState(null);
+  const [arquivoMinuta,setArquivoMinuta]=useState(null);
+  const [etapaAdmin,setEtapaAdmin]=useState('');
+  const [motivoAdmin,setMotivoAdmin]=useState('');
   const limite=100;
 
   const carregar=useCallback(async()=>{
@@ -186,7 +191,7 @@ export default function LaboratorioIndividualV2Page() {
     setItem(i);setOs(i.os_numero||i.os_referencia||'');
     setDefeitos(Array.isArray(i.defeitos_atual)?i.defeitos_atual:[]);
     setResultado(i.resultado||'reparado');setObservacoes(i.observacoes||'');
-    setNovoDefeito('');setErro('');
+    setNovoDefeito('');setErro('');setEtapaAdmin(i.status||'');setMotivoAdmin('');
   }
 
   async function abrirVoucherJaCadastrado(voucher) {
@@ -230,6 +235,79 @@ export default function LaboratorioIndividualV2Page() {
       await carregar();
       return r;
     } catch(e){setErro(e.message||'Falha na operação.');return null;}
+    finally{setOcupado(false);}
+  }
+
+  async function prepararArquivoGaia(e) {
+    const arquivo=e.target.files?.[0]; e.target.value='';
+    if(!arquivo||ocupado)return;
+    setOcupado(true);setErro('');setSucesso('');setArquivoGaia(null);
+    try{
+      const previa=await lerVoucherOsGaia(arquivo);
+      setArquivoGaia(previa);
+      setSucesso('Planilha validada: '+previa.pares.length+' vouchers com OS GAIA. Confirme o recebimento somente após conferir os aparelhos físicos.');
+    }catch(err){setErro(err.message||'Falha na leitura de Voucher + OS GAIA.');}
+    finally{setOcupado(false);}
+  }
+
+  async function confirmarArquivoGaia() {
+    if(ocupado||!arquivoGaia?.pares.length)return;
+    if(!window.confirm('Confirmar recebimento físico de '+arquivoGaia.pares.length+' vouchers vinculados à OS GAIA? Os vouchers sem envio do Warehouse serão recusados.'))return;
+    setOcupado(true);setErro('');setSucesso('');
+    try{
+      const r=await receberVoucherOsGaia(arquivoGaia.pares);
+      setSucesso(r.confirmados+' recebido(s) fisicamente com OS GAIA. '+r.jaRecebidos+' já conferidos; nenhum duplicado.');
+      setArquivoGaia(null);setFiltro('recebido');setPagina(0);setBusca('');setTexto('');
+      await carregar();
+    }catch(err){setErro(err.message||'Falha no recebimento via GAIA.');}
+    finally{setOcupado(false);}
+  }
+
+  async function prepararArquivoMinuta(e) {
+    const arquivo=e.target.files?.[0];e.target.value='';
+    if(!arquivo||ocupado)return;
+    setOcupado(true);setErro('');setSucesso('');setArquivoMinuta(null);
+    try {
+      const previa=await lerVouchersMinuta(arquivo);
+      const conferencia=await resolverVouchersMinuta(previa.vouchers);
+      setArquivoMinuta({...previa,...conferencia});
+      if(conferencia.falhas.length) {
+        setErro(conferencia.falhas.length+' voucher(s) não estão Concluídos ou já estão em minuta. Corrija a planilha antes de gerar outra.');
+      } else {
+        setSucesso(previa.vouchers.length+' vouchers Concluídos conferidos. A minuta será gerada somente para esta lista.');
+      }
+    }catch(err){setErro(err.message||'Erro na planilha de minuta.');}
+    finally{setOcupado(false);}
+  }
+
+  async function emitirMinutaDaPlanilha() {
+    if(ocupado||!arquivoMinuta?.itens?.length||arquivoMinuta.falhas?.length)return;
+    if(!window.confirm('Gerar minuta apenas para os '+arquivoMinuta.itens.length+' vouchers validados na planilha?'))return;
+    setOcupado(true);setErro('');setSucesso('');
+    try {
+      const r=await gerarMinutaLaboratorio(arquivoMinuta.itens,false);
+      setSucesso('Minuta LAB-DEV-'+String(r.numero).padStart(6,'0')+' emitida com '+r.total+' aparelhos da planilha.');
+      setArquivoMinuta(null);setSelecionados([]);
+      await carregar();await carregarMinutas();
+    }catch(err){setErro(err.message||'Não foi possível emitir a minuta da planilha.');}
+    finally{setOcupado(false);}
+  }
+
+  async function salvarCorrecaoAdmin() {
+    if(!admin||!item||ocupado)return;
+    if(motivoAdmin.trim().length<10){setErro('Informe pelo menos 10 caracteres no motivo da correção administrativa.');return;}
+    if(!window.confirm('Registrar correção auditada do laudo técnico e da etapa para '+item.voucher+'?'))return;
+    setOcupado(true);setErro('');setSucesso('');
+    try {
+      const r=await corrigirLaudoEtapaAdmin({
+        origem:item.origem,id:item.id,status:etapaAdmin,resultado,
+        defeitos,observacoes,motivo:motivoAdmin.trim()
+      });
+      setItem({...r.item,origem:item.origem});
+      setSucesso('Correção administrativa registrada para '+item.voucher+'. Histórico anterior preservado.');
+      setMotivoAdmin('');
+      await carregar();
+    }catch(err){setErro(err.message||'Correção administrativa não autorizada.');}
     finally{setOcupado(false);}
   }
 
@@ -666,8 +744,7 @@ export default function LaboratorioIndividualV2Page() {
       </section>
 
       {item&&<div role="dialog" aria-modal="true" aria-labelledby="titulo-item-lab"
-        className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3"
-        onClick={e=>{if(e.target===e.currentTarget&&!ocupado)setItem(null);}}>
+        className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3">
         <div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl">
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -698,7 +775,7 @@ export default function LaboratorioIndividualV2Page() {
           {['recebido','em_reparo','concluido'].includes(item.status)&&<>
             <section className="mt-4 rounded-xl border border-slate-200 p-4">
               <h3 className="flex items-center gap-2 text-sm font-black"><ClipboardCheck size={17} className="text-violet-700"/> Validação da OS pelo técnico</h3>
-              <p className="mt-1 text-xs text-slate-500">A planilha exige somente o voucher. Se houver OS histórica, confira antes de confirmar.</p>
+              <p className="mt-1 text-xs text-slate-500">A OS pode ser vinculada na abertura pela planilha Voucher + OS GAIA. Se estiver pendente, valide manualmente.</p>
               <div className="mt-3 flex flex-wrap items-end gap-2">
                 <label className="min-w-48 flex-1 text-xs font-semibold text-slate-600">Número da OS
                   <input disabled={ocupado||item.status==='concluido'} value={os} maxLength={60} onChange={e=>setOs(e.target.value)}
