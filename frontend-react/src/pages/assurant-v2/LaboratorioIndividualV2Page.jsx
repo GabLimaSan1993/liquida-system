@@ -413,11 +413,38 @@ export default function LaboratorioIndividualV2Page() {
     setOcupado(true);setErro('');
     try{
       const result=await laboratorioIndividual('exportar');
+      const colunas=[
+        'Voucher',
+        'IMEI',
+        'Status',
+        'Número da OS',
+        'Defeitos históricos da triagem (imutáveis)',
+        'Defeitos após validação',
+        'Resultado',
+        'Observações técnicas'
+      ];
+      const listaDefeitos=valor=>Array.isArray(valor)
+        ? valor.map(defeito=>String(defeito??'').trim()).filter(Boolean).join('; ')
+        : '';
+      const resultados={
+        reparado:'Reparado',
+        sem_reparo:'Não Reparado Desbloqueado',
+        irrecuperavel:'Scrap - Não Liga / Bloqueado'
+      };
       const linhas=(result?.itens||[]).map(i=>({
-        Voucher:i.voucher||'',IMEI:i.imei||'',Status:rotulo[i.status]||i.status||''
+        Voucher:i.voucher||'',
+        IMEI:i.imei||'',
+        Status:rotulo[i.status]||i.status||'',
+        'Número da OS':i.os_numero||'',
+        'Defeitos históricos da triagem (imutáveis)':listaDefeitos(i.defeitos_origem),
+        'Defeitos após validação':listaDefeitos(i.defeitos_atual),
+        Resultado:resultados[i.resultado]||i.resultado||'',
+        'Observações técnicas':i.observacoes||''
       }));
-      const folha=XLSX.utils.json_to_sheet(linhas,{header:['Voucher','IMEI','Status']});
-      folha['!cols']=[{wch:24},{wch:24},{wch:30}];
+      const folha=XLSX.utils.json_to_sheet(linhas,{header:colunas});
+      if(!linhas.length)XLSX.utils.sheet_add_aoa(folha,[colunas],{origin:'A1'});
+      folha['!cols']=[{wch:24},{wch:24},{wch:32},{wch:24},{wch:66},{wch:60},{wch:34},{wch:80}];
+      folha['!autofilter']={ref:folha['!ref']};
       const livro=XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(livro,folha,'Laboratorio');
       XLSX.writeFile(livro,'Base_Laboratorio_'+new Date().toISOString().slice(0,10)+'.xlsx');
