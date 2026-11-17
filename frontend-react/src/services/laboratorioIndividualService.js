@@ -64,42 +64,42 @@ export async function confirmarRecebimentoLaboratorio(vouchers) {
 }
 
 
+// Vinculação parcial: cada linha tem resultado próprio e o banco só confirma
+// aparelhos realmente em Aguardando recebimento. Uma linha inválida não cancela as outras.
 export async function receberVoucherOsGaia(linhas) {
-  if (!Array.isArray(linhas) || !linhas.length) throw new Error("Planilha sem Voucher + OS GAIA.");
-  // Pré-valida o arquivo INTEIRO antes da primeira gravação, para não
-  // confirmar lotes anteriores caso um voucher inválido esteja no final.
-  const inconsistencias=[];
-  for(let i=0;i<linhas.length;i+=150) {
-    const {data,error}=await supabase.rpc("assurant_reparo_lab_prevalidar_os_gaia",{
+  if (!Array.isArray(linhas) || !linhas.length) throw new Error('Planilha sem Voucher + OS GAIA.');
+  let confirmados=0;
+  const recusados=[];
+  for (let i=0;i<linhas.length;i+=150) {
+    const {data,error}=await supabase.rpc('assurant_reparo_lab_receber_os_gaia_parcial',{
       p_linhas:linhas.slice(i,i+150)
     });
-    if(error) throw new Error("Pré-validação: "+error.message);
-    inconsistencias.push(...(data?.falhas||[]));
-  }
-  if(inconsistencias.length){
-    throw new Error(inconsistencias.length+" voucher(s) não podem ser recebidos: "+
-      inconsistencias.slice(0,12).map(x=>x.voucher+" ("+x.motivo+")").join("; ")+
-      ". Nenhum recebimento desta planilha foi gravado.");
-  }
-  let confirmados=0, jaRecebidos=0;
-  for (let i=0;i<linhas.length;i+=150) {
-    const {data,error}=await supabase.rpc("assurant_reparo_lab_receber_os_gaia",{p_linhas:linhas.slice(i,i+150)});
-    if (error) throw new Error("Falha no lote " + (Math.floor(i/150)+1) + " após " + confirmados + " recebimento(s) confirmados. " + error.message + " Reenvie a planilha: vínculos existentes não serão duplicados.");
+    if(error) throw new Error('Erro ao confirmar lote '+(Math.floor(i/150)+1)+': '+error.message+
+      '. '+confirmados+' vínculos anteriores podem ter sido registrados.');
     confirmados+=Number(data?.confirmados||0);
-    jaRecebidos+=Number(data?.ja_recebidos||0);
+    recusados.push(...(data?.recusados||[]));
   }
-  return {confirmados,jaRecebidos};
+  return {confirmados,recusados,jaRecebidos:0};
 }
 
-export async function resolverVouchersMinuta(vouchers) {
+export async function resolverVouchersMinuta(identificadores) {
   const itens=[],falhas=[];
-  for (let i=0;i<vouchers.length;i+=200) {
-    const {data,error}=await supabase.rpc("assurant_reparo_lab_resolver_minuta_planilha",{p_vouchers:vouchers.slice(i,i+200)});
-    if (error) throw new Error(error.message);
+  for (let i=0;i<identificadores.length;i+=200) {
+    const {data,error}=await supabase.rpc('assurant_reparo_lab_resolver_minuta_identificadores',{
+      p_identificadores:identificadores.slice(i,i+200)
+    });
+    if(error) throw new Error(error.message);
     itens.push(...(data?.itens||[]));
     falhas.push(...(data?.falhas||[]));
   }
-  return {itens,falhas};
+  const idVistos=new Set(),semDuplicidade=[];
+  for(const item of itens){
+    const chave=item.origem+':'+item.id;
+    if(idVistos.has(chave)){
+      falhas.push({identificador:item.voucher||item.imei,motivo:'Aparelho repetido por Voucher e IMEI'});
+    } else {idVistos.add(chave);semDuplicidade.push(item);}
+  }
+  return {itens:semDuplicidade,falhas};
 }
 
 export async function corrigirLaudoEtapaAdmin({origem,id,status,resultado,defeitos,observacoes,motivo}) {
