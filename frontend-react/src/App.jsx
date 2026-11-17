@@ -120,6 +120,7 @@ import BancadaTestesClimatizacaoV2Page from "./pages/linha-branca-v2/BancadaTest
 
 import LojaWorkspaceLayout from "./layout/LojaWorkspaceLayout.jsx";
 import VendasPdvUploadPage from "./pages/loja/VendasPdvUploadPage.jsx";
+import AnaliseFaturamentoPdvPage from "./pages/loja/AnaliseFaturamentoPdvPage.jsx";
 import SistemasPage from "./pages/SistemasPage.jsx";
 import { getUserLanding } from "./services/userLanding.js";
 import DefinicaoAssurantV2Page from "./pages/assurant-v2/DefinicaoAssurantV2Page.jsx";
@@ -384,6 +385,7 @@ export default function App() {
       }>
         <Route index element={<Navigate replace to="vendas/upload" />} />
         <Route path="vendas/upload" element={<VendasPdvUploadPage />} />
+         <Route path="vendas/analise" element={<AnaliseFaturamentoPdvPage />} />
       </Route>
 
       {/* =====================================================
