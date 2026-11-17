@@ -104,7 +104,7 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
       setPedidos(p => p.map(x => x.id === data.pedido.id ? data.pedido : x));
       if (acao === 'concluir') {
         setUltimoEnvioLab(data?.pedido?.id || detail.pedido.id);
-        setDetail(null); setMessage('Picking concluído. Romaneio de envio ao Laboratório gerado. Baixe a planilha para abertura das OS no GAIA.');
+        setDetail(null); setMessage('Picking concluído e malote enviado automaticamente para Aguardando Recebimento no Laboratório. A operadora confere os aparelhos e gera a planilha com OS GAIA.');
         await carregar();
       } else {
         setDetail(data);
@@ -128,7 +128,7 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
     setBusy(true);setError("");
     try {
       const total=await exportarPlanilhaWarehouseGaia(pedidoId);
-      setMessage(total+" aparelhos exportados para abertura no GAIA. O relatório não confirma recebimento físico.");
+      setMessage(total+" aparelhos exportados para conferência de envio. A planilha final com OS GAIA será gerada pela operadora após conferir todo o malote.");
     } catch(err) { setError(err.message || "Erro ao exportar planilha GAIA."); }
     finally { setBusy(false); }
   }
@@ -155,7 +155,7 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
   const pedidosVisiveis = pedidos.filter(p => !oracle || historico || p.status === 'aguardando_oracle');
   const pedido = detail?.pedido;
   const itens = (detail?.itens || []).filter(i => (!filtro || i.status === filtro) &&
-    `${i.imei} ${i.voucher || ''} ${i.modelo || ''} ${i.sku || ''}`.toLowerCase().includes(busca.toLowerCase().trim()));
+    `${i.imei} ${i.voucher || ''} ${i.modelo || ''} ${i.sku || ''} ${i.grade || ''} ${i.defeitos_adicionais || ''}`.toLowerCase().includes(busca.toLowerCase().trim()));
 
   return <section className="space-y-4 rounded-2xl border border-orange-200 bg-white p-5">
     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -175,7 +175,7 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
         {((oracle && detail?.pedido?.id) || (!oracle && ultimoEnvioLab)) && (
           <button type="button" disabled={busy} onClick={()=>void baixarEntregaGaia(oracle ? detail.pedido.id : ultimoEnvioLab)}
             className="flex items-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800">
-            <Download size={14} /> Planilha Warehouse → GAIA (5 campos)
+            <Download size={14} /> Planilha de envio ao laboratório
           </button>
         )}
         {detail && !oracle && <>
@@ -184,7 +184,7 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
               placeholder="Reparo / Revisão não inicializa" className="mt-1 block min-w-48 rounded-lg border bg-white px-3 py-2 text-xs" maxLength={70}/>
             <datalist id="tipos-reparo"><option value="Reparo"/><option value="Revisão não inicializa"/><option value="Revisão técnica"/><option value="Reclassificação"/></datalist>
           </label>
-          <button type="button" disabled={busy} onClick={() => imprimirDocumento('minuta')} className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs"><Download size={14}/>Gerar minuta (IMEI e descrição)</button>
+          <button type="button" disabled={busy} onClick={() => imprimirDocumento('minuta')} className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs"><Download size={14}/>Prévia da minuta (não envia)</button>
           <label className="text-xs font-semibold text-slate-600">Caixas
             <input type="number" value={quantidadeCaixas} onChange={e => setQuantidadeCaixas(e.target.value)}
               min="1" max="100" className="mt-1 block w-16 rounded-lg border bg-white px-2 py-2 text-xs"/>
@@ -239,7 +239,7 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
     {pedido && <>
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-orange-50 p-4">
         <div className="min-w-0 flex-1"><p className="whitespace-normal font-bold [overflow-wrap:anywhere]">{pedido.lote}</p><p className="mt-1 text-sm">{number(pedido.bipados)} de {number(pedido.total)} bipados • {number(pedido.pendentes)} aguardando bipagem • {number(pedido.bloqueados)} com pendência</p></div>
-        {!oracle && <button disabled={busy || pedido.bipados !== pedido.total || pedido.bloqueados > 0} onClick={() => executar('concluir')} className="flex items-center gap-2 rounded-xl bg-orange-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-40"><CheckCircle2 size={16} />Concluir picking</button>}
+        {!oracle && <button disabled={busy || pedido.bipados !== pedido.total || pedido.bloqueados > 0} onClick={() => executar('concluir')} className="flex items-center gap-2 rounded-xl bg-orange-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-40"><CheckCircle2 size={16} />Gerar minuta e enviar ao laboratório</button>}
       </div>
       {!oracle && <form onSubmit={e => { e.preventDefault(); if (imei.trim()) executar('bipar', { p_imei: imei.trim() }); }} className="flex flex-wrap gap-2">
         <input ref={inputRef} autoFocus aria-label="IMEI ou número de série para bipagem" value={imei} onChange={e => setImei(e.target.value)} disabled={busy} placeholder="Bipar IMEI / número de série" className="min-w-64 flex-1 rounded-xl border p-3 font-mono text-sm" />
@@ -256,9 +256,9 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
       <div className="flex flex-wrap gap-3"><input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Consultar IMEI, voucher, modelo ou SKU" aria-label="Consultar aparelho" className="min-w-60 flex-1 rounded-lg border p-2 text-sm" />
         <select value={filtro} onChange={e => setFiltro(e.target.value)} aria-label="Filtrar status do picking" className="rounded-lg border p-2 text-sm"><option value="">Todos os aparelhos</option><option value="pendente">Aguardando bipagem</option><option value="bloqueado">Com pendência</option><option value="bipado">Bipados</option><option value="em_reparo">Em reparo</option></select>
       </div>
-      <div className="max-h-[580px] overflow-auto rounded-xl border"><table className="w-full text-left text-xs"><thead className="sticky top-0 bg-slate-50"><tr>{['IMEI / Série', 'Voucher', 'Modelo / SKU', 'Local WMS', 'Situação', 'Pendência / Bipagem'].map(h => <th key={h} className="p-3">{h}</th>)}</tr></thead><tbody className="divide-y">
-        {itens.map(i => <tr key={i.id}><td className="p-3 font-mono font-semibold">{i.imei}</td><td className="p-3">{i.voucher || '—'}</td><td className="p-3">{i.modelo || 'Não informado'}<p className="mt-1 text-slate-400">{i.sku || '—'} • {i.grade || 'Sem grade'}</p></td><td className="whitespace-nowrap p-3">{i.local_wms || 'Sem posição WMS'}</td><td className="p-3"><span className={`whitespace-nowrap rounded-full px-2 py-1 font-semibold ${i.status === 'bloqueado' ? 'bg-red-50 text-red-700' : i.status === 'pendente' ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>{labels[i.status]}</span></td><td className="min-w-56 max-w-96 p-3">{i.pendencia || date(i.bipado_em)}</td></tr>)}
-        {!itens.length && <tr><td colSpan={6} className="p-8 text-center text-slate-500">Nenhum aparelho neste filtro.</td></tr>}
+      <div className="max-h-[580px] overflow-auto rounded-xl border"><table className="w-full text-left text-xs"><thead className="sticky top-0 bg-slate-50"><tr>{['IMEI / Série', 'Voucher', 'Modelo', 'SKU', 'Grade', 'Defeitos Adicionais', 'Local WMS', 'Situação', 'Pendência / Bipagem'].map(h => <th key={h} className="p-3">{h}</th>)}</tr></thead><tbody className="divide-y">
+        {itens.map(i => <tr key={i.id}><td className="p-3 font-mono font-semibold">{i.imei}</td><td className="p-3">{i.voucher || '—'}</td><td className="p-3">{i.modelo || 'Não informado'}</td><td className="p-3 font-mono">{i.sku || '—'}</td><td className="p-3">{i.grade || '—'}</td><td className="max-w-64 whitespace-normal p-3">{i.defeitos_adicionais || '—'}</td><td className="whitespace-nowrap p-3">{i.local_wms || 'Sem posição WMS'}</td><td className="p-3"><span className={`whitespace-nowrap rounded-full px-2 py-1 font-semibold ${i.status === 'bloqueado' ? 'bg-red-50 text-red-700' : i.status === 'pendente' ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>{labels[i.status]}</span></td><td className="min-w-56 max-w-96 p-3">{i.pendencia || date(i.bipado_em)}</td></tr>)}
+        {!itens.length && <tr><td colSpan={9} className="p-8 text-center text-slate-500">Nenhum aparelho neste filtro.</td></tr>}
       </tbody></table></div>
       {!oracle && <p className="text-xs text-slate-500">Posições vêm do WMS atual. Aparelhos com pendência ficam no pedido e impedem a conclusão até serem regularizados. A bipagem registra a retirada física para reparo.</p>}
     </>}
