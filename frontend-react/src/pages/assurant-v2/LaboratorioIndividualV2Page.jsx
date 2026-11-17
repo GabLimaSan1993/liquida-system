@@ -609,7 +609,7 @@ export default function LaboratorioIndividualV2Page() {
             </div>
           </div>
           {!!arquivoMinuta.falhas?.length&&<div className="max-h-32 overflow-auto text-xs text-rose-700">
-            {arquivoMinuta.falhas.slice(0,30).map((x,i)=><p key={i}>{x.voucher}: {x.motivo}</p>)}
+            {arquivoMinuta.falhas.slice(0,30).map((x,i)=><p key={i}>{x.voucher||x.identificador||x.imei||'Identificador'}: {x.motivo}</p>)}
           </div>}
         </div>}
         {filtro==='concluido'&&<div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
@@ -685,7 +685,7 @@ export default function LaboratorioIndividualV2Page() {
                 </td>
               </tr>)}
               {carregando&&<tr><td colSpan={8} className="p-8 text-center text-slate-500">Carregando vouchers...</td></tr>}
-              {!carregando&&!(dados.itens||[]).length&&<tr><td colSpan={7} className="p-8 text-center text-slate-500">Nenhum aparelho encontrado. Você pode importar uma planilha contendo apenas os vouchers.</td></tr>}
+              {!carregando&&!(dados.itens||[]).length&&<tr><td colSpan={8} className="p-8 text-center text-slate-500">Nenhum aparelho encontrado. Confira seus filtros.</td></tr>}
             </tbody>
           </table>
         </div>
