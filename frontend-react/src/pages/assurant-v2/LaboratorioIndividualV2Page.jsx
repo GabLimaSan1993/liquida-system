@@ -838,12 +838,12 @@ export default function LaboratorioIndividualV2Page() {
               </div>
               <p className="mt-4 text-xs font-semibold text-slate-600">Defeitos após validação</p>
               <div className="mt-2 flex flex-wrap gap-2">
-                {defeitos.map((d,k)=><button disabled={ocupado||item.status==='concluido'} key={k}
+                {defeitos.map((d,k)=><button disabled={ocupado||(item.status==='concluido'&&!admin)} key={k}
                   type="button" onClick={()=>setDefeitos(xs=>xs.filter((_,j)=>j!==k))}
                   className="flex items-center gap-1 rounded-full border border-rose-200 px-2.5 py-1 text-xs text-slate-800">{d}<X size={12}/></button>)}
                 {!defeitos.length&&<span className="text-xs text-slate-400">Sem defeitos confirmados.</span>}
               </div>
-              {item.status!=='concluido'&&<>
+              {(item.status!=='concluido'||admin)&&<>
                 {!admin&&<p className="mt-3 text-xs font-semibold text-amber-800">Selecione livremente os defeitos do catálogo abaixo. Apenas cadastrar um defeito novo, fora do catálogo, exige perfil administrador.</p>}
                 {admin&&<div className="mt-3 flex flex-wrap gap-2">
                   <input value={novoDefeito} onChange={e=>setNovoDefeito(e.target.value)}
@@ -862,8 +862,8 @@ export default function LaboratorioIndividualV2Page() {
                   </button>)}
                   {!encontrados.length&&<p className="p-2 text-xs text-slate-400">Nenhum defeito encontrado.</p>}
                 </div>
-                <button type="button" disabled={ocupado} onClick={salvarDefeitos}
-                  className={BOTAO+' mt-3 border-violet-200 text-violet-700'}>Salvar revisão dos defeitos</button>
+                {item.status!=='concluido'&&<button type="button" disabled={ocupado} onClick={salvarDefeitos}
+                  className={BOTAO+' mt-3 border-violet-200 text-violet-700'}>Salvar revisão dos defeitos</button>}
               </>}
             </section>
             <section className="mt-4 rounded-xl border border-slate-200 p-4">
@@ -906,6 +906,10 @@ export default function LaboratorioIndividualV2Page() {
                   </select>
                 </label>
               </div>
+              <label className="block text-xs font-semibold">Observações do laudo técnico
+                <textarea className={CAMPO+' mt-1 block w-full'} value={observacoes} onChange={e=>setObservacoes(e.target.value)}
+                  rows={2} maxLength={5000} disabled={ocupado}/>
+              </label>
               <label className="block text-xs font-semibold">Motivo da correção (obrigatório)
                 <textarea className={CAMPO+' mt-1 block w-full'} value={motivoAdmin} onChange={e=>setMotivoAdmin(e.target.value)}
                   rows={2} maxLength={500} placeholder="Descreva por que a etapa ou laudo técnico precisa ser ajustado" disabled={ocupado}/>
