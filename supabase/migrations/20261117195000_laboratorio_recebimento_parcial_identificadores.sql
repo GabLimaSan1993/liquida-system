@@ -109,8 +109,8 @@ BEGIN
    v_falhas:=v_falhas||jsonb_build_array(jsonb_build_object('identificador',v_chave,'motivo','Identificador inválido'));
    CONTINUE;
   END IF;
-  SELECT count(*),max(id),max(origem),max(voucher),max(imei),max(status),max(resultado),bool_or(vinculado)
-    INTO v_matches,v_item.id,v_item.origem,v_item.voucher,v_item.imei,v_item.status,v_item.resultado,v_item.vinculado
+  SELECT count(*) AS matches,max(id) AS id,max(origem) AS origem,max(voucher) AS voucher,max(imei) AS imei,max(status) AS status,max(resultado) AS resultado,bool_or(vinculado) AS vinculado
+    INTO v_item
   FROM (
    SELECT a.id,'individual'::text origem,a.voucher,a.imei,a.status,a.resultado,
     EXISTS(SELECT 1 FROM liquida_private.reparo_lab_devolucoes_unificadas_itens d
@@ -124,6 +124,7 @@ BEGIN
    FROM liquida_private.reparo_lab_itens i
     WHERE upper(btrim(coalesce(i.voucher,'')))=v_chave OR upper(btrim(coalesce(i.imei,'')))=v_chave
   ) u;
+  v_matches:=v_item.matches;
   IF v_matches=1 AND v_item.status='concluido'
       AND NOT coalesce(v_item.vinculado,false)
       AND v_item.resultado IN ('reparado','sem_reparo','irrecuperavel')
