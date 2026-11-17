@@ -76,3 +76,25 @@ export async function exportarFilaOracleReparo() {
   XLSX.writeFile(livro, 'Fila_Oracle_Envio_Reparos.xlsx');
   return { total: linhas.length, liberados: linhas.filter(i => i['Situação'] === 'Liberado — picking concluído').length };
 }
+
+
+export async function exportarPlanilhaWarehouseGaia(pedidoId) {
+  const {data,error}=await supabase.rpc("assurant_reparo_warehouse_planilha_gaia",{p_pedido_id:pedidoId});
+  if (error) throw new Error(error.message);
+  if (!data?.ok || !data?.itens?.length) throw new Error("Não há produtos destinados ao Laboratório neste picking.");
+  const XLSX = await import("xlsx");
+  const rows=data.itens.map(x=>({
+    "Voucher": x.voucher || "",
+    "Modelo comercial": x.modelo_comercial || "",
+    "Modelo Fabricante": x.modelo_fabricante || "",
+    "Marca": x.marca || "",
+    "Defeito da triagem": x.defeito_triagem || ""
+  }));
+  const sheet=XLSX.utils.json_to_sheet(rows,{header:["Voucher","Modelo comercial","Modelo Fabricante","Marca","Defeito da triagem"]});
+  sheet["!autofilter"]={ref:sheet["!ref"]};
+  sheet["!cols"]=[{wch:25},{wch:55},{wch:30},{wch:24},{wch:70}];
+  const livro=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(livro,sheet,"Envio ao Gaia");
+  XLSX.writeFile(livro,"Warehouse_GAIA_Envio_Laboratorio_"+new Date().toISOString().slice(0,10)+".xlsx");
+  return rows.length;
+}
