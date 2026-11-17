@@ -9,6 +9,7 @@ import { laboratorioReparo } from '../../services/laboratorioReparoService.js';
 import { listarDefeitos } from '../../services/triagemFuncionalService.js';
 import { DEFEITOS_SCRAP, validarConclusaoLaboratorio, selecionarDefeitoScrap } from '../../services/laboratorioConclusaoValidacao.js';
 import { gerarMinutaLaboratorio, listarMinutasLaboratorio, detalharMinutaLaboratorio, imprimirMinutaLaboratorio } from '../../services/laboratorioDevolucaoService.js';
+import MalotesReparoLaboratorio from '../../components/assurant/MalotesReparoLaboratorio.jsx';
 
 const BOTAO = 'inline-flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-40';
 const CAMPO = 'rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-violet-500';
@@ -245,14 +246,14 @@ export default function LaboratorioIndividualV2Page() {
     try{
       const previa=await lerVoucherOsGaia(arquivo);
       setArquivoGaia(previa);
-      setSucesso('Planilha validada: '+previa.pares.length+' vouchers com OS GAIA. Confirme o recebimento somente após conferir os aparelhos físicos.');
+      setSucesso('Planilha validada: '+previa.pares.length+' vouchers com OS GAIA. O malote precisa estar totalmente conferido e com minuta gerada.');
     }catch(err){setErro(err.message||'Falha na leitura de Voucher + OS GAIA.');}
     finally{setOcupado(false);}
   }
 
   async function confirmarArquivoGaia() {
     if(ocupado||!arquivoGaia?.pares.length)return;
-    if(!window.confirm('Confirmar recebimento físico de '+arquivoGaia.pares.length+' vouchers vinculados à OS GAIA? Os vouchers sem envio do Warehouse serão recusados.'))return;
+    if(!window.confirm('Importar OS GAIA de '+arquivoGaia.pares.length+' vouchers? Malotes incompletos serão recusados.'))return;
     setOcupado(true);setErro('');setSucesso('');
     try{
       const r=await receberVoucherOsGaia(arquivoGaia.pares);
@@ -502,7 +503,7 @@ export default function LaboratorioIndividualV2Page() {
         <div>
           <p className="text-xs font-bold uppercase tracking-wider text-violet-700">Assurant Warehouse · Laboratório</p>
           <h1 className="mt-1 text-2xl font-black">Laboratório de Reparos</h1>
-          <p className="mt-1 text-sm text-slate-600">A entrada no Laboratório exige histórico de recebimento e passagem pela triagem. A liberação ao técnico depende de confirmação física.</p>
+          <p className="mt-1 text-sm text-slate-600">A entrada é gerada automaticamente pelo picking do Warehouse. Confira o malote e vincule a OS GAIA antes de liberar ao técnico.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={exportarBase} disabled={ocupado} className={BOTAO+' border-emerald-700 bg-white text-emerald-800'}><Download size={15}/> Exportar base (XLSX)</button>
@@ -517,11 +518,13 @@ export default function LaboratorioIndividualV2Page() {
       {erro&&<div role="alert" className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-800"><AlertTriangle size={17} className="mt-0.5 shrink-0"/>{erro}</div>}
       {sucesso&&<div role="status" className="flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800"><CheckCircle2 size={17} className="mt-0.5 shrink-0"/>{sucesso}</div>}
 
+      <MalotesReparoLaboratorio onRecebimentoAtualizado={carregar}/>
+
       <section className="rounded-2xl border border-violet-200 bg-white p-5 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-base font-black text-slate-900">Abertura GAIA — confirmar recebimento</h2>
-            <p className="mt-1 text-xs text-slate-500">Importe o Aging após abrir as OS no GAIA, com as colunas <b>Voucher</b> e <b>OS GAIA</b>. A confirmação só será aceita para aparelhos enviados pelo Warehouse.</p>
+            <h2 className="text-base font-black text-slate-900">Vinculação GAIA — importar OS do malote conferido</h2>
+            <p className="mt-1 text-xs text-slate-500">Após conferir 100% do malote acima, baixe a minuta, abra as OS no GAIA e importe o mesmo arquivo com <b>Voucher</b> e <b>OS GAIA</b> preenchidos.</p>
           </div>
           <label className={BOTAO+' cursor-pointer border-violet-300 bg-violet-50 text-violet-800'}>
             <Upload size={16}/> Importar Voucher + OS GAIA
@@ -539,126 +542,8 @@ export default function LaboratorioIndividualV2Page() {
             </button>
           </div>
         </div>}
-        <p className="mt-3 text-[11px] text-slate-500">A abertura das OS ocorre no GAIA. Esta importação vincula as OS ao voucher no Liquida System e registra a conferência física, sem movimentar estoque WMS ou Oracle.</p>
+        <p className="mt-3 text-[11px] text-slate-500">A abertura das OS ocorre no GAIA. A importação apenas confirma a OS de aparelhos já conferidos no malote; não movimenta WMS nem Oracle.</p>
       </section>
-
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_330px]">
-        <section className="rounded-2xl border border-violet-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center gap-2"><FileSpreadsheet size={20} className="text-violet-700"/><h2 className="text-base font-black">Importar vouchers para Aguardando recebimento</h2></div>
-          <p className="mt-2 text-xs leading-5 text-slate-600">Envie XLSX, XLS, ODS ou CSV. A coluna <b>Voucher</b> é a única utilizada; pedido, lote, IMEI e OS são ignorados. Os vouchers precisam ter histórico de entrada, triagem e envio pelo Warehouse. Os novos ficam em <b>Aguardando recebimento</b>, sem confirmação automática. Vouchers já cadastrados não são duplicados.</p>
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <label className={BOTAO+' cursor-pointer border-violet-300 bg-violet-50 text-violet-800'}>
-              <Upload size={16}/> Conferir origem Warehouse
-              <input type="file" className="sr-only" accept=".xlsx,.xls,.ods,.csv" disabled={ocupado} onChange={prepararArquivo}/>
-            </label>
-            <a download="Modelo_Recebimento_Laboratorio.csv"
-              href={'data:text/csv;charset=utf-8,'+encodeURIComponent('Voucher\nYBV123456\nSAMV123456\n')}
-              className="text-xs font-bold text-violet-700 underline">Baixar modelo (uma coluna)</a>
-          </div>
-          {previa&&<div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <p className="break-all text-xs font-bold text-slate-900">{previa.arquivo} · aba {previa.aba}</p>
-            <div className="mt-2 flex flex-wrap gap-3 text-xs">
-              <span className="font-semibold text-emerald-700">{previa.vouchers.length} vouchers válidos e distintos</span>
-              <span className="text-amber-700">{previa.repetidosQuantidade} repetidos no arquivo</span>
-              <span className="text-rose-700">{previa.invalidosQuantidade} inválidos no arquivo</span>
-            </div>
-            {!!previa.invalidos.length&&<p className="mt-2 text-[11px] text-rose-700">Inválidos ignorados: {previa.invalidos.join('; ')}</p>}
-            {!!previa.repetidos.length&&<p className="mt-2 text-[11px] text-amber-800">Repetidos ignorados: {previa.repetidos.join('; ')}</p>}
-            {previa.conferencia ? (
-              <div className="mt-3 rounded-xl border border-violet-200 bg-white p-3 text-xs">
-                <p className="font-black text-slate-800">Conferência do banco antes de importar</p>
-                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
-                  <span className="font-bold text-emerald-700">{previa.conferencia.novos} novos válidos para importação</span>
-                  <span className="font-bold text-rose-700">{previa.conferencia.nao_encontrados||0} sem histórico ou envio Warehouse</span>
-                  <span className="font-bold text-slate-700">{previa.conferencia.ja_cadastrados} já cadastrados</span>
-                  <span className="font-bold text-amber-800">{previa.conferencia.ja_no_historico} no histórico</span>
-                  <span className="font-bold text-violet-700">{previa.conferencia.liberar_pendentes} aguardando confirmação física</span>
-                </div>
-                {previa.conferencia.novos===0 && previa.conferencia.liberar_pendentes===0 && !Number(previa.conferencia.nao_encontrados||0) && (
-                  <p className="mt-2 rounded-lg bg-amber-50 p-2 font-semibold text-amber-900">
-                    Essa planilha não possui cadastros novos. Reenviá-la não aumenta o total:
-                    os vouchers já estão na fila ou no histórico do Laboratório.
-                  </p>
-                )}
-                <details className="mt-2">
-                  <summary className="cursor-pointer font-bold text-violet-800">
-                    Ver voucher a voucher e por que incrementa (ou não)
-                  </summary>
-                  <div className="mt-2 max-h-56 overflow-auto rounded-lg border border-slate-200 bg-slate-50">
-                    {(previa.conferencia.itens || []).map(item => (
-                      <div key={item.voucher} className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 last:border-b-0">
-                        <span className="font-mono font-bold">{item.voucher}</span>
-                        <div className="flex flex-wrap items-center gap-2 text-slate-600">
-                          <span>
-                            {item.situacao==='NOVO'?'Novo com histórico validado'
-                              :item.situacao==='LIBERAR_PENDENTE'?'Liberação pendente'
-                              :item.situacao==='JA_NO_HISTORICO'?'Já no histórico'
-                              :item.situacao==='NAO_ENCONTRADO'?'Sem entrada/triagem ou envio Warehouse'
-                              :'Já cadastrado'} {item.status_atual?'· '+item.status_atual:''}
-                          </span>
-                          {item.cadastrado_por && <span className="text-slate-500">
-                            · Registrado por {item.cadastrado_por}
-                            {item.cadastrado_em ? ' em '+new Date(item.cadastrado_em).toLocaleString('pt-BR') : ''}
-                          </span>}
-                          {item.situacao!=='NOVO' && item.situacao!=='NAO_ENCONTRADO' && (
-                            <button type="button" disabled={ocupado}
-                              onClick={()=>void abrirVoucherJaCadastrado(item.voucher)}
-                              className="rounded-md border border-violet-200 bg-violet-50 px-2 py-1 text-[11px] font-bold text-violet-700">
-                              Abrir na bancada
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </details>
-              </div>
-            ) : !!previa.avisoConferencia && (
-              <p className="mt-3 rounded-lg bg-amber-50 p-2 text-xs font-semibold text-amber-900">
-                Não foi possível conferir os vouchers antes da importação: {previa.avisoConferencia}.
-                Não será possível importar até validar o recebimento, a triagem e o envio do Warehouse.
-              </p>
-            )}
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <button type="button"
-                disabled={ocupado || !previa.conferencia || Number(previa.conferencia.nao_encontrados||0)>0 ||
-                  Number(previa.conferencia.novos||0)===0}
-                onClick={()=>importar(previa.vouchers,previa.arquivo)}
-                className={BOTAO+' border-violet-700 bg-violet-700 text-white'}>
-                <Upload size={16}/>
-                {'Importar '+Number(previa.conferencia?.novos||0)+' novo(s) para Ag. recebimento'}
-              </button>
-              {Boolean(previa.conferencia?.liberar_pendentes) &&
-                <button type="button" disabled={ocupado || Number(previa.conferencia.nao_encontrados||0)>0}
-                  onClick={()=>void confirmarFisicamente((previa.conferencia.itens||[])
-                    .filter(x=>x.situacao==='LIBERAR_PENDENTE').map(x=>x.voucher))}
-                  className={BOTAO+' border-emerald-700 bg-emerald-600 text-white'}>
-                  <PackageCheck size={16}/> Confirmar fisicamente {previa.conferencia.liberar_pendentes} pendente(s)
-                </button>}
-              <button type="button" disabled={ocupado} onClick={()=>setPrevia(null)} className={BOTAO+' border-slate-200 text-slate-700'}>Cancelar</button>
-            </div>
-          </div>}
-          {progresso&&<p role="status" className="mt-3 text-xs font-bold text-violet-700">{progresso}</p>}
-          <p className="mt-3 text-[11px] leading-5 text-amber-800">Selecionar o arquivo apenas verifica os vouchers. A importação não confirma a chegada física: é preciso confirmar recebimento antes de enviar ao técnico. Sem movimentação automática no WMS/Oracle.</p>
-        </section>
-
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="text-sm font-black text-slate-900">Adicionar voucher individualmente</h2>
-          <p className="mt-2 text-xs text-slate-500">Somente voucher com histórico de recebimento, triagem e envio Warehouse. O cadastro não confirma recebimento físico nem libera à bancada.</p>
-          <form className="mt-4 space-y-3" onSubmit={e=>{
-            e.preventDefault();const v=normalizarVoucherLab(voucherManual);
-            if(!regraVoucher.test(v)||v==='__IMEI__'){setErro('Informe um voucher válido.');return;}
-            void importar([v],'Cadastro individual');
-          }}>
-            <input value={voucherManual} disabled={ocupado} onChange={e=>setVoucherManual(e.target.value)} placeholder="Bipar ou digitar voucher"
-              className={CAMPO+' w-full'} aria-label="Voucher individual"/>
-            <button disabled={ocupado||!regraVoucher.test(normalizarVoucherLab(voucherManual))||normalizarVoucherLab(voucherManual)==='__IMEI__'}
-              className={BOTAO+' w-full border-emerald-700 bg-emerald-600 text-white'}>
-              <PackageCheck size={16}/> Adicionar em Aguardando recebimento
-            </button>
-          </form>
-        </section>
-      </div>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-wrap gap-2">
