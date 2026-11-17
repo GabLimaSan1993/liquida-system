@@ -9,6 +9,36 @@ import {
 const PROBLEMAS = { nao_liga: "Aparelhos não ligam", imei_divergente: "IMEI divergente", sem_ordem: "Sem Ordem" };
 const problema = c => c.tipo_problema || "imei_divergente";
 const hora = (x) => (x ? new Date(x).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "—");
+function HistoricoPlanilhasSemOrdem({ caso }) {
+  if (problema(caso) !== "sem_ordem") return null;
+  const registros = Array.isArray(caso.historico_planilhas) ? caso.historico_planilhas : [];
+  if (!registros.length) return null;
+
+  // Prioriza um registro que efetivamente contenha o IMEI. A simples
+  // aparição do voucher numa planilha não autoriza afirmar que há IMEI.
+  const registro = registros.find((r) => r.imei && r.data_registro)
+    || registros.find((r) => r.data_registro)
+    || registros[0];
+  const data = registro.data_registro || "data não informada";
+  const outras = registros.length - 1;
+
+  return (
+    <div role="note" className="mt-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950">
+      <div className="font-bold">Histórico localizado em planilha</div>
+      <p className="mt-1">
+        {registro.imei
+          ? <>IMEI <span className="font-mono font-bold">{registro.imei}</span> registrado no sistema em <strong>{data}</strong>.</>
+          : <>Voucher <span className="font-mono font-bold">{caso.voucher}</span> registrado no sistema em <strong>{data}</strong>; sem IMEI informado nesta base.</>}
+      </p>
+      <p className="mt-1 text-xs text-sky-800">
+        Fonte: {registro.fonte}{outras > 0 ? ` · Presente em mais ${outras} fonte(s) importada(s)` : ""}
+      </p>
+      <p className="mt-2 text-xs font-medium text-sky-800">
+        O registro na planilha não comprova uma ordem ativa. A decisão da Assurant continua necessária.
+      </p>
+    </div>
+  );
+}
 const envioEmAndamento = c => c.email_validado_em && ["pendente", "enviando"].includes(c.email_status)
   && Date.now() - new Date(c.email_atualizado_em).getTime() < (c.email_status === "enviando" ? 300000 : 120000);
 export default function DivergenciasImeiV2Page() {
@@ -121,7 +151,7 @@ export default function DivergenciasImeiV2Page() {
     (c) =>
       (!filtro || c.status === filtro) &&
       (!tipo || problema(c) === tipo) &&
-      `${c.voucher} ${c.imei1} ${c.imei2 || ""} ${c.modelo}`
+      `${c.voucher} ${c.imei1} ${c.imei2 || ""} ${c.modelo} ${(c.historico_planilhas || []).map((r) => r.imei || "").join(" ")}`
         .toLowerCase()
         .includes(busca.toLowerCase()),
   );
@@ -207,6 +237,7 @@ export default function DivergenciasImeiV2Page() {
                 </div>
                 <p className="mt-1 text-sm font-bold">{c.modelo || "Modelo ainda não identificado"}</p>
                 {c.motivo && <p className="mt-2 text-sm text-slate-600">{c.motivo}</p>}
+                <HistoricoPlanilhasSemOrdem caso={c} />
                 <p className="mt-1 text-xs text-slate-500">
                   Registrado por {c.criado_por_nome || c.criado_por} em {hora(c.criado_em)}
                 </p>
