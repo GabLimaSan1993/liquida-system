@@ -245,13 +245,18 @@ if (error) {
 const esperadas =
   posicoesWms || [];
 
+  // Usa o IMEI quando disponível; em aparelhos sem IMEI no WMS
+  // utiliza o voucher como identificador de bipagem, sem alterar o cadastro.
   const linhas = (esperadas || []).map(p => ({
     contagem_id:       contagemId,
     ciclo_id:          cont.ciclo_id,
-    imei:              p.imei,
+    imei:              String(p.imei || p.voucher || "").trim(),
     veredito:          "esperado",
     endereco_anterior: p.endereco,
   }));
+  if (linhas.some(l => !l.imei)) {
+    return { ok: false, erro: "Há um produto neste endereço sem IMEI nem voucher no WMS. Regularize a identificação antes de iniciar a contagem." };
+  }
 
   if (linhas.length) {
     const { error: errIns } = await supabase.from("inventario_itens").insert(linhas);
@@ -288,6 +293,22 @@ export async function listarItens(contagemId) {
 // ══════════════════════════════════════════════════════════
 // BIPAR
 // ══════════════════════════════════════════════════════════
+// Busca por voucher sem alterar nenhuma posição ou identificação física.
+// A coluna "imei" do inventário guarda o identificador de bipagem;
+// se o IMEI está vazio no WMS, ela recebe o voucher desse produto.
+async function buscarAlocacoesVoucher(codigo) {
+  const { data, error } = await supabase
+    .from("wms_alocacoes")
+    .select("id, voucher, imei, endereco_id, criado_em")
+    .eq("voucher", codigo)
+    .eq("status", "confirmado")
+    .is("retirado_em", null)
+    .order("criado_em", { ascending: false })
+    .limit(20);
+  if (error) throw new Error("Falha na consulta do voucher ao WMS: " + error.message);
+  return data || [];
+}
+
 export async function biparItem(contagemId, imeiDigitado) {
   const imei = String(imeiDigitado || "").trim();
   if (!imei) return { ok: false, erro: "Bipe um identificador." };
@@ -299,26 +320,52 @@ export async function biparItem(contagemId, imeiDigitado) {
   }
 
   // Estava na lista de esperados deste endereço?
-  const { data: esperado } = await supabase
+  let identificador = imei;
+  let { data: esperado, error: erroEsperado } = await supabase
     .from("inventario_itens")
     .select("*")
     .eq("contagem_id", contagemId)
-    .eq("imei", imei)
+    .eq("imei", identificador)
     .eq("veredito", "esperado")
     .limit(1)
     .maybeSingle();
+  if (erroEsperado) throw new Error(erroEsperado.message);
+
+  // Quando o operador lê o voucher de um item que possui IMEI cadastrado,
+  // resolve para o identificador esperado nesta contagem.
+  let alocacoesVoucher = null;
+  if (!esperado && /[a-zA-Z]/.test(imei)) {
+    alocacoesVoucher = await buscarAlocacoesVoucher(imei);
+    if (alocacoesVoucher.length === 1) {
+      const alternativa = String(alocacoesVoucher[0].imei || alocacoesVoucher[0].voucher || "").trim();
+      if (alternativa && alternativa !== identificador) {
+        identificador = alternativa;
+        const resultado = await supabase.from("inventario_itens")
+          .select("*")
+          .eq("contagem_id", contagemId)
+          .eq("imei", identificador)
+          .eq("veredito", "esperado")
+          .limit(1)
+          .maybeSingle();
+        if (resultado.error) throw new Error(resultado.error.message);
+        esperado = resultado.data;
+      }
+    }
+  }
 
   const agora = new Date().toISOString();
 
   if (esperado) {
-    await supabase
+    const { error: erroAtualizacao } = await supabase
       .from("inventario_itens")
       .update({ veredito: "conferido", bipado_em: agora })
       .eq("id", esperado.id);
-    await supabase
+    if (erroAtualizacao) throw new Error(erroAtualizacao.message);
+    const { error: erroContagem } = await supabase
       .from("inventario_contagens")
       .update({ encontradas: cont.encontradas + 1 })
       .eq("id", contagemId);
+    if (erroContagem) throw new Error(erroContagem.message);
     return { ok: true, veredito: "conferido", imei };
   }
 
@@ -327,7 +374,7 @@ export async function biparItem(contagemId, imeiDigitado) {
     .from("inventario_itens")
     .select("id")
     .eq("contagem_id", contagemId)
-    .eq("imei", imei)
+    .in("imei", [...new Set([imei, identificador])])
     .in("veredito", ["conferido", "sobra", "conflito"])
     .limit(1)
     .maybeSingle();
@@ -351,19 +398,35 @@ if (erroBuscaWms) {
   );
 }
 
-if (!posicoesWms?.length) {
-  return {
-    ok: false,
-    erro:
-      `${imei} não possui alocação física ativa no WMS.`,
-  };
+// O RPC legado busca apenas por IMEI. Para voucher, utiliza a mesma
+// referência de endereço do WMS (sem realizar movimentação de estoque).
+let posicoesResolvidas = posicoesWms || [];
+if (!posicoesResolvidas.length && alocacoesVoucher?.length) {
+  const ids = [...new Set(alocacoesVoucher.map(a => a.endereco_id).filter(Boolean))];
+  const { data: enderecos, error: erroEnderecos } = await supabase
+    .from("wms_enderecos")
+    .select("id, rua, bloco, andar, coluna, linha, status, ativo")
+    .in("id", ids)
+    .eq("ativo", true)
+    .in("status", ["ocupado", "bloqueado"]);
+  if (erroEnderecos) throw new Error(erroEnderecos.message);
+  const porId = new Map((enderecos || []).map(e => [e.id, e]));
+  posicoesResolvidas = alocacoesVoucher
+    .filter(a => porId.has(a.endereco_id))
+    .map(a => {
+      const e = porId.get(a.endereco_id);
+      return {
+        imei: a.imei, voucher: a.voucher, alocacao_id: a.id,
+        endereco: `RUA ${e.rua}/BL${String(e.bloco).padStart(2, "0")}/AD${String(e.andar).padStart(2, "0")}/AP ${e.coluna}${String(e.linha).padStart(2, "0")}`,
+      };
+    });
+}
+if (!posicoesResolvidas.length) {
+  return { ok: false, erro: `${imei} não possui alocação física ativa no WMS.` };
 }
 
-const conflito =
-  posicoesWms.length > 1;
-
-const alvo =
-  posicoesWms[0];
+const conflito = posicoesResolvidas.length > 1;
+const alvo = posicoesResolvidas[0];
 
 const anterior =
   alvo.endereco;
