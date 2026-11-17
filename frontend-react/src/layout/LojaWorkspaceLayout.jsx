@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { ArrowLeft, Database, LogOut, Store } from "lucide-react";
+import { ArrowLeft, BarChart3, Database, LogOut, Store } from "lucide-react";
 import { useAuth } from "../AuthContext.jsx";
 import { signOut } from "../services/authService.js";
 
@@ -35,6 +35,9 @@ export default function LojaWorkspaceLayout() {
           <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">Operação Loja</p>
           <NavLink to="/v2/loja/vendas/upload" className={({isActive}) => "flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-semibold " + (isActive ? "bg-[#F1EDF5] text-[#43284F]" : "text-slate-600 hover:bg-slate-50")}>
             <Database size={17} /> Base de vendas PDV
+          </NavLink>
+          <NavLink to="/v2/loja/vendas/analise" className={({isActive}) => "flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-semibold " + (isActive ? "bg-[#F1EDF5] text-[#43284F]" : "text-slate-600 hover:bg-slate-50")}>
+            <BarChart3 size={17} /> Análise de faturamento
           </NavLink>
         </aside>
         <main className="min-w-0 flex-1 p-5 md:p-8 lg:p-10"><Outlet /></main>
