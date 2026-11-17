@@ -3,13 +3,17 @@ import { Download, RefreshCw, Search, X } from 'lucide-react';
 import { consultarEstoque, exportarEstoque } from '../../services/relatorioEstoqueService.js';
 import { COLUNAS_ESTOQUE, CAMPOS_ESTOQUE, DATAS_ESTOQUE } from '../../services/relatorioEstoqueColumns.js';
 
-const initial = { dataInicial: '', dataFinal: '', dataReferencia: 'recebimento', status: '', grade: '', rede: '', busca: '' };
+const initial = { dataInicial: '', dataFinal: '', dataReferencia: 'recebimento', status: '', statusLaboratorio: '', grade: '', rede: '', busca: '' };
 const references = [
   ['recebimento', 'Recebimento'], ['funcional', 'Triagem funcional'], ['cosmetica', 'Triagem cosmética'],
   ['laudo', 'Laudo'], ['alocacao', 'Alocação'], ['oracle', 'Oracle'], ['criacao', 'Criação'], ['atualizacao', 'Atualização'],
 ];
-const compact = [0, 1, 3, 4, 10, 13, 21, 22, 23, 24, 25, 26, 31, 32, 34];
+const compact = [0, 1, 3, 4, 10, 13, 21, 22, 23, 24, 25, 26, 31, 32, 33, 34];
 const num = value => Number(value || 0).toLocaleString('pt-BR');
+const ETAPAS_LAB = [
+  'Aguardando Recebimento', 'Aguardando Técnico', 'Em Reparo', 'Aguardando Peças',
+  'Concluído', 'Em Devolução', 'Devolvido ao Warehouse', 'Divergência de Voucher',
+];
 const date = value => value ? new Date(value).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '—';
 const cell = (item, index) => {
   const value = item[CAMPOS_ESTOQUE[index]];
@@ -77,6 +81,15 @@ export default function RelatorioEstoqueV2Page() {
     }
   }
   const summary = result?.resumo || {};
+  const etapasLab = result?.resumo_laboratorio || [];
+  const totalLaboratorio = etapasLab.reduce((valor, item) => valor + Number(item.total || 0), 0);
+  const etapasQuantidade = Object.fromEntries(etapasLab.map(item => [item.status, Number(item.total || 0)]));
+  const selecionarEtapa = etapa => {
+    const novaEtapa = applied.statusLaboratorio === etapa ? '' : etapa;
+    setPage(0);
+    setFilters(atual => ({ ...atual, statusLaboratorio: novaEtapa }));
+    setApplied(atual => ({ ...atual, statusLaboratorio: novaEtapa }));
+  };
   const columns = allColumns ? COLUNAS_ESTOQUE.map((_, i) => i) : compact;
   const options = (key, selectedValue) => [...new Set([...(result?.filtros?.[key] || []), ...(selectedValue ? [selectedValue] : [])])];
   return <div className="mx-auto max-w-[1800px] space-y-5 p-4 text-slate-900 md:p-7">
@@ -94,6 +107,7 @@ export default function RelatorioEstoqueV2Page() {
       <label className="text-xs font-semibold text-slate-600">Data inicial<input type="date" className={inputClass} value={filters.dataInicial} onChange={e => set('dataInicial', e.target.value)}/></label>
       <label className="text-xs font-semibold text-slate-600">Data final<input type="date" className={inputClass} value={filters.dataFinal} onChange={e => set('dataFinal', e.target.value)}/></label>
       <label className="text-xs font-semibold text-slate-600">Status atual<select className={inputClass} value={filters.status} onChange={e => set('status', e.target.value)}><option value="">Todos</option>{options('status', filters.status).map(value => <option key={value}>{value}</option>)}</select></label>
+      <label className="text-xs font-semibold text-slate-600">Status laboratório<select className={inputClass} value={filters.statusLaboratorio} onChange={e => set('statusLaboratorio', e.target.value)}><option value="">Todas as etapas</option>{ETAPAS_LAB.map(value => <option key={value} value={value}>{value}</option>)}</select></label>
       <label className="text-xs font-semibold text-slate-600">Grade<select className={inputClass} value={filters.grade} onChange={e => set('grade', e.target.value)}><option value="">Todas</option>{options('grades', filters.grade).map(value => <option key={value}>{value}</option>)}</select></label>
       <label className="text-xs font-semibold text-slate-600">Rede<select className={inputClass} value={filters.rede} onChange={e => set('rede', e.target.value)}><option value="">Todas</option>{options('redes', filters.rede).map(value => <option key={value}>{value}</option>)}</select></label>
       <label className="text-xs font-semibold text-slate-600 sm:col-span-2">Voucher, IMEI, SKU, modelo, cliente, loja ou local<div className="mt-2 flex items-center rounded-lg border border-slate-200 px-3"><Search size={16}/><input className="w-full p-2.5 text-sm font-normal outline-none" value={filters.busca} placeholder="Buscar aparelho" onChange={e => set('busca', e.target.value)}/></div></label>
@@ -107,6 +121,22 @@ export default function RelatorioEstoqueV2Page() {
     {loading && <p role="status" className="text-sm text-purple-700">Consultando estoque…</p>}
     {progress && <p role="status" className="text-sm text-purple-700">{progress}</p>}
     {result && <div className={loading ? 'pointer-events-none space-y-5 opacity-50' : 'space-y-5'}>
+      <section className="rounded-2xl border border-slate-200 bg-white p-5">
+        <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-base font-bold text-slate-900">Esteira do laboratório</h2>
+          <span className="text-xs font-medium text-slate-500">{num(totalLaboratorio)} aparelhos vinculados à consulta • selecione uma etapa para filtrar</span>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {ETAPAS_LAB.map(etapa => (
+            <button key={etapa} type="button" disabled={loading || exporting} onClick={() => selecionarEtapa(etapa)}
+              className={'rounded-xl border px-4 py-3 text-left transition disabled:opacity-50 ' +
+                (applied.statusLaboratorio === etapa ? 'border-purple-500 bg-purple-50 text-purple-900' : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-purple-200 hover:bg-purple-50/50')}>
+              <span className="block text-[11px] font-semibold">{etapa}</span>
+              <span className="mt-1 block text-2xl font-bold tabular-nums">{num(etapasQuantidade[etapa])}</span>
+            </button>
+          ))}
+        </div>
+      </section>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[['Aparelhos', summary.total, 'Total da consulta'], ['Com funcional registrada', summary.funcional, 'Data de triagem funcional preenchida'], ['Com cosmética registrada', summary.cosmetica, 'Data de triagem cosmética preenchida'], ['Com Oracle registrado', summary.oracle, 'Data de Oracle preenchida']].map(([label, value, detail]) => <div key={label} className="rounded-2xl border border-slate-200 bg-white p-5"><p className="text-sm text-slate-500">{label}</p><p className="mt-3 text-3xl font-bold">{num(value)}</p><p className="mt-2 text-xs text-slate-500">{detail}</p></div>)}
       </div>
@@ -125,7 +155,7 @@ export default function RelatorioEstoqueV2Page() {
           <button disabled={loading || exporting || (page + 1) * 100 >= summary.total} onClick={() => setPage(p => p + 1)} className="rounded-lg border px-4 py-2 disabled:opacity-40">Próxima</button>
         </div>
       </section>
-      <p className="text-xs leading-relaxed text-slate-500">Inclui o histórico GAIA e Liquida. Local considera a alocação ativa confirmada quando disponível. Datas e avaliações sem registro ficam em branco no Excel. Os indicadores contam aparelhos com datas registradas; o status atual aparece na tabela. Consulta realizada em {date(result.consultado_em)}.</p>
+      <p className="text-xs leading-relaxed text-slate-500">Inclui o histórico GAIA e Liquida. O status do laboratório acompanha a etapa registrada; os resultados técnicos exibem a descrição atual e mantêm os códigos internos para as regras de movimentação. Local considera a alocação ativa confirmada quando disponível. Datas e avaliações sem registro ficam em branco no Excel. Os indicadores contam aparelhos com datas registradas; o status atual aparece na tabela. Consulta realizada em {date(result.consultado_em)}.</p>
     </div>}
     {selected && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" onClick={() => setSelected(null)}>
       <div role="dialog" aria-modal="true" aria-label="Detalhes do aparelho" className="max-h-[90vh] w-full max-w-4xl overflow-auto rounded-2xl bg-white p-6" onClick={e => e.stopPropagation()}>
