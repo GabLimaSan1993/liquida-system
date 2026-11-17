@@ -66,10 +66,25 @@ export async function confirmarRecebimentoLaboratorio(vouchers) {
 
 export async function receberVoucherOsGaia(linhas) {
   if (!Array.isArray(linhas) || !linhas.length) throw new Error("Planilha sem Voucher + OS GAIA.");
+  // Pré-valida o arquivo INTEIRO antes da primeira gravação, para não
+  // confirmar lotes anteriores caso um voucher inválido esteja no final.
+  const inconsistencias=[];
+  for(let i=0;i<linhas.length;i+=150) {
+    const {data,error}=await supabase.rpc("assurant_reparo_lab_prevalidar_os_gaia",{
+      p_linhas:linhas.slice(i,i+150)
+    });
+    if(error) throw new Error("Pré-validação: "+error.message);
+    inconsistencias.push(...(data?.falhas||[]));
+  }
+  if(inconsistencias.length){
+    throw new Error(inconsistencias.length+" voucher(s) não podem ser recebidos: "+
+      inconsistencias.slice(0,12).map(x=>x.voucher+" ("+x.motivo+")").join("; ")+
+      ". Nenhum recebimento desta planilha foi gravado.");
+  }
   let confirmados=0, jaRecebidos=0;
   for (let i=0;i<linhas.length;i+=150) {
     const {data,error}=await supabase.rpc("assurant_reparo_lab_receber_os_gaia",{p_linhas:linhas.slice(i,i+150)});
-    if (error) throw new Error("Lote " + (Math.floor(i/150)+1) + ": " + error.message);
+    if (error) throw new Error("Falha no lote " + (Math.floor(i/150)+1) + " após " + confirmados + " recebimento(s) confirmados. " + error.message + " Reenvie a planilha: vínculos existentes não serão duplicados.");
     confirmados+=Number(data?.confirmados||0);
     jaRecebidos+=Number(data?.ja_recebidos||0);
   }
