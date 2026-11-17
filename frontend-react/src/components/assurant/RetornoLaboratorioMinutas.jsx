@@ -218,7 +218,7 @@ export default function RetornoLaboratorioMinutas(){
       </div>
 
       <form onSubmit={e=>void bipar(e)} className="flex flex-wrap gap-2">
-        <input ref={inputRef} value={leitura} onChange={e=>setLeitura(e.target.value)}
+        <input ref={inputRef} autoFocus value={leitura} onChange={e=>setLeitura(e.target.value)}
           placeholder="Bipar Voucher ou IMEI desta minuta" autoComplete="off"
           aria-label="Voucher ou IMEI do aparelho recebido"
           disabled={ocupado} className={CAMPO+' min-w-[220px] flex-1 font-mono'}/>
