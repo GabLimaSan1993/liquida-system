@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 
 import * as XLSX from "xlsx";
+import { exportarRecebimentosConsolidados } from "../../services/exportacaoGestaoRecebimentoService.js";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 
@@ -470,6 +471,38 @@ export default function GestaoRecebimentoV2Page() {
     baixando,
     setBaixando,
   ] = useState(null);
+
+  const [exportandoConsolidado, setExportandoConsolidado] = useState(false);
+  const [progressoConsolidado, setProgressoConsolidado] = useState(null);
+  const [resultadoConsolidado, setResultadoConsolidado] = useState(null);
+
+  async function baixarConsolidadoPeriodo() {
+    if (exportandoConsolidado || dataInvalida) return;
+    setExportandoConsolidado(true);
+    setProgressoConsolidado(null);
+    setResultadoConsolidado(null);
+    try {
+      const resultado = await exportarRecebimentosConsolidados({
+        dataDe,
+        dataAte,
+        onProgress: setProgressoConsolidado,
+      });
+      setResultadoConsolidado({
+        sucesso: true,
+        texto: "Excel consolidado gerado: " + fmtNumber(resultado.cargas) +
+          " cargas, " + fmtNumber(resultado.vouchers) + " vouchers e " +
+          fmtNumber(resultado.objetos) + " objetos dos Correios.",
+      });
+    } catch (error) {
+      setResultadoConsolidado({
+        sucesso: false,
+        texto: error?.message || "Não foi possível exportar o consolidado.",
+      });
+    } finally {
+      setExportandoConsolidado(false);
+      setProgressoConsolidado(null);
+    }
+  }
 
   async function carregar() {
     setLoading(true);
@@ -948,6 +981,17 @@ export default function GestaoRecebimentoV2Page() {
 
           <button
             type="button"
+            onClick={() => void baixarConsolidadoPeriodo()}
+            disabled={exportandoConsolidado || Boolean(dataInvalida) || loading}
+            title="Exportar todas as cargas concluídas e suas bipagens no período selecionado"
+            className="inline-flex h-10 items-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-4 text-xs font-bold text-emerald-800 shadow-sm transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <FileSpreadsheet className="h-4 w-4" />
+            {exportandoConsolidado ? "Preparando Excel..." : "Exportar consolidado"}
+          </button>
+
+          <button
+            type="button"
             onClick={carregar}
             className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 shadow-sm transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700"
           >
@@ -956,6 +1000,22 @@ export default function GestaoRecebimentoV2Page() {
           </button>
         </div>
       </div>
+
+      {progressoConsolidado && (
+        <p role="status" className="rounded-xl border border-violet-100 bg-violet-50 px-4 py-3 text-xs font-semibold text-violet-700">
+          {progressoConsolidado.fase}: {fmtNumber(progressoConsolidado.quantidade)} registros.
+          A consulta inclui todos os romaneios concluídos do intervalo, independentemente da busca na tabela.
+        </p>
+      )}
+
+      {resultadoConsolidado && (
+        <p role="status" className={"rounded-xl border px-4 py-3 text-xs font-semibold " +
+          (resultadoConsolidado.sucesso
+            ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+            : "border-rose-200 bg-rose-50 text-rose-700")}>
+          {resultadoConsolidado.texto}
+        </p>
+      )}
 
       {dataInvalida && (
         <div className="flex items-center gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-semibold text-rose-700">
