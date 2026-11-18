@@ -154,9 +154,8 @@ export default function SistemasPage() {
   const acessoFluxoCaixa = hasAccess("/financeiro/fluxo-caixa");
   const acessoExtratosBancarios = hasAccess("/financeiro/extratos-bancarios");
   const acessoBackOffice = acessoFluxoCaixa || acessoExtratosBancarios;
-  const entradaBackOffice = acessoFluxoCaixa
-    ? "/financeiro/fluxo-caixa"
-    : "/financeiro/extratos-bancarios";
+  // Novo ambiente independente. Não utiliza FluxoCaixaRealizadoPage do legado.
+  const entradaBackOffice = "/backoffice/financeiro/fluxo-caixa";
 
   function abrirLinhaBranca() {
   navigate("/v2/linha-branca");
