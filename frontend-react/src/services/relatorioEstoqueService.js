@@ -1,12 +1,17 @@
 import { supabase } from '../lib/supabase.js';
 
 export async function consultarEstoque(filters, offset = 0, limit = 100, summary = true, signal) {
-  let request = supabase.rpc('assurant_relatorio_estoque_lab', {
+  // A carga inicial busca indicadores; os lotes seguintes do Excel usam a
+  // RPC otimizada sem repetir os cálculos de todo o histórico.
+  const rpc = summary ? 'assurant_relatorio_estoque_lab' : 'assurant_relatorio_estoque_lab_exportar';
+  const params = {
     p_data_inicial: filters.dataInicial || null, p_data_final: filters.dataFinal || null,
     p_data_referencia: filters.dataReferencia, p_status: filters.status, p_grade: filters.grade,
-    p_rede: filters.rede, p_busca: filters.busca.trim(), p_offset: offset, p_limite: limit, p_resumo: summary,
+    p_rede: filters.rede, p_busca: filters.busca.trim(), p_offset: offset, p_limite: limit,
     p_status_laboratorio: filters.statusLaboratorio || '',
-  });
+  };
+  if (summary) params.p_resumo = true;
+  let request = supabase.rpc(rpc, params);
   if (signal) request = request.abortSignal(signal);
   const { data, error } = await request;
   if (error) throw error;
