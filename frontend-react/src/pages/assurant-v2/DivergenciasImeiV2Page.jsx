@@ -9,6 +9,7 @@ import {
 import { exportarBaseValidacaoImei } from "../../services/divergenciasImeiExport.js";
 const PROBLEMAS = { nao_liga: "Aparelhos não ligam", imei_divergente: "IMEI divergente", sem_ordem: "Sem Ordem" };
 const problema = c => c.tipo_problema || "imei_divergente";
+const usaSerial = c => ["RELOGIO", "TABLET"].includes(String(c?.tipo_aparelho || "").toUpperCase());
 const hora = (x) => (x ? new Date(x).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "—");
 function HistoricoPlanilhasSemOrdem({ caso }) {
   if (problema(caso) !== "sem_ordem") return null;
@@ -290,7 +291,7 @@ export default function DivergenciasImeiV2Page() {
                   </button>
                 )}
                 {c.status === "pendente" && <button onClick={() => {setCorrecao({...c,acao:"voucher"});setNovoValor("");setJustificativa("");}} className="rounded-xl border p-3 text-xs font-bold">Corrigir voucher</button>}
-                {c.status === "pendente" && problema(c)==="imei_divergente" && <button onClick={() => {setCorrecao({...c,acao:"imei"});setNovoValor(c.imei1||"");setJustificativa("");}} className="rounded-xl border p-3 text-xs font-bold">Corrigir IMEI</button>}
+                {c.status === "pendente" && problema(c)==="imei_divergente" && <button onClick={() => {setCorrecao({...c,acao:"imei"});setNovoValor(c.imei1||"");setJustificativa("");}} className="rounded-xl border p-3 text-xs font-bold">{usaSerial(c) ? "Corrigir serial" : "Corrigir IMEI"}</button>}
                 {(c.status === "pendente" || c.status === "devolver") && (
                   <button
                     onClick={() => {
@@ -348,7 +349,7 @@ export default function DivergenciasImeiV2Page() {
       </div>
       {correcao && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
         <form onSubmit={salvarCorrecao} className="w-full max-w-lg space-y-4 rounded-xl bg-white p-6">
-          <h2 className="font-black">Regularizar {correcao.acao==="voucher"?"voucher":"IMEI"} — {correcao.voucher}</h2>
+          <h2 className="font-black">Regularizar {correcao.acao === "voucher" ? "voucher" : usaSerial(correcao) ? "serial" : "IMEI"} — {correcao.voucher}</h2>
           <input aria-label="Identificador correto" required value={novoValor} onChange={e=>setNovoValor(e.target.value)} placeholder="Identificador correto" className="w-full rounded border p-3" />
           <textarea aria-label="Justificativa" required minLength={8} value={justificativa} onChange={e=>setJustificativa(e.target.value)} placeholder="Justificativa da correção" className="w-full rounded border p-3" />
           <div className="flex gap-3"><button type="button" onClick={()=>setCorrecao(null)}>Cancelar</button><button disabled={loading} className="rounded bg-violet-700 px-4 py-2 text-white">Confirmar correção</button></div>
