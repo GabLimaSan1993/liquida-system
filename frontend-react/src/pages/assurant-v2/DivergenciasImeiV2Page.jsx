@@ -116,6 +116,7 @@ export default function DivergenciasImeiV2Page() {
   async function salvarCorrecao(e) {
     e.preventDefault();
     setLoading(true);
+    setErro("");
     try {
       await regularizarDivergencia(correcao.id, correcao.acao, novoValor, justificativa);
       setCorrecao(null);
