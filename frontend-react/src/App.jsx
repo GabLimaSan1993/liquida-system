@@ -709,7 +709,7 @@ export default function App() {
 
         {/* Gestão */}
         <Route path="gestao/relatorio-estoque" element={<ProtectedRoute tela="/v2/assurant/gestao/relatorio-estoque"><RelatorioEstoqueV2Page /></ProtectedRoute>} />
-        <Route path="gestao/relatorio-als" element={<ProtectedRoute tela="/v2/assurant/gestao/relatorio-estoque"><RelatorioALSFluxoV2Page /></ProtectedRoute>} />
+        <Route path="gestao/relatorio-als" element={<ProtectedRoute tela="/v2/assurant/gestao/relatorio-als"><RelatorioALSFluxoV2Page /></ProtectedRoute>} />
         <Route path="gestao/fechamento-lojas" element={<ProtectedRoute tela="/v2/assurant/gestao/fechamento-lojas"><FechamentoLojasV2Page /></ProtectedRoute>} />
         <Route path="gestao/producao" element={<ProtectedRoute tela="/v2/assurant/gestao/producao"><ProducaoEsteiraV2Page /></ProtectedRoute>} />
         <Route path="gestao/esteira" element={<ProtectedRoute tela="/v2/assurant/gestao/esteira"><GestaoEsteiraV2Page /></ProtectedRoute>} />
