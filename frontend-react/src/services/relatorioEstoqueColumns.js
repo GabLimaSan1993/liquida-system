@@ -6,6 +6,7 @@ export const COLUNAS_ESTOQUE = [
   'Respostas_Funcional', 'status_bateria', 'Reanalise', 'Saúde da bateria (%)',
   'Status_Laboratorio', 'Resultado_Laboratorio',
   'Defeitos_Laboratorio', 'Defeitos_Adicionados_Laboratorio', 'Defeitos_Removidos_Laboratorio',
+  'Pedido_reservado',
 ];
 export const CAMPOS_ESTOQUE = COLUNAS_ESTOQUE.map(c => c === 'Saúde da bateria (%)' ? 'bateria_percentual' : c.toLowerCase());
 export const DATAS_ESTOQUE = new Set([14, 15, 21, 22, 23, 24, 25, 26]);
