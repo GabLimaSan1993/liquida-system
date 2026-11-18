@@ -23,6 +23,8 @@ import {
 } from "./AuthContext.jsx";
 
 import MainLayout from "./layout/MainLayout.jsx";
+import BackOfficeWorkspaceLayout from "./layout/BackOfficeWorkspaceLayout.jsx";
+import FluxoCaixaBackOfficePage from "./pages/FluxoCaixaBackOfficePage.jsx";
 import AssurantWorkspaceLayout from "./layout/AssurantWorkspaceLayout.jsx";
 import LinhaBrancaWorkspaceLayout from "./layout/LinhaBrancaWorkspaceLayout.jsx";
 
@@ -748,6 +750,15 @@ export default function App() {
           LIQUIDA SYSTEM ATUAL
       ====================================================== */}
 
+      {/* Ambiente novo, independente da Tesouraria antiga */}
+      <Route path="/backoffice" element={
+        <ProtectedRoute><BackOfficeWorkspaceLayout /></ProtectedRoute>
+      }>
+        <Route index element={<Navigate replace to="financeiro/fluxo-caixa" />} />
+        <Route path="financeiro/fluxo-caixa" element={<FluxoCaixaBackOfficePage />} />
+        <Route path="financeiro/extratos-bancarios" element={<ExtratosBancariosPage />} />
+      </Route>
+
       <Route
         element={
           <ProtectedRoute>
@@ -812,19 +823,7 @@ export default function App() {
         />
 
 
-        {/* Financeiro - menu principal */}
-        <Route path="/financeiro/fluxo-caixa" element={
-          <ProtectedRoute tela="/financeiro/fluxo-caixa">
-            <FluxoCaixaRealizadoPage />
-          </ProtectedRoute>
-        } />
-        <Route path="/financeiro/extratos-bancarios" element={
-          <ProtectedRoute tela="/financeiro/extratos-bancarios">
-            <ExtratosBancariosPage />
-          </ProtectedRoute>
-        } />
-
-        {/* Financeiro - rotas existentes preservadas */}
+        {/* Financeiro */}
 
         <Route
           path="/financeiro/fluxo-realizado"
