@@ -695,7 +695,7 @@ export default function RastreabilidadeItemV2Page() {
               referencia: tradeinResult.voucher,
             }]
           : [];
-      const resultadoCompleto = temTradein ? {
+      let resultadoCompleto = temTradein ? {
         ...(result || {}),
         tradein: tradeinResult,
         eventos: [...eventosAtuais, ...(tradeinResult.eventos || []), ...recebimentoComplementar],
@@ -718,6 +718,50 @@ export default function RastreabilidadeItemV2Page() {
             ? [{ imei: tradeinResult.imei, voucher: tradeinResult.voucher, sku: tradeinResult.sku, modelo: tradeinResult.modelo }]
             : [],
       } : result;
+
+      // Busca transversal por pedido, NF, IMEI e voucher. Os documentos históricos
+      // não dependem da existência do pedido na esteira operacional ou no WMS.
+      // A RPC protege o vínculo exato; jamais une aparelhos somente pelo SKU.
+      let frentes = result?.frentes || null;
+      if (!frentes && (/^(?:YBV)?[0-9]+$/i.test(term) || result?.selecionado_imei)) {
+        const { data: fontesEncontradas, error: erroFontes } = await supabase.rpc(
+          "assurant_rastreabilidade_frentes",
+          { p_busca: term, p_imei: consultaVoucherExato ? null : (imei || result?.selecionado_imei || null) }
+        );
+        if (!erroFontes) {
+          frentes = fontesEncontradas;
+        } else {
+          // Não derrubar a rastreabilidade operacional por falha da consulta complementar.
+          console.warn("Falha no cruzamento de frentes:", erroFontes.message);
+        }
+      }
+      if (frentes) {
+        const eventosOriginais = resultadoCompleto?.eventos || [];
+        const existentes = new Set(eventosOriginais.map(e => [e.data, e.evento, e.origem].join("|")));
+        const adicionais = (frentes.eventos || []).filter(e =>
+          !existentes.has([e.data, e.evento, e.origem].join("|"))
+        );
+        const principal = frentes.fontes?.[0] || null;
+        resultadoCompleto = {
+          ...(resultadoCompleto || {}),
+          frentes,
+          eventos: [...eventosOriginais, ...adicionais],
+          // Pedido encontrado somente no histórico: é registro comercial,
+          // não há como inferir IMEI, voucher ou passagem física.
+          resumo: resultadoCompleto?.resumo || (principal ? {
+            voucher: principal.voucher || null,
+            imei: principal.imei || null,
+            sku: principal.detalhes?.sku || principal.detalhes?.sku_produto || null,
+            modelo: principal.titulo || null,
+            grade: principal.detalhes?.grade || null,
+            status_operacional: principal.status || null,
+            somente_tradein: true,
+            origem_consulta: principal.origem,
+            pedido_consultado: term,
+            vinculo_operacional_nao_confirmado: true,
+          } : null),
+        };
+      }
 
       let specialResult = { ativa: null, historico: [] };
       let unlinkResult = [];
@@ -849,6 +893,7 @@ export default function RastreabilidadeItemV2Page() {
 
   const summary = data?.resumo || null;
   const matches = data?.matches || [];
+  const fontesAdicionais = data?.frentes?.fontes || [];
   const cycles = data?.wms_ciclos || [];
   const b2c = data?.pedidos_b2c || [];
   const b2b = data?.pedidos_b2b || [];
@@ -889,16 +934,16 @@ export default function RastreabilidadeItemV2Page() {
 
   const filteredEvents = useMemo(() => {
     if (activeTab === "triagem") {
-      return events.filter((event) => ["Trade-in", "Recebimento", "Triagem", "Oracle"].includes(event.categoria));
+      return events.filter((event) => ["Trade-in", "Trade-In", "Recebimento", "Triagem", "Oracle", "Laboratório"].includes(event.categoria));
     }
 
     if (activeTab === "wms") {
-      return events.filter((event) => ["WMS", "Estoque", "FIFO"].includes(event.categoria));
+      return events.filter((event) => ["WMS", "Warehouse / WMS", "Estoque", "FIFO"].includes(event.categoria));
     }
 
     if (activeTab === "pedidos") {
       return events.filter((event) =>
-        ["B2C", "B2B", "Faturamento", "Expedição", "Marketplace"].includes(event.categoria)
+        ["B2C", "B2B", "Pedidos B2C", "Histórico de Vendas", "Trocas B2C", "Trocas — Operação", "Devoluções B2C", "Histórico de Devoluções", "Integração AnyMarket", "Faturamento", "Expedição", "Marketplace"].includes(event.categoria)
       );
     }
 
@@ -1171,7 +1216,7 @@ export default function RastreabilidadeItemV2Page() {
               Consulta completa de histórico
             </h1>
             <p className="mt-1 max-w-4xl text-xs leading-5 text-slate-500">
-              Pesquisa por voucher, IMEI/serial, pedido, NF, chave da NF, SKU ou modelo. A jornada começa no Trade-in (quando disponível) e acompanha recebimento, Triagem, Oracle, WMS, B2C/B2B e expedição.
+              Pesquisa por voucher, IMEI/serial, pedido, NF, chave da NF, SKU ou modelo. Consulta também histórico de vendas, trocas, devoluções e integrações, mesmo quando não há passagem pelo Warehouse.
             </p>
           </div>
 
@@ -1349,6 +1394,68 @@ export default function RastreabilidadeItemV2Page() {
               </div>
             </section>
           )}
+          {fontesAdicionais.length > 0 && (
+            <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+                <div>
+                  <h2 className="text-sm font-black text-slate-900">Registros por frente</h2>
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    Fontes comprovadas por pedido, NF, voucher ou IMEI. Não relacionamos aparelhos apenas por SKU ou modelo.
+                  </p>
+                </div>
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
+                  {fontesAdicionais.length} {fontesAdicionais.length === 1 ? "registro" : "registros"}
+                </span>
+              </div>
+              {summary?.vinculo_operacional_nao_confirmado && (
+                <div className="mx-5 mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                  Há registro em outra fonte, mas não há vínculo físico seguro com IMEI/voucher no processo consultado. A ausência desse vínculo não significa que o pedido não existiu.
+                </div>
+              )}
+              <div className="grid gap-3 p-5 lg:grid-cols-2">
+                {fontesAdicionais.map((fonte, index) => (
+                  <div key={fonte.origem + ":" + fonte.referencia + ":" + index}
+                    className="rounded-xl border border-slate-200 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="text-xs font-black text-slate-900">{fonte.frente}</div>
+                      <span className="rounded-full bg-violet-50 px-2.5 py-1 text-[10px] font-bold text-violet-700">
+                        {fonte.status || "Sem status"}
+                      </span>
+                    </div>
+                    <div className="mt-2 text-sm font-bold text-slate-700">{fonte.titulo || "Registro sem descrição"}</div>
+                    <div className="mt-1 font-mono text-[10px] text-slate-400">
+                      Fonte: {fonte.origem} · ID: {fonte.referencia}
+                    </div>
+                    {(fonte.voucher || fonte.imei) && (
+                      <button type="button"
+                        onClick={() => {
+                          const buscaVinculo = fonte.voucher || fonte.imei;
+                          setInput(buscaVinculo);
+                          void consultar(buscaVinculo, null, true);
+                        }}
+                        className="mt-2 rounded-lg border border-violet-200 px-2.5 py-1 text-[11px] font-semibold text-violet-700 hover:bg-violet-50">
+                        Consultar vínculo {fonte.voucher || fonte.imei}
+                      </button>
+                    )}
+                    <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2">
+                      {Object.entries(fonte.detalhes || {}).filter(([, valor]) =>
+                        valor != null && valor !== "" && typeof valor !== "object"
+                      ).slice(0, 14).map(([campo, valor]) => (
+                        <div key={campo} className="min-w-0">
+                          <div className="truncate text-[9px] font-bold uppercase tracking-wide text-slate-400">
+                            {campo.replaceAll("_", " ")}
+                          </div>
+                          <div className="break-words text-[11px] font-semibold text-slate-700">
+                            {String(valor)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
           {summary ? (
             <>
               <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -1359,9 +1466,11 @@ export default function RastreabilidadeItemV2Page() {
                         <Fingerprint size={22} />
                       </div>
                       <div>
-                        <div className="text-[9px] font-black uppercase tracking-[0.14em] text-slate-400">Identidade rastreada</div>
+                        <div className="text-[9px] font-black uppercase tracking-[0.14em] text-slate-400">
+                          {summary.vinculo_operacional_nao_confirmado ? "Registro documental · identidade física não confirmada" : "Identidade rastreada"}
+                        </div>
                         <div className="mt-1 font-mono text-xl font-black tracking-tight text-slate-950">
-                          {summary.imei || summary.voucher || `Pedido ${data?.selecionado_pedido || "—"}`}
+                          {summary.imei || summary.voucher || `Pedido ${summary.pedido_consultado || data?.selecionado_pedido || "—"}`}
                         </div>
                         <div className="mt-1 text-xs font-semibold text-slate-500">
                           {summary.voucher || "Sem voucher identificado"} · {summary.sku || "Sem SKU"}
