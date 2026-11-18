@@ -8,7 +8,7 @@ const references = [
   ['recebimento', 'Recebimento'], ['funcional', 'Triagem funcional'], ['cosmetica', 'Triagem cosmética'],
   ['laudo', 'Laudo'], ['alocacao', 'Alocação'], ['oracle', 'Oracle'], ['criacao', 'Criação'], ['atualizacao', 'Atualização'],
 ];
-const compact = [0, 1, 3, 4, 10, 13, 21, 22, 23, 24, 25, 26, 31, 32, 33];
+const compact = [0, 1, 3, 4, 10, 36, 13, 21, 22, 23, 24, 25, 26, 31, 32, 33];
 const num = value => Number(value || 0).toLocaleString('pt-BR');
 const ETAPAS_LAB = [
   'Aguardando Recebimento', 'Aguardando Técnico', 'Aguardando Peças',
@@ -96,7 +96,7 @@ export default function RelatorioEstoqueV2Page() {
     <header className="flex flex-wrap items-start justify-between gap-4">
       <div><p className="text-xs font-bold uppercase tracking-widest text-purple-600">Assurant • Gestão</p>
         <h1 className="mt-1 text-3xl font-bold">Relatório de Estoque</h1>
-        <p className="mt-2 text-sm text-slate-500">Status, localização, avaliações e datas de cada etapa do aparelho.</p></div>
+        <p className="mt-2 text-sm text-slate-500">Status operacional por bipagem B2B/B2C, pedido vinculado, localização e datas de cada etapa.</p></div>
       <div className="flex gap-2">
         <button disabled={loading || exporting} onClick={() => setApplied(f => ({ ...f }))} className="flex items-center gap-2 rounded-xl border bg-white px-4 py-3 text-sm font-semibold disabled:opacity-50"><RefreshCw size={17} className={loading ? 'animate-spin' : ''}/>Atualizar</button>
         <button disabled={loading || exporting || !summary.total || !!error} onClick={exportExcel} className="flex items-center gap-2 rounded-xl bg-purple-700 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"><Download size={17}/>{exporting ? 'Exportando…' : 'Exportar Excel'}</button>
