@@ -151,6 +151,12 @@ export default function SistemasPage() {
     : telas.find(rota => rota.startsWith("/v2/assurant/online/")) || "/v2/assurant";
 
   const acessoLinhaBranca = hasAccess("/v2/linha-branca");
+  const acessoFluxoCaixa = hasAccess("/financeiro/fluxo-caixa");
+  const acessoExtratosBancarios = hasAccess("/financeiro/extratos-bancarios");
+  const acessoBackOffice = acessoFluxoCaixa || acessoExtratosBancarios;
+  const entradaBackOffice = acessoFluxoCaixa
+    ? "/financeiro/fluxo-caixa"
+    : "/financeiro/extratos-bancarios";
 
   function abrirLinhaBranca() {
   navigate("/v2/linha-branca");
@@ -264,12 +270,20 @@ export default function SistemasPage() {
             />
           )}
 
-          {MODULOS_FUTUROS.map((modulo) => (
-            <ModuloIndisponivel
-              key={modulo.nome}
-              {...modulo}
-            />
-          ))}
+          {MODULOS_FUTUROS.map((modulo) =>
+            modulo.nome === "Back Office" && acessoBackOffice ? (
+              <ModuloDisponivel
+                key={modulo.nome}
+                {...modulo}
+                onClick={() => navigate(entradaBackOffice)}
+              />
+            ) : (
+              <ModuloIndisponivel
+                key={modulo.nome}
+                {...modulo}
+              />
+            )
+          )}
 
           <ModuloIndisponivel
             nome="Outras Operações"
