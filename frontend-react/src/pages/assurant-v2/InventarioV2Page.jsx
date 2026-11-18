@@ -414,6 +414,8 @@ function TabContagem({
     setProc,
   ] = useState(false);
 
+  const [erroAbertura, setErroAbertura] = useState("");
+
   const [
     resumo,
     setResumo,
@@ -443,30 +445,29 @@ function TabContagem({
 
 
   async function carregar() {
-    setLoading(
-      true
-    );
-
+    setLoading(true);
     try {
-      const dados =
-        await listarContagensPendentes(
-          ciclo.id
-        );
-
-      setPendentes(
-        dados
-      );
+      const dados = await listarContagensPendentes(ciclo.id);
+      setPendentes(dados);
     } catch (e) {
-      console.error(
-        e
-      );
+      console.error("Falha ao atualizar endereços do cíclico:", e);
+      setErroAbertura("Não foi possível atualizar os endereços: " + e.message);
     } finally {
-      setLoading(
-        false
-      );
+      setLoading(false);
     }
   }
 
+  // Contagens feitas por outra sessão precisam desaparecer ao retomar esta aba.
+  useEffect(() => {
+    if (!ciclo) return;
+    const aoFocar = () => { if (!document.hidden && !proc && !ativa) void carregar(); };
+    window.addEventListener("focus", aoFocar);
+    document.addEventListener("visibilitychange", aoFocar);
+    return () => {
+      window.removeEventListener("focus", aoFocar);
+      document.removeEventListener("visibilitychange", aoFocar);
+    };
+  }, [ciclo?.id, proc, ativa]);
 
   const ruasDisponiveis =
     [
@@ -571,60 +572,29 @@ function TabContagem({
   }
 
 
-  async function handleAbrir(
-    contagem
-  ) {
-    setProc(
-      true
-    );
-
-    setResumo(
-      null
-    );
-
+  async function handleAbrir(contagem) {
+    if (proc || loading) return;
+    setProc(true);
+    setErroAbertura("");
+    setResumo(null);
     try {
-      const resposta =
-        await abrirContagem(
-          contagem.id,
-          user.id,
-          profile?.nome
-        );
-
-      if (
-        !resposta.ok
-      ) {
-        addHist({
-          tipo: "erro",
-          msg:
-            resposta.erro,
-        });
-
+      const resposta = await abrirContagem(contagem.id, user.id, profile?.nome);
+      if (!resposta.ok) {
+        setErroAbertura(resposta.erro || "Não foi possível abrir a contagem.");
+        await carregar();
         return;
       }
-
-      setAtiva(
-        resposta.contagem
-      );
-
-      setItens(
-        resposta.itens
-      );
-
-      setHistorico(
-        []
-      );
+      setAtiva(resposta.contagem);
+      setItens(resposta.itens);
+      setHistorico([]);
+      setPendentes(atual => atual.filter(item => item.id !== contagem.id));
     } catch (e) {
-      addHist({
-        tipo: "erro",
-        msg: e.message,
-      });
+      setErroAbertura("Falha ao abrir contagem: " + e.message);
+      await carregar();
     } finally {
-      setProc(
-        false
-      );
+      setProc(false);
     }
   }
-
 
   async function handleBipar(
     evento
@@ -802,6 +772,12 @@ function TabContagem({
   if (!ativa) {
     return (
       <div className="space-y-4">
+        {erroAbertura && (
+          <div role="alert" className="flex items-start justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-semibold text-rose-700">
+            <span>{erroAbertura}</span>
+            <button type="button" aria-label="Fechar aviso" onClick={() => setErroAbertura("")} className="shrink-0 rounded-md px-2 py-0.5 hover:bg-rose-100">Fechar</button>
+          </div>
+        )}
         {resumo && (
           <Feedback
             feedback={{
