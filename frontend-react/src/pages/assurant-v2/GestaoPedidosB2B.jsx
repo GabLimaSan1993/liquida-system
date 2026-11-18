@@ -40,7 +40,7 @@ function Situacao({ status }) {
 
 export default function GestaoPedidosB2B({ pedidos = [], carregando = false, aoAtualizar }) {
   const [busca, setBusca] = useState("");
-  const [filtro, setFiltro] = useState("");
+  const [statusSelecionados, setStatusSelecionados] = useState([]);
   const [selecionadoId, setSelecionadoId] = useState(null);
   const [confirmarReenvio, setConfirmarReenvio] = useState(false);
   const [reenviando, setReenviando] = useState(false);
@@ -56,12 +56,12 @@ export default function GestaoPedidosB2B({ pedidos = [], carregando = false, aoA
   const filtrados = useMemo(() => {
     const q = busca.trim().toLowerCase();
     return pedidos.filter(p =>
-      (!filtro || p.status === filtro) &&
+      (statusSelecionados.length === 0 || statusSelecionados.includes(p.status)) &&
       (!q || [p.cliente, p.lote, p.dataPedido, ...(p.nfs || []).map(n => n.numero)]
         .some(v => String(v || "").toLowerCase().includes(q)))
     ).sort((a, b) => (b.dataPedido || "").localeCompare(a.dataPedido || "") ||
       (b.lote || "").localeCompare(a.lote || ""));
-  }, [pedidos, filtro, busca]);
+  }, [pedidos, statusSelecionados, busca]);
 
   function abrir(p) {
     setSelecionadoId(p.id);
@@ -98,13 +98,26 @@ export default function GestaoPedidosB2B({ pedidos = [], carregando = false, aoA
           </button>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button type="button" onClick={() => setFiltro("")} className={`rounded-lg px-3 py-1.5 text-[11px] font-bold ${!filtro ? "bg-[#211136] text-white" : "bg-slate-100 text-slate-600"}`}>Todos · {pedidos.length}</button>
-          {STATUS.filter(k => totaisStatus[k]).map(k =>
-            <button key={k} type="button" onClick={() => setFiltro(filtro === k ? "" : k)}
-              className={`rounded-lg px-3 py-1.5 text-[10px] font-bold ring-1 ${filtro === k ? COR[k] : "bg-white text-slate-600 ring-slate-200"}`}>
-              {k} · {num(totaisStatus[k])}
-            </button>
-          )}
+          <button
+            type="button"
+            aria-pressed={statusSelecionados.length === 0}
+            onClick={() => setStatusSelecionados([])}
+            className={`rounded-xl px-3 py-1.5 text-[11px] font-bold transition-all ${statusSelecionados.length === 0 ? "bg-[#211136] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+          >Todos · {num(pedidos.length)}</button>
+          {STATUS.filter(k => totaisStatus[k] > 0 || statusSelecionados.includes(k)).map(k => {
+            const ativo = statusSelecionados.includes(k);
+            return (
+              <button
+                key={k}
+                type="button"
+                aria-pressed={ativo}
+                onClick={() => setStatusSelecionados(anteriores =>
+                  anteriores.includes(k) ? anteriores.filter(s => s !== k) : [...anteriores, k]
+                )}
+                className={`rounded-xl px-3 py-1.5 text-[10px] font-bold ring-1 transition-all ${ativo ? "bg-[#211136] text-white ring-[#211136]" : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50"}`}
+              >{k} · {num(totaisStatus[k] || 0)}</button>
+            );
+          })}
         </div>
         <div className="relative mt-3">
           <Search size={16} className="absolute left-3 top-3 text-slate-400"/>
