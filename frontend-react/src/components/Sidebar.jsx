@@ -301,7 +301,7 @@ function SidebarContent({ profile, onClose, handleLogout }) {
             <CollapseGroup
               icon={TrendingUp}
               label="Tesouraria"
-              paths={["/analise-entrada", "/faturamento"]}
+              paths={["/analise-entrada", "/faturamento", "/financeiro"]}
             >
               <SubGroup icon={ShoppingCart} label="Vendas" paths={["/faturamento"]}>
                 <NavItem to="/faturamento" icon={DollarSign} label="Faturamento" indent onClick={onClose} />
@@ -309,14 +309,17 @@ function SidebarContent({ profile, onClose, handleLogout }) {
               <SubGroup icon={BarChart3} label="Compras" paths={["/analise-entrada"]}>
                 <NavItem to="/analise-entrada" icon={BarChart3} label="Análise de Entrada" indent onClick={onClose} />
               </SubGroup>
+              <SubGroup icon={Landmark} label="Financeiro" paths={["/financeiro"]}>
+                <NavItem to="/financeiro/fluxo-realizado" icon={BarChart2}    label="Fluxo Realizado"  indent onClick={onClose} />
+                <NavItem to="/financeiro/contas-pagar"    icon={TrendingDown} label="Contas a Pagar"   indent onClick={onClose} />
+                <NavItem to="/financeiro/contas-receber"  icon={TrendingUp}   label="Contas a Receber" indent onClick={onClose} />
+                <NavItem to="/financeiro/carga-historica" icon={Database}     label="Carga Histórica"  indent onClick={onClose} />
+                <NavItemDisabled icon={BarChart2} label="Conciliação"     indent />
+                <NavItemDisabled icon={BarChart2} label="Fluxo Projetado" indent />
+              </SubGroup>
               <SubGroup icon={BarChart2} label="Fechamentos" paths={["/fechamentos"]}>
                 <NavItemDisabled icon={BarChart2} label="Em breve" indent />
               </SubGroup>
-            </CollapseGroup>
-
-            <CollapseGroup icon={Landmark} label="Financeiro" paths={["/financeiro"]}>
-              <NavItem to="/financeiro/fluxo-caixa" icon={BarChart2} label="Fluxo de Caixa" indent onClick={onClose} />
-              <NavItem to="/financeiro/extratos-bancarios" icon={Upload} label="Extratos Bancários" indent onClick={onClose} />
             </CollapseGroup>
 
             <CollapseGroup icon={Truck} label="Logística" paths={["/abertura-os"]}>
@@ -363,19 +366,6 @@ function SidebarContent({ profile, onClose, handleLogout }) {
               </SubGroup>
             </CollapseGroup>
           </>
-        )}
-
-        {/* Acesso financeiro com permissões específicas, sem liberar as demais áreas. */}
-        {!isMaster && (profile?.telas_permitidas?.includes("/financeiro/fluxo-caixa") ||
-          profile?.telas_permitidas?.includes("/financeiro/extratos-bancarios")) && (
-          <CollapseGroup icon={Landmark} label="Financeiro" paths={["/financeiro"]}>
-            {profile?.telas_permitidas?.includes("/financeiro/fluxo-caixa") && (
-              <NavItem to="/financeiro/fluxo-caixa" icon={BarChart2} label="Fluxo de Caixa" indent onClick={onClose} />
-            )}
-            {profile?.telas_permitidas?.includes("/financeiro/extratos-bancarios") && (
-              <NavItem to="/financeiro/extratos-bancarios" icon={Upload} label="Extratos Bancários" indent onClick={onClose} />
-            )}
-          </CollapseGroup>
         )}
 
         {/* ── Operador Assurant ── */}
