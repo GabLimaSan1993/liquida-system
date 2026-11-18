@@ -384,6 +384,7 @@ const MENU_GROUPS = [
   label: "GESTÃO",
   items: [
     { label: "Relatório de Estoque", icon: FileText, to: "/v2/assurant/gestao/relatorio-estoque", exact: true, enabled: true },
+    { label: "Recebimento ALS · Etapas", icon: FileText, to: "/v2/assurant/gestao/relatorio-als", exact: true, enabled: true },
     { label: "Fechamento de Lojas", icon: FileText, to: "/v2/assurant/gestao/fechamento-lojas", exact: true, enabled: true },
     { label: "Fechamento Diário", icon: BarChart3, to: "/v2/assurant/gestao/fechamento-diario", exact: true, enabled: true, allowedUserIds: FECHAMENTO_DIARIO_ALLOWED_USERS },
     { label: "Fechamento Mensal • Cobrança", icon: FileText, to: "/v2/assurant/gestao/fechamento-cobranca", exact: true, enabled: true },
@@ -1005,7 +1006,7 @@ function SidebarContent({
     if (profile?.is_master) return true;
     if (to === "/chamados/gestao") return profile?.id === "b517d70a-56be-4b4f-8b9e-a03c769dd3c3" && profile?.telas_permitidas?.includes(to) === true && profile?.telas_permitidas?.includes("/chamados") === true;
     if (to === "/chamados") return profile?.telas_permitidas?.includes(to) === true;
-    if (["/v2/assurant/b2c/baixas", "/v2/assurant/gestao/producao", "/v2/assurant/b2c/validacao-meli", "/v2/assurant/gestao/esteira", "/v2/assurant/gestao/fechamento-lojas", "/v2/assurant/gestao/relatorio-estoque"].includes(to)) return profile?.telas_permitidas?.includes(to) === true;
+    if (["/v2/assurant/b2c/baixas", "/v2/assurant/gestao/producao", "/v2/assurant/b2c/validacao-meli", "/v2/assurant/gestao/esteira", "/v2/assurant/gestao/fechamento-lojas", "/v2/assurant/gestao/relatorio-estoque", "/v2/assurant/gestao/relatorio-als"].includes(to)) return profile?.telas_permitidas?.includes(to) === true;
     if (liquidaOnly) {
       const email = String(profile?.email || "").toLowerCase();
       const identidadeLiquida =
