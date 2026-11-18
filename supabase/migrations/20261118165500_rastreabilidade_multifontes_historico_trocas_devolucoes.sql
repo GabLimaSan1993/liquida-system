@@ -1,7 +1,6 @@
--- 2026-11-18 | Rastreabilidade em todas as frentes
--- Fallback por venda histórica / troca / devolução quando não há IMEI na esteira.
--- Não atribuir vínculos físicos por SKU, modelo ou similaridade de pedidos.
--- RPC autorizada para o perfil existente de rastreabilidade.
+-- 2026-11-18 | Rastreabilidade por múltiplas frentes e fallback de pedido histórico.
+-- Correspondência por pedido, voucher e IMEI; IMEI isolado sem voucher não vincula WMS ao pedido.
+-- AnyMarket: snapshot mais recente por pedido para evitar registros repetidos.
 
 CREATE OR REPLACE FUNCTION public.assurant_rastreabilidade_frentes(p_busca text, p_imei text DEFAULT NULL::text)
  RETURNS jsonb
@@ -142,14 +141,26 @@ begin
       jsonb_build_object('pedido',p.id_anymarket,'codigo_pedido',p.codigo_pedido,
        'status_marketplace',p.status_no_marketplace,'codigo_rastreio',p.codigo_de_rastreio),
       '[]'::jsonb
-    from public.anymarket_pedidos p
-    where (v_num is not null and p.id_anymarket=v_num)
-      or p.codigo_pedido=v_busca
+    from (
+      -- Um pedido AnyMarket tem múltiplos snapshots de importação.
+      -- Exibir o estado mais recente sem repetir dezenas de cartões.
+      select src.* from public.anymarket_pedidos src
+      where src.id_anymarket=coalesce(v_num,(
+        select h.id_anymarket from public.assurant_historico_vendas h
+        where h.codigo_pedido=v_busca
+        order by h.data_pedido desc nulls last limit 1
+      ))
+      order by src.importado_em desc nulls last,src.id desc
+      limit 1
+    ) p
     union all
     select 'Trade-In','tradein_geral',g.voucher::text,g.status_atual,g.aparelho,g.imei,
        coalesce(nullif(upper(btrim(g.voucher_ybv)),''),'YBV'||g.voucher::text),
        jsonb_build_object('sku',g.sku,'modelo',g.aparelho,'status_tradein',g.status_atual,
-        'vinculo','Voucher ou IMEI comprovadamente registrado; verificar identidade em caso de IMEI compartilhado'),
+        'vinculo',case
+          when v_voucher is not null and (upper(g.voucher_ybv)=v_voucher or g.voucher::text=substring(v_voucher from 4)) then 'Voucher pesquisado confirmado'
+          when exists(select 1 from refs x where x.voucher is not null and x.voucher=upper(g.voucher_ybv)) then 'Voucher vinculado ao pedido'
+          else 'Correspondência apenas por IMEI: conferir voucher, não vincular automaticamente' end),
        '[]'::jsonb
     from public.tradein_geral g
     where (v_voucher is not null and (upper(g.voucher_ybv)=v_voucher or g.voucher::text=substring(v_voucher from 4)))
@@ -167,9 +178,11 @@ begin
     from public.wms_alocacoes w
     where (v_voucher is not null and upper(w.voucher)=v_voucher)
       or (v_imei is not null and w.imei=v_imei)
+      -- IMEI isolado em pedido histórico não prova que o WMS é do
+      -- mesmo voucher. Exigir vínculo físico voucher + IMEI no pedido.
       or exists(select 1 from refs x
-         where x.imei=w.imei and x.imei is not null
-           and (x.voucher is null or upper(w.voucher)=x.voucher))
+         where x.voucher is not null and upper(w.voucher)=x.voucher
+           and (x.imei is null or x.imei=w.imei))
     union all
     select 'Laboratório','reparo_lab_itens',l.id::text,l.status_etapa,l.resultado_descricao,l.imei,l.voucher,
        jsonb_build_object('resultado',l.resultado_descricao),
