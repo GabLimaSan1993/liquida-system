@@ -4,7 +4,8 @@ import * as XLSX from 'xlsx';
 import { COLUNAS_ESTOQUE, CAMPOS_ESTOQUE, linhaEstoque } from './relatorioEstoqueColumns.js';
 
 test('percentual da bateria, defeitos adicionais e laboratório preservados sem coluna duplicada', () => {
-  assert.equal(COLUNAS_ESTOQUE.length, 36);
+  assert.equal(COLUNAS_ESTOQUE.length, 37);
+  assert.equal(CAMPOS_ESTOQUE[36], 'pedido_reservado');
   assert.equal(COLUNAS_ESTOQUE[30], 'Saúde da bateria (%)');
   assert.equal(CAMPOS_ESTOQUE[30], 'bateria_percentual');
   assert.equal(CAMPOS_ESTOQUE[19], 'defeitos_adicionais');
@@ -21,6 +22,8 @@ test('percentual da bateria, defeitos adicionais e laboratório preservados sem 
   assert.equal(linha[28], 'Saúde da bateria entre 80% e 85%');
   assert.equal(linha[19], 'Tela quebrada');
   assert.equal(linha[31], 'Aguardando Técnico');
+  assert.equal(linhaEstoque({ status_atual: 'Reservado para pedido B2B', pedido_reservado: 'LOTE_10' })[36], 'LOTE_10');
+  assert.equal(linhaEstoque({ status_atual: 'Reservado para pedido B2C', pedido_reservado: '12345' })[10], 'Reservado para pedido B2C');
   assert.equal(linha.includes('Duplicado'), false);
   assert.equal(linhaEstoque({ bateria_percentual: 0 })[30], 0);
   assert.equal(linhaEstoque({ bateria_percentual: 100 })[30], 100);
