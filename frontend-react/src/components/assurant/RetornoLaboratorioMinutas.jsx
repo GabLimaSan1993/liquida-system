@@ -155,12 +155,19 @@ export default function RetornoLaboratorioMinutas(){
         setMinutasBusca(busca.minutas||[]);
       }
       setLeitura('');
+      const destino=r.resultado==='reparado'
+        ? 'Aguardando triagem cosmética'
+        : r.resultado==='irrecuperavel'
+          ? 'Aguardando alocação · Oracle Sub 1000'
+          : r.resultado==='sem_reparo'
+            ? 'Aguardando alocação · Oracle Sub 7'
+            : 'Conferir resultado do reparo';
       if(Number(registro.minuta?.pendentes||0)===0){
         setDetalhe(null);
-        setAviso(numeroMinuta(registro.minuta.numero)+' recebida integralmente e retirada da fila.');
+        setAviso(numeroMinuta(registro.minuta.numero)+' recebida integralmente. Último aparelho: '+r.voucher+' · '+destino+'.');
       }else{
         setDetalhe(registro);
-        setAviso('Recebido: '+r.voucher+' · '+registro.minuta.recebidos+' de '+registro.minuta.total);
+        setAviso('Recebido: '+r.voucher+' · '+destino+' · '+registro.minuta.recebidos+' de '+registro.minuta.total);
       }
     }catch(e){
       setErro(e.message||'Não foi possível confirmar este aparelho.');
