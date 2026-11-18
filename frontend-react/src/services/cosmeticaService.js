@@ -20,6 +20,26 @@ const BATERIA_REBAIXA = "Saúde da bateria entre 70 e 79%";
 // Da pior para a melhor.
 const HIERARQUIA  = ["QUEBRADO", "REGULAR", "BOM", "MUITO BOM", "EXCELENTE", "LIKE NEW"];
 const REBAIXAVEIS = ["LIKE NEW", "EXCELENTE", "MUITO BOM", "BOM"];
+const ORIGENS_COSMETICA = ["liquida", "devolucao_b2c", "tradein_online"];
+
+// Datas sem timezone são gravadas no PostgreSQL em UTC. Comparar sempre em UTC
+// impede que o horário do navegador altere a classificação pós-reparo.
+function instanteUTC(valor) {
+  if (!valor) return null;
+  const texto = String(valor).trim().replace(" ", "T");
+  const normalizado = /(Z|[+-]\d{2}:?\d{2})$/i.test(texto) ? texto : texto + "Z";
+  const n = Date.parse(normalizado);
+  return Number.isFinite(n) ? n : null;
+}
+
+function reparoAguardandoNovaCosmetica(t) {
+  const retorno = instanteUTC(t.retorno_reparo_em);
+  if (retorno === null) return false;
+  const funcional = instanteUTC(t.data_funcional);
+  const cosmetica = instanteUTC(t.data_cosmetico);
+  return (funcional === null || funcional <= retorno) &&
+    (cosmetica === null || cosmetica <= retorno);
+}
 
 export function piorGrade(...grades) {
   const validas = grades.filter(Boolean).map(g => String(g).toUpperCase().trim())
@@ -114,26 +134,38 @@ export async function buscarOpcoes() {
 // Fila da cosmética. Só o que a triagem nova produziu — a base do Gaia tem
 // 181 mil linhas de histórico e puxaria passivo antigo junto.
 export async function listarAguardandoCosmetica() {
-  const { data, error } = await supabase
-    .from("assurant_triagem")
-    .select("voucher, imei, modelo, status_bateria, data_funcional, respostas_funcional, resultado_triagem_funcional, defeitos_adicionais")
-    .eq("status_atual", STATUS_ENTRADA)
-    .in("origem_triagem", ["liquida", "devolucao_b2c", "tradein_online"])
-    .order("data_funcional", { ascending: true });
-  if (error) throw new Error(error.message);
+  const todos = [];
+  // Paginação real: a fila pode ultrapassar o limite padrão de 1.000 linhas.
+  for (let offset = 0; ; offset += 500) {
+    const { data, error } = await supabase
+      .from("assurant_triagem")
+      .select("voucher, imei, modelo, status_bateria, data_funcional, data_cosmetico, retorno_reparo_em, origem_triagem, respostas_funcional, resultado_triagem_funcional, defeitos_adicionais")
+      .eq("status_atual", STATUS_ENTRADA)
+      .or("origem_triagem.in.(liquida,devolucao_b2c,tradein_online),retorno_reparo_em.not.is.null")
+      .order("data_funcional", { ascending: true, nullsFirst: false })
+      .order("voucher", { ascending: true })
+      .range(offset, offset + 499);
+    if (error) throw new Error(error.message);
+    todos.push(...(data || []));
+    if (!data || data.length < 500) break;
+  }
 
-  return (data || []).map(t => {
+  return todos
+    .filter(t => ORIGENS_COSMETICA.includes(t.origem_triagem) || reparoAguardandoNovaCosmetica(t))
+    .map(t => {
     let r = null;
     try { r = JSON.parse(t.respostas_funcional || "null"); } catch { r = null; }
+    const retornoReparado = reparoAguardandoNovaCosmetica(t);
     return {
       voucher:  t.voucher,
       imei:     t.imei,
       marca:    r?.produto?.marca || null,
       modelo:   r?.produto?.modelo || t.modelo || null,
       bateria:  t.status_bateria,
-      defeito:  t.resultado_triagem_funcional === "BAD" || defeitoExigeQuebrado(t.defeitos_adicionais),
-      naoLigaDivergencia: r?.destino?.nao_liga_para_triagem === true,
-      desde:    t.data_funcional,
+      defeito:  !retornoReparado && (t.resultado_triagem_funcional === "BAD" || defeitoExigeQuebrado(t.defeitos_adicionais)),
+      naoLigaDivergencia: !retornoReparado && r?.destino?.nao_liga_para_triagem === true,
+      retornoReparado,
+      desde:    retornoReparado ? t.retorno_reparo_em : t.data_funcional,
     };
   });
 }
@@ -144,7 +176,7 @@ export async function carregarParaCosmetica(voucher) {
 
   const { data: t, error } = await supabase
     .from("assurant_triagem")
-    .select("id, voucher, imei, sku, modelo, status_atual, status_bateria, bateria_percentual, resultado_triagem_funcional, defeitos_adicionais, respostas_funcional")
+    .select("id, voucher, imei, sku, modelo, status_atual, status_bateria, bateria_percentual, resultado_triagem_funcional, defeitos_adicionais, respostas_funcional, data_funcional, data_cosmetico, retorno_reparo_em")
     .eq("voucher", v)
     .maybeSingle();
   if (error) throw new Error(error.message);
@@ -156,6 +188,7 @@ export async function carregarParaCosmetica(voucher) {
 
   let r = null;
   try { r = JSON.parse(t.respostas_funcional || "null"); } catch { r = null; }
+  const retornoReparado = reparoAguardandoNovaCosmetica(t);
 
   return {
     ok: true,
@@ -165,9 +198,12 @@ export async function carregarParaCosmetica(voucher) {
     produto: r?.produto || null,
     bateria: t.status_bateria,
     bateriaPercentual: t.bateria_percentual,
-    temDefeitoFuncional: t.resultado_triagem_funcional === "BAD" || defeitoExigeQuebrado(t.defeitos_adicionais),
-    naoLigaDivergencia: r?.destino?.nao_liga_para_triagem === true,
-    defeitos: t.defeitos_adicionais
+    // O diagnóstico antigo permanece no banco para auditoria, mas não força
+    // Quebrado após retorno comprovado como REPARADO pelo laboratório.
+    retornoReparado,
+    temDefeitoFuncional: !retornoReparado && (t.resultado_triagem_funcional === "BAD" || defeitoExigeQuebrado(t.defeitos_adicionais)),
+    naoLigaDivergencia: !retornoReparado && r?.destino?.nao_liga_para_triagem === true,
+    defeitos: !retornoReparado && t.defeitos_adicionais
       ? t.defeitos_adicionais.split(";").map(s => s.trim()).filter(Boolean)
       : [],
   };
