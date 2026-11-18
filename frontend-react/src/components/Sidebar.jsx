@@ -365,6 +365,19 @@ function SidebarContent({ profile, onClose, handleLogout }) {
           </>
         )}
 
+        {/* Acesso financeiro com permissões específicas, sem liberar as demais áreas. */}
+        {!isMaster && (profile?.telas_permitidas?.includes("/financeiro/fluxo-caixa") ||
+          profile?.telas_permitidas?.includes("/financeiro/extratos-bancarios")) && (
+          <CollapseGroup icon={Landmark} label="Financeiro" paths={["/financeiro"]}>
+            {profile?.telas_permitidas?.includes("/financeiro/fluxo-caixa") && (
+              <NavItem to="/financeiro/fluxo-caixa" icon={BarChart2} label="Fluxo de Caixa" indent onClick={onClose} />
+            )}
+            {profile?.telas_permitidas?.includes("/financeiro/extratos-bancarios") && (
+              <NavItem to="/financeiro/extratos-bancarios" icon={Upload} label="Extratos Bancários" indent onClick={onClose} />
+            )}
+          </CollapseGroup>
+        )}
+
         {/* ── Operador Assurant ── */}
         {isAssurant && (
           <MenuAssurant onClose={onClose} telas={profile?.telas_permitidas} />
