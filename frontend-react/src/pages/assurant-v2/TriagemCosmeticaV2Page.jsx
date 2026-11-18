@@ -1455,6 +1455,18 @@ export default function TriagemCosmeticaV2Page() {
             "perguntas" &&
             dados && (
               <div className="space-y-5">
+                {dados.retornoReparado && (
+                  <Aviso tipo="ok">
+                    <div>
+                      <div className="font-black">Retorno reparado — nova triagem cosmética</div>
+                      <p className="mt-2 text-xs font-medium">
+                        Os defeitos funcionais anteriores foram tratados no laboratório e permanecem somente no histórico.
+                        Classifique Tela, Laterais e Traseira pela condição atual do aparelho.
+                        A regra independente de saúde de bateria continua aplicável.
+                      </p>
+                    </div>
+                  </Aviso>
+                )}
                 {dados.naoLigaDivergencia && (
                   <Aviso tipo="aviso">
                     <div>
