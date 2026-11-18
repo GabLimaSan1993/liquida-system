@@ -1424,7 +1424,10 @@ export default function RastreabilidadeItemV2Page() {
                         </span>
                       )}
                       {summary.status_triagem && summary.status_operacional &&
-                        summary.status_triagem !== summary.status_operacional && (
+                        summary.status_triagem !== summary.status_operacional &&
+                        // O cadastro histórico pode estar "Produto disponível" depois da bipagem.
+                        // Não exibir esse valor concorrendo com a reserva operacional vigente.
+                        !/^Reservado para pedido B2[BC]$/i.test(summary.status_operacional) && (
                           <span className={`rounded-full px-3 py-1.5 text-[10px] font-semibold ring-1 ring-inset ${statusTone(summary.status_triagem)}`}>
                             Triagem: {pretty(summary.status_triagem)}
                           </span>
