@@ -41,6 +41,7 @@ import BancadaTestesPage from "./pages/BancadaTestesPage.jsx";
 import LimpezaPage from "./pages/LimpezaPage.jsx";
 import QualidadePage from "./pages/QualidadePage.jsx";
 import FluxoCaixaRealizadoPage from "./pages/FluxoCaixaRealizadoPage.jsx";
+import ExtratosBancariosPage from "./pages/ExtratosBancariosPage.jsx";
 import ContasPagarPage from "./pages/ContasPagarPage.jsx";
 import ContasReceberPage from "./pages/ContasReceberPage.jsx";
 import CargaHistoricaPage from "./pages/CargaHistoricaPage.jsx";
@@ -811,7 +812,19 @@ export default function App() {
         />
 
 
-        {/* Financeiro */}
+        {/* Financeiro - menu principal */}
+        <Route path="/financeiro/fluxo-caixa" element={
+          <ProtectedRoute tela="/financeiro/fluxo-caixa">
+            <FluxoCaixaRealizadoPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/financeiro/extratos-bancarios" element={
+          <ProtectedRoute tela="/financeiro/extratos-bancarios">
+            <ExtratosBancariosPage />
+          </ProtectedRoute>
+        } />
+
+        {/* Financeiro - rotas existentes preservadas */}
 
         <Route
           path="/financeiro/fluxo-realizado"
