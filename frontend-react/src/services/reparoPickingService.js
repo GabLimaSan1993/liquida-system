@@ -10,6 +10,22 @@ export async function operarReparo(acao, pedidoId = null, extra = {}, signal) {
   return data;
 }
 
+// Consultas gerenciais: incluem pedidos abertos, em Oracle e o histórico do laboratório.
+// São somente leitura; a bipagem e as confirmações continuam nas operações existentes.
+export async function listarPainelReparo(signal) {
+  let request = supabase.rpc('assurant_reparo_painel_pedidos');
+  if (signal) request = request.abortSignal(signal);
+  const { data, error } = await request;
+  if (error) throw new Error(error.message);
+  return Array.isArray(data) ? data : [];
+}
+
+export async function detalharPainelReparo(pedidoId) {
+  const { data, error } = await supabase.rpc('assurant_reparo_painel_detalhes', { p_pedido_id: pedidoId });
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 // Novo importador: a planilha contém vouchers; o banco resolve os IMEIs.
 export async function operarReparoPorVouchers(vouchers) {
   const { data, error } = await supabase.rpc('assurant_reparo_criar_por_vouchers', {
