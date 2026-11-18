@@ -53,6 +53,7 @@ export default function ExtratosBancariosPage() {
       if (error) throw error;
       setHistorico(data || []);
     } catch (error) {
+      setAutorizado(false);
       setMensagem({ tipo: "erro", texto: "Não foi possível consultar os extratos: " + error.message });
     } finally {
       setCarregando(false);
