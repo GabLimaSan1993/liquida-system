@@ -6,6 +6,7 @@ import {
   enviarEmailDivergencia,
   etiquetaDivergencia,
 } from "../../services/divergenciasImeiService";
+import { exportarBaseValidacaoImei } from "../../services/divergenciasImeiExport.js";
 const PROBLEMAS = { nao_liga: "Aparelhos não ligam", imei_divergente: "IMEI divergente", sem_ordem: "Sem Ordem" };
 const problema = c => c.tipo_problema || "imei_divergente";
 const hora = (x) => (x ? new Date(x).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "—");
@@ -59,6 +60,26 @@ export default function DivergenciasImeiV2Page() {
   const [casoEmail, setCasoEmail] = useState(null);
   const [conferido, setConferido] = useState(false);
   const [enviandoEmail, setEnviandoEmail] = useState(false);
+  const [exportandoBase, setExportandoBase] = useState(false);
+
+  async function exportarBase() {
+    if (exportandoBase || loading) return;
+    setExportandoBase(true);
+    setErro("");
+    setAviso("");
+    try {
+      const resultado = await exportarBaseValidacaoImei();
+      setAviso(
+        "Planilha gerada: " + resultado.total + " casos de IMEI, " +
+        resultado.cruzados + " com IMEI encontrado em outro contrato e " +
+        resultado.demais + " para demais conferências."
+      );
+    } catch (e) {
+      setErro(e.message || "Não foi possível exportar a base de IMEIs.");
+    } finally {
+      setExportandoBase(false);
+    }
+  }
   async function carregar() {
     setLoading(true);
     setErro("");
@@ -166,13 +187,18 @@ export default function DivergenciasImeiV2Page() {
             Aparelhos que não ligam, com IMEI divergente ou Sem Ordem. Validação do Leandro antes do envio à Assurant.
           </p>
         </div>
-        <button
-          onClick={carregar}
-          disabled={loading}
-          className="rounded-xl border bg-white p-3"
-        >
-          Atualizar
-        </button>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <button type="button" onClick={exportarBase}
+            disabled={loading || exportandoBase}
+            className="rounded-xl bg-violet-700 px-4 py-3 text-sm font-bold text-white hover:bg-violet-800 disabled:opacity-50">
+            {exportandoBase ? "Gerando Excel..." : "Exportar base de IMEIs"}
+          </button>
+          <button type="button" onClick={carregar}
+            disabled={loading || exportandoBase}
+            className="rounded-xl border bg-white p-3 text-sm font-bold">
+            Atualizar
+          </button>
+        </div>
       </header>
       {erro && (
         <p
