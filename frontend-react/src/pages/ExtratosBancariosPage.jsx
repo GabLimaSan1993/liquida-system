@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Download, FileArchive, FileText, Landmark, LoaderCircle, UploadCloud } from "lucide-react";
+import { Download, FileArchive, FileText, Landmark, LoaderCircle, UploadCloud, Play, RefreshCw } from "lucide-react";
 import { useAuth } from "../AuthContext.jsx";
 import { supabase } from "../lib/supabase.js";
 
@@ -30,6 +30,9 @@ export default function ExtratosBancariosPage() {
   const [enviando, setEnviando] = useState(false);
   const [progresso, setProgresso] = useState("");
   const [mensagem, setMensagem] = useState(null);
+  const [processandoId, setProcessandoId] = useState(null);
+  const [andamento, setAndamento] = useState(null);
+  const [resumosArquivos, setResumosArquivos] = useState({});
   const bancoSelecionado = (banco === "Outro" ? outroBanco : banco).trim();
   const resumo = useMemo(() => ({
     arquivos: historico.length,
@@ -52,6 +55,27 @@ export default function ExtratosBancariosPage() {
         .limit(100);
       if (error) throw error;
       setHistorico(data || []);
+      if (data?.length) {
+        const { data: detalhes, error: erroDetalhes } = await supabase
+          .from("financeiro_extratos_arquivos_processados")
+          .select("upload_id,status,registros_brutos,saldos_informativos,lancamentos_novos,lancamentos_repetidos")
+          .in("upload_id", data.map(item => item.id));
+        if (!erroDetalhes) {
+          const resumo = {};
+          for (const registro of detalhes || []) {
+            const atual = resumo[registro.upload_id] || { arquivos: 0, brutos: 0, saldos: 0, novos: 0, repetidos: 0 };
+            if (registro.status === "processado") {
+              atual.arquivos += 1;
+              atual.brutos += registro.registros_brutos || 0;
+              atual.saldos += registro.saldos_informativos || 0;
+              atual.novos += registro.lancamentos_novos || 0;
+              atual.repetidos += registro.lancamentos_repetidos || 0;
+            }
+            resumo[registro.upload_id] = atual;
+          }
+          setResumosArquivos(resumo);
+        }
+      }
     } catch (error) {
       setAutorizado(false);
       setMensagem({ tipo: "erro", texto: "Não foi possível consultar os extratos: " + error.message });
@@ -69,6 +93,69 @@ export default function ExtratosBancariosPage() {
       window.open(data.signedUrl, "_blank", "noopener,noreferrer");
     } catch (error) {
       setMensagem({ tipo: "erro", texto: "Falha ao abrir arquivo: " + error.message });
+    }
+  }
+
+  async function chamarProcessamento(uploadId, mode, indices) {
+    const { data, error } = await supabase.functions.invoke("financeiro-processar-extrato", {
+      body: { uploadId, mode, ...(indices ? { indices } : {}) },
+    });
+    if (error) {
+      let motivo = error.message || "Falha ao processar arquivo";
+      if (error.context && typeof error.context.json === "function") {
+        try { const body = await error.context.json(); motivo = body?.error || motivo; } catch { /* resposta sem JSON */ }
+      }
+      throw new Error(motivo);
+    }
+    if (data?.error) throw new Error(data.error);
+    return data;
+  }
+
+  async function processarUpload(item) {
+    if (processandoId || enviando) return;
+    if (!["zip", "ofx"].includes(item.arquivo_tipo)) {
+      setMensagem({ tipo: "erro", texto: "Processamento disponível para OFX ou ZIP contendo OFX." });
+      return;
+    }
+    setProcessandoId(item.id);
+    setMensagem(null);
+    setAndamento({ id: item.id, total: 0, concluidos: 0, atual: "Lendo o arquivo original..." });
+    try {
+      const inicio = await chamarProcessamento(item.id, "inspect");
+      const pendentes = (inicio.arquivos || [])
+        .filter(arquivo => arquivo.status !== "processado")
+        .map(arquivo => arquivo.index);
+      if (!pendentes.length) {
+        setMensagem({ tipo: "sucesso", texto: "Todos os OFXs deste upload já estavam processados." });
+      } else {
+        for (let i = 0; i < pendentes.length; i += 4) {
+          const indices = pendentes.slice(i, i + 4);
+          setAndamento({
+            id: item.id,
+            total: inicio.arquivos_total,
+            concluidos: inicio.arquivos_processados + i,
+            atual: "Processando arquivos " + (i + 1) + " a " + (i + indices.length) + " de " + pendentes.length,
+          });
+          const retorno = await chamarProcessamento(item.id, "process", indices);
+          setAndamento({
+            id: item.id, total: retorno.arquivos_total,
+            concluidos: retorno.arquivos_processados,
+            atual: retorno.concluido ? "Processamento concluído" : "Importação em andamento...",
+          });
+        }
+        setMensagem({
+          tipo: "sucesso",
+          texto: "Extrato processado. Os lançamentos já podem ser consultados em Fluxo de Caixa. Linhas informativas de saldo não entram nos totais.",
+        });
+      }
+    } catch (error) {
+      setMensagem({
+        tipo: "erro",
+        texto: "Processamento interrompido: " + error.message + ". Os arquivos concluídos foram preservados; clique em Retomar processamento.",
+      });
+    } finally {
+      setProcessandoId(null);
+      await atualizarHistorico();
     }
   }
 
@@ -212,7 +299,7 @@ export default function ExtratosBancariosPage() {
         <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-4">
           <Landmark className="h-4 w-4 text-[#6B1F87]" />
           <h3 className="font-semibold text-slate-800">Arquivos recebidos</h3>
-          <span className="ml-auto text-xs text-slate-400">Últimos 100 envios</span>
+          <span className="ml-auto text-xs text-slate-400">Últimos 100 envios · mantenha esta página aberta durante o processamento</span>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full text-left text-sm">
@@ -232,15 +319,44 @@ export default function ExtratosBancariosPage() {
                   <td className="px-5 py-3 text-slate-600">{item.banco} · {item.conta}</td>
                   <td className="whitespace-nowrap px-5 py-3 text-slate-600">{dataHora(item.criado_em)}</td>
                   <td className="px-5 py-3">
-                    <span className="rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700">
-                      {item.status === "recebido" ? "Aguardando processamento" : item.status}
+                    <span className={"rounded-md px-2 py-1 text-xs font-medium " +
+                      (item.status === "processado" ? "bg-green-50 text-green-700" :
+                        item.status === "erro" ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-700")}>
+                      {item.status === "recebido" ? "Aguardando processamento" :
+                        item.status === "em_processamento" ? "Parcial" :
+                        item.status === "processado" ? "Processado" :
+                        item.status === "erro" ? "Verificar erro" : item.status}
                     </span>
+                    {resumosArquivos[item.id] && (
+                      <div className="mt-1 text-xs text-slate-500">
+                        {resumosArquivos[item.id].novos.toLocaleString("pt-BR")} registros novos ·
+                        {" "}{resumosArquivos[item.id].saldos.toLocaleString("pt-BR")} saldos informativos ·
+                        {" "}{resumosArquivos[item.id].repetidos.toLocaleString("pt-BR")} repetidos
+                      </div>
+                    )}
+                    {andamento?.id === item.id && processandoId === item.id && (
+                      <div className="mt-2 text-xs font-medium text-purple-700" role="status">
+                        {andamento.atual} ({andamento.concluidos}/{andamento.total || "?"})
+                      </div>
+                    )}
                   </td>
                   <td className="px-5 py-3 text-right">
-                    <button type="button" onClick={() => baixarArquivo(item)} title="Baixar arquivo original"
-                      className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-[#6B1F87] hover:bg-purple-50">
-                      <Download className="h-4 w-4" /> Baixar
-                    </button>
+                    <div className="flex flex-wrap items-center justify-end gap-1">
+                      {["zip", "ofx"].includes(item.arquivo_tipo) && item.status !== "processado" && (
+                        <button type="button" disabled={Boolean(processandoId) || enviando}
+                          onClick={() => processarUpload(item)}
+                          className="inline-flex items-center gap-1 rounded-lg bg-[#43284F] px-3 py-2 text-xs font-semibold text-white hover:bg-[#5A3966] disabled:opacity-40">
+                          {processandoId === item.id ? <LoaderCircle className="h-4 w-4 animate-spin" /> :
+                            item.status === "recebido" ? <Play className="h-4 w-4" /> : <RefreshCw className="h-4 w-4" />}
+                          {processandoId === item.id ? "Processando" :
+                            item.status === "recebido" ? "Processar extrato" : "Retomar"}
+                        </button>
+                      )}
+                      <button type="button" onClick={() => baixarArquivo(item)} title="Baixar arquivo original"
+                        className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-[#6B1F87] hover:bg-purple-50">
+                        <Download className="h-4 w-4" /> Baixar
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
