@@ -160,12 +160,14 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
   const contadores = {
     todos: pedidos.length,
     picking: pedidos.filter(p => p.status === 'picking').length,
+    pendencias: pedidos.filter(p => p.status === 'picking' && (Number(p.pendentes) > 0 || Number(p.bloqueados) > 0)).length,
     aguardando_oracle: pedidos.filter(p => p.status === 'aguardando_oracle').length,
     em_reparo: pedidos.filter(p => p.status === 'em_reparo').length,
   };
   const pedidosVisiveis = pedidos.filter(p => {
     if (oracle && !((p.status === 'picking' && Number(p.fila_oracle) > 0) || p.status === 'aguardando_oracle' || (historico && p.status === 'em_reparo'))) return false;
-    if (!oracle && filtroPedidos !== 'todos' && p.status !== filtroPedidos) return false;
+    if (!oracle && filtroPedidos === 'pendencias' && !(p.status === 'picking' && (Number(p.pendentes) > 0 || Number(p.bloqueados) > 0))) return false;
+    if (!oracle && filtroPedidos !== 'todos' && filtroPedidos !== 'pendencias' && p.status !== filtroPedidos) return false;
     const termo = buscaPedidos.trim().toLowerCase();
     return !termo || [p.lote, p.criado_por_nome, p.origem_lab, tipoPedido(p), statusPedido(p)].some(x => String(x || '').toLowerCase().includes(termo));
   });
@@ -250,6 +252,7 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
         {!oracle && [
           { key: 'todos', titulo: 'Todos' },
           { key: 'picking', titulo: 'Em picking' },
+          { key: 'pendencias', titulo: 'Com pendência' },
           { key: 'aguardando_oracle', titulo: 'Fila Oracle' },
           { key: 'em_reparo', titulo: 'Histórico / Em reparo' },
         ].map(opcao => (
@@ -273,7 +276,7 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
         <p className="mt-2 w-full whitespace-normal font-bold leading-snug text-slate-800 [overflow-wrap:anywhere]">{p.lote}</p>
         <p className="mt-1 text-xs text-slate-500">{number(p.total)} aparelhos • {date(p.criado_em)}</p>
         <p className="mt-1 text-xs text-slate-500">{p.criado_por_nome || '—'}</p>
-        <p className="mt-3 text-sm text-slate-700">{oracle ? `${number(p.fila_oracle)} bipados na fila` : p.status === 'picking' ? `${number(p.bipados)} bipados · ${number(p.pendentes)} pendentes · ${number(p.bloqueados)} bloqueados` : p.status === 'aguardando_oracle' ? `${number(p.fila_oracle)} aguardando Oracle` : 'Consultar histórico do lote'}</p>
+        <p className="mt-3 text-sm text-slate-700">{oracle ? p.status === 'em_reparo' ? (p.oracle_confirmado_em ? 'Movimentação confirmada' : 'Histórico do laboratório') : `${number(p.fila_oracle)} bipados na fila` : p.status === 'picking' ? `${number(p.bipados)} bipados · ${number(p.pendentes)} pendentes · ${number(p.bloqueados)} bloqueados` : p.status === 'aguardando_oracle' ? `${number(p.fila_oracle)} aguardando Oracle` : 'Consultar histórico do lote'}</p>
       </button>)}</div>
       {!loading && !pedidosVisiveis.length && <p className="py-3 text-sm text-slate-500">{oracle ? 'Nenhum item bipado na pré-lista ou lote liberado para movimentação.' : 'Nenhum pedido encontrado para este filtro.'}</p>}
     </>}
