@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Download, Upload, RefreshCw, Wrench, ArrowLeft, CheckCircle2 } from 'lucide-react';
-import { operarReparo, operarReparoPorVouchers, exportarReparo, exportarFilaOracleReparo, exportarPlanilhaWarehouseGaia } from '../services/reparoPickingService.js';
+import { operarReparo, operarReparoPorVouchers, listarPainelReparo, detalharPainelReparo, exportarReparo, exportarFilaOracleReparo, exportarPlanilhaWarehouseGaia } from '../services/reparoPickingService.js';
 import { lerUploadReparoFlexivel, baixarModeloReparoVoucher } from '../services/reparoUpload.js';
 import { useAuth } from '../AuthContext.jsx';
 import { imprimirMinutaReparo, imprimirEtiquetasCaixasReparo } from '../services/reparoDocumentosService.js';
 
-const labels = { pendente: 'Aguardando bipagem', bloqueado: 'Pendência', bipado: 'Bipado', em_reparo: 'Em reparo' };
+const labels = { pendente: 'Aguardando bipagem', bloqueado: 'Pendência', bipado: 'Bipado', em_reparo: 'Em reparo', retornado: 'Retornado' };
+const statusPedido = p => p.origem_lab === 'planilha_laboratorio' ? 'Histórico — laboratório' : p.status === 'picking' ? 'Em separação' : p.status === 'aguardando_oracle' ? 'Aguardando Oracle' : p.oracle_confirmado_em ? 'Oracle confirmado' : 'Em reparo';
+const tipoPedido = p => /REVIS|NAO.?INICI|NÃO.?INICI/i.test(p?.lote || '') ? 'Revisão' : 'Reparo';
 const number = n => Number(n || 0).toLocaleString('pt-BR');
 const date = d => d ? new Date(d).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '—';
 
@@ -20,6 +22,8 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
   const [message, setMessage] = useState('');
   const [imei, setImei] = useState('');
   const [busca, setBusca] = useState('');
+  const [buscaPedidos, setBuscaPedidos] = useState('');
+  const [filtroPedidos, setFiltroPedidos] = useState('todos');
   const [filtro, setFiltro] = useState('');
   const [historico, setHistorico] = useState(false);
   const [destino, setDestino] = useState('');
@@ -56,7 +60,7 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
         setMessage('Nenhum novo aparelho incluído. Confira os vouchers já vinculados a outros pickings ou que precisam de regularização.');
       } else if (data.pedido.status === 'picking') {
         setDetail(data); setImei(''); setBusca(''); setFiltro('');
-        setTipoProcesso(/NAO.?INICI|NÃO.?INICI/i.test(data?.pedido?.lote || '') ? 'Revisão não inicializa' : 'Reparo');
+        setTipoProcesso(tipoPedido(data?.pedido) === 'Revisão' ? 'Revisão não inicializa' : 'Reparo');
         setMessage(`Lote ${data.pedido.lote} criado a partir dos vouchers: ${number(data.importacao?.incluidos || data.pedido.total)} incluídos e ${number(data.importacao?.qtd_ignorados)} ignorados. ${number(data.pedido.bloqueados)} com pendência. Confira a lista antes da bipagem.`);
       } else {
         setDetail(null);
@@ -69,7 +73,7 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
   const carregar = useCallback(async signal => {
     setLoading(true);
     try {
-      const data = await operarReparo(oracle ? 'listar_oracle' : 'listar_picking', null, {}, signal);
+      const data = await listarPainelReparo(signal);
       if (!signal?.aborted) setPedidos(data);
     } catch (err) { if (!signal?.aborted) setError(err.message); }
     finally { if (!signal?.aborted) setLoading(false); }
@@ -88,9 +92,9 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
   async function abrir(id) {
     setBusy(true); setError(''); setMessage('');
     try {
-      const data = await operarReparo(oracle ? 'detalhar_oracle' : 'detalhar_picking', id);
+      const data = await detalharPainelReparo(id);
       setDetail(data); setDestino(data.pedido.status_destino_oracle || '');
-      setTipoProcesso(/NAO.?INICI|NÃO.?INICI/i.test(data?.pedido?.lote || '') ? 'Revisão não inicializa' : 'Reparo');
+      setTipoProcesso(tipoPedido(data?.pedido) === 'Revisão' ? 'Revisão não inicializa' : 'Reparo');
       setReferencia(data.pedido.referencia_oracle || ''); setBusca(''); setFiltro('');
     } catch (err) { setError(err.message); }
     finally { setBusy(false); }
@@ -108,6 +112,7 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
         await carregar();
       } else {
         setDetail(data);
+        await carregar();
         setMessage(acao === 'bipar' ? `Aparelho ${extra.p_imei} separado para reparo.` : acao === 'confirmar_oracle' ? 'Movimentação Oracle registrada. Aparelhos em reparo.' : 'Posições e pendências atualizadas.');
       }
       setImei('');
@@ -152,15 +157,27 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
     } catch (err) { setError(err.message); }
   }
 
-  const pedidosVisiveis = pedidos.filter(p => !oracle || historico || p.status === 'aguardando_oracle');
+  const contadores = {
+    todos: pedidos.length,
+    picking: pedidos.filter(p => p.status === 'picking').length,
+    aguardando_oracle: pedidos.filter(p => p.status === 'aguardando_oracle').length,
+    em_reparo: pedidos.filter(p => p.status === 'em_reparo').length,
+  };
+  const pedidosVisiveis = pedidos.filter(p => {
+    if (oracle && !((p.status === 'picking' && Number(p.fila_oracle) > 0) || p.status === 'aguardando_oracle' || (historico && p.status === 'em_reparo'))) return false;
+    if (!oracle && filtroPedidos !== 'todos' && p.status !== filtroPedidos) return false;
+    const termo = buscaPedidos.trim().toLowerCase();
+    return !termo || [p.lote, p.criado_por_nome, p.origem_lab, tipoPedido(p), statusPedido(p)].some(x => String(x || '').toLowerCase().includes(termo));
+  });
   const pedido = detail?.pedido;
+  const ehPickingAtivo = !oracle && pedido?.status === 'picking';
   const itens = (detail?.itens || []).filter(i => (!filtro || i.status === filtro) &&
     `${i.imei} ${i.voucher || ''} ${i.modelo || ''} ${i.sku || ''} ${i.grade || ''} ${i.defeitos_adicionais || ''}`.toLowerCase().includes(busca.toLowerCase().trim()));
 
   return <section className="space-y-4 rounded-2xl border border-orange-200 bg-white p-5">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div className="flex items-center gap-3"><Wrench className="h-5 w-5 text-orange-600" />
-        <div><h2 className="text-lg font-bold text-slate-800">{oracle ? 'Movimentação Oracle — Reparos' : 'Picking para reparo'}</h2>
+        <div><h2 className="text-lg font-bold text-slate-800">{oracle ? 'Movimentação Oracle — Reparos' : 'Pedidos de reparo e revisão'}</h2>
           <p className="text-xs text-slate-500">Pedido interno • sem faturamento</p></div>
       </div>
       <div className="flex flex-wrap gap-2">
@@ -171,14 +188,14 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
         </>}
         {oracle && <button disabled={busy} onClick={baixarFilaOracle} className="flex items-center gap-2 rounded-xl border border-violet-300 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-800"><Download size={14} />Fila Oracle dos IMEIs bipados</button>}
         {detail && <button disabled={busy} onClick={() => { setDetail(null); carregar(); }} className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs"><ArrowLeft size={14} />Pedidos</button>}
-        {detail && <button disabled={busy} onClick={exportar} className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs"><Download size={14} />{oracle ? 'Exportar movimentação' : 'Exportar picking'}</button>}
-        {((oracle && detail?.pedido?.id) || (!oracle && ultimoEnvioLab)) && (
+        {detail && (!oracle || detail.pedido.status !== 'picking') && <button disabled={busy} onClick={exportar} className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs"><Download size={14} />{oracle ? 'Exportar movimentação' : 'Exportar picking'}</button>}
+        {((oracle && detail?.pedido?.status !== 'picking' && detail?.pedido?.id) || (!oracle && ultimoEnvioLab)) && (
           <button type="button" disabled={busy} onClick={()=>void baixarEntregaGaia(oracle ? detail.pedido.id : ultimoEnvioLab)}
             className="flex items-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800">
             <Download size={14} /> Planilha de envio ao laboratório
           </button>
         )}
-        {detail && !oracle && <>
+        {detail && ehPickingAtivo && <>
           <label className="text-xs font-semibold text-slate-600">Classificação do processo
             <input list="tipos-reparo" value={tipoProcesso} onChange={e => setTipoProcesso(e.target.value)}
               placeholder="Reparo / Revisão não inicializa" className="mt-1 block min-w-48 rounded-lg border bg-white px-3 py-2 text-xs" maxLength={70}/>
@@ -191,7 +208,7 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
           </label>
           <button type="button" disabled={busy} onClick={() => imprimirDocumento('etiquetas')} className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs"><Download size={14}/>Etiquetas das caixas</button>
         </>}
-        <button disabled={busy || loading} onClick={() => detail && !oracle ? executar('atualizar') : detail ? abrir(detail.pedido.id) : carregar()} className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs disabled:opacity-50"><RefreshCw size={14} />{detail && !oracle ? 'Atualizar posições' : 'Atualizar'}</button>
+        <button disabled={busy || loading} onClick={() => detail && ehPickingAtivo ? executar('atualizar') : detail ? abrir(detail.pedido.id) : carregar()} className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs disabled:opacity-50"><RefreshCw size={14} />{detail && ehPickingAtivo ? 'Atualizar posições' : 'Atualizar'}</button>
       </div>
     </div>
     {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
@@ -229,19 +246,39 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
     </div>}
     {loading && !detail && <p className="text-sm text-slate-500">Consultando reparos…</p>}
     {!detail && <>
-      {oracle && <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={historico} onChange={e => setHistorico(e.target.checked)} />Mostrar movimentações concluídas</label>}
+      <div className="flex flex-wrap items-center gap-2">
+        {!oracle && [
+          { key: 'todos', titulo: 'Todos' },
+          { key: 'picking', titulo: 'Em picking' },
+          { key: 'aguardando_oracle', titulo: 'Fila Oracle' },
+          { key: 'em_reparo', titulo: 'Histórico / Em reparo' },
+        ].map(opcao => (
+          <button key={opcao.key} type="button" onClick={() => setFiltroPedidos(opcao.key)}
+            className={`rounded-lg border px-3 py-2 text-xs font-semibold ${filtroPedidos === opcao.key ? 'border-orange-500 bg-orange-50 text-orange-900' : 'border-slate-200 text-slate-600'}`}>{opcao.titulo} · {number(contadores[opcao.key])}</button>
+        ))}
+        {oracle && <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={historico} onChange={e => setHistorico(e.target.checked)} />Incluir histórico de reparo</label>}
+        <input aria-label="Buscar pedidos de reparo" value={buscaPedidos} onChange={e => setBuscaPedidos(e.target.value)}
+          placeholder="Buscar lote, responsável ou tipo" className="min-w-52 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-xs" />
+      </div>
+      {oracle && <p className="text-xs text-slate-500">Bipados de lotes ainda abertos aparecem como pré-lista. A confirmação Oracle permanece disponível somente após concluir o picking.</p>}
       <div className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-3">{pedidosVisiveis.map(p => <button disabled={busy} onClick={() => abrir(p.id)} key={p.id} className="flex min-w-0 w-full flex-col items-start rounded-xl border border-slate-200 p-4 text-left whitespace-normal hover:border-orange-400 disabled:opacity-50">
-        <p className="w-full whitespace-normal font-bold leading-snug text-slate-800 [overflow-wrap:anywhere]">{p.lote}</p><p className="mt-1 text-xs text-slate-500">{number(p.total)} aparelhos • {date(p.criado_em)}</p>
-        <p className="mt-3 text-sm">{oracle ? p.status === 'em_reparo' ? 'Movimentação confirmada' : 'Aguardando movimentação Oracle' : `${number(p.bipados)} bipados • ${number(p.bloqueados)} com pendência`}</p>
+        <div className="flex w-full flex-wrap items-center justify-between gap-2">
+          <span className="text-[11px] font-bold uppercase tracking-wide text-orange-700">{tipoPedido(p)}</span>
+          <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${p.status === 'aguardando_oracle' ? 'bg-violet-50 text-violet-800' : p.status === 'picking' ? 'bg-amber-50 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>{oracle && p.status === 'picking' ? 'Pré-lista Oracle' : statusPedido(p)}</span>
+        </div>
+        <p className="mt-2 w-full whitespace-normal font-bold leading-snug text-slate-800 [overflow-wrap:anywhere]">{p.lote}</p>
+        <p className="mt-1 text-xs text-slate-500">{number(p.total)} aparelhos • {date(p.criado_em)}</p>
+        <p className="mt-1 text-xs text-slate-500">{p.criado_por_nome || '—'}</p>
+        <p className="mt-3 text-sm text-slate-700">{oracle ? `${number(p.fila_oracle)} bipados na fila` : p.status === 'picking' ? `${number(p.bipados)} bipados · ${number(p.pendentes)} pendentes · ${number(p.bloqueados)} bloqueados` : p.status === 'aguardando_oracle' ? `${number(p.fila_oracle)} aguardando Oracle` : 'Consultar histórico do lote'}</p>
       </button>)}</div>
-      {!loading && !pedidosVisiveis.length && <p className="py-3 text-sm text-slate-500">{oracle ? 'Nenhum reparo aguardando movimentação. Os pedidos entram aqui após concluir o picking.' : 'Nenhum picking de reparo em aberto.'}</p>}
+      {!loading && !pedidosVisiveis.length && <p className="py-3 text-sm text-slate-500">{oracle ? 'Nenhum item bipado na pré-lista ou lote liberado para movimentação.' : 'Nenhum pedido encontrado para este filtro.'}</p>}
     </>}
     {pedido && <>
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-orange-50 p-4">
-        <div className="min-w-0 flex-1"><p className="whitespace-normal font-bold [overflow-wrap:anywhere]">{pedido.lote}</p><p className="mt-1 text-sm">{number(pedido.bipados)} de {number(pedido.total)} bipados • {number(pedido.pendentes)} aguardando bipagem • {number(pedido.bloqueados)} com pendência</p></div>
-        {!oracle && <button disabled={busy || pedido.bipados !== pedido.total || pedido.bloqueados > 0} onClick={() => executar('concluir')} className="flex items-center gap-2 rounded-xl bg-orange-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-40"><CheckCircle2 size={16} />Gerar minuta e enviar ao laboratório</button>}
+        <div className="min-w-0 flex-1"><p className="whitespace-normal font-bold [overflow-wrap:anywhere]">{pedido.lote}</p><p className="mt-1 text-xs font-semibold text-amber-800">{statusPedido(pedido)}</p><p className="mt-1 text-sm">{pedido.status === 'picking' ? `${number(pedido.bipados)} de ${number(pedido.total)} bipados • ${number(pedido.pendentes)} aguardando bipagem • ${number(pedido.bloqueados)} com pendência` : `${number(pedido.total)} aparelhos no histórico do lote`}</p></div>
+        {ehPickingAtivo && <button disabled={busy || pedido.bipados !== pedido.total || pedido.bloqueados > 0} onClick={() => executar('concluir')} className="flex items-center gap-2 rounded-xl bg-orange-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-40"><CheckCircle2 size={16} />Gerar minuta e enviar ao laboratório</button>}
       </div>
-      {!oracle && <form onSubmit={e => { e.preventDefault(); if (imei.trim()) executar('bipar', { p_imei: imei.trim() }); }} className="flex flex-wrap gap-2">
+      {ehPickingAtivo && <form onSubmit={e => { e.preventDefault(); if (imei.trim()) executar('bipar', { p_imei: imei.trim() }); }} className="flex flex-wrap gap-2">
         <input ref={inputRef} autoFocus aria-label="IMEI ou número de série para bipagem" value={imei} onChange={e => setImei(e.target.value)} disabled={busy} placeholder="Bipar IMEI / número de série" className="min-w-64 flex-1 rounded-xl border p-3 font-mono text-sm" />
         <button disabled={busy || !imei.trim()} className="rounded-xl bg-purple-700 px-5 py-3 text-sm font-bold text-white disabled:opacity-50">Bipar para reparo</button>
       </form>}
@@ -252,7 +289,8 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
           <button disabled={busy || !destino.trim() || !referencia.trim()} className="rounded-xl bg-purple-700 px-4 py-3 text-sm font-bold text-white disabled:opacity-40">Registrar movimentação realizada</button>
         </div>
       </form>}
-      {oracle && pedido.status === 'em_reparo' && <p className="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800">Status Oracle: {pedido.status_destino_oracle} • Referência: {pedido.referencia_oracle} • Confirmado em {date(pedido.oracle_confirmado_em)}</p>}
+      {oracle && pedido.status === 'picking' && <p className="rounded-xl bg-amber-50 p-4 text-sm text-amber-800">Os aparelhos bipados deste lote estão na pré-lista Oracle. Aguardam a conclusão do picking para liberação da movimentação.</p>}
+      {oracle && pedido.status === 'em_reparo' && pedido.oracle_confirmado_em && <p className="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800">Status Oracle: {pedido.status_destino_oracle} • Referência: {pedido.referencia_oracle} • Confirmado em {date(pedido.oracle_confirmado_em)}</p>}
       <div className="flex flex-wrap gap-3"><input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Consultar IMEI, voucher, modelo ou SKU" aria-label="Consultar aparelho" className="min-w-60 flex-1 rounded-lg border p-2 text-sm" />
         <select value={filtro} onChange={e => setFiltro(e.target.value)} aria-label="Filtrar status do picking" className="rounded-lg border p-2 text-sm"><option value="">Todos os aparelhos</option><option value="pendente">Aguardando bipagem</option><option value="bloqueado">Com pendência</option><option value="bipado">Bipados</option><option value="em_reparo">Em reparo</option></select>
       </div>
@@ -260,7 +298,7 @@ export default function ReparoOperacaoPanel({ modo = 'picking' }) {
         {itens.map(i => <tr key={i.id}><td className="p-3 font-mono font-semibold">{i.imei}</td><td className="p-3">{i.voucher || '—'}</td><td className="p-3">{i.modelo || 'Não informado'}</td><td className="p-3 font-mono">{i.sku || '—'}</td><td className="p-3">{i.grade || '—'}</td><td className="max-w-64 whitespace-normal p-3">{i.defeitos_adicionais || '—'}</td><td className="whitespace-nowrap p-3">{i.local_wms || 'Sem posição WMS'}</td><td className="p-3"><span className={`whitespace-nowrap rounded-full px-2 py-1 font-semibold ${i.status === 'bloqueado' ? 'bg-red-50 text-red-700' : i.status === 'pendente' ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>{labels[i.status]}</span></td><td className="min-w-56 max-w-96 p-3">{i.pendencia || date(i.bipado_em)}</td></tr>)}
         {!itens.length && <tr><td colSpan={9} className="p-8 text-center text-slate-500">Nenhum aparelho neste filtro.</td></tr>}
       </tbody></table></div>
-      {!oracle && <p className="text-xs text-slate-500">Posições vêm do WMS atual. Aparelhos com pendência ficam no pedido e impedem a conclusão até serem regularizados. A bipagem registra a retirada física para reparo.</p>}
+      {ehPickingAtivo && <p className="text-xs text-slate-500">Posições vêm do WMS atual. Aparelhos com pendência ficam no pedido e impedem a conclusão até serem regularizados. A bipagem registra a retirada física para reparo.</p>}
     </>}
   </section>;
 }
