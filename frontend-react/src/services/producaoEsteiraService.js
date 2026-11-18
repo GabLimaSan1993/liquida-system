@@ -42,18 +42,18 @@ export async function consultarProducaoDetalhada(filters, signal) {
 
 export function resumirProducao(dados, pesos = {}) {
   const pessoas = new Map(), etapas = new Map(), periodos = new Map();
-  let total = 0, semResponsavel = 0, retrabalho = 0;
+  let total = 0, semResponsavel = 0;
   for (const d of dados) {
-    const n = Number(d.producao || 0), r = Number(d.retrabalho || 0);
-    total += n; retrabalho += r;
+    const n = Number(d.producao || 0);
+    total += n;
     if (!d.colaborador_id) semResponsavel += n;
-    const etapa = etapas.get(d.etapa) || { producao: 0, retrabalho: 0, unidade: d.unidade };
-    etapa.producao += n; etapa.retrabalho += r; etapas.set(d.etapa, etapa);
+    const etapa = etapas.get(d.etapa) || { producao: 0, unidade: d.unidade };
+    etapa.producao += n; etapas.set(d.etapa, etapa);
     const periodo = periodos.get(d.periodo) || { periodo: d.periodo, total: 0 };
     periodo[d.etapa] = (periodo[d.etapa] || 0) + n; periodo.total += n; periodos.set(d.periodo, periodo);
     if (!d.colaborador_id) continue;
-    const p = pessoas.get(d.colaborador_id) || { id: d.colaborador_id, nome: d.colaborador, producao: 0, retrabalho: 0, pontos: 0, dias: new Set(), etapas: {} };
-    p.producao += n; p.retrabalho += r; p.pontos += n * Number(pesos[d.etapa] ?? 1);
+    const p = pessoas.get(d.colaborador_id) || { id: d.colaborador_id, nome: d.colaborador, producao: 0, pontos: 0, dias: new Set(), etapas: {} };
+    p.producao += n; p.pontos += n * Number(pesos[d.etapa] ?? 1);
     // Dias ativos are returned independently of chart grouping.
     for (const dia of d.dias_ativos || []) if (n) p.dias.add(dia);
     p.etapas[d.etapa] = (p.etapas[d.etapa] || 0) + n; pessoas.set(p.id, p);
@@ -65,7 +65,7 @@ export function resumirProducao(dados, pesos = {}) {
     if (!i || p.pontos !== ranking[i-1].pontos) posicao = i + 1;
     p.posicao = posicao; p.diasAtivos = p.dias.size; p.media = p.dias.size ? p.producao / p.dias.size : 0;
   }
-  return { total, semResponsavel, retrabalho, ranking, etapas, periodos: [...periodos.values()].sort((a,b) => a.periodo.localeCompare(b.periodo)) };
+  return { total, semResponsavel, ranking, etapas, periodos: [...periodos.values()].sort((a,b) => a.periodo.localeCompare(b.periodo)) };
 }
 
 // Largest remainder distributes whole cents and preserves the exact simulation budget.
