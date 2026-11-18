@@ -8,6 +8,8 @@ const PAGE_META = {
   "/analise-entrada":              { title: "Análise de Entrada",        subtitle: "Compras · Acompanhe entrada, disponibilidade, itens vendidos, PMV e rentabilidade" },
   "/faturamento":                  { title: "Faturamento",               subtitle: "Vendas · Vendas, cliente, fornecedor, lote e rentabilidade" },
   "/abertura-os":                  { title: "Abertura de OS",            subtitle: "Logística · Registro e acompanhamento de ordens de serviço" },
+  "/financeiro/fluxo-caixa":       { title: "Fluxo de Caixa",            subtitle: "Financeiro · Visão das movimentações bancárias" },
+  "/financeiro/extratos-bancarios": { title: "Extratos Bancários",        subtitle: "Financeiro · Upload e controle dos arquivos bancários" },
   "/financeiro/fluxo-realizado":   { title: "Fluxo de Caixa Realizado",  subtitle: "Financeiro · Lançamentos do extrato bancário" },
   "/financeiro/contas-pagar":      { title: "Contas a Pagar",            subtitle: "Financeiro · Obrigações financeiras sincronizadas do Tiny" },
   "/financeiro/contas-receber":    { title: "Contas a Receber",          subtitle: "Financeiro · Recebimentos sincronizados do Tiny" },
