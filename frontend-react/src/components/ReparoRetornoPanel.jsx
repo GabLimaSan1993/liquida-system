@@ -63,12 +63,22 @@ export default function ReparoRetornoPanel({ modo = 'armazenagem' }) {
   const carregar = useCallback(async () => {
     setLoading(true); setErro('');
     try {
-      const { data, error } = await supabase.rpc(
-        oracle ? 'assurant_reparo_retorno' : 'assurant_reparo_retorno_laboratorio',
-        { p_acao: oracle ? 'listar_oracle' : 'listar' }
-      );
-      if (error) throw error;
-      setItens(Array.isArray(data) ? data : []);
+      if (oracle) {
+        const [comPicking, semPicking] = await Promise.all([
+          supabase.rpc('assurant_reparo_retorno', { p_acao: 'listar_oracle' }),
+          supabase.rpc('assurant_reparo_retorno_indiretos', { p_acao: 'listar' })
+        ]);
+        if (comPicking.error) throw comPicking.error;
+        if (semPicking.error) throw semPicking.error;
+        setItens([
+          ...(Array.isArray(comPicking.data) ? comPicking.data : []),
+          ...(Array.isArray(semPicking.data) ? semPicking.data : [])
+        ]);
+      } else {
+        const { data, error } = await supabase.rpc('assurant_reparo_retorno_laboratorio', { p_acao: 'listar' });
+        if (error) throw error;
+        setItens(Array.isArray(data) ? data : []);
+      }
     } catch (e) { setErro(e.message || 'Não foi possível consultar os retornos.'); }
     finally { setLoading(false); }
   }, [oracle]);
@@ -121,9 +131,13 @@ export default function ReparoRetornoPanel({ modo = 'armazenagem' }) {
     if (!window.confirm(pergunta)) return;
     setBusy(item.id); setErro(''); setMensagem('');
     try {
-      const { data, error } = await supabase.rpc('assurant_reparo_retorno', {
-        p_acao: acao, p_item_id: item.id, p_referencia: referencia?.trim() || null
-      });
+      const retornoIndireto = Boolean(item.via_origem_indireta);
+      const { data, error } = await supabase.rpc(
+        retornoIndireto ? 'assurant_reparo_retorno_indiretos' : 'assurant_reparo_retorno',
+        retornoIndireto
+          ? { p_acao: acao, p_item_id: item.id, p_origem: item.origem, p_referencia: referencia?.trim() || null }
+          : { p_acao: acao, p_item_id: item.id, p_referencia: referencia?.trim() || null }
+      );
       if (error) throw error;
       setMensagem(oracle
         ? `Movimentação Sub 6 → ${data?.subinv_destino} confirmada no sistema. Referência: ${data?.referencia_oracle}.`
