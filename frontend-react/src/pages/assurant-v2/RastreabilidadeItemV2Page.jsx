@@ -1690,6 +1690,9 @@ export default function RastreabilidadeItemV2Page() {
                     <DetailField label="Cor da ALS" value={nomenclaturaOnline.cor} />
                     <DetailField label="IMEI 2 / Serial" value={nomenclaturaOnline.imei2} mono />
                     <DetailField label="Resultado ALS Online" value={nomenclaturaOnline.resultado_als} />
+                    <DetailField label="Defeitos ALS" value={Array.isArray(nomenclaturaOnline.defeitos_als) ? nomenclaturaOnline.defeitos_als.join(', ') : nomenclaturaOnline.defeitos_als} wide />
+                    <DetailField label="Pedido de origem" value={nomenclaturaOnline.pedido_origem} />
+                    <DetailField label="Observações" value={nomenclaturaOnline.observacoes} wide />
                     <DetailField label="Etapa Trade-In Online" value={nomenclaturaOnline.etapa} />
                   </>)}
                   <DetailField label="Local atual / último local" value={summary.local} wide />
