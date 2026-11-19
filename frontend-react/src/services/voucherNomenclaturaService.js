@@ -43,6 +43,9 @@ export function aplicarNomenclatura(item, referencias = {}) {
     destinatario_correios: encontrado.destinatario || null,
     etapa_online: encontrado.etapa || null,
     resultado_als: encontrado.resultado_als || null,
+    defeitos_als: identidade(item.defeitos_als) || encontrado.defeitos_als || null,
+    pedido_origem: identidade(item.pedido_origem) || encontrado.pedido_origem || null,
+    observacoes_online: encontrado.observacoes || null,
   };
 }
 
