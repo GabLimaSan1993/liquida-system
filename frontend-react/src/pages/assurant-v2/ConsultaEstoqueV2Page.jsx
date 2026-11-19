@@ -1179,7 +1179,7 @@ const andarResumo =
                     })
                   )
                 }
-                placeholder="Voucher, IMEI, SKU, produto ou endereço..."
+                placeholder="Voucher, código de postagem Correios, e-ticket, IMEI ou endereço..."
                 className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-3 text-xs outline-none transition focus:border-violet-300 focus:ring-4 focus:ring-violet-50"
               />
             </div>
@@ -2091,6 +2091,8 @@ const ativo =
                       {selecionado.imei2 && <CampoDetalhe label="IMEI 2" value={selecionado.imei2} mono />}
                       {selecionado.destinatario_correios && <CampoDetalhe label="Destinatário Trade-In Online" value={selecionado.destinatario_correios} />}
                       {selecionado.objeto_correios && <CampoDetalhe label="Objeto Correios" value={selecionado.objeto_correios} mono />}
+                      {selecionado.codigo_postagem && <CampoDetalhe label="Código de postagem / e-ticket" value={selecionado.codigo_postagem} mono />}
+                      {selecionado.codigo_rastreio_saida && <CampoDetalhe label="Rastreio de saída Correios" value={selecionado.codigo_rastreio_saida} mono />}
                       {selecionado.etapa_online && <CampoDetalhe label="Etapa Trade-In Online" value={selecionado.etapa_online} />}
                       {selecionado.resultado_als && <CampoDetalhe label="Resultado ALS" value={selecionado.resultado_als} />}
                       {selecionado.defeitos_als?.length > 0 && <CampoDetalhe label="Defeitos ALS" value={Array.isArray(selecionado.defeitos_als) ? selecionado.defeitos_als.join(', ') : selecionado.defeitos_als} />}
