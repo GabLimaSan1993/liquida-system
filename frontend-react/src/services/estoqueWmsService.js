@@ -1,5 +1,5 @@
 import { supabase } from "../lib/supabase";
-import { enriquecerNomenclaturaLista, consultarNomenclaturaVouchers } from "./voucherNomenclaturaService.js";
+import { enriquecerNomenclaturaLista, resolverIdentificadorOnline } from "./voucherNomenclaturaService.js";
 
 export const RUAS_WMS = [
   { rua: 1, grade: "QUEBRADO", tipo: "CELULAR" },
@@ -222,13 +222,10 @@ export async function pesquisarEstoqueWms({
   const paginaSegura = Math.max(1, Number(pagina) || 1);
   const tamanhoSeguro = Math.min(100, Math.max(1, Number(tamanhoPagina) || 50));
   let buscaOperacional = busca.trim();
-  if (/^(SAMV|GRV)[0-9]+$/i.test(buscaOperacional)) {
-    try {
-      const dados = await consultarNomenclaturaVouchers([buscaOperacional]);
-      buscaOperacional = dados[buscaOperacional.toUpperCase()]?.voucher_original || buscaOperacional;
-    } catch (error) {
-      console.warn("Busca por voucher de origem indisponível:", error.message);
-    }
+  try {
+    ({ buscaOperacional } = await resolverIdentificadorOnline(buscaOperacional));
+  } catch (error) {
+    console.warn("Falha na resolução do código de postagem; pesquisando termo original:", error.message);
   }
   const { data, error } = await supabase.rpc("wms_buscar_estoque_expedicao_pagina", {
     p_busca: buscaOperacional || null,
