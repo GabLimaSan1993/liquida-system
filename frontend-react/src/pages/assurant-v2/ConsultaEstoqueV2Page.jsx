@@ -2093,6 +2093,9 @@ const ativo =
                       {selecionado.objeto_correios && <CampoDetalhe label="Objeto Correios" value={selecionado.objeto_correios} mono />}
                       {selecionado.etapa_online && <CampoDetalhe label="Etapa Trade-In Online" value={selecionado.etapa_online} />}
                       {selecionado.resultado_als && <CampoDetalhe label="Resultado ALS" value={selecionado.resultado_als} />}
+                      {selecionado.defeitos_als?.length > 0 && <CampoDetalhe label="Defeitos ALS" value={Array.isArray(selecionado.defeitos_als) ? selecionado.defeitos_als.join(', ') : selecionado.defeitos_als} />}
+                      {selecionado.pedido_origem && <CampoDetalhe label="Pedido de origem" value={selecionado.pedido_origem} />}
+                      {selecionado.observacoes_online && <CampoDetalhe label="Observações Trade-In Online" value={selecionado.observacoes_online} />}
 
 
                       <div className="grid grid-cols-2 gap-2">
