@@ -4,7 +4,8 @@ import * as XLSX from 'xlsx';
 import { COLUNAS_ESTOQUE, CAMPOS_ESTOQUE, linhaEstoque } from './relatorioEstoqueColumns.js';
 
 test('percentual da bateria, defeitos adicionais e laboratório preservados sem coluna duplicada', () => {
-  assert.equal(COLUNAS_ESTOQUE.length, 37);
+  assert.equal(COLUNAS_ESTOQUE.length, 46);
+  assert.deepEqual(CAMPOS_ESTOQUE.slice(37), ['marca', 'capacidade', 'cor', 'imei2', 'descricao', 'objeto_correios', 'destinatario_correios', 'etapa_online', 'resultado_als']);
   assert.equal(CAMPOS_ESTOQUE[36], 'pedido_reservado');
   assert.equal(COLUNAS_ESTOQUE[30], 'Saúde da bateria (%)');
   assert.equal(CAMPOS_ESTOQUE[30], 'bateria_percentual');
