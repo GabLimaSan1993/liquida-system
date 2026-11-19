@@ -14,6 +14,20 @@ const botao='rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs fon
 const limpar=txt=>String(txt||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 const unicos=lista=>[...new Set(lista.filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
 const vazio=()=>({marca:'',modelo:'',capacidade:'',cor:''});
+const fichaCampos=[
+  ['Marca','marca'],['Modelo','modelo'],['Capacidade','capacidade'],['Cor','cor'],
+  ['SKU ALS','sku'],['IMEI / Serial','imei'],['IMEI 2','imei2'],
+  ['Tipo de aparelho','tipo_aparelho'],['Pedido de origem','pedido_origem'],
+  ['Resultado ALS','resultado_als'],['Etapa','etapa'],['Observações','observacoes']
+];
+const pendente=valor=>String(valor??'').trim()||'Aguardando identificação';
+const voucherSuspeito=registro=>{
+  const v=String(registro.voucher||'').trim().toUpperCase();
+  const objeto=String(registro.codigo_rastreio||'').trim().toUpperCase();
+  return !/^[A-Z][A-Z0-9]*[0-9]+$/.test(v)||/^[A-Z]{2}[0-9]{9}BR$/.test(v)||
+    v===objeto||v===objeto.replace(/BR$/,'');
+};
+
 
 export default function TriagemAlsOnlinePanel(){
   const [fila,setFila]=useState([]);
@@ -58,7 +72,7 @@ export default function TriagemAlsOnlinePanel(){
   const tipo=tipoDoAparelho(produto.modelo,selecionado?.tipo);
   const segundoObrigatorio=tipo==='CELULAR'&&exigeDoisImeis(produto.modelo,tipo,false,false);
   const imeisOpcionais=resultado==='RECUSADO';
-  const visiveis=useMemo(()=>fila.filter(a=>[a.voucher,a.codigo_rastreio,a.destinatario_correios,a.observacoes].some(v=>limpar(v).includes(limpar(busca)))),[fila,busca]);
+  const visiveis=useMemo(()=>fila.filter(a=>[a.voucher,a.codigo_rastreio,a.destinatario_correios,...fichaCampos.map(([,chave])=>a[chave])].some(v=>limpar(v).includes(limpar(busca)))),[fila,busca]);
   const defeitosVisiveis=useMemo(()=>{
     const termo=limpar(buscaDefeito.trim());
     return !termo ? catalogoDefeitos : catalogoDefeitos.filter(d =>
@@ -119,16 +133,34 @@ export default function TriagemAlsOnlinePanel(){
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div><h2 className="font-black">Fila por voucher</h2><p className="mt-1 text-xs text-slate-500">Clique no voucher para iniciar a Triagem ALS.</p></div>
         <div className="relative"><Search size={16} className="absolute left-3 top-3.5 text-slate-400"/>
-          <input className={campo+' pl-9'} placeholder="Buscar voucher ou objeto" value={busca} onChange={e=>setBusca(e.target.value)}/></div>
+          <input className={campo+' pl-9'} placeholder="Buscar voucher, modelo, IMEI ou objeto" value={busca} onChange={e=>setBusca(e.target.value)}/></div>
       </div>
-      <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[650px] text-left text-xs">
-        <thead className="bg-slate-50">{['Voucher','Objeto Correios','Destinatário','Observações','Data do vínculo','Ação'].map(x=><th className="border-b p-3" key={x}>{x}</th>)}</thead>
-        <tbody>{visiveis.map(a=><tr key={a.id} className="border-b hover:bg-violet-50/30">
-          <td className="p-3"><button type="button" className="font-mono font-black text-violet-700 hover:underline" onClick={()=>abrir(a)}>{a.voucher}</button></td>
-          <td className="p-3 font-mono">{a.codigo_rastreio}</td><td className="p-3">{a.destinatario_correios}</td>
-          <td className="p-3">{a.observacoes||'—'}</td><td className="p-3">{a.criado_em?new Date(a.criado_em).toLocaleString('pt-BR'):'—'}</td>
-          <td className="p-3"><button type="button" className={botao} onClick={()=>abrir(a)}>Abrir triagem</button></td>
-        </tr>)}</tbody></table>
+      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {visiveis.map(a=>{
+          const suspeito=voucherSuspeito(a);
+          return <article key={a.id} className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 pb-3">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase text-slate-500">Voucher</p>
+                <p className="break-all font-mono text-sm font-black text-violet-700">{a.voucher||'Não informado'}</p>
+                <p className="mt-2 break-words text-sm font-bold text-slate-900">{[a.marca,a.modelo,a.capacidade,a.cor].filter(Boolean).join(' · ')||'Modelo aguardando identificação na ALS'}</p>
+              </div>
+              {suspeito&&<span className="rounded-md bg-amber-50 px-2 py-1 text-[11px] font-bold text-amber-800">Conferir voucher</span>}
+            </div>
+            <dl className="mt-3 grid grid-cols-2 gap-3 text-xs">
+              <div className="col-span-2 min-w-0"><dt className="text-slate-500">Objeto Correios</dt><dd className="mt-0.5 break-all font-mono font-semibold">{a.codigo_rastreio||'—'}</dd></div>
+              <div className="col-span-2 min-w-0"><dt className="text-slate-500">Destinatário</dt><dd className="mt-0.5 break-words font-semibold">{a.destinatario_correios||'—'}</dd></div>
+              {fichaCampos.map(([rotulo,chave])=><div key={chave} className={chave==='observacoes'?'col-span-2 min-w-0':'min-w-0'}>
+                <dt className="text-slate-500">{rotulo}</dt>
+                <dd className="mt-0.5 break-words font-medium text-slate-800">{pendente(a[chave])}</dd>
+              </div>)}
+              <div className="col-span-2 min-w-0"><dt className="text-slate-500">Data da vinculação</dt><dd className="mt-0.5 font-semibold">{a.criado_em?new Date(a.criado_em).toLocaleString('pt-BR'):'—'}</dd></div>
+            </dl>
+            {suspeito
+              ? <a href="/v2/assurant/online/vinculacao" className="mt-4 flex w-full justify-center rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs font-bold text-amber-900">Corrigir vínculo antes da triagem</a>
+              : <button type="button" className={botao+' mt-4 w-full'} onClick={()=>abrir(a)}>Abrir Triagem ALS</button>}
+          </article>;
+        })}
         {!carregando&&visiveis.length===0&&<p className="py-10 text-center text-xs text-slate-500">Nenhum voucher aguardando ALS.</p>}
       </div>
     </section>
