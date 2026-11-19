@@ -454,7 +454,7 @@ export default function App() {
             </div>
           </ProtectedRoute>
         } />
-        {/* Fluxo piloto — laboratório de reparos, acesso restrito */
+        {/* Fluxo piloto — laboratório de reparos, acesso restrito */}
         <Route
           path="laboratorio/reparos"
           element={<ProtectedRoute tela="/v2/assurant/laboratorio/reparos"><LaboratorioIndividualV2Page /></ProtectedRoute>}
