@@ -8,7 +8,7 @@ const references = [
   ['recebimento', 'Recebimento'], ['funcional', 'Triagem funcional'], ['cosmetica', 'Triagem cosmética'],
   ['laudo', 'Laudo'], ['alocacao', 'Alocação'], ['oracle', 'Oracle'], ['criacao', 'Criação'], ['atualizacao', 'Atualização'],
 ];
-const compact = [0, 1, 2, 3, 37, 38, 39, 40, 4, 10, 13, 42, 43, 44, 45, 36, 31, 32, 33];
+const compact = [0, 1, 2, 3, 37, 38, 39, 40, 4, 10, 13, 42, 43, 44, 45, 46, 36, 31, 32, 33];
 const num = value => Number(value || 0).toLocaleString('pt-BR');
 const ETAPAS_LAB = [
   'Aguardando Recebimento', 'Aguardando Técnico', 'Aguardando Peças',
