@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase.js';
-import { enriquecerNomenclaturaLista } from './voucherNomenclaturaService.js';
+import { enriquecerNomenclaturaLista, consultarNomenclaturaVouchers } from './voucherNomenclaturaService.js';
 
 export async function consultarEstoque(filters, offset = 0, limit = 100, summary = true, signal) {
   // A carga inicial busca indicadores; os lotes seguintes do Excel usam a
@@ -11,6 +11,14 @@ export async function consultarEstoque(filters, offset = 0, limit = 100, summary
     p_rede: filters.rede, p_busca: filters.busca.trim(), p_offset: offset, p_limite: limit,
     p_status_laboratorio: filters.statusLaboratorio || '',
   };
+  if (/^(SAMV|GRV)[0-9]+$/i.test(params.p_busca)) {
+    try {
+      const dados = await consultarNomenclaturaVouchers([params.p_busca]);
+      params.p_busca = dados[params.p_busca.toUpperCase()]?.voucher_original || params.p_busca;
+    } catch (error) {
+      console.warn("Busca por voucher de origem indisponível:", error.message);
+    }
+  }
   if (summary) params.p_resumo = true;
   let request = supabase.rpc(rpc, params);
   if (signal) request = request.abortSignal(signal);
