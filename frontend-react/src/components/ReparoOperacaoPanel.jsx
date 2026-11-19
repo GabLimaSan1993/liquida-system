@@ -6,7 +6,16 @@ import { useAuth } from '../AuthContext.jsx';
 import { imprimirMinutaReparo, imprimirEtiquetasCaixasReparo } from '../services/reparoDocumentosService.js';
 
 const labels = { pendente: 'Aguardando bipagem', bloqueado: 'Pendência', bipado: 'Bipado', em_reparo: 'Em reparo', retornado: 'Retornado' };
-const statusPedido = p => p.origem_lab === 'planilha_laboratorio' ? 'Histórico — laboratório' : p.status === 'picking' ? 'Em separação' : p.status === 'aguardando_oracle' ? 'Aguardando Oracle' : p.oracle_confirmado_em ? 'Oracle confirmado' : 'Em reparo';
+// O status operacional do lote sempre prevalece sobre a origem histórica.
+const statusPedido = p => p.status === 'picking'
+  ? 'Em separação'
+  : p.status === 'aguardando_oracle'
+    ? 'Aguardando Oracle'
+    : p.oracle_confirmado_em
+      ? 'Oracle confirmado'
+      : p.origem_lab === 'planilha_laboratorio'
+        ? 'Histórico — laboratório'
+        : p.status === 'em_reparo' ? 'Em reparo' : (p.status || 'Sem status');
 const tipoPedido = p => /REVIS|NAO.?INICI|NÃO.?INICI/i.test(p?.lote || '') ? 'Revisão' : 'Reparo';
 const number = n => Number(n || 0).toLocaleString('pt-BR');
 const date = d => d ? new Date(d).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '—';
