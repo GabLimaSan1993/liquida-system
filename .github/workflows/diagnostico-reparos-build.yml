@@ -5,6 +5,7 @@ on:
       - diagnostics/reparos-build
     paths:
       - '.github/workflows/diagnostico-reparos-build.yml'
+      - 'frontend-react/src/**'
   workflow_dispatch:
 
 permissions:
