@@ -1,4 +1,4 @@
-import ReparoOperacaoPanel from "../components/ReparoOperacaoPanel.jsx";
+
 import { useState, useEffect, useRef } from "react";
 import {
   Search, CheckCircle, AlertTriangle, Download,
@@ -1944,7 +1944,15 @@ export default function B2BPickingPage({
         </div>
       ) : (
         <>
-          {aba === "picking" && <ReparoOperacaoPanel />}
+          {aba === "picking" && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-white px-4 py-3 text-xs">
+              <span className="font-semibold text-slate-600">Pedidos internos de reparo e revisão foram movidos para Reparos.</span>
+              <a href="/v2/assurant/reparos/pedidos"
+                className="rounded-lg border border-violet-200 px-3 py-2 font-bold text-violet-700 hover:bg-violet-50">
+                Abrir pedidos de reparo
+              </a>
+            </div>
+          )}
           {aba === "picking"   && <TabPicking   pedidosIniciais={pedidos} onAtualizarSilencioso={atualizarSilencioso} />}
           {aba === "analise"   && <TabAnalise   pedidosIniciais={pedidos} onAtualizarSilencioso={atualizarSilencioso} itensAnalise={itensAnalise} />}
           {aba === "embalagem" && <TabEmbalagem pedidosIniciais={pedidos} onAtualizarSilencioso={atualizarSilencioso} />}

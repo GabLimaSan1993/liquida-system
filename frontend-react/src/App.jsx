@@ -84,6 +84,8 @@ import TriagemAutomaticaLabV2Page from "./pages/assurant-v2/TriagemAutomaticaLab
 import TriagemUnificadaTestePage from "./pages/assurant-v2/TriagemUnificadaTestePage.jsx";
 import ArmazenagemV2Page from "./pages/assurant-v2/ArmazenagemV2Page.jsx";
 import ReparoRetornoPanel from "./components/ReparoRetornoPanel.jsx";
+import ReparoOperacaoPanel from "./components/ReparoOperacaoPanel.jsx";
+import ReparosVisaoGeralPage from "./pages/assurant-v2/ReparosVisaoGeralPage.jsx";
 import ConsultaEstoqueV2Page from "./pages/assurant-v2/ConsultaEstoqueV2Page.jsx";
 import KardexEstoqueV2Page from "./pages/assurant-v2/KardexEstoqueV2Page.jsx";
 import InventarioV2Page from "./pages/assurant-v2/InventarioV2Page.jsx";
@@ -131,6 +133,12 @@ import DefinicaoAssurantV2Page from "./pages/assurant-v2/DefinicaoAssurantV2Page
 import ValidacaoMeliV2Page from "./pages/assurant-v2/ValidacaoMeliV2Page.jsx";
 
 
+
+function ReparosOverviewGate({ children }) {
+  const { hasAccess } = useAuth();
+  return hasAccess("/v2/assurant/b2b/picking") || hasAccess("/v2/assurant/triagens/oracle")
+    ? children : <Navigate to="/sem-acesso" replace />;
+}
 
 function ProtectedRoute({
   tela,
@@ -433,7 +441,20 @@ export default function App() {
         }
       >
 
-        {/* Fluxo piloto — laboratório de reparos, acesso restrito */}
+        {/* Reparos: módulo operacional dedicado, sem criar permissões adicionais. */}
+        <Route path="reparos" element={<ReparosOverviewGate><ReparosVisaoGeralPage /></ReparosOverviewGate>} />
+        <Route path="reparos/pedidos" element={
+          <ProtectedRoute tela="/v2/assurant/b2b/picking"><ReparoOperacaoPanel modo="picking" /></ProtectedRoute>
+        } />
+        <Route path="reparos/oracle" element={
+          <ProtectedRoute tela="/v2/assurant/triagens/oracle">
+            <div className="mx-auto max-w-[1700px] space-y-5 p-4 md:p-6">
+              <ReparoOperacaoPanel modo="oracle" />
+              <ReparoRetornoPanel modo="oracle" />
+            </div>
+          </ProtectedRoute>
+        } />
+        {/* Fluxo piloto — laboratório de reparos, acesso restrito */
         <Route
           path="laboratorio/reparos"
           element={<ProtectedRoute tela="/v2/assurant/laboratorio/reparos"><LaboratorioIndividualV2Page /></ProtectedRoute>}

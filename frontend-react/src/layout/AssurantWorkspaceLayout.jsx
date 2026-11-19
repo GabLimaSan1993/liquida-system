@@ -133,14 +133,6 @@ const MENU_GROUPS = [
       },
 
       {
-        label: "Laboratório de Reparos · Piloto",
-        icon: ClipboardCheck,
-        to: "/v2/assurant/laboratorio/reparos",
-        exact: true,
-        enabled: true,
-      },
-
-      {
         label: "Triagens",
         icon: FlaskConical,
         enabled: true,
@@ -288,19 +280,27 @@ const MENU_GROUPS = [
   },
 
   {
+    label: "REPAROS",
+    items: [
+      { label: "Visão Geral", icon: LayoutDashboard, to: "/v2/assurant/reparos", exact: true, enabled: true,
+        permissoesAlternativas: ["/v2/assurant/b2b/picking", "/v2/assurant/triagens/oracle"] },
+      { label: "Pedidos de Reparo e Revisão", icon: ClipboardCheck, to: "/v2/assurant/reparos/pedidos",
+        permissao: "/v2/assurant/b2b/picking", exact: true, enabled: true },
+      { label: "Laboratório", icon: FlaskConical, to: "/v2/assurant/laboratorio/reparos", exact: true, enabled: true },
+      { label: "Retorno do Laboratório", icon: RefreshCw, to: "/v2/assurant/estoque/retorno-reparo", exact: true, enabled: true },
+      { label: "Movimentação Oracle", icon: Activity, to: "/v2/assurant/reparos/oracle",
+        permissao: "/v2/assurant/triagens/oracle", exact: true, enabled: true },
+      { label: "Histórico e Rastreabilidade", icon: History, to: ASSURANT_TRACE_ROUTE, exact: true, enabled: true },
+    ],
+  },
+
+  {
     label: "ESTOQUE",
     items: [
       {
   label: "Armazenagem",
   icon: Package,
   to: "/v2/assurant/estoque/armazenagem",
-  exact: true,
-  enabled: true,
-},
-      {
-  label: "Retorno de Reparo",
-  icon: RefreshCw,
-  to: "/v2/assurant/estoque/retorno-reparo",
   exact: true,
   enabled: true,
 },
@@ -1036,6 +1036,14 @@ function SidebarContent({
     );
   };
 
+  const podeVerItem = item => {
+    if (item.permissoesAlternativas?.length) {
+      return item.permissoesAlternativas.some(rota =>
+        podeVerRota(rota, item.allowedUserIds, item.liquidaOnly));
+    }
+    return podeVerRota(item.permissao || item.to, item.allowedUserIds, item.liquidaOnly);
+  };
+
   const menuGroupsVisiveis = [MENU_GROUPS[0], MENU_GROUPS[1], ...MENU_TRADEIN_ONLINE, ...MENU_GROUPS.slice(2)]
     .map((group) => ({
       ...group,
@@ -1045,7 +1053,7 @@ function SidebarContent({
             return {
               ...item,
               children: item.children.filter((child) =>
-                podeVerRota(child.to, child.allowedUserIds, child.liquidaOnly)
+                podeVerItem(child)
               ),
             };
           }
@@ -1059,7 +1067,7 @@ function SidebarContent({
             return item.children.length > 0;
           }
 
-          return podeVerRota(item.to, item.allowedUserIds, item.liquidaOnly);
+          return podeVerItem(item);
         }),
     }))
     .filter((group) => group.items.length > 0);
