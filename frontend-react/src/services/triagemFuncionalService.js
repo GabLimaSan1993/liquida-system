@@ -452,7 +452,7 @@ export async function carregarCatalogo(tipo = null) {
   // A cor vem daqui, em inglês, porque é parte da chave que resolve o SKU.
   const { data, error } = await supabase
     .from("produtos_catalogo")
-    .select("tipo, marca, modelo, capacidade, tamanho, cor, sku_als, sku_oracle, pendente")
+    .select("tipo, marca, modelo, capacidade, tamanho, cor, sku_als, sku_oracle, descricao, pendente")
     .in("tipo", tipo ? [tipo] : ["APARELHO", "TABLET", "SMARTWATCH"])
     .eq("ativo", true)
     .order("marca").order("modelo")
