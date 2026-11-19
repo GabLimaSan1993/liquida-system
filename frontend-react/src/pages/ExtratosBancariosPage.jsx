@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Download, FileArchive, FileText, Landmark, LoaderCircle, UploadCloud, Play, RefreshCw } from "lucide-react";
 import { useAuth } from "../AuthContext.jsx";
 import { supabase } from "../lib/supabase.js";
+import SantanderConferencia from "../components/SantanderConferencia.jsx";
 
 const BUCKET = "financeiro-extratos";
 const LIMITE_BYTES = 50 * 1024 * 1024;
@@ -33,6 +34,7 @@ export default function ExtratosBancariosPage() {
   const [processandoId, setProcessandoId] = useState(null);
   const [andamento, setAndamento] = useState(null);
   const [resumosArquivos, setResumosArquivos] = useState({});
+  const [conferenciaItem, setConferenciaItem] = useState(null);
   const bancoSelecionado = (banco === "Outro" ? outroBanco : banco).trim();
   const resumo = useMemo(() => ({
     arquivos: historico.length,
@@ -327,19 +329,24 @@ export default function ExtratosBancariosPage() {
                   <td className="whitespace-nowrap px-5 py-3 text-slate-600">{dataHora(item.criado_em)}</td>
                   <td className="px-5 py-3">
                     <span className={"rounded-md px-2 py-1 text-xs font-medium " +
-                      (item.status === "processado" ? "bg-green-50 text-green-700" :
+                      (item.status === "processado" && Number(resumosArquivos[item.id]?.pendentes) > 0 ? "bg-amber-50 text-amber-800" :
+                         item.status === "processado" ? "bg-green-50 text-green-700" :
                         item.status === "erro" ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-700")}>
                       {item.status === "recebido" ? "Aguardando processamento" :
                         item.status === "em_processamento" ? "Parcial" :
-                        item.status === "processado" ? "Processado" :
+                        item.status === "processado" && Number(resumosArquivos[item.id]?.pendentes) > 0 ? "Processado · conferir PDF" :
+                         item.status === "processado" ? "Processado" :
                         item.status === "erro" ? "Verificar erro" : item.status}
                     </span>
                     {resumosArquivos[item.id] && (
                       <div className="mt-1 text-xs text-slate-500">
-                        {resumosArquivos[item.id].novos.toLocaleString("pt-BR")} registros novos ·
+                        {resumosArquivos[item.id].novos.toLocaleString("pt-BR")} lançamentos importados ·
                         {" "}{resumosArquivos[item.id].saldos.toLocaleString("pt-BR")} saldos informativos ·
                         {" "}{resumosArquivos[item.id].repetidos.toLocaleString("pt-BR")} repetidos
-                        {resumosArquivos[item.id].pendentes > 0 && <span className="font-semibold text-amber-700"> · {resumosArquivos[item.id].pendentes.toLocaleString("pt-BR")} aguardando conferência</span>}
+                        {resumosArquivos[item.id].pendentes > 0 && <>
+                          <span className="font-semibold text-emerald-700"> · {(resumosArquivos[item.id].novos - resumosArquivos[item.id].pendentes).toLocaleString("pt-BR")} conferidos</span>
+                          <span className="font-semibold text-amber-700"> · {resumosArquivos[item.id].pendentes.toLocaleString("pt-BR")} aguardando conferência</span>
+                        </>}
                       </div>
                     )}
                     {andamento?.id === item.id && processandoId === item.id && (
@@ -360,6 +367,12 @@ export default function ExtratosBancariosPage() {
                             item.status === "recebido" ? "Processar extrato" : "Retomar"}
                         </button>
                       )}
+                      {item.status === "processado" && Number(resumosArquivos[item.id]?.pendentes) > 0 && (
+                        <button type="button" onClick={() => setConferenciaItem(atual => atual?.id === item.id ? null : item)}
+                          className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100">
+                          {conferenciaItem?.id === item.id ? "Fechar conferência" : "Conferir divergências"}
+                        </button>
+                      )}
                       {item.arquivo_tipo === "pdf" && <span className="text-[11px] text-slate-500">PDF · somente consulta</span>}
                       <button type="button" onClick={() => baixarArquivo(item)} title="Baixar arquivo original"
                         className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-[#6B1F87] hover:bg-purple-50">
@@ -374,6 +387,7 @@ export default function ExtratosBancariosPage() {
           </table>
         </div>
       </section>
+      {conferenciaItem && <SantanderConferencia upload={conferenciaItem} onClose={() => setConferenciaItem(null)} />}
     </div>
   );
 }
