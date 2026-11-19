@@ -41,7 +41,7 @@ async function openArchive(data: Uint8Array, type: string) {
   const entries = ofxEntries(zip);
   if (entries.length < 1) throw new Error("Nenhum OFX encontrado no ZIP.");
   if (entries.length > 250) throw new Error("ZIP excede o limite de 250 arquivos OFX.");
-  const total = entries.reduce((acc, entry) => acc + (entry._data?.uncompressedSize || 0), 0);
+  const total = entries.reduce((acc, entry) => acc + ((entry as unknown as { _data?: { uncompressedSize?: number } })._data?.uncompressedSize || 0), 0);
   if (total > 120 * 1024 * 1024) throw new Error("ZIP excede 120 MB de dados descompactados.");
   return zip;
 }
