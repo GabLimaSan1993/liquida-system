@@ -35,6 +35,7 @@ import { Link, useSearchParams } from "react-router-dom";
 
 import { supabase } from "../../lib/supabase.js";
 import { ehProdutoOutlet } from "../../services/estoqueWmsService.js";
+import { consultarNomenclaturaVouchers } from "../../services/voucherNomenclaturaService.js";
 
 const TABS = [
   { id: "historico", label: "Histórico completo", icon: History },
@@ -606,6 +607,7 @@ export default function RastreabilidadeItemV2Page() {
   const [input, setInput] = useState(params.get("q") || "");
   const [activeTab, setActiveTab] = useState("historico");
   const [data, setData] = useState(null);
+  const [nomenclaturaOnline, setNomenclaturaOnline] = useState(null);
   const [special, setSpecial] = useState({ ativa: null, historico: [] });
   const [unlinkHistory, setUnlinkHistory] = useState([]);
   const [retriageHistory, setRetriageHistory] = useState([]);
@@ -634,6 +636,7 @@ export default function RastreabilidadeItemV2Page() {
 
     setLoading(true);
     setError("");
+    setNomenclaturaOnline(null);
 
     try {
       // A RPC privada exige JWT do usuário: nunca fazer a busca como anon.
@@ -643,15 +646,27 @@ export default function RastreabilidadeItemV2Page() {
         throw new Error("Sua sessão expirou. Faça login novamente no Liquida System para consultar a rastreabilidade.");
       }
 
+      // Recuperar a chave operacional legada sem alterar o vínculo físico.
+      let buscaBanco = term;
+      let origemConsultada = null;
+      if (/^(?:SAMV|GRV)[0-9]+$/i.test(term) || /^[0-9]{5,10}$/.test(term)) {
+        try {
+          const refs = await consultarNomenclaturaVouchers([term]);
+          origemConsultada = refs[term.toUpperCase()] || null;
+          if (origemConsultada?.voucher_original) buscaBanco = origemConsultada.voucher_original;
+        } catch (erroNomenclatura) {
+          console.warn("Nomenclatura Trade-In Online indisponível:", erroNomenclatura.message);
+        }
+      }
       // O voucher exato prevalece sobre vínculos por IMEI. Alguns IMEIs
       // constam em mais de um YBV; buscar só por IMEI escolhia outro cadastro.
-      const consultaVoucherExato = /^YBV[0-9]+$/i.test(term);
+      const consultaVoucherExato = /^YBV[0-9]+$/i.test(buscaBanco);
       const nomeRpc = consultaVoucherExato
         ? "assurant_rastreabilidade_voucher_exato"
         : "assurant_rastreabilidade_privada_fast";
       const parametrosBusca = consultaVoucherExato
-        ? { p_voucher: term.toUpperCase() }
-        : { p_busca: term, p_imei: imei || null };
+        ? { p_voucher: buscaBanco.toUpperCase() }
+        : { p_busca: buscaBanco, p_imei: imei || null };
       let { data: result, error: rpcError } = await supabase.rpc(
         nomeRpc,
         parametrosBusca
@@ -676,7 +691,7 @@ export default function RastreabilidadeItemV2Page() {
       // ainda não existe na Triagem nem no recebimento físico do Liquida.
       const { data: tradeinResult, error: tradeinError } = await supabase.rpc(
         "assurant_rastreabilidade_tradein",
-        { p_busca: term, p_imei: consultaVoucherExato ? null : (imei || result?.selecionado_imei || null) }
+        { p_busca: buscaBanco, p_imei: consultaVoucherExato ? null : (imei || result?.selecionado_imei || null) }
       );
       if (tradeinError) throw tradeinError;
 
@@ -723,10 +738,10 @@ export default function RastreabilidadeItemV2Page() {
       // não dependem da existência do pedido na esteira operacional ou no WMS.
       // A RPC protege o vínculo exato; jamais une aparelhos somente pelo SKU.
       let frentes = result?.frentes || null;
-      if (!frentes && (/^(?:YBV)?[0-9]+$/i.test(term) || result?.selecionado_imei)) {
+      if (!frentes && (/^(?:YBV)?[0-9]+$/i.test(buscaBanco) || result?.selecionado_imei)) {
         const { data: fontesEncontradas, error: erroFontes } = await supabase.rpc(
           "assurant_rastreabilidade_frentes",
-          { p_busca: term, p_imei: consultaVoucherExato ? null : (imei || result?.selecionado_imei || null) }
+          { p_busca: buscaBanco, p_imei: consultaVoucherExato ? null : (imei || result?.selecionado_imei || null) }
         );
         if (!erroFontes) {
           frentes = fontesEncontradas;
@@ -799,6 +814,37 @@ export default function RastreabilidadeItemV2Page() {
         colorResult = colorResponse.data || null;
       }
 
+      // Somente agregar metadados da origem quando houver vínculo pelo voucher.
+      try {
+        if (!origemConsultada && resultadoCompleto?.resumo?.voucher) {
+          const atual = String(resultadoCompleto.resumo.voucher).toUpperCase();
+          const refs = await consultarNomenclaturaVouchers([atual]);
+          origemConsultada = refs[atual] || null;
+        }
+      } catch (erroNomenclatura) {
+        console.warn("Complemento Trade-In Online indisponível:", erroNomenclatura.message);
+      }
+      setNomenclaturaOnline(origemConsultada);
+      if (origemConsultada && resultadoCompleto) {
+        const eventosOnline = [];
+        if (origemConsultada.vinculado_em) {
+          eventosOnline.push({
+            data: origemConsultada.vinculado_em, categoria: "Trade-in",
+            evento: "Vinculação ao objeto Correios", status: origemConsultada.etapa,
+            descricao: "Voucher " + origemConsultada.voucher + " vinculado ao objeto " + (origemConsultada.codigo_rastreio || "não informado"),
+            origem: "tradein_online_aparelhos", referencia: origemConsultada.voucher_original,
+          });
+        }
+        if (origemConsultada.triado_em) {
+          eventosOnline.push({
+            data: origemConsultada.triado_em, categoria: "Triagem",
+            evento: "Triagem ALS Online concluída", status: origemConsultada.resultado_als,
+            descricao: "Resultado da ALS Online: " + (origemConsultada.resultado_als || "não informado"),
+            origem: "tradein_online_aparelhos", referencia: origemConsultada.voucher_original,
+          });
+        }
+        resultadoCompleto = { ...resultadoCompleto, eventos: [...(resultadoCompleto.eventos || []), ...eventosOnline] };
+      }
       setData(resultadoCompleto || null);
       setSpecial(specialResult);
       setUnlinkHistory(unlinkResult);
@@ -820,6 +866,7 @@ export default function RastreabilidadeItemV2Page() {
       console.error(err);
       setError(err?.message || "Não foi possível consultar a rastreabilidade.");
       setData(null);
+      setNomenclaturaOnline(null);
       setSpecial({ ativa: null, historico: [] });
       setUnlinkHistory([]);
       setRetriageHistory([]);
@@ -1470,10 +1517,10 @@ export default function RastreabilidadeItemV2Page() {
                           {summary.vinculo_operacional_nao_confirmado ? "Registro documental · identidade física não confirmada" : "Identidade rastreada"}
                         </div>
                         <div className="mt-1 font-mono text-xl font-black tracking-tight text-slate-950">
-                          {summary.imei || summary.voucher || `Pedido ${summary.pedido_consultado || data?.selecionado_pedido || "—"}`}
+                          {summary.imei || nomenclaturaOnline?.voucher || summary.voucher || `Pedido ${summary.pedido_consultado || data?.selecionado_pedido || "—"}`}
                         </div>
                         <div className="mt-1 text-xs font-semibold text-slate-500">
-                          {summary.voucher || "Sem voucher identificado"} · {summary.sku || "Sem SKU"}
+                          {nomenclaturaOnline?.voucher || summary.voucher || "Sem voucher identificado"} · {summary.sku || nomenclaturaOnline?.sku || "Sem SKU"}
                         </div>
                       </div>
                     </div>
@@ -1551,7 +1598,7 @@ export default function RastreabilidadeItemV2Page() {
                 </div>
 
                 <div className="grid gap-x-6 gap-y-5 p-5 sm:grid-cols-2 xl:grid-cols-6">
-                  <DetailField label="Voucher" value={summary.voucher} mono />
+                  <DetailField label="Voucher" value={nomenclaturaOnline?.voucher || summary.voucher} mono />
                   {data?.tradein?.encontrado && (
                     <>
                       <DetailField label="Trade-in iniciado em" value={fmtDateTime(data.tradein.inicio)} />
@@ -1559,8 +1606,8 @@ export default function RastreabilidadeItemV2Page() {
                       <DetailField label="Status na origem" value={data.tradein.status_tradein} wide />
                     </>
                   )}
-                  <DetailField label="IMEI / Serial" value={summary.imei} mono />
-                  <DetailField label="SKU" value={summary.sku} mono />
+                  <DetailField label="IMEI / Serial" value={summary.imei || nomenclaturaOnline?.imei} mono />
+                  <DetailField label="SKU" value={summary.sku || nomenclaturaOnline?.sku} mono />
                   <div>
                     <div className="text-[9px] font-black uppercase tracking-[0.12em] text-slate-400">
                       Cor física
@@ -1599,7 +1646,19 @@ export default function RastreabilidadeItemV2Page() {
                   <DetailField label="Condição" value={summary.condicao} />
                   {summary.pedido_reservado && <DetailField label="Pedido reservado" value={summary.pedido_reservado} wide />}
                   <DetailField label="Status bateria" value={summary.status_bateria} />
-                  <DetailField label="Produto / modelo" value={summary.modelo} wide />
+                  <DetailField label="Produto / modelo" value={summary.modelo || nomenclaturaOnline?.descricao || nomenclaturaOnline?.modelo} wide />
+                  {nomenclaturaOnline && (<>
+                    <DetailField label="Nomenclatura completa do voucher" value={nomenclaturaOnline.voucher} mono wide />
+                    <DetailField label="Objeto Correios" value={nomenclaturaOnline.codigo_rastreio} mono />
+                    <DetailField label="Destinatário Trade-In Online" value={nomenclaturaOnline.destinatario} />
+                    <DetailField label="Marca" value={nomenclaturaOnline.marca} />
+                    <DetailField label="Modelo ALS" value={nomenclaturaOnline.modelo} />
+                    <DetailField label="Capacidade" value={nomenclaturaOnline.capacidade} />
+                    <DetailField label="Cor da ALS" value={nomenclaturaOnline.cor} />
+                    <DetailField label="IMEI 2 / Serial" value={nomenclaturaOnline.imei2} mono />
+                    <DetailField label="Resultado ALS Online" value={nomenclaturaOnline.resultado_als} />
+                    <DetailField label="Etapa Trade-In Online" value={nomenclaturaOnline.etapa} />
+                  </>)}
                   <DetailField label="Local atual / último local" value={summary.local} wide />
                   <DetailField label="Recebido em" value={fmtDateTime(summary.data_recebimento)} />
                   <DetailField label="Oracle em" value={fmtDateTime(summary.data_oracle)} />
