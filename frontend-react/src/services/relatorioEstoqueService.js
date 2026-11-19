@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase.js';
+import { enriquecerNomenclaturaLista } from './voucherNomenclaturaService.js';
 
 export async function consultarEstoque(filters, offset = 0, limit = 100, summary = true, signal) {
   // A carga inicial busca indicadores; os lotes seguintes do Excel usam a
@@ -15,7 +16,8 @@ export async function consultarEstoque(filters, offset = 0, limit = 100, summary
   if (signal) request = request.abortSignal(signal);
   const { data, error } = await request;
   if (error) throw error;
-  return data;
+  if (!data?.itens?.length) return data;
+  return { ...data, itens: await enriquecerNomenclaturaLista(data.itens) };
 }
 export async function exportarEstoque(filters, onProgress) {
   const worker = new Worker(new URL('./relatorioEstoqueExport.worker.js', import.meta.url), { type: 'module' });
