@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase";
+import { enriquecerNomenclaturaLista } from "./voucherNomenclaturaService.js";
 
 export const RUAS_WMS = [
   { rua: 1, grade: "QUEBRADO", tipo: "CELULAR" },
@@ -206,7 +207,8 @@ export async function buscarMapaAndarWms(rua, bloco, andar) {
   });
   if (error) throw new Error(error.message);
   const comOutlet = await enriquecerIndicadorOutlet(data || []);
-  return enriquecerBlacklist(comOutlet);
+  const comBlacklist = await enriquecerBlacklist(comOutlet);
+  return enriquecerNomenclaturaLista(comBlacklist);
 }
 
 export async function pesquisarEstoqueWms({
@@ -231,7 +233,8 @@ export async function pesquisarEstoqueWms({
 
   const linhas = data || [];
   const comOutlet = await enriquecerIndicadorOutlet(linhas);
-  const linhasEnriquecidas = await enriquecerBlacklist(comOutlet);
+  const comBlacklist = await enriquecerBlacklist(comOutlet);
+  const linhasEnriquecidas = await enriquecerNomenclaturaLista(comBlacklist);
 
   return {
     total: linhas[0]?.total_encontrado || 0,
