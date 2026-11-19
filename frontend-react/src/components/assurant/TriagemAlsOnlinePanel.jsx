@@ -176,7 +176,10 @@ export default function TriagemAlsOnlinePanel(){
                   <option value="">Selecione a cor</option>{cores.map(c=><option key={c} value={c}>{c}</option>)}</select>
               </label>
             </div>
-            {selecionado&&<p className="mt-2 text-xs text-violet-700">Tipo: {tipo} · SKU ALS: {selecionado.sku_als||'Pendente'} · {segundoObrigatorio?'2 IMEIs':'Identificação simples'}</p>}
+            {selecionado&&<div className="mt-3 rounded-xl border border-violet-100 bg-violet-50/70 p-3">
+              <p className="text-xs font-bold text-slate-900">Nomenclatura: {selecionado.descricao || [produto.marca,produto.modelo,produto.capacidade,produto.cor].filter(Boolean).join(' ')}</p>
+              <p className="mt-1 text-xs text-violet-700">SKU ALS: {selecionado.sku_als||'Pendente'} · Tipo: {tipo} · {segundoObrigatorio?'2 IMEIs':'Identificação simples'}</p>
+            </div>}
           </section>
           <section>
             <div className="flex items-center gap-2"><ScanLine size={16} className="text-violet-700"/><h3 className="text-sm font-black">Bipagem de IMEIs {imeisOpcionais?'(opcional)':'*'}</h3></div>
