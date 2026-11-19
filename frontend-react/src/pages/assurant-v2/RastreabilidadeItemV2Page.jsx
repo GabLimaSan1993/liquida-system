@@ -35,7 +35,7 @@ import { Link, useSearchParams } from "react-router-dom";
 
 import { supabase } from "../../lib/supabase.js";
 import { ehProdutoOutlet } from "../../services/estoqueWmsService.js";
-import { consultarNomenclaturaVouchers } from "../../services/voucherNomenclaturaService.js";
+import { consultarNomenclaturaVouchers, resolverIdentificadorOnline } from "../../services/voucherNomenclaturaService.js";
 
 const TABS = [
   { id: "historico", label: "Histórico completo", icon: History },
@@ -646,17 +646,16 @@ export default function RastreabilidadeItemV2Page() {
         throw new Error("Sua sessão expirou. Faça login novamente no Liquida System para consultar a rastreabilidade.");
       }
 
-      // Recuperar a chave operacional legada sem alterar o vínculo físico.
+      // Código de postagem Correios, e-ticket e voucher completo são resolvidos
+      // pelo vínculo registrado; Oracle/WMS continuam usando o voucher original.
       let buscaBanco = term;
       let origemConsultada = null;
-      if (/^(?:SAMV|GRV)[0-9]+$/i.test(term) || /^[0-9]{5,10}$/.test(term)) {
-        try {
-          const refs = await consultarNomenclaturaVouchers([term]);
-          origemConsultada = refs[term.toUpperCase()] || null;
-          if (origemConsultada?.voucher_original) buscaBanco = origemConsultada.voucher_original;
-        } catch (erroNomenclatura) {
-          console.warn("Nomenclatura Trade-In Online indisponível:", erroNomenclatura.message);
-        }
+      try {
+        const identificado = await resolverIdentificadorOnline(term);
+        buscaBanco = identificado.buscaOperacional;
+        origemConsultada = identificado.registro;
+      } catch (erroNomenclatura) {
+        console.warn("Resolução de código de postagem indisponível:", erroNomenclatura.message);
       }
       // O voucher exato prevalece sobre vínculos por IMEI. Alguns IMEIs
       // constam em mais de um YBV; buscar só por IMEI escolhia outro cadastro.
@@ -1296,7 +1295,7 @@ export default function RastreabilidadeItemV2Page() {
               Consulta completa de histórico
             </h1>
             <p className="mt-1 max-w-4xl text-xs leading-5 text-slate-500">
-              Pesquisa por voucher, IMEI/serial, pedido, NF, chave da NF, SKU ou modelo. Consulta também histórico de vendas, trocas, devoluções e integrações, mesmo quando não há passagem pelo Warehouse.
+              Pesquisa por voucher, código de postagem/rastreio Correios, e-ticket de devolução, IMEI/serial, pedido, NF, SKU ou modelo. Consulta o histórico das etapas e movimentações vinculadas.
             </p>
           </div>
 
@@ -1312,7 +1311,7 @@ export default function RastreabilidadeItemV2Page() {
             <input
               value={input}
               onChange={(event) => setInput(event.target.value)}
-              placeholder="Voucher, IMEI, pedido, NF, chave NF, SKU ou modelo..."
+              placeholder="Voucher, código de postagem Correios, e-ticket, IMEI, pedido, NF ou modelo..."
               className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-violet-300 focus:bg-white focus:ring-4 focus:ring-violet-100"
             />
           </div>
@@ -1683,6 +1682,8 @@ export default function RastreabilidadeItemV2Page() {
                   {nomenclaturaOnline && (<>
                     <DetailField label="Nomenclatura completa do voucher" value={nomenclaturaOnline.voucher} mono wide />
                     <DetailField label="Objeto Correios" value={nomenclaturaOnline.codigo_rastreio} mono />
+                    <DetailField label="Código de postagem / e-ticket" value={nomenclaturaOnline.codigo_postagem} mono />
+                    <DetailField label="Rastreio de saída Correios" value={nomenclaturaOnline.codigo_rastreio_saida} mono />
                     <DetailField label="Destinatário Trade-In Online" value={nomenclaturaOnline.destinatario} />
                     <DetailField label="Marca" value={nomenclaturaOnline.marca} />
                     <DetailField label="Modelo ALS" value={nomenclaturaOnline.modelo} />
