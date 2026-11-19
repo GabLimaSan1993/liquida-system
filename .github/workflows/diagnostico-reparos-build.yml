@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/diagnostico-reparos-build.yml'
       - 'frontend-react/src/**'
+      - 'supabase/functions/financeiro-processar-extrato/**'
   workflow_dispatch:
 
 permissions:
@@ -27,3 +28,8 @@ jobs:
       - name: Compilar frontend
         working-directory: frontend-react
         run: npm run build
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Validar Edge Function
+        run: deno check supabase/functions/financeiro-processar-extrato/index.ts

@@ -197,7 +197,8 @@ async function prepareCsvRows(data: Uint8Array, banco: string, conta: string, up
     const fitid = (r["FITID"] || "").slice(0, 200);
     const status = /^(conferido por saldo|ofx deduplicado)/i.test(r["Status do detalhe"])
       ? "csv_conferido" : "csv_pendente";
-    const category = normalize((r["Categoria preliminar"] || "") + " " + (r["Subcategoria preliminar"] || ""));
+    const category = normalize((r["Categoria preliminar"] || "") + " " + (r["Subcategoria preliminar"] || ""))
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     let nature = "movimento";
     if (/^SALDO(?:\s|$)/i.test(history)) nature = "saldo_informativo";
     else if (/RESGATE|RESGATADO/.test(category)) nature = "resgate";
