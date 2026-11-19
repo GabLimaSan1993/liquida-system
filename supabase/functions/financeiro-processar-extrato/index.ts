@@ -31,12 +31,12 @@ function ofxEntries(zip: JSZip) {
 }
 
 async function openArchive(data: Uint8Array, type: string) {
-  if (type === "ofx") {
+  if (type === "ofx" || type === "csv") {
     const file = new JSZip();
-    file.file("extrato.ofx", data);
+    file.file(type === "csv" ? "extrato.csv" : "extrato.ofx", data);
     return file;
   }
-  if (type !== "zip") throw new Error("Processamento disponível apenas para OFX ou ZIP contendo OFX.");
+  if (type !== "zip") throw new Error("Processamento disponível para OFX, CSV Santander ou ZIP contendo OFX.");
   const zip = await JSZip.loadAsync(data, { checkCRC32: false });
   const entries = ofxEntries(zip);
   if (entries.length < 1) throw new Error("Nenhum OFX encontrado no ZIP.");
@@ -84,10 +84,12 @@ function parseOfx(text: string, arquivo: string, banco: string, conta: string) {
 async function prepareRows(parsed: ReturnType<typeof parseOfx>, banco: string, conta: string, uploadId: string, arquivo: string) {
   const result = [];
   for (const row of parsed.parsed) {
-    const normalized = JSON.stringify([
-      digits(parsed.bancoCodigo), digits(parsed.contaOfx), row.data,
-      row.valor.toFixed(2), row.fitid, normalize(row.historico), normalize(row.tipoOfx),
-    ]);
+    const normalized = banco === "Santander" && row.fitid
+      ? JSON.stringify(["SANTANDER_FITID", digits(conta), row.data, row.valor.toFixed(2), row.fitid])
+      : JSON.stringify([
+        digits(parsed.bancoCodigo), digits(parsed.contaOfx), row.data,
+        row.valor.toFixed(2), row.fitid, normalize(row.historico), normalize(row.tipoOfx),
+      ]);
     result.push({
       banco, conta,
       banco_codigo: parsed.bancoCodigo,
@@ -95,11 +97,133 @@ async function prepareRows(parsed: ReturnType<typeof parseOfx>, banco: string, c
       historico: row.historico,
       tipo: row.natureza === "saldo_informativo" ? "informativo" : row.valor < 0 ? "saida" : "entrada",
       natureza: row.natureza, fitid: row.fitid || null,
+      status_extracao: "ofx_original",
       chave_unica: await hex(normalized),
       upload_id: uploadId, arquivo_interno: arquivo,
     });
   }
   return result;
+}
+
+
+// Layout histórico Santander (gerado da consolidação PDF/OFX).
+// A validação ocorre integralmente antes de inserir qualquer lançamento.
+type CsvRecord = Record<string, string>;
+function parseSemicolonCsv(raw: string): CsvRecord[] {
+  const table: string[][] = [];
+  let cell = "", row: string[] = [], quoted = false;
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i];
+    if (ch === '"') {
+      if (quoted && raw[i + 1] === '"') { cell += '"'; i++; }
+      else if (quoted || !cell) quoted = !quoted;
+      else throw new Error("CSV malformado: aspas fora de um campo");
+    } else if (ch === ";" && !quoted) {
+      row.push(cell); cell = "";
+    } else if ((ch === "\r" || ch === "\n") && !quoted) {
+      if (ch === "\r" && raw[i + 1] === "\n") i++;
+      row.push(cell); cell = "";
+      if (row.some(c => c.trim() !== "")) table.push(row);
+      row = [];
+    } else cell += ch;
+  }
+  if (quoted) throw new Error("CSV malformado: aspas não fechadas");
+  if (cell || row.length) { row.push(cell); if (row.some(c => c.trim())) table.push(row); }
+  if (table.length < 2) throw new Error("CSV vazio ou sem lançamentos");
+  if (table.length > 20001) throw new Error("CSV excede 20.000 lançamentos; divida por ano ou mês");
+  const names = table.shift()!.map(c => c.replace(/^\uFEFF/, "").trim());
+  const required = ["Data", "Banco", "Conta", "Histórico bancário", "Valor líquido (R$)", "ID controle", "Status do detalhe"];
+  const missing = required.filter(col => !names.includes(col));
+  if (missing.length) throw new Error(
+    "CSV sem colunas do modelo Santander (" + missing.join(", ") + "). Envie o CSV histórico por conta; arquivos de auditoria e resumo não são extratos de lançamentos."
+  );
+  const rows: CsvRecord[] = [];
+  for (const [index, values] of table.entries()) {
+    if (values.length !== names.length) throw new Error("CSV linha " + (index + 2) + ": número de colunas inesperado");
+    const record: CsvRecord = {};
+    names.forEach((col, k) => { record[col] = values[k].trim(); });
+    rows.push(record);
+  }
+  return rows;
+}
+function parseBRMoney(input: string, line: number) {
+  const raw = input.replace(/^R\$\s*/, "").replace(/\s/g, "");
+  if (!/^-?\d+(?:\.\d{3})*(?:,\d{1,2})?$/.test(raw))
+    throw new Error("CSV linha " + line + ": valor monetário inválido (" + input + ")");
+  const result = Number(raw.replace(/\./g, "").replace(",", "."));
+  if (!Number.isFinite(result)) throw new Error("CSV linha " + line + ": valor monetário fora do intervalo");
+  return Number(result.toFixed(2));
+}
+function parseBRDate(input: string, line: number) {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(input);
+  if (!m) throw new Error("CSV linha " + line + ": data inválida (" + input + ")");
+  const day = Number(m[1]), month = Number(m[2]), year = Number(m[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day)
+    throw new Error("CSV linha " + line + ": data inexistente (" + input + ")");
+  return m[3] + "-" + m[2] + "-" + m[1];
+}
+async function prepareCsvRows(data: Uint8Array, banco: string, conta: string, uploadId: string, arquivo: string) {
+  if (data.byteLength > 12 * 1024 * 1024) throw new Error("CSV excede o limite de 12 MB para processamento");
+  let csv: string;
+  try { csv = new TextDecoder("utf-8", { fatal: true }).decode(data); }
+  catch { csv = new TextDecoder("windows-1252").decode(data); }
+  const source = parseSemicolonCsv(csv);
+  const seenIds = new Set<string>();
+  const rows = [];
+  for (const [index, r] of source.entries()) {
+    const line = index + 2;
+    if (normalize(r["Banco"]) !== normalize(banco))
+      throw new Error("CSV linha " + line + ": banco " + r["Banco"] + " diferente de " + banco);
+    const sourceAccount = digits(r["Conta"].split("/").at(-1) || "");
+    if (sourceAccount !== digits(conta))
+      throw new Error("CSV linha " + line + ": conta " + r["Conta"] + " diferente de " + conta + ". Importe as contas separadamente.");
+    const date = parseBRDate(r["Data"], line);
+    if (r["Competência"] && r["Competência"] !== date.slice(0, 7))
+      throw new Error("CSV linha " + line + ": competência diferente da data");
+    const value = parseBRMoney(r["Valor líquido (R$)"], line);
+    if (r["Entradas (R$)"] !== undefined && r["Saídas (R$)"] !== undefined) {
+      const credit = parseBRMoney(r["Entradas (R$)"], line);
+      const debit = parseBRMoney(r["Saídas (R$)"], line);
+      if (Math.abs(value - (credit - debit)) > 0.011)
+        throw new Error("CSV linha " + line + ": entradas, saídas e valor líquido divergentes");
+    }
+    const control = r["ID controle"];
+    if (!control || control.length > 200 || seenIds.has(control))
+      throw new Error("CSV linha " + line + ": ID controle ausente ou repetido");
+    seenIds.add(control);
+    const history = r["Histórico bancário"].slice(0, 1000);
+    if (!history) throw new Error("CSV linha " + line + ": histórico vazio");
+    const fitid = (r["FITID"] || "").slice(0, 200);
+    const status = /^(conferido por saldo|ofx deduplicado)/i.test(r["Status do detalhe"])
+      ? "csv_conferido" : "csv_pendente";
+    const category = normalize((r["Categoria preliminar"] || "") + " " + (r["Subcategoria preliminar"] || ""));
+    let nature = "movimento";
+    if (/^SALDO(?:\s|$)/i.test(history)) nature = "saldo_informativo";
+    else if (/RESGATE|RESGATADO/.test(category)) nature = "resgate";
+    else if (/APLICAC|APLICADO/.test(category)) nature = "aplicacao";
+    else if (/RENDIMENTO/.test(category)) nature = "rendimento";
+    const ref = fitid
+      ? JSON.stringify(["SANTANDER_FITID", digits(conta), date, value.toFixed(2), fitid])
+      : JSON.stringify(["CSV_CONTROLE", digits(conta), control]);
+    rows.push({
+      banco, conta, banco_codigo: "33",
+      data: date, valor: value, historico: history,
+      tipo: nature === "saldo_informativo" ? "informativo" : value < 0 ? "saida" : "entrada",
+      natureza: nature, fitid: fitid || null,
+      chave_unica: await hex(ref), upload_id: uploadId, arquivo_interno: arquivo,
+      status_extracao: status,
+      metadados_origem: {
+        id_controle: control, origem: r["Origem"] || null, arquivo_fonte: r["Arquivo fonte"] || null,
+        pagina_pdf: r["Página PDF"] || null, status_detalhe: r["Status do detalhe"],
+        categoria_preliminar: r["Categoria preliminar"] || null, subcategoria_preliminar: r["Subcategoria preliminar"] || null,
+        natureza_preliminar: r["Natureza"] || null, complemento: r["Complemento histórico"] || null,
+        documento_bancario: r["Documento bancário"] || null,
+        observacoes: r["Observações"] || null,
+      },
+    });
+  }
+  return rows;
 }
 
 Deno.serve(async (req: Request) => {
@@ -123,16 +247,18 @@ Deno.serve(async (req: Request) => {
       .select("id,banco,conta,arquivo_tipo,storage_path,status")
       .eq("id", uploadId).single();
     if (uploadError || !upload) return respond({ error: "Upload não encontrado" }, 404);
-    if (!["zip", "ofx"].includes(upload.arquivo_tipo)) {
-      return respond({ error: "Este arquivo é " + upload.arquivo_tipo.toUpperCase() + ". O processamento bancário suporta OFX ou ZIP de OFXs." }, 422);
+    if (!["zip", "ofx", "csv"].includes(upload.arquivo_tipo)) {
+      return respond({ error: "Este arquivo é " + upload.arquivo_tipo.toUpperCase() + ". O processamento suporta OFX, CSV do modelo Santander ou ZIP com OFX." }, 422);
     }
     const { data: file, error: storageError } = await admin.storage.from(BUCKET).download(upload.storage_path);
     if (storageError || !file) throw new Error("Falha ao recuperar arquivo original: " + (storageError?.message || "não localizado"));
     const zip = await openArchive(new Uint8Array(await file.arrayBuffer()), upload.arquivo_tipo);
-    const entries = ofxEntries(zip);
+    const entries = upload.arquivo_tipo === "csv"
+      ? Object.values(zip.files).filter(e => !e.dir && e.name.endsWith(".csv"))
+      : ofxEntries(zip);
     const names = entries.map(e => e.name);
     const { data: completed, error: completedError } = await admin.from("financeiro_extratos_arquivos_processados")
-      .select("arquivo_interno,status,registros_brutos,saldos_informativos,lancamentos_novos,lancamentos_repetidos")
+      .select("arquivo_interno,status,registros_brutos,saldos_informativos,lancamentos_novos,lancamentos_repetidos,lancamentos_pendentes")
       .eq("upload_id", uploadId);
     if (completedError) throw completedError;
     const byName = new Map((completed || []).map(e => [e.arquivo_interno, e]));
@@ -159,10 +285,15 @@ Deno.serve(async (req: Request) => {
       try {
         const content = await entry.async("uint8array");
         if (content.byteLength > 12 * 1024 * 1024) throw new Error("OFX excede 12 MB.");
-        let text = new TextDecoder("windows-1252").decode(content);
-        if (/\bENCODING:UTF-8\b/i.test(text)) text = new TextDecoder("utf-8").decode(content);
-        const result = parseOfx(text, entry.name, upload.banco, upload.conta);
-        const rows = await prepareRows(result, upload.banco, upload.conta, uploadId, entry.name);
+        let rows;
+        if (upload.arquivo_tipo === "csv") {
+          rows = await prepareCsvRows(content, upload.banco, upload.conta, uploadId, entry.name);
+        } else {
+          let text = new TextDecoder("windows-1252").decode(content);
+          if (/\bENCODING:UTF-8\b/i.test(text)) text = new TextDecoder("utf-8").decode(content);
+          const result = parseOfx(text, entry.name, upload.banco, upload.conta);
+          rows = await prepareRows(result, upload.banco, upload.conta, uploadId, entry.name);
+        }
         let inserted = 0;
         for (let i = 0; i < rows.length; i += 400) {
           const { data: newRows, error: insertError } = await admin
@@ -177,6 +308,7 @@ Deno.serve(async (req: Request) => {
           status: "processado",
           registros_brutos: rows.length,
           saldos_informativos: rows.filter(r => r.natureza === "saldo_informativo").length,
+          lancamentos_pendentes: rows.filter(r => r.status_extracao === "csv_pendente").length,
           lancamentos_novos: inserted,
           lancamentos_repetidos: rows.length - inserted,
           erro: null, processado_em: new Date().toISOString(),
@@ -185,7 +317,8 @@ Deno.serve(async (req: Request) => {
           .upsert(stats, { onConflict: "upload_id,arquivo_interno" });
         if (checkpointError) throw checkpointError;
         byName.set(entry.name, stats);
-        completedThisCall.push({ name: entry.name, status: "processado", registros: rows.length, novos: inserted, duplicados: rows.length - inserted });
+        completedThisCall.push({ name: entry.name, status: "processado", registros: rows.length, novos: inserted, duplicados: rows.length - inserted,
+          pendentes_conferencia: rows.filter(r => r.status_extracao === "csv_pendente").length });
       } catch (e) {
         const errorMsg = e instanceof Error ? e.message : String(e);
         await admin.from("financeiro_extratos_arquivos_processados").upsert({
