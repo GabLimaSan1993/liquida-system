@@ -686,14 +686,25 @@ export default function RastreabilidadeItemV2Page() {
       }
 
       if (rpcError) throw rpcError;
+      // Evitar que um número de voucher GRV/SAMV seja confundido com um pedido
+      // ou voucher YBV de mesmo número na consulta transversal.
+      if (origemConsultada && result?.resumo?.voucher &&
+          ![origemConsultada.voucher_original, origemConsultada.voucher]
+            .some(v => String(v).toUpperCase() === String(result.resumo.voucher).toUpperCase())) {
+        result = null;
+      }
 
       // O trade-in é a origem da jornada: também deve aparecer quando o voucher
       // ainda não existe na Triagem nem no recebimento físico do Liquida.
-      const { data: tradeinResult, error: tradeinError } = await supabase.rpc(
-        "assurant_rastreabilidade_tradein",
-        { p_busca: buscaBanco, p_imei: consultaVoucherExato ? null : (imei || result?.selecionado_imei || null) }
-      );
-      if (tradeinError) throw tradeinError;
+      let tradeinResult = { encontrado: false };
+      if (!origemConsultada) {
+        const { data, error: tradeinError } = await supabase.rpc(
+          "assurant_rastreabilidade_tradein",
+          { p_busca: buscaBanco, p_imei: consultaVoucherExato ? null : (imei || result?.selecionado_imei || null) }
+        );
+        if (tradeinError) throw tradeinError;
+        tradeinResult = data || tradeinResult;
+      }
 
       const temTradein = Boolean(tradeinResult?.encontrado);
       const eventosAtuais = result?.eventos || [];
@@ -737,8 +748,8 @@ export default function RastreabilidadeItemV2Page() {
       // Busca transversal por pedido, NF, IMEI e voucher. Os documentos históricos
       // não dependem da existência do pedido na esteira operacional ou no WMS.
       // A RPC protege o vínculo exato; jamais une aparelhos somente pelo SKU.
-      let frentes = result?.frentes || null;
-      if (!frentes && (/^(?:YBV)?[0-9]+$/i.test(buscaBanco) || result?.selecionado_imei)) {
+      let frentes = origemConsultada ? null : (result?.frentes || null);
+      if (!origemConsultada && !frentes && (/^(?:YBV)?[0-9]+$/i.test(buscaBanco) || result?.selecionado_imei)) {
         const { data: fontesEncontradas, error: erroFontes } = await supabase.rpc(
           "assurant_rastreabilidade_frentes",
           { p_busca: buscaBanco, p_imei: consultaVoucherExato ? null : (imei || result?.selecionado_imei || null) }
@@ -823,6 +834,28 @@ export default function RastreabilidadeItemV2Page() {
         }
       } catch (erroNomenclatura) {
         console.warn("Complemento Trade-In Online indisponível:", erroNomenclatura.message);
+      }
+      // Voucher da ALS ainda sem IMEI: continua rastreável desde a vinculação,
+      // porém sem fabricar passagem pela triagem, WMS ou Oracle.
+      if (origemConsultada && !resultadoCompleto?.resumo) {
+        resultadoCompleto = {
+          ...(resultadoCompleto || {}),
+          privado: true,
+          busca: term,
+          resumo: {
+            voucher: origemConsultada.voucher_original,
+            imei: origemConsultada.imei,
+            sku: origemConsultada.sku,
+            modelo: origemConsultada.modelo,
+            status_operacional: origemConsultada.etapa,
+            somente_tradein: true,
+          },
+          eventos: [],
+          matches: [],
+          wms_ciclos: [],
+          pedidos_b2c: [],
+          pedidos_b2b: [],
+        };
       }
       setNomenclaturaOnline(origemConsultada);
       if (origemConsultada && resultadoCompleto) {
