@@ -42,7 +42,7 @@ export default function FluxoCaixaBackOfficePage() {
       try {
         const [resultadoResumo, resultadoUploads] = await Promise.all([
           supabase.from("financeiro_fluxo_mensal")
-            .select("mes,banco,conta,lancamentos,entradas_brutas,saidas_brutas,movimento_liquido,aplicacoes,resgates,linhas_saldo_informativo")
+            .select("mes,banco,conta,lancamentos,entradas_brutas,saidas_brutas,movimento_liquido,aplicacoes,resgates,linhas_saldo_informativo,lancamentos_pendentes")
             .order("mes", { ascending: false }).limit(1000),
           supabase.from("financeiro_extratos_uploads").select("id,status,banco,conta"),
         ]);
@@ -82,8 +82,9 @@ export default function FluxoCaixaBackOfficePage() {
     acc.aplicacoes += Number(r.aplicacoes || 0);
     acc.resgates += Number(r.resgates || 0);
     acc.registros += Number(r.lancamentos || 0);
+    acc.pendentesExtracao += Number(r.lancamentos_pendentes || 0);
     return acc;
-  }, { credito: 0, debito: 0, liquido: 0, aplicacoes: 0, resgates: 0, registros: 0 }), [resumoFiltrado]);
+  }, { credito: 0, debito: 0, liquido: 0, aplicacoes: 0, resgates: 0, registros: 0, pendentesExtracao: 0 }), [resumoFiltrado]);
 
   const meses = useMemo(() => {
     const map = new Map();
@@ -107,6 +108,7 @@ export default function FluxoCaixaBackOfficePage() {
         let query = supabase.from("financeiro_lancamentos_bancarios")
           .select("id,data,banco,conta,historico,valor,natureza,fitid", { count: "exact" })
           .neq("natureza", "saldo_informativo")
+          .neq("status_extracao", "csv_pendente")
           .gte("data", ano + "-01-01")
           .lte("data", ano + "-12-31")
           .order("data", { ascending: false })
@@ -130,7 +132,7 @@ export default function FluxoCaixaBackOfficePage() {
   }, [user?.id, ano, conta, pagina]);
 
   const pendentes = uploads.filter((r) => r.status !== "processado").length;
-  const temDados = totais.registros > 0;
+  const temDados = totais.registros > 0 || totais.pendentesExtracao > 0;
 
   return <div className="space-y-6">
     <div className="flex flex-wrap items-start justify-between gap-4">
@@ -177,6 +179,11 @@ export default function FluxoCaixaBackOfficePage() {
       Valores bancários brutos, ainda sem conciliação com títulos. Aplicações ({brl(totais.aplicacoes)})
       e resgates ({brl(totais.resgates)}) estão segregados na base, mas incluídos nos totais bancários.
       Saldos informativos não são contabilizados como entradas ou saídas.
+      {totais.pendentesExtracao > 0 && (
+        <span className="ml-1 font-semibold text-amber-700">
+          {num(totais.pendentesExtracao)} registros históricos com extração divergente estão pendentes de conferência e fora dos totais.
+        </span>
+      )}
     </p>
 
     {temDados && (
@@ -214,7 +221,7 @@ export default function FluxoCaixaBackOfficePage() {
         <div className="flex flex-col items-center justify-center px-5 py-14 text-center">
           <div className="mb-3 rounded-xl bg-[#F4F0F6] p-4"><Landmark className="h-6 w-6 text-[#6B1F87]" /></div>
           <h3 className="font-semibold text-slate-800">Nenhum lançamento processado neste filtro</h3>
-          <p className="mt-2 max-w-md text-sm text-slate-500">Processe os OFXs na tela de Extratos Bancários. Os lançamentos antigos da Tesouraria não são utilizados aqui.</p>
+          <p className="mt-2 max-w-md text-sm text-slate-500">Processe OFX ou CSV Santander na tela de Extratos Bancários. Os lançamentos antigos da Tesouraria não são utilizados aqui.</p>
         </div>
       ) : (
         <div className="overflow-x-auto">
