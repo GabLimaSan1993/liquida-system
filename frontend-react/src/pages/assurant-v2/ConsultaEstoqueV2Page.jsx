@@ -2083,6 +2083,18 @@ const ativo =
                           )}
                       />
 
+                      {selecionado.descricao && <CampoDetalhe label="Nomenclatura do produto" value={selecionado.descricao} />}
+                      {selecionado.marca && <CampoDetalhe label="Marca" value={selecionado.marca} />}
+                      {selecionado.modelo && <CampoDetalhe label="Modelo" value={selecionado.modelo} />}
+                      {selecionado.capacidade && <CampoDetalhe label="Capacidade" value={selecionado.capacidade} />}
+                      {selecionado.cor && <CampoDetalhe label="Cor" value={selecionado.cor} />}
+                      {selecionado.imei2 && <CampoDetalhe label="IMEI 2" value={selecionado.imei2} mono />}
+                      {selecionado.destinatario_correios && <CampoDetalhe label="Destinatário Trade-In Online" value={selecionado.destinatario_correios} />}
+                      {selecionado.objeto_correios && <CampoDetalhe label="Objeto Correios" value={selecionado.objeto_correios} mono />}
+                      {selecionado.etapa_online && <CampoDetalhe label="Etapa Trade-In Online" value={selecionado.etapa_online} />}
+                      {selecionado.resultado_als && <CampoDetalhe label="Resultado ALS" value={selecionado.resultado_als} />}
+
+
                       <div className="grid grid-cols-2 gap-2">
                         <CampoDetalhe
                           label="Grade física"
